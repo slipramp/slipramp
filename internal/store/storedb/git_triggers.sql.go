@@ -139,8 +139,39 @@ ORDER BY created_at, id
 LIMIT 1
 `
 
+// StatePendingEligible: no durable outcome and the retry boundary is due.
 func (q *Queries) GetEligibleGitTriggerDelivery(ctx context.Context, attemptedAt pgtype.Timestamptz) (GitTriggerDelivery, error) {
 	row := q.db.QueryRow(ctx, getEligibleGitTriggerDelivery, attemptedAt)
+	var i GitTriggerDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.TargetName,
+		&i.ActionName,
+		&i.TriggerName,
+		&i.Parameters,
+		&i.CreatedAt,
+		&i.FailureCount,
+		&i.NextAttemptAt,
+		&i.Diagnostic,
+		&i.FailedAt,
+		&i.RunID,
+		&i.SupersededAt,
+		&i.TargetID,
+		&i.ReviewRequired,
+	)
+	return i, err
+}
+
+const getGitTriggerDelivery = `-- name: GetGitTriggerDelivery :one
+SELECT id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at, target_id, review_required
+FROM git_trigger_deliveries
+WHERE id = $1
+`
+
+func (q *Queries) GetGitTriggerDelivery(ctx context.Context, id pgtype.UUID) (GitTriggerDelivery, error) {
+	row := q.db.QueryRow(ctx, getGitTriggerDelivery, id)
 	var i GitTriggerDelivery
 	err := row.Scan(
 		&i.ID,
@@ -314,38 +345,58 @@ SET failure_count = failure_count + 1,
     next_attempt_at = $2::timestamptz + make_interval(secs =>
         LEAST($3::double precision,
               $4::double precision * power(2, failure_count))),
-    failed_at = CASE WHEN failure_count + 1 >= $5::integer
+    failed_at = CASE WHEN $5::boolean
+                          OR failure_count + 1 >= $6::integer
         THEN $2::timestamptz ELSE NULL END
-WHERE id = $6
+WHERE id = $7
   AND run_id IS NULL AND superseded_at IS NULL AND failed_at IS NULL
-RETURNING failure_count, failed_at
+  AND failure_count = $8
+  AND failure_count < $6::integer
+  AND next_attempt_at <= $2
+RETURNING id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at, target_id, review_required
 `
 
 type RecordGitTriggerDeliveryFailureParams struct {
-	Diagnostic          *string
-	AttemptedAt         pgtype.Timestamptz
-	MaxDelaySeconds     float64
-	InitialDelaySeconds float64
-	FailureLimit        int32
-	ID                  pgtype.UUID
+	Diagnostic           *string
+	AttemptedAt          pgtype.Timestamptz
+	MaxDelaySeconds      float64
+	InitialDelaySeconds  float64
+	Permanent            bool
+	FailureLimit         int32
+	ID                   pgtype.UUID
+	ExpectedFailureCount int32
 }
 
-type RecordGitTriggerDeliveryFailureRow struct {
-	FailureCount int32
-	FailedAt     pgtype.Timestamptz
-}
-
-func (q *Queries) RecordGitTriggerDeliveryFailure(ctx context.Context, arg RecordGitTriggerDeliveryFailureParams) (RecordGitTriggerDeliveryFailureRow, error) {
+func (q *Queries) RecordGitTriggerDeliveryFailure(ctx context.Context, arg RecordGitTriggerDeliveryFailureParams) (GitTriggerDelivery, error) {
 	row := q.db.QueryRow(ctx, recordGitTriggerDeliveryFailure,
 		arg.Diagnostic,
 		arg.AttemptedAt,
 		arg.MaxDelaySeconds,
 		arg.InitialDelaySeconds,
+		arg.Permanent,
 		arg.FailureLimit,
 		arg.ID,
+		arg.ExpectedFailureCount,
 	)
-	var i RecordGitTriggerDeliveryFailureRow
-	err := row.Scan(&i.FailureCount, &i.FailedAt)
+	var i GitTriggerDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.TargetName,
+		&i.ActionName,
+		&i.TriggerName,
+		&i.Parameters,
+		&i.CreatedAt,
+		&i.FailureCount,
+		&i.NextAttemptAt,
+		&i.Diagnostic,
+		&i.FailedAt,
+		&i.RunID,
+		&i.SupersededAt,
+		&i.TargetID,
+		&i.ReviewRequired,
+	)
 	return i, err
 }
 

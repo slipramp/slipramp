@@ -174,7 +174,7 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | --- | --- | --- | --- |
 | `slipramp.repository.refresh.attempts` | `slipramp_repository_refresh_attempts_total` | counter / `{repository}` | `result=succeeded|fetch_failed|catalog_rejected|persist_failed` |
 | `slipramp.repository.refresh.duration` | `slipramp_repository_refresh_duration_seconds` | histogram / `s` | same `result` |
-| `slipramp.git_trigger.delivery.attempts` | `slipramp_git_trigger_delivery_attempts_total` | counter / `{delivery}` | `result=created|superseded|retry_scheduled|terminal_failed|record_failed` |
+| `slipramp.git_trigger.delivery.attempts` | `slipramp_git_trigger_delivery_attempts_total` | counter / `{delivery}` | `result=pending-eligible|pending-retry|run-linked|superseded|failed|record_failed` |
 | `slipramp.git_trigger.delivery.duration` | `slipramp_git_trigger_delivery_duration_seconds` | histogram / `s` | same `result` |
 | `slipramp.notification.delivery.attempts` | `slipramp_notification_delivery_attempts_total` | counter / `{delivery}` | `result=delivered|retry_scheduled|terminal_failed|configuration_failed|record_failed` |
 | `slipramp.notification.delivery.duration` | `slipramp_notification_delivery_duration_seconds` | histogram / `s` | same `result` |

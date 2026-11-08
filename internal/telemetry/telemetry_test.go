@@ -92,7 +92,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	}
 
 	metrics.ObserveRepositoryRefresh(t.Context(), repository.RefreshAttemptSucceeded, 150*time.Millisecond)
-	metrics.ObserveGitTriggerDelivery(t.Context(), gittrigger.DeliveryAttemptRetryScheduled, 25*time.Millisecond)
+	metrics.ObserveGitTriggerDelivery(t.Context(), gittrigger.DeliveryAttemptPendingRetry, 25*time.Millisecond)
 	metrics.ObserveNotificationDelivery(t.Context(), notification.DeliveryAttemptDelivered, 50*time.Millisecond)
 	metrics.ObserveArtifactReconciliation(
 		t.Context(),
@@ -177,7 +177,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	)
 	assertMetricLine(t, firstScrape, "slipramp_repository_refresh_attempts_total", `result="succeeded"`, " 1")
 	assertMetricLine(t, firstScrape, "slipramp_repository_refresh_duration_seconds_count", `result="succeeded"`, " 1")
-	assertMetricLine(t, firstScrape, "slipramp_git_trigger_delivery_attempts_total", `result="retry_scheduled"`, " 1")
+	assertMetricLine(t, firstScrape, "slipramp_git_trigger_delivery_attempts_total", `result="pending-retry"`, " 1")
 	assertMetricLine(t, firstScrape, "slipramp_notification_delivery_attempts_total", `result="delivered"`, " 1")
 	assertMetricLine(t, firstScrape, "slipramp_artifact_reconciliation_runs_total", `result="succeeded"`, " 1")
 	assertMetricLine(t, firstScrape, "slipramp_artifact_reconciliation_items_total", `operation="expired"`, " 2")

@@ -3,7 +3,6 @@ package gittrigger
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
@@ -34,8 +33,8 @@ func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 	if store.failureCalls != 0 {
 		t.Fatal("successful creation recorded a failure")
 	}
-	if !reflect.DeepEqual(observer.results, []DeliveryAttemptResult{DeliveryAttemptCreated}) {
-		t.Errorf("delivery metric results = %v, want created", observer.results)
+	if !reflect.DeepEqual(observer.results, []DeliveryAttemptResult{DeliveryAttemptRunLinked}) {
+		t.Errorf("delivery metric results = %v, want run-linked", observer.results)
 	}
 
 	request := runs.request
@@ -108,7 +107,7 @@ func TestDispatcherContinuesAfterRunCreationFailure(t *testing.T) {
 	if store.diagnostic != FailureDiagnostic(errors.New("configuration unavailable")) {
 		t.Errorf("diagnostic = %q", store.diagnostic)
 	}
-	wantResults := []DeliveryAttemptResult{DeliveryAttemptRetryScheduled, DeliveryAttemptCreated}
+	wantResults := []DeliveryAttemptResult{DeliveryAttemptPendingRetry, DeliveryAttemptRunLinked}
 	if !reflect.DeepEqual(observer.results, wantResults) {
 		t.Errorf("delivery metric results = %v, want %v", observer.results, wantResults)
 	}
@@ -129,7 +128,7 @@ func TestProcessNextRecordsTerminalAndPersistenceFailures(t *testing.T) {
 				queue:           []Delivery{testDelivery()},
 				failureTerminal: true,
 			},
-			wantResult: DeliveryAttemptTerminalFailed,
+			wantResult: DeliveryAttemptFailed,
 		},
 		{
 			name: "record failure",
@@ -192,36 +191,54 @@ func TestProcessNextDoesNotRecordIdleOrShutdownCancellation(t *testing.T) {
 	}
 }
 
-func TestFailureDiagnostic(t *testing.T) {
+func TestClassifyCreationFailure(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		err  error
-		want string
+		name           string
+		err            error
+		wantPermanent  bool
+		wantDiagnostic string
 	}{
 		{
-			name: "known error",
-			err:  fmt.Errorf("%w: parameter password=secret", run.ErrInvalidParameters),
-			want: run.ErrInvalidParameters.Error(),
+			name:          "invalid frozen parameters",
+			err:           errors.Join(run.ErrInvalidParameters, errors.New("password=secret")),
+			wantPermanent: true, wantDiagnostic: run.ErrInvalidParameters.Error(),
 		},
 		{
-			name: "unknown error",
-			err:  errors.New("postgres://admin:secret@db private-token"),
-			want: "Run creation failed; check Server configuration and dependency health.",
+			name: "missing frozen action", err: run.ErrActionNotFound,
+			wantPermanent: true, wantDiagnostic: run.ErrActionNotFound.Error(),
+		},
+		{
+			name: "placement can be configured", err: run.ErrPlacementNotFound,
+			wantPermanent: false, wantDiagnostic: run.ErrPlacementNotFound.Error(),
+		},
+		{
+			name: "dependency outage", err: errors.New("postgres://admin:secret@db private-token"),
+			wantPermanent:  false,
+			wantDiagnostic: "Run creation failed; check Server configuration and dependency health.",
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			if got := FailureDiagnostic(test.err); got != test.want {
-				t.Errorf("FailureDiagnostic() = %q, want %q", got, test.want)
+
+			failure := ClassifyCreationFailure(test.err)
+			if failure.Permanent != test.wantPermanent || failure.Diagnostic != test.wantDiagnostic {
+				t.Errorf(
+					"ClassifyCreationFailure() = %#v, want permanent %t diagnostic %q",
+					failure,
+					test.wantPermanent,
+					test.wantDiagnostic,
+				)
 			}
 		})
 	}
 }
 
 func testDelivery() Delivery {
+	createdAt := time.Date(2026, time.November, 7, 12, 0, 0, 0, time.UTC)
 	return Delivery{
 		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
 		RepositoryID:      uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201"),
@@ -235,6 +252,7 @@ func testDelivery() Delivery {
 			"auto-approve": true,
 			"retries":      float64(3),
 		},
+		Lifecycle: Lifecycle{CreatedAt: createdAt, NextAttemptAt: createdAt},
 	}
 }
 
@@ -289,14 +307,25 @@ func (s *deliveryStore) GetEligibleGitTriggerDelivery(context.Context, time.Time
 func (s *deliveryStore) RecordGitTriggerDeliveryFailure(
 	_ context.Context,
 	_ uuid.UUID,
-	_ time.Time,
-	diagnostic string,
-) (FailureState, bool, error) {
+	expectedFailureCount int,
+	attemptedAt time.Time,
+	failure CreationFailure,
+) (Delivery, bool, error) {
 	s.failureCalls++
-	s.diagnostic = diagnostic
+	s.diagnostic = failure.Diagnostic
 	if s.recordError != nil {
-		return FailureState{}, false, s.recordError
+		return Delivery{}, false, s.recordError
 	}
 	s.queue = s.queue[1:]
-	return FailureState{Count: s.failureCalls, Terminal: s.failureTerminal}, true, nil
+	failedAt := (*time.Time)(nil)
+	if s.failureTerminal || failure.Permanent {
+		failedAt = &attemptedAt
+	}
+	return Delivery{Lifecycle: Lifecycle{
+		CreatedAt:     attemptedAt.Add(-time.Minute),
+		FailureCount:  expectedFailureCount + 1,
+		NextAttemptAt: attemptedAt.Add(InitialRetryDelay),
+		Diagnostic:    failure.Diagnostic,
+		FailedAt:      failedAt,
+	}}, true, nil
 }

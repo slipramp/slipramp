@@ -19,9 +19,10 @@ type Store interface {
 	RecordGitTriggerDeliveryFailure(
 		ctx context.Context,
 		deliveryID uuid.UUID,
+		expectedFailureCount int,
 		now time.Time,
-		diagnostic string,
-	) (FailureState, bool, error)
+		failure CreationFailure,
+	) (Delivery, bool, error)
 }
 
 type RunCreator interface {
@@ -31,11 +32,12 @@ type RunCreator interface {
 type DeliveryAttemptResult string
 
 const (
-	DeliveryAttemptCreated        DeliveryAttemptResult = "created"
-	DeliveryAttemptSuperseded     DeliveryAttemptResult = "superseded"
-	DeliveryAttemptRetryScheduled DeliveryAttemptResult = "retry_scheduled"
-	DeliveryAttemptTerminalFailed DeliveryAttemptResult = "terminal_failed"
-	DeliveryAttemptRecordFailed   DeliveryAttemptResult = "record_failed"
+	DeliveryAttemptPendingEligible DeliveryAttemptResult = "pending-eligible"
+	DeliveryAttemptRunLinked       DeliveryAttemptResult = "run-linked"
+	DeliveryAttemptSuperseded      DeliveryAttemptResult = "superseded"
+	DeliveryAttemptPendingRetry    DeliveryAttemptResult = "pending-retry"
+	DeliveryAttemptFailed          DeliveryAttemptResult = "failed"
+	DeliveryAttemptRecordFailed    DeliveryAttemptResult = "record_failed"
 )
 
 type DeliveryObserver interface {
@@ -165,29 +167,41 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 
-		diagnostic := FailureDiagnostic(err)
-		failure, recorded, recordErr := d.deliveries.RecordGitTriggerDeliveryFailure(
+		failure := ClassifyCreationFailure(err)
+		updated, recorded, recordErr := d.deliveries.RecordGitTriggerDeliveryFailure(
 			ctx,
 			delivery.ID,
+			delivery.Lifecycle.FailureCount,
 			d.now(),
-			diagnostic,
+			failure,
 		)
 		if recordErr != nil {
 			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptRecordFailed, time.Since(startedAt))
 			return false, fmt.Errorf("record failed attempt for delivery %s: %w", delivery.ID, recordErr)
 		}
 		if !recorded {
-			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptSuperseded, time.Since(startedAt))
+			state, stateErr := updated.State(d.now())
+			if stateErr != nil {
+				d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptRecordFailed, time.Since(startedAt))
+				return false, fmt.Errorf("interpret concurrently resolved delivery %s: %w", delivery.ID, stateErr)
+			}
+			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptResult(state), time.Since(startedAt))
 			d.logger.Info("Git-trigger delivery was resolved after Run creation failed",
 				"delivery", delivery.ID,
 				"repository", delivery.RepositoryID,
 				"target", delivery.TargetName,
+				"state", state,
 			)
 			return true, nil
 		}
-		result := DeliveryAttemptRetryScheduled
-		if failure.Terminal {
-			result = DeliveryAttemptTerminalFailed
+		state, stateErr := updated.State(d.now())
+		if stateErr != nil {
+			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptRecordFailed, time.Since(startedAt))
+			return false, fmt.Errorf("interpret failed delivery %s: %w", delivery.ID, stateErr)
+		}
+		result := DeliveryAttemptPendingRetry
+		if state == StateFailed {
+			result = DeliveryAttemptFailed
 		}
 		d.observer.ObserveGitTriggerDelivery(ctx, result, time.Since(startedAt))
 		d.logger.Warn("Git-trigger delivery could not create Run",
@@ -196,14 +210,14 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 			"target", delivery.TargetName,
 			"action", delivery.ActionName,
 			"trigger", delivery.TriggerName,
-			"failure_count", failure.Count,
-			"terminal", failure.Terminal,
-			"diagnostic", diagnostic,
+			"failure_count", updated.Lifecycle.FailureCount,
+			"state", state,
+			"diagnostic", failure.Diagnostic,
 		)
 		return true, nil
 	}
 
-	d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptCreated, time.Since(startedAt))
+	d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptRunLinked, time.Since(startedAt))
 	d.logger.Info(
 		"Git-trigger delivery created Run",
 		"delivery", delivery.ID,

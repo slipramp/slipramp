@@ -115,16 +115,35 @@ Each delivery freezes revision, parameters, and review requirement.
 Automatic Git work uses Target-scoped latest-wins coalescing. When desired
 relevance advances or a Target is archived, older undispatched deliveries are
 superseded and older queued Git Runs finish as canceled. Active Git Runs finish
-normally. Manual, API, MCP, and Promotion Runs are never superseded.
+normally. Manual, API, MCP, schedule, and Promotion Runs are never superseded.
 
 Dispatch pins creation to the delivery revision and uses the delivery UUID as
 the idempotency key. Run insertion locks current Target state and refuses work
 whose commit is no longer desired, closing the refresh/dispatch race.
 
+Delivery state is derived from the existing `run_id`, `superseded_at`,
+`failed_at`, `failure_count`, and `next_attempt_at` fields; no persisted status
+duplicates those facts. The terminal markers are mutually exclusive. Pending
+eligibility is time-dependent: `next_attempt_at` is due at an inclusive
+boundary.
+
+| Current state | Authoritative fields | Guarded operation | Result |
+| --- | --- | --- | --- |
+| Pending, eligible | No terminal marker; `next_attempt_at <= now` | Link the matching Run | Run linked |
+| Pending, eligible | No terminal marker; selected `failure_count` still matches | Record a retryable creation failure | Pending in retry backoff |
+| Pending, eligible | No terminal marker; selected `failure_count` still matches | Record a permanent failure or exhaust the attempt limit | Terminally failed |
+| Pending, eligible or in backoff | No terminal marker | Supersede for a newer desired commit | Superseded |
+| Pending in retry backoff | No terminal marker; `next_attempt_at > now` | Time reaches `next_attempt_at` | Pending, eligible |
+| Run linked | Matching `run_id` | Repeat the same linkage | Run linked, unchanged |
+
 Creation failures retain bounded diagnostics, attempt count, and next due time.
-Bounded exponential backoff isolates a failing delivery so later eligible work
-continues. Exhaustion produces terminal failure history. Retrying a delivery may
-create its immutable Run; it never retries the Run's infrastructure command.
+Permanent frozen-definition failures terminate immediately. Operational
+failures use bounded exponential backoff, isolating a failing delivery so later
+eligible work continues in ordinary creation-time FIFO order. A failure update
+compares the selected failure count and due time, so duplicate or concurrent
+dispatchers record at most one transition for the attempt. Exhaustion produces
+terminal failure history. Retrying a delivery may create its immutable Run; it
+never retries the Run's infrastructure command.
 
 ## Scheduled Action triggers
 

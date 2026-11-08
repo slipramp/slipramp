@@ -31,12 +31,18 @@ WHERE targets.repository_id = sqlc.arg(repository_id)
 -- name: GetEligibleGitTriggerDelivery :one
 SELECT *
 FROM git_trigger_deliveries
+-- StatePendingEligible: no durable outcome and the retry boundary is due.
 WHERE run_id IS NULL
   AND superseded_at IS NULL
   AND failed_at IS NULL
   AND next_attempt_at <= sqlc.arg(attempted_at)
 ORDER BY created_at, id
 LIMIT 1;
+
+-- name: GetGitTriggerDelivery :one
+SELECT *
+FROM git_trigger_deliveries
+WHERE id = sqlc.arg(id);
 
 -- name: LinkGitTriggerRun :execrows
 UPDATE git_trigger_deliveries
@@ -62,11 +68,15 @@ SET failure_count = failure_count + 1,
     next_attempt_at = sqlc.arg(attempted_at)::timestamptz + make_interval(secs =>
         LEAST(sqlc.arg(max_delay_seconds)::double precision,
               sqlc.arg(initial_delay_seconds)::double precision * power(2, failure_count))),
-    failed_at = CASE WHEN failure_count + 1 >= sqlc.arg(failure_limit)::integer
+    failed_at = CASE WHEN sqlc.arg(permanent)::boolean
+                          OR failure_count + 1 >= sqlc.arg(failure_limit)::integer
         THEN sqlc.arg(attempted_at)::timestamptz ELSE NULL END
 WHERE id = sqlc.arg(id)
   AND run_id IS NULL AND superseded_at IS NULL AND failed_at IS NULL
-RETURNING failure_count, failed_at;
+  AND failure_count = sqlc.arg(expected_failure_count)
+  AND failure_count < sqlc.arg(failure_limit)::integer
+  AND next_attempt_at <= sqlc.arg(attempted_at)
+RETURNING *;
 
 -- name: ListFailedGitTriggerDeliveries :many
 SELECT delivery.*, repositories.name AS repository_name, catalog_revisions.commit_sha

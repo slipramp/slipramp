@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
@@ -237,7 +238,7 @@ func TestRunReviewNotificationFailureRollsBackRunCreationIntegration(t *testing.
 	).Scan(&failureCount); err != nil {
 		t.Fatal(err)
 	}
-	assertGitTriggerDeliveryState(t, database, delivery.ID, false, false)
+	assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StatePendingRetry)
 	if failureCount != 1 {
 		t.Fatalf("delivery failures after Run rollback = %d, want 1", failureCount)
 	}

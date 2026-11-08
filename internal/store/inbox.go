@@ -125,12 +125,33 @@ func (d *Database) ListInboxFailedGitTriggerDeliveries(ctx context.Context) ([]g
 
 	records := make([]gittrigger.FailedDelivery, 0, len(rows))
 	for _, row := range rows {
-		diagnostic := ""
-		if row.Diagnostic != nil {
-			diagnostic = *row.Diagnostic
+		lifecycle := gitTriggerLifecycle(
+			row.CreatedAt,
+			row.FailureCount,
+			row.NextAttemptAt,
+			row.Diagnostic,
+			row.FailedAt,
+			row.RunID,
+			row.SupersededAt,
+		)
+		state, err := lifecycle.State(lifecycle.NextAttemptAt)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"map failed Git-trigger delivery %s for Inbox: %w",
+				uuid.UUID(row.ID.Bytes),
+				err,
+			)
+		}
+		if state != gittrigger.StateFailed {
+			return nil, fmt.Errorf(
+				"map failed Git-trigger delivery %s for Inbox: state is %s",
+				uuid.UUID(row.ID.Bytes),
+				state,
+			)
 		}
 		records = append(records, gittrigger.FailedDelivery{
 			ID:                uuid.UUID(row.ID.Bytes),
+			TargetID:          uuid.UUID(row.TargetID.Bytes),
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			RepositoryName:    row.RepositoryName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
@@ -138,9 +159,9 @@ func (d *Database) ListInboxFailedGitTriggerDeliveries(ctx context.Context) ([]g
 			TargetName:        row.TargetName,
 			ActionName:        row.ActionName,
 			TriggerName:       row.TriggerName,
-			FailureCount:      int(row.FailureCount),
-			Diagnostic:        diagnostic,
-			FailedAt:          row.FailedAt.Time.UTC(),
+			FailureCount:      lifecycle.FailureCount,
+			Diagnostic:        lifecycle.Diagnostic,
+			FailedAt:          *lifecycle.FailedAt,
 		})
 	}
 

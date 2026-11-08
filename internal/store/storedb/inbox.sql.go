@@ -96,17 +96,9 @@ func (q *Queries) ListInboxActiveRuns(ctx context.Context) ([]ListInboxActiveRun
 
 const listInboxFailedGitTriggerDeliveries = `-- name: ListInboxFailedGitTriggerDeliveries :many
 SELECT
-    delivery.id,
-    delivery.repository_id,
+    delivery.id, delivery.repository_id, delivery.catalog_revision_id, delivery.target_name, delivery.action_name, delivery.trigger_name, delivery.parameters, delivery.created_at, delivery.failure_count, delivery.next_attempt_at, delivery.diagnostic, delivery.failed_at, delivery.run_id, delivery.superseded_at, delivery.target_id, delivery.review_required,
     repositories.name AS repository_name,
-    delivery.catalog_revision_id,
-    catalog_revisions.commit_sha,
-    delivery.target_name,
-    delivery.action_name,
-    delivery.trigger_name,
-    delivery.failure_count,
-    delivery.diagnostic,
-    delivery.failed_at
+    catalog_revisions.commit_sha
 FROM git_trigger_deliveries AS delivery
 JOIN repositories ON repositories.id = delivery.repository_id
 JOIN catalog_revisions ON catalog_revisions.id = delivery.catalog_revision_id
@@ -117,15 +109,22 @@ ORDER BY delivery.failed_at DESC, delivery.id DESC
 type ListInboxFailedGitTriggerDeliveriesRow struct {
 	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID
-	RepositoryName    string
 	CatalogRevisionID pgtype.UUID
-	CommitSha         string
 	TargetName        string
 	ActionName        string
 	TriggerName       string
+	Parameters        []byte
+	CreatedAt         pgtype.Timestamptz
 	FailureCount      int32
+	NextAttemptAt     pgtype.Timestamptz
 	Diagnostic        *string
 	FailedAt          pgtype.Timestamptz
+	RunID             pgtype.UUID
+	SupersededAt      pgtype.Timestamptz
+	TargetID          pgtype.UUID
+	ReviewRequired    bool
+	RepositoryName    string
+	CommitSha         string
 }
 
 func (q *Queries) ListInboxFailedGitTriggerDeliveries(ctx context.Context) ([]ListInboxFailedGitTriggerDeliveriesRow, error) {
@@ -140,15 +139,22 @@ func (q *Queries) ListInboxFailedGitTriggerDeliveries(ctx context.Context) ([]Li
 		if err := rows.Scan(
 			&i.ID,
 			&i.RepositoryID,
-			&i.RepositoryName,
 			&i.CatalogRevisionID,
-			&i.CommitSha,
 			&i.TargetName,
 			&i.ActionName,
 			&i.TriggerName,
+			&i.Parameters,
+			&i.CreatedAt,
 			&i.FailureCount,
+			&i.NextAttemptAt,
 			&i.Diagnostic,
 			&i.FailedAt,
+			&i.RunID,
+			&i.SupersededAt,
+			&i.TargetID,
+			&i.ReviewRequired,
+			&i.RepositoryName,
+			&i.CommitSha,
 		); err != nil {
 			return nil, err
 		}

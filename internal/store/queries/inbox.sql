@@ -48,17 +48,9 @@ ORDER BY created_at DESC, id DESC;
 
 -- name: ListInboxFailedGitTriggerDeliveries :many
 SELECT
-    delivery.id,
-    delivery.repository_id,
+    delivery.*,
     repositories.name AS repository_name,
-    delivery.catalog_revision_id,
-    catalog_revisions.commit_sha,
-    delivery.target_name,
-    delivery.action_name,
-    delivery.trigger_name,
-    delivery.failure_count,
-    delivery.diagnostic,
-    delivery.failed_at
+    catalog_revisions.commit_sha
 FROM git_trigger_deliveries AS delivery
 JOIN repositories ON repositories.id = delivery.repository_id
 JOIN catalog_revisions ON catalog_revisions.id = delivery.catalog_revision_id

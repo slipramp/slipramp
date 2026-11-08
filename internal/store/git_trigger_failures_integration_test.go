@@ -1,8 +1,12 @@
 package store
 
 import (
+	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,10 +51,11 @@ func TestGitDeliveryBackoffPersistsAndTerminatesIntegration(t *testing.T) {
 	failure := errors.New("postgres://admin:secret@database private parameter")
 
 	state := recordGitDeliveryFailure(t, database, delivery.ID, attemptedAt, failure)
-	if state.Count != 1 || state.Terminal {
+	derived, stateErr := state.State(attemptedAt)
+	if state.Lifecycle.FailureCount != 1 || stateErr != nil || derived != gittrigger.StatePendingRetry {
 		t.Fatalf("first failure state = %#v", state)
 	}
-	nextAttemptAt := attemptedAt.Add(gittrigger.InitialRetryDelay)
+	nextAttemptAt := state.Lifecycle.NextAttemptAt
 	database.Close()
 
 	// A new Server connection sees the durable schedule and does not select the delivery early.
@@ -70,16 +75,13 @@ func TestGitDeliveryBackoffPersistsAndTerminatesIntegration(t *testing.T) {
 			t.Fatalf("due selection = %#v, %v", selected, err)
 		}
 		state = recordGitDeliveryFailure(t, database, delivery.ID, attemptedAt, failure)
-		if state.Count != count {
+		if state.Lifecycle.FailureCount != count {
 			t.Fatalf("failure %d state = %#v", count, state)
 		}
-		delay := min(
-			gittrigger.InitialRetryDelay*time.Duration(1<<(count-1)),
-			gittrigger.MaximumRetryDelay,
-		)
-		nextAttemptAt = attemptedAt.Add(delay)
+		nextAttemptAt = state.Lifecycle.NextAttemptAt
 	}
-	if !state.Terminal {
+	derived, stateErr = state.State(attemptedAt)
+	if stateErr != nil || derived != gittrigger.StateFailed {
 		t.Fatal("failure limit did not make the delivery terminal")
 	}
 	if _, err := database.GetEligibleGitTriggerDelivery(ctx, attemptedAt.Add(24*time.Hour)); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
@@ -122,63 +124,173 @@ func TestGitDeliveryBackoffIsSupersededByNewHeadIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(ctx, delivery.RepositoryID, refresh); err != nil {
 		t.Fatal(err)
 	}
-	assertGitTriggerDeliveryState(t, database, delivery.ID, true, false)
+	assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateSuperseded)
 
 	_, recorded, err := database.RecordGitTriggerDeliveryFailure(
 		ctx,
 		delivery.ID,
+		1,
 		attemptedAt.Add(time.Second),
-		gittrigger.FailureDiagnostic(errors.New("late failure")),
+		gittrigger.ClassifyCreationFailure(errors.New("late failure")),
 	)
 	if err != nil || recorded {
 		t.Fatalf("failure after supersession: recorded=%t error=%v", recorded, err)
 	}
 }
 
-func TestGitRunAndDeliveryLinkCommitAtomicallyIntegration(t *testing.T) {
+func TestGitDeliveryIdempotencyIntegration(t *testing.T) {
+	t.Run("duplicate failure attempt", func(t *testing.T) {
+		ctx, _, database := openIntegrationDatabase(t)
+		defer database.Close()
+
+		delivery, attemptedAt := seedGitDelivery(t, database)
+		failure := gittrigger.ClassifyCreationFailure(errors.New("database unavailable"))
+		updated, recorded, err := database.RecordGitTriggerDeliveryFailure(
+			ctx,
+			delivery.ID,
+			delivery.Lifecycle.FailureCount,
+			attemptedAt,
+			failure,
+		)
+		if err != nil || !recorded || updated.Lifecycle.FailureCount != 1 {
+			t.Fatalf("first failure = (%#v, %t, %v)", updated, recorded, err)
+		}
+
+		duplicate, recorded, err := database.RecordGitTriggerDeliveryFailure(
+			ctx,
+			delivery.ID,
+			delivery.Lifecycle.FailureCount,
+			attemptedAt,
+			failure,
+		)
+		if err != nil || recorded || duplicate.ID != delivery.ID || duplicate.Lifecycle.FailureCount != 1 {
+			t.Fatalf("duplicate failure = (%#v, %t, %v), want unchanged", duplicate, recorded, err)
+		}
+	})
+
+	t.Run("concurrent dispatchers", func(t *testing.T) {
+		ctx, _, database := openIntegrationDatabase(t)
+		defer database.Close()
+
+		delivery, _ := seedGitDelivery(t, database)
+		runs, _ := newGitTriggerTestServices(t, database)
+		ready := make(chan struct{}, 2)
+		release := make(chan struct{})
+		var releaseOnce sync.Once
+		releaseDispatchers := func() { releaseOnce.Do(func() { close(release) }) }
+		defer releaseDispatchers()
+		creator := synchronizedRunCreator{runs: runs, ready: ready, release: release}
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		dispatchers := []*gittrigger.Dispatcher{
+			gittrigger.NewDispatcher(database, creator, time.Second, logger),
+			gittrigger.NewDispatcher(database, creator, time.Second, logger),
+		}
+
+		type result struct {
+			processed bool
+			err       error
+		}
+		results := make(chan result, len(dispatchers))
+		for _, dispatcher := range dispatchers {
+			go func() {
+				processed, err := dispatcher.ProcessNext(ctx)
+				results <- result{processed: processed, err: err}
+			}()
+		}
+		for range dispatchers {
+			select {
+			case <-ready:
+			case <-time.After(5 * time.Second):
+				releaseDispatchers()
+				t.Fatal("dispatchers did not select the delivery concurrently")
+			}
+		}
+		releaseDispatchers()
+		for range dispatchers {
+			result := <-results
+			if result.err != nil || !result.processed {
+				t.Fatalf("concurrent ProcessNext() = (%t, %v)", result.processed, result.err)
+			}
+		}
+
+		assertRunCounts(t, database, 1, 1)
+		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateRunLinked)
+		if _, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now()); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
+			t.Fatalf("linked delivery remains eligible: %v", err)
+		}
+	})
+}
+
+func TestGitDeliveryPermanentFailureTerminatesImmediatelyIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
 
 	delivery, attemptedAt := seedGitDelivery(t, database)
-	record := queuedGitTestRun(uuid.New(), delivery, strings.Repeat("b", 40), attemptedAt.Add(time.Second))
-	_, err := database.pool.Exec(ctx, `CREATE FUNCTION reject_delivery_link() RETURNS trigger LANGUAGE plpgsql AS
+	updated, recorded, err := database.RecordGitTriggerDeliveryFailure(
+		ctx,
+		delivery.ID,
+		delivery.Lifecycle.FailureCount,
+		attemptedAt,
+		gittrigger.ClassifyCreationFailure(run.ErrInvalidParameters),
+	)
+	if err != nil || !recorded {
+		t.Fatalf("permanent failure = (%#v, %t, %v)", updated, recorded, err)
+	}
+	state, err := updated.State(attemptedAt)
+	if err != nil || state != gittrigger.StateFailed || updated.Lifecycle.FailureCount != 1 {
+		t.Fatalf("permanent failure state = (%s, %#v, %v)", state, updated.Lifecycle, err)
+	}
+	if _, err := database.GetEligibleGitTriggerDelivery(ctx, attemptedAt.Add(24*time.Hour)); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
+		t.Fatalf("permanently failed delivery remains eligible: %v", err)
+	}
+}
+
+func TestGitRunDeliveryLinkageIntegration(t *testing.T) {
+	t.Run("Run and delivery commit atomically", func(t *testing.T) {
+		ctx, _, database := openIntegrationDatabase(t)
+		defer database.Close()
+
+		delivery, attemptedAt := seedGitDelivery(t, database)
+		record := queuedGitTestRun(uuid.New(), delivery, strings.Repeat("b", 40), attemptedAt.Add(time.Second))
+		_, err := database.pool.Exec(ctx, `CREATE FUNCTION reject_delivery_link() RETURNS trigger LANGUAGE plpgsql AS
         $$ BEGIN RAISE EXCEPTION 'simulated link storage failure'; END; $$;
         CREATE TRIGGER reject_delivery_link BEFORE UPDATE OF run_id ON git_trigger_deliveries
         FOR EACH ROW EXECUTE FUNCTION reject_delivery_link();`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.CreateRun(ctx, record, nil); err == nil {
-		t.Fatal("expected link storage failure")
-	}
-	assertRunCounts(t, database, 0, 0)
-	assertGitTriggerDeliveryState(t, database, delivery.ID, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.CreateRun(ctx, record, nil); err == nil {
+			t.Fatal("expected link storage failure")
+		}
+		assertRunCounts(t, database, 0, 0)
+		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StatePendingEligible)
 
-	if _, err := database.pool.Exec(
-		ctx,
-		"DROP TRIGGER reject_delivery_link ON git_trigger_deliveries; DROP FUNCTION reject_delivery_link()",
-	); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.CreateRun(ctx, record, nil); err != nil {
-		t.Fatal(err)
-	}
-	assertRunCounts(t, database, 1, 1)
-	assertGitTriggerDeliveryState(t, database, delivery.ID, false, true)
-}
+		if _, err := database.pool.Exec(
+			ctx,
+			"DROP TRIGGER reject_delivery_link ON git_trigger_deliveries; DROP FUNCTION reject_delivery_link()",
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.CreateRun(ctx, record, nil); err != nil {
+			t.Fatal(err)
+		}
+		assertRunCounts(t, database, 1, 1)
+		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateRunLinked)
+	})
 
-func TestGitRunLinkRejectsMismatchedDeliveryIntegration(t *testing.T) {
-	ctx, _, database := openIntegrationDatabase(t)
-	defer database.Close()
+	t.Run("mismatched definition is rejected", func(t *testing.T) {
+		ctx, _, database := openIntegrationDatabase(t)
+		defer database.Close()
 
-	delivery, attemptedAt := seedGitDelivery(t, database)
-	record := queuedGitTestRun(uuid.New(), delivery, strings.Repeat("b", 40), attemptedAt.Add(time.Second))
-	record.Source.Git.TriggerName = "other-trigger"
-	if _, err := database.CreateRun(ctx, record, nil); err == nil {
-		t.Fatal("mismatched delivery created a Run")
-	}
-	assertRunCounts(t, database, 0, 0)
-	assertGitTriggerDeliveryState(t, database, delivery.ID, false, false)
+		delivery, attemptedAt := seedGitDelivery(t, database)
+		record := queuedGitTestRun(uuid.New(), delivery, strings.Repeat("b", 40), attemptedAt.Add(time.Second))
+		record.Source.Git.TriggerName = "other-trigger"
+		if _, err := database.CreateRun(ctx, record, nil); err == nil {
+			t.Fatal("mismatched delivery created a Run")
+		}
+		assertRunCounts(t, database, 0, 0)
+		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StatePendingEligible)
+	})
 }
 
 func TestFailedGitDeliveryPaginationOrderIntegration(t *testing.T) {
@@ -193,7 +305,7 @@ func TestFailedGitDeliveryPaginationOrderIntegration(t *testing.T) {
 				(id, target_id, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
                  review_required, parameters, created_at, next_attempt_at)
 				SELECT $1, target_id, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
-                       review_required, parameters, created_at, next_attempt_at
+				       review_required, parameters, created_at, created_at
                 FROM git_trigger_deliveries WHERE id = $2`, id, delivery.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -215,14 +327,23 @@ func recordGitDeliveryFailure(
 	deliveryID uuid.UUID,
 	attemptedAt time.Time,
 	failure error,
-) gittrigger.FailureState {
+) gittrigger.Delivery {
 	t.Helper()
 
+	var expectedFailureCount int
+	if err := database.pool.QueryRow(
+		t.Context(),
+		"SELECT failure_count FROM git_trigger_deliveries WHERE id = $1",
+		deliveryID,
+	).Scan(&expectedFailureCount); err != nil {
+		t.Fatalf("load delivery failure count: %v", err)
+	}
 	state, recorded, err := database.RecordGitTriggerDeliveryFailure(
 		t.Context(),
 		deliveryID,
+		expectedFailureCount,
 		attemptedAt,
-		gittrigger.FailureDiagnostic(failure),
+		gittrigger.ClassifyCreationFailure(failure),
 	)
 	if err != nil || !recorded {
 		t.Fatalf("record delivery failure: state=%#v recorded=%t error=%v", state, recorded, err)
@@ -234,6 +355,24 @@ func exhaustGitDelivery(t *testing.T, database *Database, deliveryID uuid.UUID, 
 	t.Helper()
 
 	for range gittrigger.FailureLimit {
-		recordGitDeliveryFailure(t, database, deliveryID, attemptedAt, run.ErrPlacementNotFound)
+		state := recordGitDeliveryFailure(t, database, deliveryID, attemptedAt, run.ErrPlacementNotFound)
+		attemptedAt = state.Lifecycle.NextAttemptAt
 	}
+}
+
+type synchronizedRunCreator struct {
+	runs    *run.Service
+	ready   chan<- struct{}
+	release <-chan struct{}
+}
+
+func (c synchronizedRunCreator) CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error) {
+	c.ready <- struct{}{}
+	select {
+	case <-c.release:
+	case <-ctx.Done():
+		return run.Run{}, ctx.Err()
+	}
+
+	return c.runs.CreateRun(ctx, request)
 }

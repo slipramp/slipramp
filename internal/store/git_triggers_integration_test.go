@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gittrigger"
@@ -123,7 +122,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		t.Fatalf("record later matching catalog: %v", err)
 	}
 	assertGitTriggerDeliveryCount(t, database, 2)
-	assertGitTriggerDeliveryState(t, database, oldest.ID, true, false)
+	assertGitTriggerDeliveryState(t, database, oldest.ID, gittrigger.StateSuperseded)
 	pending, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
 		t.Fatalf("get latest delivery after later refresh: %v", err)
@@ -426,7 +425,7 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 	}
 }
 
-func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
+func TestGitRefreshPreservesNonGitRunsAndFIFOIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
 
@@ -467,11 +466,75 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 		baseTime.Add(3*time.Minute),
 		"b",
 	)
+	mcpRun := queuedTestRun(
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1805"),
+		manual.TargetID,
+		repositoryID,
+		revisionAID,
+		commitA,
+		run.SourceTypeMCP,
+		baseTime.Add(3*time.Minute+10*time.Second),
+		"c",
+	)
+	scheduleRun := queuedTestRun(
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1806"),
+		manual.TargetID,
+		repositoryID,
+		revisionAID,
+		commitA,
+		run.SourceTypeSchedule,
+		baseTime.Add(3*time.Minute+20*time.Second),
+		"d",
+	)
+	scheduledAt := baseTime.Add(3 * time.Minute).Truncate(time.Minute)
+	scheduleRun.Source.Schedule = &run.ScheduleRunSource{
+		TriggerName: "nightly",
+		ScheduledAt: scheduledAt,
+	}
+	scheduleKey := run.ScheduleOccurrenceIdempotencyKey(
+		scheduleRun.TargetID,
+		scheduleRun.ActionName,
+		scheduleRun.Source.Schedule.TriggerName,
+		scheduledAt,
+	)
+	scheduleRun.IdempotencyKey = &scheduleKey
+	promotionRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1807")
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1808")
 	if _, err := database.CreateRun(ctx, manual, nil); err != nil {
 		t.Fatalf("create manual Run: %v", err)
 	}
 	if _, err := database.CreateRun(ctx, apiRun, nil); err != nil {
 		t.Fatalf("create API Run: %v", err)
+	}
+	if _, err := database.CreateRun(ctx, mcpRun, nil); err != nil {
+		t.Fatalf("create MCP Run: %v", err)
+	}
+	if _, err := database.CreateRun(ctx, scheduleRun, nil); err != nil {
+		t.Fatalf("create schedule Run: %v", err)
+	}
+	if _, err := database.pool.Exec(ctx, `
+		INSERT INTO runs (
+			id, phase, target_id, repository_id, catalog_revision_id, commit_sha,
+			target_name, action_name, parameters, placement_name, cluster_name,
+			source, idempotency_key, request_digest, snapshot, review_state, created_at
+		)
+		SELECT
+			$1, 'queued', target_id, repository_id, catalog_revision_id, commit_sha,
+			target_name, action_name, parameters, placement_name, cluster_name,
+			jsonb_build_object(
+				'type', 'promotion',
+				'promotion', jsonb_build_object('promotionId', $2::text)
+			),
+			$2::text, $3, snapshot, 'not-required', $4
+		FROM runs
+		WHERE id = $5`,
+		promotionRunID,
+		promotionID,
+		strings.Repeat("e", 64),
+		baseTime.Add(3*time.Minute+30*time.Second),
+		apiRun.ID,
+	); err != nil {
+		t.Fatalf("create Promotion Run fixture: %v", err)
 	}
 
 	refreshB := successfulCatalogRefresh(
@@ -484,7 +547,10 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refreshB); err != nil {
 		t.Fatalf("record changed catalog: %v", err)
 	}
-	for _, record := range []run.Run{manual, apiRun} {
+	nonGitRuns := []run.Run{manual, apiRun, mcpRun, scheduleRun, {
+		ID: promotionRunID, Source: run.Source{Type: run.SourceTypePromotion},
+	}}
+	for _, record := range nonGitRuns {
 		stored, err := database.GetRun(ctx, record.ID)
 		if err != nil {
 			t.Fatalf("get %s Run: %v", record.Source.Type, err)
@@ -597,7 +663,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 	if err := <-result; !errors.Is(err, run.ErrGitRunSuperseded) {
 		t.Fatalf("stale Git Run creation error = %v, want Git Run superseded", err)
 	}
-	assertGitTriggerDeliveryState(t, database, delivery.ID, true, false)
+	assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateSuperseded)
 	assertRunCounts(t, database, 0, 0)
 }
 
@@ -875,28 +941,24 @@ func assertGitTriggerDeliveryState(
 	t *testing.T,
 	database *Database,
 	deliveryID uuid.UUID,
-	wantSuperseded bool,
-	wantRun bool,
+	want gittrigger.State,
 ) {
 	t.Helper()
 
-	var storedID, storedRunID pgtype.UUID
-	var supersededTime pgtype.Timestamptz
-	err := database.pool.QueryRow(
-		t.Context(),
-		`SELECT id, superseded_at, run_id FROM git_trigger_deliveries WHERE id = $1`,
-		deliveryID,
-	).Scan(&storedID, &supersededTime, &storedRunID)
+	row, err := database.queries.GetGitTriggerDelivery(t.Context(), databaseUUID(deliveryID))
 	if err != nil {
 		t.Fatalf("load Git-trigger delivery state: %v", err)
 	}
-	if supersededTime.Valid != wantSuperseded || storedRunID.Valid != wantRun {
-		t.Errorf(
-			"Git-trigger delivery state = (superseded %t, Run %t), want (%t, %t)",
-			supersededTime.Valid,
-			storedRunID.Valid,
-			wantSuperseded,
-			wantRun,
-		)
+	delivery, err := gitTriggerDeliveryFromRow(row)
+	if err != nil {
+		t.Fatalf("map Git-trigger delivery state: %v", err)
+	}
+	at := delivery.Lifecycle.NextAttemptAt
+	if want == gittrigger.StatePendingRetry {
+		at = at.Add(-time.Nanosecond)
+	}
+	got, err := delivery.State(at)
+	if err != nil || got != want {
+		t.Errorf("Git-trigger delivery state = (%s, %v), want (%s, nil)", got, err, want)
 	}
 }

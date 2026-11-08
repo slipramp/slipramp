@@ -18,9 +18,31 @@ const (
 	MaximumRetryDelay = 5 * time.Minute
 )
 
-type FailureState struct {
-	Count    int
-	Terminal bool
+type CreationFailure struct {
+	Diagnostic string
+	Permanent  bool
+}
+
+// ClassifyCreationFailure separates durable definition failures from
+// operational failures that can recover during bounded retry. A missing
+// Placement remains retryable because Server configuration can be repaired.
+func ClassifyCreationFailure(err error) CreationFailure {
+	permanent := false
+	for _, known := range []error{
+		run.ErrInvalidRequest, run.ErrInvalidParameters, run.ErrInvalidInputs,
+		run.ErrRepositoryNotFound, run.ErrCatalogNotFound, run.ErrTargetNotFound,
+		run.ErrActionNotFound, run.ErrRuntimeNotFound, run.ErrIdempotencyConflict,
+	} {
+		if errors.Is(err, known) {
+			permanent = true
+			break
+		}
+	}
+
+	return CreationFailure{
+		Diagnostic: FailureDiagnostic(err),
+		Permanent:  permanent,
+	}
 }
 
 // FailureDiagnostic maps Run-creation errors to fixed, non-sensitive text.
