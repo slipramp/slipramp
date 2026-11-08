@@ -1,4 +1,5 @@
-package runreport
+// Package ansible projects Ansible Runner event reports into bounded, redacted Run reports.
+package ansible
 
 import (
 	"errors"
@@ -9,20 +10,22 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	ansiblesource "github.com/slipramp/slipramp/internal/runreport/ansible/source"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 const (
-	AnsiblePlaybookKind ReportKind = "ansible-playbook"
+	PlaybookMediaType            = "application/vnd.slipramp.ansible-playbook+json"
+	PlaybookKind      model.Kind = "ansible-playbook"
 
-	AnsiblePlaybookSchemaVersion  = 1
-	AnsiblePlaybookAdapterVersion = 1
+	SchemaVersion  = 1
+	AdapterVersion = 1
 
-	MaximumAnsiblePlaybookSourceSizeBytes int64 = 32 * 1024 * 1024
-	MaximumAnsiblePlaybookEvents                = 200_000
-	MaximumAnsiblePlaybookPlays                 = 1_000
-	MaximumAnsiblePlaybookTasks                 = 20_000
-	MaximumAnsiblePlaybookHosts                 = 128
-	MaximumAnsiblePlaybookResults               = 100_000
+	MaximumAnsiblePlaybookPlays   = 1_000
+	MaximumAnsiblePlaybookTasks   = 20_000
+	MaximumAnsiblePlaybookHosts   = 128
+	MaximumAnsiblePlaybookResults = 100_000
 
 	maximumAnsibleIdentifierLength = 256
 	maximumAnsibleEventNameLength  = 128
@@ -56,7 +59,7 @@ const (
 )
 
 type AnsiblePlaybookReport struct {
-	ReportEnvelope
+	model.Envelope
 	Runner  AnsibleRunnerSummary   `json:"runner"`
 	Summary AnsiblePlaybookSummary `json:"summary"`
 	Plays   []AnsiblePlay          `json:"plays"`
@@ -124,15 +127,15 @@ type AnsibleTaskResult struct {
 
 type ansiblePlaybookAdapter struct{}
 
-func (ansiblePlaybookAdapter) Kind() ReportKind {
-	return AnsiblePlaybookKind
+func (ansiblePlaybookAdapter) Kind() model.Kind {
+	return PlaybookKind
 }
 
 func (ansiblePlaybookAdapter) MaximumSourceSizeBytes() int64 {
-	return MaximumAnsiblePlaybookSourceSizeBytes
+	return ansiblesource.MaximumSourceSize
 }
 
-func (ansiblePlaybookAdapter) Decode(source io.Reader) (Report, error) {
+func (ansiblePlaybookAdapter) Decode(source io.Reader) (model.Report, error) {
 	report, err := DecodeAnsiblePlaybook(source)
 	if err != nil {
 		return nil, err
@@ -141,28 +144,32 @@ func (ansiblePlaybookAdapter) Decode(source io.Reader) (Report, error) {
 	return &report, nil
 }
 
-func (ansiblePlaybookAdapter) newReport() Report {
+func (ansiblePlaybookAdapter) NewReport() model.Report {
 	return &AnsiblePlaybookReport{}
 }
 
-func (ansiblePlaybookAdapter) newSummary() Summary {
+func (ansiblePlaybookAdapter) NewSummary() model.Summary {
 	return &AnsiblePlaybookSummary{}
 }
 
-func (ansiblePlaybookAdapter) validateEnvelope(envelope ReportEnvelope) error {
+func (ansiblePlaybookAdapter) ValidateEnvelope(envelope model.Envelope) error {
 	return validateAnsiblePlaybookEnvelope(envelope)
 }
 
-func (r AnsiblePlaybookReport) Metadata() ReportEnvelope {
-	return r.ReportEnvelope
+func PlaybookFormat() model.Format {
+	return ansiblePlaybookAdapter{}
 }
 
-func (r AnsiblePlaybookReport) ReportSummary() Summary {
+func (r AnsiblePlaybookReport) Metadata() model.Envelope {
+	return r.Envelope
+}
+
+func (r AnsiblePlaybookReport) ReportSummary() model.Summary {
 	return &r.Summary
 }
 
 func (r AnsiblePlaybookReport) Validate() error {
-	if err := validateAnsiblePlaybookEnvelope(r.ReportEnvelope); err != nil {
+	if err := validateAnsiblePlaybookEnvelope(r.Envelope); err != nil {
 		return err
 	}
 	if err := r.Runner.validate(); err != nil {
@@ -257,12 +264,12 @@ func (r AnsiblePlaybookReport) Validate() error {
 	return nil
 }
 
-func validateAnsiblePlaybookEnvelope(envelope ReportEnvelope) error {
-	if envelope.Kind != AnsiblePlaybookKind ||
-		envelope.SchemaVersion != AnsiblePlaybookSchemaVersion ||
-		envelope.AdapterVersion != AnsiblePlaybookAdapterVersion ||
+func validateAnsiblePlaybookEnvelope(envelope model.Envelope) error {
+	if envelope.Kind != PlaybookKind ||
+		envelope.SchemaVersion != SchemaVersion ||
+		envelope.AdapterVersion != AdapterVersion ||
 		envelope.Tool != "ansible" ||
-		(envelope.Mode != PreviewMode && envelope.Mode != ApplyMode) {
+		(envelope.Mode != model.PreviewMode && envelope.Mode != model.ApplyMode) {
 		return errors.New("ansible playbook report envelope is invalid")
 	}
 
@@ -288,8 +295,8 @@ func validAnsibleRunnerStatus(status AnsibleRunnerStatus) bool {
 		status == AnsibleRunnerStatusTimeout || status == AnsibleRunnerStatusCanceled
 }
 
-func (s AnsiblePlaybookSummary) ReportKind() ReportKind {
-	return AnsiblePlaybookKind
+func (s AnsiblePlaybookSummary) ReportKind() model.Kind {
+	return PlaybookKind
 }
 
 func (s AnsiblePlaybookSummary) Validate() error {
@@ -316,7 +323,7 @@ func (s AnsiblePlaybookSummary) Validate() error {
 		}
 		previousHost = totals.Host
 		baseOutcomes += totals.OK + totals.Failed + totals.Unreachable + totals.Skipped
-		if baseOutcomes > MaximumAnsiblePlaybookEvents {
+		if baseOutcomes > ansiblesource.MaximumSourceEvents {
 			return errors.New("summary.hostTotals exceed Ansible event bounds")
 		}
 	}
@@ -366,7 +373,7 @@ func (t AnsibleHostTotals) validate(field string) error {
 		return fmt.Errorf("%s.changed must not exceed ok", field)
 	}
 	for _, count := range []int{t.OK, t.Changed, t.Failed, t.Unreachable, t.Skipped, t.Rescued, t.Ignored} {
-		if count > MaximumAnsiblePlaybookEvents {
+		if count > ansiblesource.MaximumSourceEvents {
 			return fmt.Errorf("%s counts exceed Ansible event bounds", field)
 		}
 	}

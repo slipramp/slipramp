@@ -10,6 +10,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
@@ -98,7 +99,7 @@ func createArtifactReport(
 	queries *storedb.Queries,
 	report runreport.ArtifactReport,
 ) error {
-	summary, err := runreport.EncodeSummary(report.Summary)
+	summary, err := model.EncodeSummary(report.Summary)
 	if err != nil {
 		return err
 	}
@@ -135,7 +136,7 @@ func createArtifactReport(
 }
 
 func artifactReportFromRow(row storedb.ArtifactReport) (runreport.ArtifactReport, error) {
-	kind := runreport.ReportKind(row.Kind)
+	kind := model.Kind(row.Kind)
 	summary, err := runreport.DecodeSummary(kind, row.Summary)
 	if err != nil {
 		return runreport.ArtifactReport{}, fmt.Errorf("decode stored artifact report summary: %w", err)
@@ -148,7 +149,7 @@ func artifactReportFromRow(row storedb.ArtifactReport) (runreport.ArtifactReport
 		AdapterVersion:      int(row.AdapterVersion),
 		Tool:                row.Tool,
 		ToolVersion:         textValue(row.ToolVersion),
-		Mode:                runreport.ReportMode(row.Mode),
+		Mode:                model.Mode(row.Mode),
 		Summary:             summary,
 		ProjectionObjectKey: row.ProjectionObjectKey,
 		ProjectionSizeBytes: row.ProjectionSizeBytes,

@@ -1,4 +1,4 @@
-package ansiblereport
+package source
 
 import (
 	"bytes"
@@ -260,19 +260,14 @@ func testBinaries(t *testing.T) (string, string) {
 	return runner, playbook
 }
 
-type testSource struct {
-	sourceEnvelope
-	Events []json.RawMessage `json:"events"`
-}
-
-func readSource(t *testing.T, path string) testSource {
+func readSource(t *testing.T, path string) Document {
 	t.Helper()
 
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("os.ReadFile() error = %v", err)
 	}
-	var source testSource
+	var source Document
 	if err := json.Unmarshal(contents, &source); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}

@@ -21,6 +21,10 @@ import (
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/ansible"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
+	"github.com/slipramp/slipramp/internal/runreport/model"
+	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
 )
 
 func TestArtifactTransferIntegration(t *testing.T) {
@@ -143,7 +147,7 @@ func TestArtifactTransferIntegration(t *testing.T) {
 	if reportRecord == nil || reportRecord.Report == nil {
 		t.Fatalf("report Artifact was not listed: %#v", records)
 	}
-	reportSummary, ok := reportRecord.Report.Summary.(*runreport.InfrastructurePlanSummary)
+	reportSummary, ok := reportRecord.Report.Summary.(*infrastructure.InfrastructurePlanSummary)
 	if !ok || reportSummary.ResourceChanges.Create != 1 {
 		t.Fatalf("stored report summary = %#v", reportRecord.Report.Summary)
 	}
@@ -151,7 +155,7 @@ func TestArtifactTransferIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenReport() error = %v", err)
 	}
-	plan, ok := reportContent.Report.(*runreport.InfrastructurePlanReport)
+	plan, ok := reportContent.Report.(*infrastructure.InfrastructurePlanReport)
 	if !ok || len(plan.ResourceChanges) != 1 || plan.ResourceChanges[0].Address != "example.main" {
 		t.Fatalf("OpenReport() report = %#v", reportContent.Report)
 	}
@@ -252,7 +256,7 @@ func TestArtifactReportPersistenceIntegration(t *testing.T) {
 		Name:           "plan-report",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.TerraformPlanMediaType,
+		MediaType:      infrastructure.TerraformPlanMediaType,
 		SizeBytes:      512,
 		SHA256:         &digest,
 		Sensitive:      true,
@@ -280,7 +284,7 @@ func TestArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactReport() error = %v", err)
 	}
-	summary, ok := loaded.Summary.(*runreport.InfrastructurePlanSummary)
+	summary, ok := loaded.Summary.(*infrastructure.InfrastructurePlanSummary)
 	if !ok || summary.ResourceChanges.Create != 1 ||
 		loaded.ProjectionObjectKey != report.ProjectionObjectKey || loaded.ProjectionSHA256 != report.ProjectionSHA256 {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
@@ -321,7 +325,7 @@ func TestOpenTofuArtifactReportPersistenceIntegration(t *testing.T) {
 
 	createdAt := time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
-	report, err := runreport.DecodeOpenTofuPlan(strings.NewReader(`{
+	report, err := infrastructure.DecodeOpenTofuPlan(strings.NewReader(`{
 		"format_version":"1.2",
 		"terraform_version":"1.13.2",
 		"errored":false,
@@ -337,7 +341,7 @@ func TestOpenTofuArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +353,7 @@ func TestOpenTofuArtifactReportPersistenceIntegration(t *testing.T) {
 		Name:           "opentofu-plan-report",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.OpenTofuPlanMediaType,
+		MediaType:      infrastructure.OpenTofuPlanMediaType,
 		SizeBytes:      512,
 		SHA256:         &digest,
 		Sensitive:      true,
@@ -376,8 +380,8 @@ func TestOpenTofuArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactReport() error = %v", err)
 	}
-	summary, ok := loaded.Summary.(*runreport.InfrastructurePlanSummary)
-	if !ok || loaded.Kind != runreport.OpenTofuPlanKind || loaded.Tool != "opentofu" ||
+	summary, ok := loaded.Summary.(*infrastructure.InfrastructurePlanSummary)
+	if !ok || loaded.Kind != infrastructure.OpenTofuPlanKind || loaded.Tool != "opentofu" ||
 		summary.ResourceChanges.Forget != 1 {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
 	}
@@ -389,7 +393,7 @@ func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
 
 	createdAt := time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
-	report, err := runreport.DecodePyinfraDeploy(strings.NewReader(`{
+	report, err := pyinfra.DecodePyinfraDeploy(strings.NewReader(`{
 		"plan":[{
 			"op_hash":"package",
 			"names":["server.package"],
@@ -411,7 +415,7 @@ func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +427,7 @@ func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
 		Name:           "deploy-report",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.PyinfraDeployMediaType,
+		MediaType:      pyinfra.DeployMediaType,
 		SizeBytes:      512,
 		SHA256:         &digest,
 		Sensitive:      true,
@@ -450,8 +454,8 @@ func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactReport() error = %v", err)
 	}
-	summary, ok := loaded.Summary.(*runreport.PyinfraDeploySummary)
-	if !ok || loaded.Kind != runreport.PyinfraDeployKind || loaded.Mode != runreport.ApplyMode ||
+	summary, ok := loaded.Summary.(*pyinfra.PyinfraDeploySummary)
+	if !ok || loaded.Kind != pyinfra.DeployKind || loaded.Mode != model.ApplyMode ||
 		summary.Results == nil || summary.Results.ChangedHostOperations != 1 {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
 	}
@@ -463,50 +467,50 @@ func TestAnsibleArtifactReportPersistenceIntegration(t *testing.T) {
 
 	createdAt := time.Date(2026, time.November, 2, 16, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
-	envelope := runreport.ReportEnvelope{
-		Kind:           runreport.AnsiblePlaybookKind,
-		SchemaVersion:  runreport.AnsiblePlaybookSchemaVersion,
-		AdapterVersion: runreport.AnsiblePlaybookAdapterVersion,
+	envelope := model.Envelope{
+		Kind:           ansible.PlaybookKind,
+		SchemaVersion:  ansible.SchemaVersion,
+		AdapterVersion: ansible.AdapterVersion,
 		Tool:           "ansible",
 		ToolVersion:    "2.21.5",
-		Mode:           runreport.ApplyMode,
+		Mode:           model.ApplyMode,
 	}
-	report := runreport.AnsiblePlaybookReport{
-		ReportEnvelope: envelope,
-		Runner: runreport.AnsibleRunnerSummary{
+	report := ansible.AnsiblePlaybookReport{
+		Envelope: envelope,
+		Runner: ansible.AnsibleRunnerSummary{
 			Version:  "2.4.3",
-			Status:   runreport.AnsibleRunnerStatusSuccessful,
+			Status:   ansible.AnsibleRunnerStatusSuccessful,
 			ExitCode: 0,
 		},
-		Summary: runreport.AnsiblePlaybookSummary{
+		Summary: ansible.AnsiblePlaybookSummary{
 			Complete: true,
 			Hosts:    1,
 			Plays:    1,
 			Tasks:    1,
-			Results:  runreport.AnsibleOutcomeCounts{Total: 1, OK: 1},
-			HostTotals: []runreport.AnsibleHostTotals{{
+			Results:  ansible.AnsibleOutcomeCounts{Total: 1, OK: 1},
+			HostTotals: []ansible.AnsibleHostTotals{{
 				Host: "web-1",
 				OK:   1,
 			}},
 		},
-		Plays: []runreport.AnsiblePlay{{
+		Plays: []ansible.AnsiblePlay{{
 			Order: 1,
 			ID:    "play",
 			Name:  "Configure web host",
-			Tasks: []runreport.AnsibleTask{{
+			Tasks: []ansible.AnsibleTask{{
 				Order:  2,
 				ID:     "task",
 				Name:   "Install package",
 				Action: "package",
-				Results: []runreport.AnsibleTaskResult{{
+				Results: []ansible.AnsibleTaskResult{{
 					Order:   3,
 					Host:    "web-1",
-					Outcome: runreport.AnsibleOutcomeOK,
+					Outcome: ansible.AnsibleOutcomeOK,
 				}},
 			}},
 		}},
 	}
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +522,7 @@ func TestAnsibleArtifactReportPersistenceIntegration(t *testing.T) {
 		Name:           "ansible-report",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.AnsiblePlaybookMediaType,
+		MediaType:      ansible.PlaybookMediaType,
 		SizeBytes:      1024,
 		SHA256:         &digest,
 		Sensitive:      true,
@@ -545,8 +549,8 @@ func TestAnsibleArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactReport() error = %v", err)
 	}
-	summary, ok := loaded.Summary.(*runreport.AnsiblePlaybookSummary)
-	if !ok || loaded.Kind != runreport.AnsiblePlaybookKind || loaded.Mode != runreport.ApplyMode ||
+	summary, ok := loaded.Summary.(*ansible.AnsiblePlaybookSummary)
+	if !ok || loaded.Kind != ansible.PlaybookKind || loaded.Mode != model.ApplyMode ||
 		!summary.Complete || summary.Results.OK != 1 || summary.HostTotals[0].Host != "web-1" {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
 	}
@@ -867,7 +871,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		Name:           "plan",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.TerraformPlanMediaType,
+		MediaType:      infrastructure.TerraformPlanMediaType,
 		SizeBytes:      128,
 		SHA256:         &digest,
 		Sensitive:      true,
@@ -1055,7 +1059,7 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 					},
 					"plan-report": {
 						Path:      "plan.json",
-						MediaType: runreport.TerraformPlanMediaType,
+						MediaType: infrastructure.TerraformPlanMediaType,
 						Sensitive: true,
 					},
 				},
@@ -1084,7 +1088,7 @@ func testArtifactReport(
 ) runreport.ArtifactReport {
 	t.Helper()
 
-	report, err := runreport.DecodeTerraformPlan(strings.NewReader(`{
+	report, err := infrastructure.DecodeTerraformPlan(strings.NewReader(`{
 		"format_version":"1.0",
 		"terraform_version":"1.14.3",
 		"resource_changes":[{
@@ -1099,7 +1103,7 @@ func testArtifactReport(
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}

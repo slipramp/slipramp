@@ -12,6 +12,10 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/ansible"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
+	"github.com/slipramp/slipramp/internal/runreport/model"
+	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
 )
 
 func TestGetArtifactReportEnforcesSensitiveContentAuthorization(t *testing.T) {
@@ -271,7 +275,7 @@ func TestAnsiblePlaybookReportResponses(t *testing.T) {
 func handlerReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
-	report, err := runreport.DecodeTerraformPlan(strings.NewReader(`{
+	report, err := infrastructure.DecodeTerraformPlan(strings.NewReader(`{
 		"format_version":"1.0",
 		"terraform_version":"1.14.3",
 		"resource_changes":[{
@@ -292,7 +296,7 @@ func handlerReportContent(t *testing.T) artifact.ReportContent {
 		t,
 		&report,
 		"plan-report",
-		runreport.TerraformPlanMediaType,
+		infrastructure.TerraformPlanMediaType,
 		"runs/report/artifacts/plan-report/reports/terraform-plan-v1.json",
 		time.Date(2026, time.October, 29, 15, 0, 0, 0, time.UTC),
 	)
@@ -301,7 +305,7 @@ func handlerReportContent(t *testing.T) artifact.ReportContent {
 func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
-	report, err := runreport.DecodeOpenTofuPlan(strings.NewReader(`{
+	report, err := infrastructure.DecodeOpenTofuPlan(strings.NewReader(`{
 		"format_version":"1.2",
 		"terraform_version":"1.13.2",
 		"errored":false,
@@ -322,7 +326,7 @@ func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
 		t,
 		&report,
 		"plan-report",
-		runreport.OpenTofuPlanMediaType,
+		infrastructure.OpenTofuPlanMediaType,
 		"runs/report/artifacts/plan-report/reports/opentofu-plan-v1.json",
 		time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC),
 	)
@@ -331,7 +335,7 @@ func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
 func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportContent {
 	t.Helper()
 
-	report, err := runreport.DecodePyinfraDeploy(strings.NewReader(`{
+	report, err := pyinfra.DecodePyinfraDeploy(strings.NewReader(`{
 		"plan":[{
 			"op_hash":"package",
 			"names":["server.package"],
@@ -348,7 +352,7 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 		t,
 		&report,
 		"deploy-report",
-		runreport.PyinfraDeployMediaType,
+		pyinfra.DeployMediaType,
 		"runs/report/artifacts/deploy-report/reports/pyinfra-deploy-v1.json",
 		time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC),
 	)
@@ -357,7 +361,7 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
-	report, err := runreport.DecodeAnsiblePlaybook(strings.NewReader(`{
+	report, err := ansible.DecodeAnsiblePlaybook(strings.NewReader(`{
 		"schemaVersion":2,"repositoryDirectory":"/workspace",
 		"mode":"apply",
 		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
@@ -393,7 +397,7 @@ func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
 		t,
 		&report,
 		"ansible-report",
-		runreport.AnsiblePlaybookMediaType,
+		ansible.PlaybookMediaType,
 		"runs/report/artifacts/ansible-report/reports/ansible-playbook-v1.json",
 		time.Date(2026, time.November, 2, 16, 0, 0, 0, time.UTC),
 	)
@@ -401,7 +405,7 @@ func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
 
 func newHandlerReportContent(
 	t *testing.T,
-	report runreport.Report,
+	report model.Report,
 	name string,
 	mediaType string,
 	projectionObjectKey string,
@@ -409,7 +413,7 @@ func newHandlerReportContent(
 ) artifact.ReportContent {
 	t.Helper()
 
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}

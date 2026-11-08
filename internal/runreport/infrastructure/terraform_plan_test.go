@@ -1,4 +1,4 @@
-package runreport
+package infrastructure
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 func TestDecodeInfrastructurePlanFixtures(t *testing.T) {
@@ -108,7 +110,7 @@ func TestDecodeInfrastructurePlanFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeTerraformPlan() error = %v", err)
 			}
-			encoded, err := Encode(report)
+			encoded, err := model.Encode(report)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
@@ -130,7 +132,7 @@ func TestDecodeOpenTofuPlanFixture(t *testing.T) {
 		t.Fatalf("DecodeOpenTofuPlan() error = %v", err)
 	}
 	if report.Kind != OpenTofuPlanKind || report.Tool != "opentofu" || report.ToolVersion != "1.13.2" {
-		t.Errorf("report metadata = %#v", report.ReportEnvelope)
+		t.Errorf("report metadata = %#v", report.Envelope)
 	}
 	wantCounts := InfrastructureActionCounts{Total: 1, Forget: 1}
 	if report.Summary.ResourceChanges != wantCounts || len(report.ResourceChanges) != 1 ||
@@ -141,7 +143,7 @@ func TestDecodeOpenTofuPlanFixture(t *testing.T) {
 		*report.Summary.Errored {
 		t.Errorf("report flags = %#v", report.Summary)
 	}
-	encoded, err := Encode(report)
+	encoded, err := model.Encode(report)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
@@ -277,9 +279,9 @@ func TestDecodeTerraformPlanEnforcesCollectionBounds(t *testing.T) {
 func TestDecodeTerraformPlanEnforcesSourceSize(t *testing.T) {
 	t.Parallel()
 
-	reader := io.LimitReader(zeroReader{}, MaximumInfrastructurePlanSourceSizeBytes+1)
+	reader := io.LimitReader(zeroReader{}, MaximumSourceSizeBytes+1)
 	_, err := DecodeTerraformPlan(reader)
-	if !errors.Is(err, ErrSourceTooLarge) {
+	if !errors.Is(err, model.ErrSourceTooLarge) {
 		t.Fatalf("DecodeTerraformPlan() error = %v, want source size error", err)
 	}
 }
@@ -304,12 +306,12 @@ func TestEncodeEnforcesProjectionSizeAndValidation(t *testing.T) {
 
 	invalidSummary := report
 	invalidSummary.Summary.ResourceChanges.Create = 0
-	if _, err := Encode(invalidSummary); err == nil || !strings.Contains(err.Error(), "does not match") {
+	if _, err := model.Encode(invalidSummary); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("Encode(invalid summary) error = %v", err)
 	}
 
 	oversized := InfrastructurePlanReport{
-		ReportEnvelope:  report.ReportEnvelope,
+		Envelope:        report.Envelope,
 		ResourceChanges: make([]InfrastructureResourceChange, 10_000),
 	}
 	for index := range oversized.ResourceChanges {
@@ -323,41 +325,8 @@ func TestEncodeEnforcesProjectionSizeAndValidation(t *testing.T) {
 		}
 		oversized.Summary.ResourceChanges.add(InfrastructureActionCreate)
 	}
-	if _, err := Encode(oversized); !errors.Is(err, ErrProjectionTooLarge) {
+	if _, err := model.Encode(oversized); !errors.Is(err, model.ErrProjectionTooLarge) {
 		t.Fatalf("Encode(oversized) error = %v, want projection size error", err)
-	}
-}
-
-func TestDecodeProjectionRequiresCanonicalValidatedContent(t *testing.T) {
-	t.Parallel()
-
-	report, err := DecodeTerraformPlan(strings.NewReader(`{
-		"format_version":"1.0",
-		"terraform_version":"1.14.3",
-		"resource_changes":[]
-	}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	projection, err := Encode(report)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := DecodeProjection(TerraformPlanKind, bytes.NewReader(projection))
-	if err != nil {
-		t.Fatalf("DecodeProjection() error = %v", err)
-	}
-	typed, ok := decoded.(*InfrastructurePlanReport)
-	if !ok || typed.ToolVersion != "1.14.3" {
-		t.Fatalf("DecodeProjection() = %#v", decoded)
-	}
-
-	withUnknownField := append(bytes.TrimSuffix(projection, []byte("}")), []byte(`,"unknown":true}`)...)
-	if _, err := DecodeProjection(TerraformPlanKind, bytes.NewReader(withUnknownField)); err == nil || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("DecodeProjection(unknown field) error = %v", err)
-	}
-	if _, err := DecodeProjection("unknown", bytes.NewReader(projection)); err == nil {
-		t.Fatal("DecodeProjection(unknown) error = nil")
 	}
 }
 

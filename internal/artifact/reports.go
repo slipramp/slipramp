@@ -11,6 +11,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 type ReportIngestionOutcome string
@@ -22,14 +23,14 @@ const (
 )
 
 type ReportIngestionObserver interface {
-	ObserveReportIngestion(context.Context, runreport.ReportKind, ReportIngestionOutcome, time.Duration)
+	ObserveReportIngestion(context.Context, model.Kind, ReportIngestionOutcome, time.Duration)
 }
 
 type noopReportIngestionObserver struct{}
 
 func (noopReportIngestionObserver) ObserveReportIngestion(
 	context.Context,
-	runreport.ReportKind,
+	model.Kind,
 	ReportIngestionOutcome,
 	time.Duration,
 ) {
@@ -56,7 +57,7 @@ func reportIngestionOutcome(err error) ReportIngestionOutcome {
 
 func (s *Service) projectReport(
 	ctx context.Context,
-	adapter runreport.Adapter,
+	adapter model.Adapter,
 	record Artifact,
 ) (runreport.ArtifactReport, error) {
 	if record.ObjectKey == nil {
@@ -75,7 +76,7 @@ func (s *Service) projectReport(
 	report, decodeErr := adapter.Decode(source.Body)
 	closeErr := source.Body.Close()
 	if decodeErr != nil {
-		if errors.Is(decodeErr, runreport.ErrSourceRead) {
+		if errors.Is(decodeErr, model.ErrSourceRead) {
 			return runreport.ArtifactReport{}, decodeErr
 		}
 
@@ -85,7 +86,7 @@ func (s *Service) projectReport(
 		return runreport.ArtifactReport{}, fmt.Errorf("close stored Run report source: %w", closeErr)
 	}
 
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		return runreport.ArtifactReport{}, invalid("Run report projection is invalid: %v", err)
 	}
@@ -120,7 +121,7 @@ func (s *Service) projectReport(
 
 func reportProjectionObjectKey(
 	record Artifact,
-	envelope runreport.ReportEnvelope,
+	envelope model.Envelope,
 	digest string,
 ) string {
 	filename := fmt.Sprintf("%s-v%d-%s.json", envelope.Kind, envelope.SchemaVersion, digest)

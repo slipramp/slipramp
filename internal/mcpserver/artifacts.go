@@ -18,7 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 const (
@@ -263,7 +263,7 @@ func (s *toolHandler) listRunArtifacts(
 func newArtifactOutput(record artifact.Record) (artifactOutput, error) {
 	var report *artifactReportOutput
 	if record.Report != nil {
-		encodedSummary, err := runreport.EncodeSummary(record.Report.Summary)
+		encodedSummary, err := model.EncodeSummary(record.Report.Summary)
 		if err != nil {
 			return artifactOutput{}, err
 		}

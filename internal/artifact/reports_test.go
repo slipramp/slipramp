@@ -13,7 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/ansible"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
+	"github.com/slipramp/slipramp/internal/runreport/model"
+	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
 )
 
 func TestServiceProjectsRunReportArtifactIdempotently(t *testing.T) {
@@ -49,7 +52,7 @@ func TestServiceProjectsRunReportArtifactIdempotently(t *testing.T) {
 		t.Fatalf("report upload = puts %d, Artifact %#v, reports %#v", contents.puts, metadata.record, metadata.reports)
 	}
 	report := metadata.reports[metadata.record.ID]
-	summary, ok := report.Summary.(*runreport.InfrastructurePlanSummary)
+	summary, ok := report.Summary.(*infrastructure.InfrastructurePlanSummary)
 	if !ok || summary.ResourceChanges.Create != 1 {
 		t.Fatalf("report summary = %#v", report.Summary)
 	}
@@ -108,7 +111,7 @@ func TestServiceProjectsOpenTofuPlanReport(t *testing.T) {
 	request := reportUploadRequest(source)
 	metadata := reportTestMetadata()
 	metadata.context.Artifacts[request.Name] = Declaration{
-		MediaType: runreport.OpenTofuPlanMediaType,
+		MediaType: infrastructure.OpenTofuPlanMediaType,
 		Sensitive: true,
 	}
 	contents := &serviceContentStore{}
@@ -121,16 +124,16 @@ func TestServiceProjectsOpenTofuPlanReport(t *testing.T) {
 		t.Fatal("Upload() did not persist Artifact metadata")
 	}
 	reportMetadata := metadata.reports[metadata.record.ID]
-	if reportMetadata.Kind != runreport.OpenTofuPlanKind || reportMetadata.Tool != "opentofu" {
+	if reportMetadata.Kind != infrastructure.OpenTofuPlanKind || reportMetadata.Tool != "opentofu" {
 		t.Fatalf("stored report metadata = %#v", reportMetadata)
 	}
 	content, err := service.OpenReport(context.Background(), metadata.record.ID)
 	if err != nil {
 		t.Fatalf("OpenReport() error = %v", err)
 	}
-	report, ok := content.Report.(*runreport.InfrastructurePlanReport)
+	report, ok := content.Report.(*infrastructure.InfrastructurePlanReport)
 	if !ok || report.Summary.ResourceChanges.Forget != 1 || len(report.ResourceChanges) != 1 ||
-		report.ResourceChanges[0].Action != runreport.InfrastructureActionForget {
+		report.ResourceChanges[0].Action != infrastructure.InfrastructureActionForget {
 		t.Fatalf("OpenReport() report = %#v", content.Report)
 	}
 }
@@ -160,7 +163,7 @@ func TestServiceProjectsPyinfraDeployReport(t *testing.T) {
 	request := reportUploadRequest(source)
 	metadata := reportTestMetadata()
 	metadata.context.Artifacts[request.Name] = Declaration{
-		MediaType: runreport.PyinfraDeployMediaType,
+		MediaType: pyinfra.DeployMediaType,
 		Sensitive: true,
 	}
 	contents := &serviceContentStore{}
@@ -173,14 +176,14 @@ func TestServiceProjectsPyinfraDeployReport(t *testing.T) {
 		t.Fatal("Upload() did not persist Artifact metadata")
 	}
 	reportMetadata := metadata.reports[metadata.record.ID]
-	if reportMetadata.Kind != runreport.PyinfraDeployKind || reportMetadata.Mode != runreport.ApplyMode {
+	if reportMetadata.Kind != pyinfra.DeployKind || reportMetadata.Mode != model.ApplyMode {
 		t.Fatalf("stored report metadata = %#v", reportMetadata)
 	}
 	content, err := service.OpenReport(context.Background(), metadata.record.ID)
 	if err != nil {
 		t.Fatalf("OpenReport() error = %v", err)
 	}
-	report, ok := content.Report.(*runreport.PyinfraDeployReport)
+	report, ok := content.Report.(*pyinfra.PyinfraDeployReport)
 	if !ok || report.Summary.Results == nil || report.Summary.Results.ChangedHostOperations != 1 ||
 		len(report.Operations) != 1 || report.Operations[0].Names[0] != "server.package" {
 		t.Fatalf("OpenReport() report = %#v", content.Report)
@@ -194,7 +197,7 @@ func TestServiceProjectsAnsiblePlaybookReport(t *testing.T) {
 	request := reportUploadRequest(source)
 	metadata := reportTestMetadata()
 	metadata.context.Artifacts[request.Name] = Declaration{
-		MediaType: runreport.AnsiblePlaybookMediaType,
+		MediaType: ansible.PlaybookMediaType,
 		Sensitive: true,
 	}
 	contents := &serviceContentStore{}
@@ -207,7 +210,7 @@ func TestServiceProjectsAnsiblePlaybookReport(t *testing.T) {
 		t.Fatal("Upload() did not persist Artifact metadata")
 	}
 	reportMetadata := metadata.reports[metadata.record.ID]
-	if reportMetadata.Kind != runreport.AnsiblePlaybookKind || reportMetadata.Mode != runreport.ApplyMode {
+	if reportMetadata.Kind != ansible.PlaybookKind || reportMetadata.Mode != model.ApplyMode {
 		t.Fatalf("stored report metadata = %#v", reportMetadata)
 	}
 	projection := contents.objects[reportMetadata.ProjectionObjectKey]
@@ -218,7 +221,7 @@ func TestServiceProjectsAnsiblePlaybookReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenReport() error = %v", err)
 	}
-	report, ok := content.Report.(*runreport.AnsiblePlaybookReport)
+	report, ok := content.Report.(*ansible.AnsiblePlaybookReport)
 	if !ok || !report.Summary.Complete || report.Summary.Results.OK != 1 ||
 		len(report.Plays) != 1 || len(report.Plays[0].Tasks) != 1 || !report.Plays[0].Tasks[0].Redacted {
 		t.Fatalf("OpenReport() report = %#v", content.Report)
@@ -249,7 +252,7 @@ func TestServiceLeavesReportObjectsForReconciliationAfterFailure(t *testing.T) {
 			source: []byte(`{"schemaVersion":2`),
 			configure: func(metadata *serviceMetadataStore, _ *serviceContentStore) {
 				metadata.context.Artifacts["plan-report"] = Declaration{
-					MediaType: runreport.AnsiblePlaybookMediaType,
+					MediaType: ansible.PlaybookMediaType,
 					Sensitive: true,
 				}
 			},
@@ -312,7 +315,7 @@ func reportTestMetadata() *serviceMetadataStore {
 		runCluster: "colo",
 		context: RunContext{Artifacts: map[string]Declaration{
 			"plan-report": {
-				MediaType: runreport.TerraformPlanMediaType,
+				MediaType: infrastructure.TerraformPlanMediaType,
 				Sensitive: true,
 			},
 		}},
@@ -363,13 +366,13 @@ func ansibleReportSource() []byte {
 }
 
 type recordingReportIngestionObserver struct {
-	kinds    []runreport.ReportKind
+	kinds    []model.Kind
 	outcomes []ReportIngestionOutcome
 }
 
 func (o *recordingReportIngestionObserver) ObserveReportIngestion(
 	_ context.Context,
-	kind runreport.ReportKind,
+	kind model.Kind,
 	outcome ReportIngestionOutcome,
 	_ time.Duration,
 ) {

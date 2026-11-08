@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 type Content struct {
@@ -22,7 +23,7 @@ type Content struct {
 type ReportContent struct {
 	Artifact Artifact
 	Metadata runreport.ArtifactReport
-	Report   runreport.Report
+	Report   model.Report
 }
 
 func (s *Service) GetStorageUsage(ctx context.Context) (StorageUsage, error) {
@@ -123,14 +124,14 @@ func (s *Service) OpenReport(ctx context.Context, artifactID uuid.UUID) (ReportC
 	if err != nil {
 		return ReportContent{}, fmt.Errorf("decode Run report projection: %w", err)
 	}
-	if report.Metadata() != metadata.ReportEnvelope {
+	if report.Metadata() != metadata.Envelope {
 		return ReportContent{}, errors.New("Run report projection envelope does not match metadata")
 	}
-	projectedSummary, err := runreport.EncodeSummary(report.ReportSummary())
+	projectedSummary, err := model.EncodeSummary(report.ReportSummary())
 	if err != nil {
 		return ReportContent{}, fmt.Errorf("encode Run report projection summary: %w", err)
 	}
-	storedSummary, err := runreport.EncodeSummary(metadata.Summary)
+	storedSummary, err := model.EncodeSummary(metadata.Summary)
 	if err != nil {
 		return ReportContent{}, fmt.Errorf("encode stored Run report summary: %w", err)
 	}

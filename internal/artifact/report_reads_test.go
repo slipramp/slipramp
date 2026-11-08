@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 func TestServiceOpensVerifiedRunReportProjection(t *testing.T) {
@@ -25,12 +27,12 @@ func TestServiceOpensVerifiedRunReportProjection(t *testing.T) {
 	if content.Artifact.ID != record.ID || content.Metadata.ArtifactID != record.ID {
 		t.Fatalf("OpenReport() = %#v", content)
 	}
-	report, ok := content.Report.(*runreport.InfrastructurePlanReport)
+	report, ok := content.Report.(*infrastructure.InfrastructurePlanReport)
 	if !ok || report.Summary.ResourceChanges.Create != 1 || report.ResourceChanges[0].Address != "example.main" {
 		t.Fatalf("OpenReport() report = %#v", content.Report)
 	}
-	if report.Metadata() != metadata.ReportEnvelope {
-		t.Errorf("OpenReport() envelope = %#v, want %#v", report.Metadata(), metadata.ReportEnvelope)
+	if report.Metadata() != metadata.Envelope {
+		t.Errorf("OpenReport() envelope = %#v, want %#v", report.Metadata(), metadata.Envelope)
 	}
 }
 
@@ -90,7 +92,7 @@ func TestServiceRejectsUnavailableOrInvalidRunReportProjection(t *testing.T) {
 		{
 			name: "summary mismatch",
 			configure: func(metadata *serviceMetadataStore, _ *serviceContentStore, _ Artifact, report runreport.ArtifactReport) {
-				summary := *report.Summary.(*runreport.InfrastructurePlanSummary)
+				summary := *report.Summary.(*infrastructure.InfrastructurePlanSummary)
 				summary.ResourceChanges.Create = 0
 				summary.ResourceChanges.NoOp = 1
 				report.Summary = summary
@@ -131,7 +133,7 @@ func reportReadService(t *testing.T) (*Service, Artifact, runreport.ArtifactRepo
 	t.Helper()
 
 	createdAt := time.Date(2026, time.October, 29, 14, 0, 0, 0, time.UTC)
-	report, err := runreport.DecodeTerraformPlan(strings.NewReader(`{
+	report, err := infrastructure.DecodeTerraformPlan(strings.NewReader(`{
 		"format_version":"1.0",
 		"terraform_version":"1.14.3",
 		"resource_changes":[{
@@ -146,7 +148,7 @@ func reportReadService(t *testing.T) (*Service, Artifact, runreport.ArtifactRepo
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
+	projection, err := model.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +158,7 @@ func reportReadService(t *testing.T) (*Service, Artifact, runreport.ArtifactRepo
 		Name:           "plan-report",
 		Kind:           KindOutput,
 		State:          StateSealed,
-		MediaType:      runreport.TerraformPlanMediaType,
+		MediaType:      infrastructure.TerraformPlanMediaType,
 		Sensitive:      true,
 		RetentionState: RetentionRetained,
 		CreatedAt:      createdAt,

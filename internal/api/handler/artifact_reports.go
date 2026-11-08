@@ -8,7 +8,10 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/artifact"
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/ansible"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
+	"github.com/slipramp/slipramp/internal/runreport/model"
+	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
 )
 
 func (h *Handler) GetArtifactReport(
@@ -46,11 +49,11 @@ func reportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error
 	}
 
 	switch record.Report.Kind {
-	case runreport.TerraformPlanKind, runreport.OpenTofuPlanKind:
+	case infrastructure.TerraformPlanKind, infrastructure.OpenTofuPlanKind:
 		return infrastructurePlanReportSummaryResponse(record)
-	case runreport.PyinfraDeployKind:
+	case pyinfra.DeployKind:
 		return pyinfraDeployReportSummaryResponse(record)
-	case runreport.AnsiblePlaybookKind:
+	case ansible.PlaybookKind:
 		return ansiblePlaybookReportSummaryResponse(record)
 	default:
 		return nil, fmt.Errorf("run report kind %q is not supported", record.Report.Kind)
@@ -59,11 +62,11 @@ func reportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error
 
 func runReportResponse(content artifact.ReportContent) (api.RunReport, error) {
 	switch report := content.Report.(type) {
-	case *runreport.InfrastructurePlanReport:
+	case *infrastructure.InfrastructurePlanReport:
 		return infrastructurePlanReportResponse(content, report)
-	case *runreport.PyinfraDeployReport:
+	case *pyinfra.PyinfraDeployReport:
 		return pyinfraDeployReportResponse(content, report)
-	case *runreport.AnsiblePlaybookReport:
+	case *ansible.AnsiblePlaybookReport:
 		return ansiblePlaybookReportResponse(content, report)
 	default:
 		return api.RunReport{}, fmt.Errorf("run report kind %q is not supported", content.Metadata.Kind)
@@ -77,7 +80,7 @@ func infrastructurePlanReportSummaryResponse(record artifact.Record) (*api.RunRe
 	}
 	response := &api.RunReportSummary{}
 	switch record.Report.Kind {
-	case runreport.TerraformPlanKind:
+	case infrastructure.TerraformPlanKind:
 		body := api.TerraformPlanReportSummary{
 			ArtifactID:     record.ID,
 			RunID:          record.RunID,
@@ -93,7 +96,7 @@ func infrastructurePlanReportSummaryResponse(record artifact.Record) (*api.RunRe
 		if err := response.FromTerraformPlanReportSummary(body); err != nil {
 			return nil, fmt.Errorf("encode Terraform plan report summary response: %w", err)
 		}
-	case runreport.OpenTofuPlanKind:
+	case infrastructure.OpenTofuPlanKind:
 		body := api.OpenTofuPlanReportSummary{
 			ArtifactID:     record.ID,
 			RunID:          record.RunID,
@@ -118,7 +121,7 @@ func infrastructurePlanReportSummaryResponse(record artifact.Record) (*api.RunRe
 
 func infrastructurePlanReportResponse(
 	content artifact.ReportContent,
-	report *runreport.InfrastructurePlanReport,
+	report *infrastructure.InfrastructurePlanReport,
 ) (api.RunReport, error) {
 	if report == nil {
 		return api.RunReport{}, errors.New("infrastructure plan report is missing")
@@ -129,7 +132,7 @@ func infrastructurePlanReportResponse(
 	}
 	response := api.RunReport{}
 	switch report.Kind {
-	case runreport.TerraformPlanKind:
+	case infrastructure.TerraformPlanKind:
 		body := api.TerraformPlanReport{
 			ArtifactID:      content.Artifact.ID,
 			RunID:           content.Artifact.RunID,
@@ -147,7 +150,7 @@ func infrastructurePlanReportResponse(
 		if err := response.FromTerraformPlanReport(body); err != nil {
 			return api.RunReport{}, fmt.Errorf("encode Terraform plan report response: %w", err)
 		}
-	case runreport.OpenTofuPlanKind:
+	case infrastructure.OpenTofuPlanKind:
 		body := api.OpenTofuPlanReport{
 			ArtifactID:      content.Artifact.ID,
 			RunID:           content.Artifact.RunID,
@@ -199,7 +202,7 @@ func pyinfraDeployReportSummaryResponse(record artifact.Record) (*api.RunReportS
 
 func pyinfraDeployReportResponse(
 	content artifact.ReportContent,
-	report *runreport.PyinfraDeployReport,
+	report *pyinfra.PyinfraDeployReport,
 ) (api.RunReport, error) {
 	if report == nil {
 		return api.RunReport{}, errors.New("pyinfra deploy report is missing")
@@ -230,8 +233,8 @@ func pyinfraDeployReportResponse(
 	return response, nil
 }
 
-func pyinfraDeploySummaryResponse(value runreport.Summary) (api.PyinfraDeploySummary, error) {
-	summary, ok := value.(*runreport.PyinfraDeploySummary)
+func pyinfraDeploySummaryResponse(value model.Summary) (api.PyinfraDeploySummary, error) {
+	summary, ok := value.(*pyinfra.PyinfraDeploySummary)
 	if !ok {
 		return api.PyinfraDeploySummary{}, fmt.Errorf("run report summary type %T is not supported", value)
 	}
@@ -262,7 +265,7 @@ func pyinfraDeploySummaryResponse(value runreport.Summary) (api.PyinfraDeploySum
 	return response, nil
 }
 
-func pyinfraOperationResponses(operations []runreport.PyinfraOperation) []api.PyinfraOperation {
+func pyinfraOperationResponses(operations []pyinfra.PyinfraOperation) []api.PyinfraOperation {
 	result := make([]api.PyinfraOperation, 0, len(operations))
 	for _, operation := range operations {
 		response := api.PyinfraOperation{
@@ -310,7 +313,7 @@ func ansiblePlaybookReportSummaryResponse(record artifact.Record) (*api.RunRepor
 
 func ansiblePlaybookReportResponse(
 	content artifact.ReportContent,
-	report *runreport.AnsiblePlaybookReport,
+	report *ansible.AnsiblePlaybookReport,
 ) (api.RunReport, error) {
 	if report == nil {
 		return api.RunReport{}, errors.New("ansible playbook report is missing")
@@ -345,8 +348,8 @@ func ansiblePlaybookReportResponse(
 	return response, nil
 }
 
-func ansiblePlaybookSummaryResponse(value runreport.Summary) (api.AnsiblePlaybookSummary, error) {
-	summary, ok := value.(*runreport.AnsiblePlaybookSummary)
+func ansiblePlaybookSummaryResponse(value model.Summary) (api.AnsiblePlaybookSummary, error) {
+	summary, ok := value.(*ansible.AnsiblePlaybookSummary)
 	if !ok {
 		return api.AnsiblePlaybookSummary{}, fmt.Errorf("run report summary type %T is not supported", value)
 	}
@@ -371,7 +374,7 @@ func ansiblePlaybookSummaryResponse(value runreport.Summary) (api.AnsiblePlayboo
 	}, nil
 }
 
-func ansibleHostTotalResponses(totals []runreport.AnsibleHostTotals) []api.AnsibleHostTotals {
+func ansibleHostTotalResponses(totals []ansible.AnsibleHostTotals) []api.AnsibleHostTotals {
 	result := make([]api.AnsibleHostTotals, 0, len(totals))
 	for _, total := range totals {
 		result = append(result, api.AnsibleHostTotals{
@@ -389,7 +392,7 @@ func ansibleHostTotalResponses(totals []runreport.AnsibleHostTotals) []api.Ansib
 	return result
 }
 
-func ansiblePlayResponses(plays []runreport.AnsiblePlay) []api.AnsiblePlay {
+func ansiblePlayResponses(plays []ansible.AnsiblePlay) []api.AnsiblePlay {
 	result := make([]api.AnsiblePlay, 0, len(plays))
 	for _, play := range plays {
 		result = append(result, api.AnsiblePlay{
@@ -403,7 +406,7 @@ func ansiblePlayResponses(plays []runreport.AnsiblePlay) []api.AnsiblePlay {
 	return result
 }
 
-func ansibleTaskResponses(tasks []runreport.AnsibleTask) []api.AnsibleTask {
+func ansibleTaskResponses(tasks []ansible.AnsibleTask) []api.AnsibleTask {
 	result := make([]api.AnsibleTask, 0, len(tasks))
 	for _, task := range tasks {
 		results := make([]api.AnsibleTaskResult, 0, len(task.Results))
@@ -434,8 +437,8 @@ func nonNilStrings(values []string) []string {
 	return append([]string{}, values...)
 }
 
-func infrastructurePlanSummaryResponse(value runreport.Summary) (api.InfrastructurePlanSummary, error) {
-	summary, ok := value.(*runreport.InfrastructurePlanSummary)
+func infrastructurePlanSummaryResponse(value model.Summary) (api.InfrastructurePlanSummary, error) {
+	summary, ok := value.(*infrastructure.InfrastructurePlanSummary)
 	if !ok {
 		return api.InfrastructurePlanSummary{}, fmt.Errorf("run report summary type %T is not supported", value)
 	}
@@ -461,7 +464,7 @@ func infrastructurePlanSummaryResponse(value runreport.Summary) (api.Infrastruct
 }
 
 func infrastructureActionCountsResponse(
-	counts runreport.InfrastructureActionCounts,
+	counts infrastructure.InfrastructureActionCounts,
 ) api.InfrastructureActionCounts {
 	return api.InfrastructureActionCounts{
 		Total:   counts.Total,
@@ -476,7 +479,7 @@ func infrastructureActionCountsResponse(
 }
 
 func infrastructureResourceChangeResponses(
-	changes []runreport.InfrastructureResourceChange,
+	changes []infrastructure.InfrastructureResourceChange,
 ) []api.InfrastructureResourceChange {
 	result := make([]api.InfrastructureResourceChange, 0, len(changes))
 	for _, change := range changes {

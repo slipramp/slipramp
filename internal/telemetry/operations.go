@@ -13,7 +13,7 @@ import (
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 type operationInstruments struct {
@@ -160,7 +160,7 @@ func (t *Telemetry) ObserveMCPToolCall(
 
 func (t *Telemetry) ObserveReportIngestion(
 	ctx context.Context,
-	kind runreport.ReportKind,
+	kind model.Kind,
 	result artifact.ReportIngestionOutcome,
 	duration time.Duration,
 ) {

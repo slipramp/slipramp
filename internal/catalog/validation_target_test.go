@@ -6,7 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -94,7 +94,7 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				action.Artifacts = map[string]catalog.Artifact{
 					"plan-report": {
 						Path:      "/artifacts/plan.json",
-						MediaType: runreport.TerraformPlanMediaType,
+						MediaType: infrastructure.TerraformPlanMediaType,
 					},
 				}
 				input.Targets[0].Spec.Actions["preview"] = action
@@ -108,7 +108,7 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				action.Artifacts = map[string]catalog.Artifact{
 					"plan-report": {
 						Path:      "/artifacts/plan.json",
-						MediaType: runreport.TerraformPlanMediaType + "; charset=utf-8",
+						MediaType: infrastructure.TerraformPlanMediaType + "; charset=utf-8",
 						Sensitive: true,
 					},
 				}
@@ -122,7 +122,7 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				action.Artifacts = map[string]catalog.Artifact{
 					"plan-report": {
 						Path:      "/artifacts/plan.json",
-						MediaType: runreport.OpenTofuPlanMediaType,
+						MediaType: infrastructure.OpenTofuPlanMediaType,
 					},
 				}
 				input.Targets[0].Spec.Actions["preview"] = action
@@ -136,7 +136,7 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				action.Artifacts = map[string]catalog.Artifact{
 					"plan-report": {
 						Path:      "/artifacts/plan.json",
-						MediaType: runreport.OpenTofuPlanMediaType + "; charset=utf-8",
+						MediaType: infrastructure.OpenTofuPlanMediaType + "; charset=utf-8",
 						Sensitive: true,
 					},
 				}

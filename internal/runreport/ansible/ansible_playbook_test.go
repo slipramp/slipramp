@@ -1,4 +1,4 @@
-package runreport
+package ansible
 
 import (
 	"bytes"
@@ -10,6 +10,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	ansiblesource "github.com/slipramp/slipramp/internal/runreport/ansible/source"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
@@ -24,13 +27,13 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 			check: func(t *testing.T, report AnsiblePlaybookReport) {
 				t.Helper()
 				wantResults := AnsibleOutcomeCounts{Total: 6, OK: 2, Changed: 4}
-				if report.Mode != ApplyMode || !report.Summary.Complete || report.Summary.Hosts != 2 ||
+				if report.Mode != model.ApplyMode || !report.Summary.Complete || report.Summary.Hosts != 2 ||
 					report.Summary.Plays != 1 || report.Summary.Tasks != 3 || report.Summary.Results != wantResults {
 					t.Errorf("report summary = %#v", report.Summary)
 				}
 				if report.ToolVersion != "2.21.5" || report.Runner.Version != "2.4.3" ||
 					report.Runner.Status != AnsibleRunnerStatusSuccessful || report.Runner.ExitCode != 0 {
-					t.Errorf("report versions and Runner = %#v %#v", report.ReportEnvelope, report.Runner)
+					t.Errorf("report versions and Runner = %#v %#v", report.Envelope, report.Runner)
 				}
 				if got := report.Summary.HostTotals[0]; got.Host != "node01.example.com" ||
 					got.OK != 3 || got.Changed != 3 {
@@ -55,7 +58,7 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 			check: func(t *testing.T, report AnsiblePlaybookReport) {
 				t.Helper()
 				wantResults := AnsibleOutcomeCounts{Total: 1, Changed: 1}
-				if report.Mode != PreviewMode || !report.Summary.Complete || report.Summary.Results != wantResults ||
+				if report.Mode != model.PreviewMode || !report.Summary.Complete || report.Summary.Results != wantResults ||
 					report.Plays[0].Tasks[0].SourcePath != "site.yml" {
 					t.Errorf("preview report = %#v", report)
 				}
@@ -116,20 +119,12 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 			}
 			test.check(t, report)
 
-			encoded, err := Encode(report)
+			encoded, err := model.Encode(report)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
 			if bytes.Contains(encoded, []byte("source-only")) {
 				t.Errorf("projection retained excluded source data: %s", encoded)
-			}
-
-			projection, err := DecodeProjection(AnsiblePlaybookKind, bytes.NewReader(encoded))
-			if err != nil {
-				t.Fatalf("DecodeProjection() error = %v", err)
-			}
-			if _, ok := projection.(*AnsiblePlaybookReport); !ok {
-				t.Fatalf("DecodeProjection() = %T", projection)
 			}
 		})
 	}
@@ -156,7 +151,7 @@ func TestDecodeAnsiblePlaybookRedactsCensoredResults(t *testing.T) {
 				task.SourcePath != "" {
 				t.Fatalf("no_log task = %#v", task)
 			}
-			encoded, err := Encode(report)
+			encoded, err := model.Encode(report)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -325,19 +320,18 @@ func TestDecodeAnsiblePlaybookRejectsInvalidDocuments(t *testing.T) {
 func TestDecodeAnsiblePlaybookEnforcesBounds(t *testing.T) {
 	t.Parallel()
 
-	exitCode := 0
-	document := ansiblePlaybookSource{
-		SchemaVersion:       ansiblePlaybookSourceSchemaVersion,
+	document := ansiblesource.Document{
+		SchemaVersion:       ansiblesource.SourceSchemaVersion,
 		RepositoryDirectory: "/workspace",
-		Mode:                ApplyMode,
-		Versions:            &ansibleVersionsSource{},
-		Runner: &ansibleRunnerSource{
-			Status:   AnsibleRunnerStatusSuccessful,
-			ExitCode: &exitCode,
+		Mode:                ansiblesource.ModeApply,
+		Versions:            &ansiblesource.Versions{},
+		Runner: &ansiblesource.RunnerResult{
+			Status:   ansiblesource.RunnerStatusSuccessful,
+			ExitCode: 0,
 		},
 		Events: slices.Repeat(
 			[]json.RawMessage{json.RawMessage(`{"counter":1,"uuid":"event","event":"future"}`)},
-			MaximumAnsiblePlaybookEvents+1,
+			ansiblesource.MaximumSourceEvents+1,
 		),
 	}
 	contents, err := json.Marshal(document)
@@ -384,9 +378,9 @@ func TestDecodeAnsiblePlaybookEnforcesBounds(t *testing.T) {
 func TestDecodeAnsiblePlaybookEnforcesSourceSize(t *testing.T) {
 	t.Parallel()
 
-	reader := io.LimitReader(zeroReader{}, MaximumAnsiblePlaybookSourceSizeBytes+1)
+	reader := io.LimitReader(zeroReader{}, ansiblesource.MaximumSourceSize+1)
 	_, err := DecodeAnsiblePlaybook(reader)
-	if !errors.Is(err, ErrSourceTooLarge) {
+	if !errors.Is(err, model.ErrSourceTooLarge) {
 		t.Fatalf("DecodeAnsiblePlaybook() error = %v, want source size error", err)
 	}
 }
@@ -402,17 +396,17 @@ func validAnsibleSource(events string) string {
 }
 
 func validAnsibleProjection() AnsiblePlaybookReport {
-	envelope := ReportEnvelope{
-		Kind:           AnsiblePlaybookKind,
-		SchemaVersion:  AnsiblePlaybookSchemaVersion,
-		AdapterVersion: AnsiblePlaybookAdapterVersion,
+	envelope := model.Envelope{
+		Kind:           PlaybookKind,
+		SchemaVersion:  SchemaVersion,
+		AdapterVersion: AdapterVersion,
 		Tool:           "ansible",
 		ToolVersion:    "2.21.5",
-		Mode:           ApplyMode,
+		Mode:           model.ApplyMode,
 	}
 
 	return AnsiblePlaybookReport{
-		ReportEnvelope: envelope,
+		Envelope: envelope,
 		Runner: AnsibleRunnerSummary{
 			Version:  "2.4.3",
 			Status:   AnsibleRunnerStatusSuccessful,
@@ -429,4 +423,14 @@ func validAnsibleProjection() AnsiblePlaybookReport {
 			Tasks: []AnsibleTask{},
 		}},
 	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(contents []byte) (int, error) {
+	for index := range contents {
+		contents[index] = 0
+	}
+
+	return len(contents), nil
 }

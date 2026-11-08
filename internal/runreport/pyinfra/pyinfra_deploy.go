@@ -1,4 +1,5 @@
-package runreport
+// Package pyinfra projects pyinfra deploy output into bounded Run reports.
+package pyinfra
 
 import (
 	"bytes"
@@ -8,9 +9,19 @@ import (
 	"io"
 	"slices"
 	"unicode/utf8"
+
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 const (
+	DeployMediaType            = "application/vnd.slipramp.pyinfra-deploy+json"
+	DeployKind      model.Kind = "pyinfra-deploy"
+
+	SchemaVersion  = 1
+	AdapterVersion = 1
+
+	MaximumSourceSizeBytes int64 = 32 * 1024 * 1024
+
 	MaximumPyinfraOperations  = 10_000
 	MaximumPyinfraHostEntries = 200_000
 
@@ -21,7 +32,7 @@ const (
 )
 
 type PyinfraDeployReport struct {
-	ReportEnvelope
+	model.Envelope
 	Summary     PyinfraDeploySummary `json:"summary"`
 	Operations  []PyinfraOperation   `json:"operations"`
 	FailedHosts []string             `json:"failedHosts"`
@@ -64,15 +75,15 @@ type PyinfraOperationResult struct {
 
 type pyinfraDeployAdapter struct{}
 
-func (pyinfraDeployAdapter) Kind() ReportKind {
-	return PyinfraDeployKind
+func (pyinfraDeployAdapter) Kind() model.Kind {
+	return DeployKind
 }
 
 func (pyinfraDeployAdapter) MaximumSourceSizeBytes() int64 {
-	return MaximumPyinfraDeploySourceSizeBytes
+	return MaximumSourceSizeBytes
 }
 
-func (pyinfraDeployAdapter) Decode(source io.Reader) (Report, error) {
+func (pyinfraDeployAdapter) Decode(source io.Reader) (model.Report, error) {
 	report, err := DecodePyinfraDeploy(source)
 	if err != nil {
 		return nil, err
@@ -81,23 +92,27 @@ func (pyinfraDeployAdapter) Decode(source io.Reader) (Report, error) {
 	return &report, nil
 }
 
-func (pyinfraDeployAdapter) newReport() Report {
+func (pyinfraDeployAdapter) NewReport() model.Report {
 	return &PyinfraDeployReport{}
 }
 
-func (pyinfraDeployAdapter) newSummary() Summary {
+func (pyinfraDeployAdapter) NewSummary() model.Summary {
 	return &PyinfraDeploySummary{}
 }
 
-func (pyinfraDeployAdapter) validateEnvelope(envelope ReportEnvelope) error {
-	if envelope.SchemaVersion != PyinfraDeploySchemaVersion ||
-		envelope.AdapterVersion != PyinfraDeployAdapterVersion ||
+func (pyinfraDeployAdapter) ValidateEnvelope(envelope model.Envelope) error {
+	if envelope.SchemaVersion != SchemaVersion ||
+		envelope.AdapterVersion != AdapterVersion ||
 		envelope.Tool != "pyinfra" || envelope.ToolVersion != "" ||
-		(envelope.Mode != PreviewMode && envelope.Mode != ApplyMode) {
+		(envelope.Mode != model.PreviewMode && envelope.Mode != model.ApplyMode) {
 		return errors.New("pyinfra deploy report envelope is invalid")
 	}
 
 	return nil
+}
+
+func DeployFormat() model.Format {
+	return pyinfraDeployAdapter{}
 }
 
 type pyinfraDeploySource struct {
@@ -138,15 +153,15 @@ func DecodePyinfraDeploy(source io.Reader) (PyinfraDeployReport, error) {
 		return PyinfraDeployReport{}, errors.New("pyinfra deploy source is required")
 	}
 
-	contents, err := io.ReadAll(io.LimitReader(source, MaximumPyinfraDeploySourceSizeBytes+1))
+	contents, err := io.ReadAll(io.LimitReader(source, MaximumSourceSizeBytes+1))
 	if err != nil {
-		return PyinfraDeployReport{}, fmt.Errorf("%w: %w", ErrSourceRead, err)
+		return PyinfraDeployReport{}, fmt.Errorf("%w: %w", model.ErrSourceRead, err)
 	}
-	if int64(len(contents)) > MaximumPyinfraDeploySourceSizeBytes {
+	if int64(len(contents)) > MaximumSourceSizeBytes {
 		return PyinfraDeployReport{}, fmt.Errorf(
 			"%w: pyinfra deploy source must not exceed %d bytes",
-			ErrSourceTooLarge,
-			MaximumPyinfraDeploySourceSizeBytes,
+			model.ErrSourceTooLarge,
+			MaximumSourceSizeBytes,
 		)
 	}
 	if !utf8.Valid(contents) {
@@ -179,17 +194,17 @@ func DecodePyinfraDeploy(source io.Reader) (PyinfraDeployReport, error) {
 		)
 	}
 
-	envelope := ReportEnvelope{
-		Kind:           PyinfraDeployKind,
-		SchemaVersion:  PyinfraDeploySchemaVersion,
-		AdapterVersion: PyinfraDeployAdapterVersion,
+	envelope := model.Envelope{
+		Kind:           DeployKind,
+		SchemaVersion:  SchemaVersion,
+		AdapterVersion: AdapterVersion,
 		Tool:           "pyinfra",
-		Mode:           PreviewMode,
+		Mode:           model.PreviewMode,
 	}
 	report := PyinfraDeployReport{
-		ReportEnvelope: envelope,
-		Operations:     make([]PyinfraOperation, 0, len(document.Plan)),
-		FailedHosts:    []string{},
+		Envelope:    envelope,
+		Operations:  make([]PyinfraOperation, 0, len(document.Plan)),
+		FailedHosts: []string{},
 	}
 	operationIndexes := make(map[string]int, len(document.Plan))
 	for index, sourceOperation := range document.Plan {
@@ -205,7 +220,7 @@ func DecodePyinfraDeploy(source io.Reader) (PyinfraDeployReport, error) {
 	}
 
 	if !bytes.Equal(bytes.TrimSpace(document.Results), []byte("null")) {
-		report.Mode = ApplyMode
+		report.Mode = model.ApplyMode
 		if err := projectPyinfraResults(document.Results, operationIndexes, &report); err != nil {
 			return PyinfraDeployReport{}, err
 		}
@@ -213,7 +228,7 @@ func DecodePyinfraDeploy(source io.Reader) (PyinfraDeployReport, error) {
 
 	summary, _ := calculatePyinfraSummary(report)
 	report.Summary = summary
-	if _, err := Encode(report); err != nil {
+	if _, err := model.Encode(report); err != nil {
 		return PyinfraDeployReport{}, err
 	}
 
@@ -224,7 +239,7 @@ func projectPyinfraPlanOperation(
 	index int,
 	source pyinfraPlanOperationSource,
 ) (PyinfraOperation, error) {
-	if err := validateRequiredString(
+	if err := model.ValidateRequiredString(
 		fmt.Sprintf("plan[%d].op_hash", index),
 		source.Hash,
 		maximumPyinfraOperationHash,
@@ -290,7 +305,7 @@ func projectPyinfraResults(
 
 	seen := make(map[string]struct{}, len(source.Operations))
 	for index, sourceOperation := range source.Operations {
-		if err := validateRequiredString(
+		if err := model.ValidateRequiredString(
 			fmt.Sprintf("results.operations[%d].op_hash", index),
 			sourceOperation.Hash,
 			maximumPyinfraOperationHash,
@@ -392,16 +407,16 @@ func projectPyinfraOperationResult(
 	}, nil
 }
 
-func (r PyinfraDeployReport) Metadata() ReportEnvelope {
-	return r.ReportEnvelope
+func (r PyinfraDeployReport) Metadata() model.Envelope {
+	return r.Envelope
 }
 
-func (r PyinfraDeployReport) ReportSummary() Summary {
+func (r PyinfraDeployReport) ReportSummary() model.Summary {
 	return &r.Summary
 }
 
 func (r PyinfraDeployReport) Validate() error {
-	if err := r.ReportEnvelope.Validate(); err != nil {
+	if err := (pyinfraDeployAdapter{}).ValidateEnvelope(r.Envelope); err != nil {
 		return err
 	}
 	if len(r.Operations) > MaximumPyinfraOperations {
@@ -421,7 +436,7 @@ func (r PyinfraDeployReport) Validate() error {
 	); err != nil {
 		return err
 	}
-	if r.Mode == PreviewMode && len(r.FailedHosts) != 0 {
+	if r.Mode == model.PreviewMode && len(r.FailedHosts) != 0 {
 		return errors.New("failedHosts is not valid in preview mode")
 	}
 
@@ -443,8 +458,8 @@ func (r PyinfraDeployReport) Validate() error {
 	return nil
 }
 
-func (s PyinfraDeploySummary) ReportKind() ReportKind {
-	return PyinfraDeployKind
+func (s PyinfraDeploySummary) ReportKind() model.Kind {
+	return DeployKind
 }
 
 func (s PyinfraDeploySummary) Validate() error {
@@ -489,7 +504,7 @@ func (s PyinfraResultSummary) validate() error {
 	return nil
 }
 
-func (o PyinfraOperation) validate(field string, mode ReportMode) error {
+func (o PyinfraOperation) validate(field string, mode model.Mode) error {
 	if err := validateCanonicalPyinfraStrings(
 		field+".names",
 		o.Names,
@@ -521,7 +536,7 @@ func (o PyinfraOperation) validate(field string, mode ReportMode) error {
 		return fmt.Errorf("%s planned host lists overlap", field)
 	}
 
-	if mode == PreviewMode {
+	if mode == model.PreviewMode {
 		if o.Result != nil {
 			return fmt.Errorf("%s.result is not valid in preview mode", field)
 		}
@@ -601,7 +616,7 @@ func calculatePyinfraSummary(report PyinfraDeployReport) (PyinfraDeploySummary, 
 		result.UnchangedHostOperations
 
 	summary := PyinfraDeploySummary{Plan: plan}
-	if report.Mode == ApplyMode {
+	if report.Mode == model.ApplyMode {
 		summary.Results = &result
 	}
 
@@ -625,7 +640,7 @@ func normalizePyinfraStrings(
 	result := slices.Clone(values)
 	slices.Sort(result)
 	for index, value := range result {
-		if err := validateRequiredString(field, value, maximumLength); err != nil {
+		if err := model.ValidateRequiredString(field, value, maximumLength); err != nil {
 			return nil, err
 		}
 		if index > 0 && result[index-1] == value {
@@ -650,7 +665,7 @@ func validateCanonicalPyinfraStrings(
 		return fmt.Errorf("%s must contain at most %d entries", field, maximumCount)
 	}
 	for index, value := range values {
-		if err := validateRequiredString(field, value, maximumLength); err != nil {
+		if err := model.ValidateRequiredString(field, value, maximumLength); err != nil {
 			return err
 		}
 		if index > 0 && values[index-1] >= value {

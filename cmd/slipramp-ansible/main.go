@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/slipramp/slipramp/internal/ansiblereport"
+	ansiblesource "github.com/slipramp/slipramp/internal/runreport/ansible/source"
 )
 
 func main() {
@@ -27,14 +27,14 @@ func run(
 	stderr io.Writer,
 	signals <-chan os.Signal,
 ) int {
-	if len(arguments) == 0 || (arguments[0] != string(ansiblereport.ModePreview) &&
-		arguments[0] != string(ansiblereport.ModeApply)) {
+	if len(arguments) == 0 || (arguments[0] != string(ansiblesource.ModePreview) &&
+		arguments[0] != string(ansiblesource.ModeApply)) {
 		_, _ = fmt.Fprintln(stderr, "usage: slipramp-ansible <preview|apply> [options] <playbook>")
 		return 64
 	}
 
-	config := ansiblereport.Config{
-		Mode:    ansiblereport.Mode(arguments[0]),
+	config := ansiblesource.Config{
+		Mode:    ansiblesource.Mode(arguments[0]),
 		Stdout:  stdout,
 		Stderr:  stderr,
 		Signals: signals,
@@ -53,7 +53,7 @@ func run(
 	}
 	config.Playbook = flags.Arg(0)
 
-	exitCode, err := ansiblereport.Run(ctx, config)
+	exitCode, err := ansiblesource.Run(ctx, config)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 	}

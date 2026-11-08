@@ -14,6 +14,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 )
 
 type serviceMetadataStore struct {
@@ -774,7 +775,7 @@ func TestServiceRejectsUnsafeRunReportArtifactDeclarations(t *testing.T) {
 		{
 			name: "not sensitive",
 			declaration: Declaration{
-				MediaType: runreport.TerraformPlanMediaType,
+				MediaType: infrastructure.TerraformPlanMediaType,
 			},
 			sizeBytes: 2,
 			wantError: "must be sensitive",
@@ -782,10 +783,10 @@ func TestServiceRejectsUnsafeRunReportArtifactDeclarations(t *testing.T) {
 		{
 			name: "too large",
 			declaration: Declaration{
-				MediaType: runreport.TerraformPlanMediaType,
+				MediaType: infrastructure.TerraformPlanMediaType,
 				Sensitive: true,
 			},
-			sizeBytes: runreport.MaximumInfrastructurePlanSourceSizeBytes + 1,
+			sizeBytes: infrastructure.MaximumSourceSizeBytes + 1,
 			wantError: "source limit",
 		},
 	}

@@ -1,4 +1,4 @@
-package runreport
+package pyinfra
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 func TestDecodePyinfraDeployFixtures(t *testing.T) {
@@ -30,7 +32,7 @@ func TestDecodePyinfraDeployFixtures(t *testing.T) {
 					PlannedHostOperations:     2,
 					ConditionalHostOperations: 1,
 				}
-				if report.Mode != PreviewMode || report.Summary.Plan != wantPlan ||
+				if report.Mode != model.PreviewMode || report.Summary.Plan != wantPlan ||
 					report.Summary.Results != nil || len(report.FailedHosts) != 0 {
 					t.Errorf("report = %#v", report)
 				}
@@ -60,7 +62,7 @@ func TestDecodePyinfraDeployFixtures(t *testing.T) {
 					UnchangedHostOperations: 1,
 					FailedHosts:             1,
 				}
-				if report.Mode != ApplyMode || report.Summary.Results == nil ||
+				if report.Mode != model.ApplyMode || report.Summary.Results == nil ||
 					*report.Summary.Results != wantResults {
 					t.Errorf("report = %#v", report)
 				}
@@ -93,19 +95,11 @@ func TestDecodePyinfraDeployFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodePyinfraDeploy() error = %v", err)
 			}
-			encoded, err := Encode(report)
+			encoded, err := model.Encode(report)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
 			test.check(t, report, encoded)
-
-			decoded, err := DecodeProjection(PyinfraDeployKind, bytes.NewReader(encoded))
-			if err != nil {
-				t.Fatalf("DecodeProjection() error = %v", err)
-			}
-			if _, ok := decoded.(*PyinfraDeployReport); !ok {
-				t.Fatalf("DecodeProjection() = %T", decoded)
-			}
 		})
 	}
 }
@@ -245,9 +239,19 @@ func TestDecodePyinfraDeployEnforcesBounds(t *testing.T) {
 func TestDecodePyinfraDeployEnforcesSourceSize(t *testing.T) {
 	t.Parallel()
 
-	reader := io.LimitReader(zeroReader{}, MaximumPyinfraDeploySourceSizeBytes+1)
+	reader := io.LimitReader(zeroReader{}, MaximumSourceSizeBytes+1)
 	_, err := DecodePyinfraDeploy(reader)
-	if !errors.Is(err, ErrSourceTooLarge) {
+	if !errors.Is(err, model.ErrSourceTooLarge) {
 		t.Fatalf("DecodePyinfraDeploy() error = %v, want source size error", err)
 	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(contents []byte) (int, error) {
+	for index := range contents {
+		contents[index] = 0
+	}
+
+	return len(contents), nil
 }

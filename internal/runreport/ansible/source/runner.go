@@ -1,4 +1,4 @@
-package ansiblereport
+package source
 
 import (
 	"bytes"

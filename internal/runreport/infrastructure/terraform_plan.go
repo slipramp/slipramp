@@ -1,4 +1,5 @@
-package runreport
+// Package infrastructure projects Terraform and OpenTofu plans into a shared value-free report model.
+package infrastructure
 
 import (
 	"bytes"
@@ -11,9 +12,22 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
 
 const (
+	TerraformPlanMediaType = "application/vnd.slipramp.terraform-plan+json"
+	OpenTofuPlanMediaType  = "application/vnd.slipramp.opentofu-plan+json"
+
+	TerraformPlanKind model.Kind = "terraform-plan"
+	OpenTofuPlanKind  model.Kind = "opentofu-plan"
+
+	SchemaVersion  = 1
+	AdapterVersion = 1
+
+	MaximumSourceSizeBytes int64 = 32 * 1024 * 1024
+
 	MaximumInfrastructureResourceEntries = 20_000
 	MaximumInfrastructureOutputEntries   = 10_000
 	MaximumInfrastructureCheckEntries    = 10_000
@@ -47,14 +61,14 @@ const (
 )
 
 type InfrastructurePlanReport struct {
-	ReportEnvelope
+	model.Envelope
 	Summary         InfrastructurePlanSummary      `json:"summary"`
 	ResourceChanges []InfrastructureResourceChange `json:"resourceChanges"`
 	ResourceDrift   []InfrastructureResourceChange `json:"resourceDrift"`
 }
 
 type InfrastructurePlanSummary struct {
-	reportKind       ReportKind
+	reportKind       model.Kind
 	ResourceChanges  InfrastructureActionCounts `json:"resourceChanges"`
 	DriftedResources int                        `json:"driftedResources"`
 	Checks           InfrastructureCheckCounts  `json:"checks"`
@@ -98,19 +112,19 @@ type InfrastructureResourceChange struct {
 }
 
 type infrastructurePlanAdapter struct {
-	kind ReportKind
+	kind model.Kind
 	tool string
 }
 
-func (a infrastructurePlanAdapter) Kind() ReportKind {
+func (a infrastructurePlanAdapter) Kind() model.Kind {
 	return a.kind
 }
 
 func (infrastructurePlanAdapter) MaximumSourceSizeBytes() int64 {
-	return MaximumInfrastructurePlanSourceSizeBytes
+	return MaximumSourceSizeBytes
 }
 
-func (a infrastructurePlanAdapter) Decode(source io.Reader) (Report, error) {
+func (a infrastructurePlanAdapter) Decode(source io.Reader) (model.Report, error) {
 	report, err := decodeInfrastructurePlan(source, a.kind, a.tool)
 	if err != nil {
 		return nil, err
@@ -119,22 +133,30 @@ func (a infrastructurePlanAdapter) Decode(source io.Reader) (Report, error) {
 	return &report, nil
 }
 
-func (infrastructurePlanAdapter) newReport() Report {
+func (infrastructurePlanAdapter) NewReport() model.Report {
 	return &InfrastructurePlanReport{}
 }
 
-func (a infrastructurePlanAdapter) newSummary() Summary {
+func (a infrastructurePlanAdapter) NewSummary() model.Summary {
 	return &InfrastructurePlanSummary{reportKind: a.kind}
 }
 
-func (a infrastructurePlanAdapter) validateEnvelope(envelope ReportEnvelope) error {
-	if envelope.SchemaVersion != InfrastructurePlanSchemaVersion ||
-		envelope.AdapterVersion != InfrastructurePlanAdapterVersion ||
-		envelope.Tool != a.tool || envelope.Mode != PreviewMode {
+func (a infrastructurePlanAdapter) ValidateEnvelope(envelope model.Envelope) error {
+	if envelope.SchemaVersion != SchemaVersion ||
+		envelope.AdapterVersion != AdapterVersion ||
+		envelope.Tool != a.tool || envelope.Mode != model.PreviewMode {
 		return errors.New("infrastructure plan report envelope is invalid")
 	}
 
-	return validateOptionalString("toolVersion", envelope.ToolVersion, maximumInfrastructureToolVersionLength)
+	return model.ValidateOptionalString("toolVersion", envelope.ToolVersion, maximumInfrastructureToolVersionLength)
+}
+
+func TerraformPlanFormat() model.Format {
+	return infrastructurePlanAdapter{kind: TerraformPlanKind, tool: "terraform"}
+}
+
+func OpenTofuPlanFormat() model.Format {
+	return infrastructurePlanAdapter{kind: OpenTofuPlanKind, tool: "opentofu"}
 }
 
 type infrastructurePlanSource struct {
@@ -185,22 +207,22 @@ func DecodeOpenTofuPlan(source io.Reader) (InfrastructurePlanReport, error) {
 
 func decodeInfrastructurePlan(
 	source io.Reader,
-	kind ReportKind,
+	kind model.Kind,
 	tool string,
 ) (InfrastructurePlanReport, error) {
 	if source == nil {
 		return InfrastructurePlanReport{}, errors.New("infrastructure plan source is required")
 	}
 
-	contents, err := io.ReadAll(io.LimitReader(source, MaximumInfrastructurePlanSourceSizeBytes+1))
+	contents, err := io.ReadAll(io.LimitReader(source, MaximumSourceSizeBytes+1))
 	if err != nil {
-		return InfrastructurePlanReport{}, fmt.Errorf("%w: %w", ErrSourceRead, err)
+		return InfrastructurePlanReport{}, fmt.Errorf("%w: %w", model.ErrSourceRead, err)
 	}
-	if int64(len(contents)) > MaximumInfrastructurePlanSourceSizeBytes {
+	if int64(len(contents)) > MaximumSourceSizeBytes {
 		return InfrastructurePlanReport{}, fmt.Errorf(
 			"%w: infrastructure plan source must not exceed %d bytes",
-			ErrSourceTooLarge,
-			MaximumInfrastructurePlanSourceSizeBytes,
+			model.ErrSourceTooLarge,
+			MaximumSourceSizeBytes,
 		)
 	}
 	if !utf8.Valid(contents) {
@@ -228,7 +250,7 @@ func decodeInfrastructurePlan(
 		document.Checks == nil && document.Applyable == nil && document.Complete == nil && document.Errored == nil {
 		return InfrastructurePlanReport{}, errors.New("infrastructure plan source does not contain a plan representation")
 	}
-	if err := validateOptionalString(
+	if err := model.ValidateOptionalString(
 		"terraform_version",
 		document.TerraformVersion,
 		maximumInfrastructureToolVersionLength,
@@ -248,16 +270,16 @@ func decodeInfrastructurePlan(
 		)
 	}
 
-	envelope := ReportEnvelope{
+	envelope := model.Envelope{
 		Kind:           kind,
-		SchemaVersion:  InfrastructurePlanSchemaVersion,
-		AdapterVersion: InfrastructurePlanAdapterVersion,
+		SchemaVersion:  SchemaVersion,
+		AdapterVersion: AdapterVersion,
 		Tool:           tool,
 		ToolVersion:    document.TerraformVersion,
-		Mode:           PreviewMode,
+		Mode:           model.PreviewMode,
 	}
 	report := InfrastructurePlanReport{
-		ReportEnvelope: envelope,
+		Envelope: envelope,
 		Summary: InfrastructurePlanSummary{
 			reportKind: kind,
 			Applyable:  document.Applyable,
@@ -335,18 +357,18 @@ func decodeInfrastructurePlan(
 
 	slices.SortFunc(report.ResourceChanges, compareInfrastructureResourceChanges)
 	slices.SortFunc(report.ResourceDrift, compareInfrastructureResourceChanges)
-	if _, err := Encode(report); err != nil {
+	if _, err := model.Encode(report); err != nil {
 		return InfrastructurePlanReport{}, err
 	}
 
 	return report, nil
 }
 
-func (r InfrastructurePlanReport) Metadata() ReportEnvelope {
-	return r.ReportEnvelope
+func (r InfrastructurePlanReport) Metadata() model.Envelope {
+	return r.Envelope
 }
 
-func (r InfrastructurePlanReport) ReportSummary() Summary {
+func (r InfrastructurePlanReport) ReportSummary() model.Summary {
 	summary := r.Summary
 	summary.reportKind = r.Kind
 
@@ -354,7 +376,7 @@ func (r InfrastructurePlanReport) ReportSummary() Summary {
 }
 
 func (r InfrastructurePlanReport) Validate() error {
-	if err := r.ReportEnvelope.Validate(); err != nil {
+	if err := (infrastructurePlanAdapter{kind: r.Kind, tool: r.Tool}).ValidateEnvelope(r.Envelope); err != nil {
 		return err
 	}
 	if len(r.ResourceChanges)+len(r.ResourceDrift) > MaximumInfrastructureResourceEntries {
@@ -395,7 +417,7 @@ func (r InfrastructurePlanReport) Validate() error {
 	return nil
 }
 
-func (s InfrastructurePlanSummary) ReportKind() ReportKind {
+func (s InfrastructurePlanSummary) ReportKind() model.Kind {
 	return s.reportKind
 }
 
@@ -437,10 +459,10 @@ func (c InfrastructureResourceChange) validate(field string) error {
 		{name: "actionReason", value: c.ActionReason, maximum: maximumResourceActionReasonLength},
 	} {
 		if item.required {
-			if err := validateRequiredString(field+"."+item.name, item.value, item.maximum); err != nil {
+			if err := model.ValidateRequiredString(field+"."+item.name, item.value, item.maximum); err != nil {
 				return err
 			}
-		} else if err := validateOptionalString(field+"."+item.name, item.value, item.maximum); err != nil {
+		} else if err := model.ValidateOptionalString(field+"."+item.name, item.value, item.maximum); err != nil {
 			return err
 		}
 	}
@@ -542,7 +564,7 @@ func normalizeInfrastructureOutputAction(actions []string) (InfrastructureAction
 }
 
 func validateInfrastructureFormatVersion(value string) error {
-	if err := validateRequiredString("format_version", value, 32); err != nil {
+	if err := model.ValidateRequiredString("format_version", value, 32); err != nil {
 		return err
 	}
 	majorText, minorText, found := strings.Cut(value, ".")
@@ -570,22 +592,6 @@ func validateInfrastructureCheckStatus(field string, status string) error {
 	default:
 		return fmt.Errorf("%s is not a supported infrastructure plan check status", field)
 	}
-}
-
-func validateRequiredString(field string, value string, maximum int) error {
-	if strings.TrimSpace(value) == "" {
-		return fmt.Errorf("%s is required", field)
-	}
-
-	return validateOptionalString(field, value, maximum)
-}
-
-func validateOptionalString(field string, value string, maximum int) error {
-	if utf8.RuneCountInString(value) > maximum {
-		return fmt.Errorf("%s must not exceed %d characters", field, maximum)
-	}
-
-	return nil
 }
 
 func (c *InfrastructureActionCounts) add(action InfrastructureAction) {

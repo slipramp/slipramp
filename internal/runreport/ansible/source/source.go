@@ -1,5 +1,5 @@
-// Package ansiblereport runs Ansible Runner and packages its event stream for Run report ingestion.
-package ansiblereport
+// Package source runs Ansible Runner and produces the versioned Ansible report source document.
+package source
 
 import (
 	"bufio"
@@ -48,16 +48,25 @@ type Versions struct {
 }
 
 type RunnerResult struct {
-	Status   RunnerStatus `json:"status"`
-	ExitCode int          `json:"exitCode"`
+	Status      RunnerStatus `json:"status"`
+	ExitCode    int          `json:"exitCode"`
+	exitCodeSet bool
 }
 
-type sourceEnvelope struct {
-	SchemaVersion       int          `json:"schemaVersion"`
-	RepositoryDirectory string       `json:"repositoryDirectory"`
-	Mode                Mode         `json:"mode"`
-	Versions            Versions     `json:"versions"`
-	Runner              RunnerResult `json:"runner"`
+type Document struct {
+	SchemaVersion       int               `json:"schemaVersion"`
+	RepositoryDirectory string            `json:"repositoryDirectory"`
+	Mode                Mode              `json:"mode"`
+	Versions            *Versions         `json:"versions"`
+	Runner              *RunnerResult     `json:"runner"`
+	Events              []json.RawMessage `json:"events,omitempty"`
+}
+
+type Event struct {
+	Counter   int             `json:"counter"`
+	UUID      string          `json:"uuid"`
+	Event     string          `json:"event"`
+	EventData json.RawMessage `json:"event_data"`
 }
 
 type PackageConfig struct {
@@ -93,12 +102,12 @@ func PackageSource(config PackageConfig) error {
 		return err
 	}
 
-	header := sourceEnvelope{
+	header := Document{
 		SchemaVersion:       SourceSchemaVersion,
 		RepositoryDirectory: config.RepositoryDirectory,
 		Mode:                config.Mode,
-		Versions:            config.Versions,
-		Runner:              runner,
+		Versions:            &config.Versions,
+		Runner:              &runner,
 	}
 	encodedHeader, err := json.Marshal(header)
 	if err != nil {
@@ -160,6 +169,29 @@ func PackageSource(config PackageConfig) error {
 	}
 
 	return nil
+}
+
+func (r *RunnerResult) UnmarshalJSON(contents []byte) error {
+	type encodedRunnerResult struct {
+		Status   RunnerStatus `json:"status"`
+		ExitCode *int         `json:"exitCode"`
+	}
+
+	var encoded encodedRunnerResult
+	if err := json.Unmarshal(contents, &encoded); err != nil {
+		return err
+	}
+	r.Status = encoded.Status
+	if encoded.ExitCode != nil {
+		r.ExitCode = *encoded.ExitCode
+		r.exitCodeSet = true
+	}
+
+	return nil
+}
+
+func (r RunnerResult) HasExitCode() bool {
+	return r.exitCodeSet
 }
 
 func readRunnerResult(config PackageConfig) (RunnerResult, error) {

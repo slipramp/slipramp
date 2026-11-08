@@ -1,4 +1,4 @@
-package runreport
+package ansible
 
 import (
 	"bytes"
@@ -11,35 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	ansiblesource "github.com/slipramp/slipramp/internal/runreport/ansible/source"
+	"github.com/slipramp/slipramp/internal/runreport/model"
 )
-
-const ansiblePlaybookSourceSchemaVersion = 2
-
-type ansiblePlaybookSource struct {
-	SchemaVersion       int                    `json:"schemaVersion"`
-	RepositoryDirectory string                 `json:"repositoryDirectory"`
-	Mode                ReportMode             `json:"mode"`
-	Versions            *ansibleVersionsSource `json:"versions"`
-	Runner              *ansibleRunnerSource   `json:"runner"`
-	Events              []json.RawMessage      `json:"events"`
-}
-
-type ansibleVersionsSource struct {
-	AnsibleCore   string `json:"ansibleCore"`
-	AnsibleRunner string `json:"ansibleRunner"`
-}
-
-type ansibleRunnerSource struct {
-	Status   AnsibleRunnerStatus `json:"status"`
-	ExitCode *int                `json:"exitCode"`
-}
-
-type ansibleEventSource struct {
-	Counter   int             `json:"counter"`
-	UUID      string          `json:"uuid"`
-	Event     string          `json:"event"`
-	EventData json.RawMessage `json:"event_data"`
-}
 
 type ansibleEventDataSource struct {
 	UUID         string          `json:"uuid"`
@@ -76,15 +51,15 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 		return AnsiblePlaybookReport{}, errors.New("ansible playbook source is required")
 	}
 
-	contents, err := io.ReadAll(io.LimitReader(source, MaximumAnsiblePlaybookSourceSizeBytes+1))
+	contents, err := io.ReadAll(io.LimitReader(source, ansiblesource.MaximumSourceSize+1))
 	if err != nil {
-		return AnsiblePlaybookReport{}, fmt.Errorf("%w: %w", ErrSourceRead, err)
+		return AnsiblePlaybookReport{}, fmt.Errorf("%w: %w", model.ErrSourceRead, err)
 	}
-	if int64(len(contents)) > MaximumAnsiblePlaybookSourceSizeBytes {
+	if int64(len(contents)) > ansiblesource.MaximumSourceSize {
 		return AnsiblePlaybookReport{}, fmt.Errorf(
 			"%w: Ansible playbook source must not exceed %d bytes",
-			ErrSourceTooLarge,
-			MaximumAnsiblePlaybookSourceSizeBytes,
+			model.ErrSourceTooLarge,
+			ansiblesource.MaximumSourceSize,
 		)
 	}
 	if !utf8.Valid(contents) {
@@ -92,7 +67,7 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(contents))
-	var document ansiblePlaybookSource
+	var document ansiblesource.Document
 	if err := decoder.Decode(&document); err != nil {
 		return AnsiblePlaybookReport{}, fmt.Errorf("decode Ansible playbook source: %w", err)
 	}
@@ -107,27 +82,27 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 	if err := validateAnsibleSourceEnvelope(document); err != nil {
 		return AnsiblePlaybookReport{}, err
 	}
-	if len(document.Events) > MaximumAnsiblePlaybookEvents {
+	if len(document.Events) > ansiblesource.MaximumSourceEvents {
 		return AnsiblePlaybookReport{}, fmt.Errorf(
 			"events must contain at most %d entries",
-			MaximumAnsiblePlaybookEvents,
+			ansiblesource.MaximumSourceEvents,
 		)
 	}
 
-	envelope := ReportEnvelope{
-		Kind:           AnsiblePlaybookKind,
-		SchemaVersion:  AnsiblePlaybookSchemaVersion,
-		AdapterVersion: AnsiblePlaybookAdapterVersion,
+	envelope := model.Envelope{
+		Kind:           PlaybookKind,
+		SchemaVersion:  SchemaVersion,
+		AdapterVersion: AdapterVersion,
 		Tool:           "ansible",
 		ToolVersion:    document.Versions.AnsibleCore,
-		Mode:           document.Mode,
+		Mode:           model.Mode(document.Mode),
 	}
 	report := AnsiblePlaybookReport{
-		ReportEnvelope: envelope,
+		Envelope: envelope,
 		Runner: AnsibleRunnerSummary{
 			Version:  document.Versions.AnsibleRunner,
-			Status:   document.Runner.Status,
-			ExitCode: *document.Runner.ExitCode,
+			Status:   AnsibleRunnerStatus(document.Runner.Status),
+			ExitCode: document.Runner.ExitCode,
 		},
 		Plays: []AnsiblePlay{},
 	}
@@ -141,7 +116,7 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 
 	previousCounter := 0
 	for index, encodedEvent := range document.Events {
-		var event ansibleEventSource
+		var event ansiblesource.Event
 		if err := json.Unmarshal(encodedEvent, &event); err != nil {
 			return AnsiblePlaybookReport{}, fmt.Errorf("decode events[%d]: %w", index, err)
 		}
@@ -174,18 +149,18 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 	if err := builder.finish(); err != nil {
 		return AnsiblePlaybookReport{}, err
 	}
-	if _, err := Encode(report); err != nil {
+	if _, err := model.Encode(report); err != nil {
 		return AnsiblePlaybookReport{}, err
 	}
 
 	return report, nil
 }
 
-func validateAnsibleSourceEnvelope(source ansiblePlaybookSource) error {
-	if source.SchemaVersion != ansiblePlaybookSourceSchemaVersion {
+func validateAnsibleSourceEnvelope(source ansiblesource.Document) error {
+	if source.SchemaVersion != ansiblesource.SourceSchemaVersion {
 		return fmt.Errorf("ansible playbook source schema version %d is not supported", source.SchemaVersion)
 	}
-	if source.Mode != PreviewMode && source.Mode != ApplyMode {
+	if source.Mode != ansiblesource.ModePreview && source.Mode != ansiblesource.ModeApply {
 		return errors.New("ansible playbook source mode must be preview or apply")
 	}
 	if err := validateAnsibleRequiredText(
@@ -213,13 +188,13 @@ func validateAnsibleSourceEnvelope(source ansiblePlaybookSource) error {
 	); err != nil {
 		return err
 	}
-	if source.Runner == nil || source.Runner.ExitCode == nil {
+	if source.Runner == nil || !source.Runner.HasExitCode() {
 		return errors.New("ansible playbook source runner status and exitCode are required")
 	}
-	if !validAnsibleRunnerStatus(source.Runner.Status) {
+	if !validAnsibleRunnerStatus(AnsibleRunnerStatus(source.Runner.Status)) {
 		return errors.New("ansible playbook source runner status is not supported")
 	}
-	if *source.Runner.ExitCode < 0 || *source.Runner.ExitCode > 255 {
+	if source.Runner.ExitCode < 0 || source.Runner.ExitCode > 255 {
 		return errors.New("ansible playbook source runner exitCode must be between 0 and 255")
 	}
 	if source.Events == nil {
@@ -245,7 +220,7 @@ type ansibleReportBuilder struct {
 	tasks               int
 }
 
-func (b *ansibleReportBuilder) consume(index int, event ansibleEventSource) error {
+func (b *ansibleReportBuilder) consume(index int, event ansiblesource.Event) error {
 	switch event.Event {
 	case "playbook_on_play_start":
 		var data ansibleEventDataSource
@@ -281,7 +256,7 @@ func (b *ansibleReportBuilder) consume(index int, event ansibleEventSource) erro
 	return nil
 }
 
-func (b *ansibleReportBuilder) consumeResult(index int, event ansibleEventSource) error {
+func (b *ansibleReportBuilder) consumeResult(index int, event ansiblesource.Event) error {
 	var data ansibleEventDataSource
 	if err := decodeAnsibleEventData(index, event.EventData, &data); err != nil {
 		return err
@@ -532,7 +507,7 @@ func projectAnsibleStats(stats ansibleStatsSource) ([]AnsibleHostTotals, error) 
 			return nil, fmt.Errorf("playbook_on_stats event_data.%s is required", required.name)
 		}
 		for host, count := range required.values {
-			if count < 0 || count > MaximumAnsiblePlaybookEvents {
+			if count < 0 || count > ansiblesource.MaximumSourceEvents {
 				return nil, fmt.Errorf(
 					"playbook_on_stats event_data.%s counts are outside report bounds", required.name,
 				)

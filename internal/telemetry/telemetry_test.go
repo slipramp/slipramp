@@ -20,7 +20,8 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
-	"github.com/slipramp/slipramp/internal/runreport"
+	"github.com/slipramp/slipramp/internal/runreport/ansible"
+	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 )
 
 func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
@@ -106,19 +107,19 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	)
 	metrics.ObserveReportIngestion(
 		t.Context(),
-		runreport.TerraformPlanKind,
+		infrastructure.TerraformPlanKind,
 		artifact.ReportIngestionSucceeded,
 		75*time.Millisecond,
 	)
 	metrics.ObserveReportIngestion(
 		t.Context(),
-		runreport.OpenTofuPlanKind,
+		infrastructure.OpenTofuPlanKind,
 		artifact.ReportIngestionSucceeded,
 		80*time.Millisecond,
 	)
 	metrics.ObserveReportIngestion(
 		t.Context(),
-		runreport.AnsiblePlaybookKind,
+		ansible.PlaybookKind,
 		artifact.ReportIngestionSucceeded,
 		85*time.Millisecond,
 	)
