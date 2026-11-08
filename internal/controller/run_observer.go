@@ -7,22 +7,23 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/controller/runjob"
 )
 
 type runObservationSession struct {
 	controller   *Controller
-	handle       jobHandle
+	handle       runjob.Handle
 	observer     *runWorker
 	cancellation *api.CancelRunCommand
 	logStream    *logSession
 	completedLog *logStreamResult
-	reported     *runObservation
+	reported     *runjob.Observation
 	reportedAt   time.Time
 }
 
 func newRunObservationSession(
 	controller *Controller,
-	handle jobHandle,
+	handle runjob.Handle,
 	observer *runWorker,
 ) *runObservationSession {
 	return &runObservationSession{
@@ -35,7 +36,7 @@ func newRunObservationSession(
 func (s *runObservationSession) run(ctx context.Context) {
 	for {
 		if s.completedLog != nil && permanentServerError(s.completedLog.err) {
-			s.controller.runWorkerError(s.handle.runID, "stream Run log", s.completedLog.err)
+			s.controller.runWorkerError(s.handle.RunID, "stream Run log", s.completedLog.err)
 
 			return
 		}
@@ -68,25 +69,23 @@ func (s *runObservationSession) acceptPendingCancellation() {
 
 func (s *runObservationSession) cancel(ctx context.Context) bool {
 	command := *s.cancellation
-	if string(command.JobNamespace) != s.handle.namespace ||
-		(s.handle.uid != "" && command.JobUID != nil && *command.JobUID != s.handle.uid) {
-		err := fmt.Errorf("%w: cancellation does not match the worker's pinned Job", errRunJobIdentityMismatch)
-		s.controller.runWorkerError(s.handle.runID, "stop cancellation after Job identity mismatch", err)
+	if string(command.JobNamespace) != s.handle.Namespace ||
+		(s.handle.UID != "" && command.JobUID != nil && *command.JobUID != s.handle.UID) {
+		err := fmt.Errorf("%w: cancellation does not match the worker's pinned Job", runjob.ErrRunJobIdentityMismatch)
+		s.controller.runWorkerError(s.handle.RunID, "stop cancellation after Job identity mismatch", err)
 
 		return true
 	}
-	if s.handle.uid != "" {
-		command.JobUID = new(s.handle.uid)
+	if s.handle.UID != "" {
+		command.JobUID = new(s.handle.UID)
 	}
 	result, err := s.controller.requestJobCancellation(ctx, command)
 	if err != nil {
 		return true
 	}
-	if result.handle.uid != "" {
-		s.handle.uid = result.handle.uid
-	}
+	s.handle = result.Handle
 	s.cancellation = nil
-	if result.jobRetained {
+	if result.JobRetained {
 		return false
 	}
 
@@ -101,24 +100,24 @@ func (s *runObservationSession) observe(ctx context.Context) bool {
 		return true
 	}
 	if err != nil {
-		if errors.Is(err, errRunJobIdentityMismatch) {
-			s.controller.runWorkerError(s.handle.runID, "stop observation after Job identity mismatch", err)
+		if errors.Is(err, runjob.ErrRunJobIdentityMismatch) {
+			s.controller.runWorkerError(s.handle.RunID, "stop observation after Job identity mismatch", err)
 
 			return true
 		}
 		s.controller.logger.Warn(
 			"observe execution Job",
-			"run_id", s.handle.runID,
+			"run_id", s.handle.RunID,
 			"error", err,
 		)
 
 		return false
 	}
 
-	if observation.jobUID != nil {
-		s.handle.uid = *observation.jobUID
+	if observation.JobUID != nil {
+		s.handle.UID = *observation.JobUID
 	}
-	if observation.terminal() {
+	if observation.Terminal() {
 		s.controller.finishObservedRun(ctx, s.handle, observation, s.logStream, s.completedLog)
 
 		return true
@@ -139,7 +138,7 @@ func (s *runObservationSession) discardCompletedLog() {
 	if s.completedLog.err != nil {
 		s.controller.logger.Warn(
 			"stream Run log",
-			"run_id", s.handle.runID,
+			"run_id", s.handle.RunID,
 			"error", s.completedLog.err,
 		)
 	}
@@ -147,22 +146,22 @@ func (s *runObservationSession) discardCompletedLog() {
 	s.completedLog = nil
 }
 
-func (s *runObservationSession) startLog(ctx context.Context, observation runObservation) bool {
-	if observation.phase != api.RunObservationPhaseRunning || s.logStream != nil {
+func (s *runObservationSession) startLog(ctx context.Context, observation runjob.Observation) bool {
+	if observation.Phase != api.RunObservationPhaseRunning || s.logStream != nil {
 		return false
 	}
 
 	logStream, err := s.controller.startLogSession(ctx, s.handle, true)
 	if err != nil {
-		if errors.Is(err, errRunJobIdentityMismatch) {
-			s.controller.runWorkerError(s.handle.runID, "retain Job after log source identity mismatch", err)
+		if errors.Is(err, runjob.ErrRunJobIdentityMismatch) {
+			s.controller.runWorkerError(s.handle.RunID, "retain Job after log source identity mismatch", err)
 
 			return true
 		}
-		if !errors.Is(err, errLogNotReady) {
+		if !errors.Is(err, runjob.ErrLogNotReady) {
 			s.controller.logger.Warn(
 				"open Run log stream",
-				"run_id", s.handle.runID,
+				"run_id", s.handle.RunID,
 				"error", err,
 			)
 		}
@@ -175,7 +174,7 @@ func (s *runObservationSession) startLog(ctx context.Context, observation runObs
 	return false
 }
 
-func (s *runObservationSession) report(ctx context.Context, observation runObservation) bool {
+func (s *runObservationSession) report(ctx context.Context, observation runjob.Observation) bool {
 	if !shouldReport(
 		observation,
 		s.reported,
@@ -186,20 +185,20 @@ func (s *runObservationSession) report(ctx context.Context, observation runObser
 		return false
 	}
 
-	err := s.controller.reports.ReportObservation(ctx, s.handle.runID, observationRequest(observation))
+	err := s.controller.reports.ReportObservation(ctx, s.handle.RunID, observationRequest(observation))
 	if ctx.Err() != nil {
 		return true
 	}
 	if permanentServerError(err) {
-		s.controller.runWorkerError(s.handle.runID, "report observation", err)
+		s.controller.runWorkerError(s.handle.RunID, "report observation", err)
 
 		return true
 	}
 	if err != nil {
 		s.controller.logger.Warn(
 			"report Run observation",
-			"run_id", s.handle.runID,
-			"phase", observation.phase,
+			"run_id", s.handle.RunID,
+			"phase", observation.Phase,
 			"error", err,
 		)
 
@@ -237,8 +236,8 @@ func (s *runObservationSession) wait(ctx context.Context) bool {
 }
 
 func shouldReport(
-	observation runObservation,
-	reported *runObservation,
+	observation runjob.Observation,
+	reported *runjob.Observation,
 	reportedAt time.Time,
 	now time.Time,
 	heartbeatEvery time.Duration,
@@ -247,14 +246,14 @@ func shouldReport(
 		now.Sub(reportedAt) >= heartbeatEvery
 }
 
-func sameObservation(left, right runObservation) bool {
-	return left.phase == right.phase &&
-		equalPointers(left.outcome, right.outcome) &&
-		equalPointers(left.jobUID, right.jobUID) &&
-		equalExecutionImages(left.images, right.images) &&
-		equalPointers(left.reason, right.reason) &&
-		equalPointers(left.message, right.message) &&
-		equalPointers(left.exitCode, right.exitCode)
+func sameObservation(left, right runjob.Observation) bool {
+	return left.Phase == right.Phase &&
+		equalPointers(left.Outcome, right.Outcome) &&
+		equalPointers(left.JobUID, right.JobUID) &&
+		equalExecutionImages(left.Images, right.Images) &&
+		equalPointers(left.Reason, right.Reason) &&
+		equalPointers(left.Message, right.Message) &&
+		equalPointers(left.ExitCode, right.ExitCode)
 }
 
 func equalExecutionImages(left, right api.ExecutionImages) bool {

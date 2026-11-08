@@ -14,6 +14,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/slipramp/slipramp/internal/api"
+	controllerkargo "github.com/slipramp/slipramp/internal/controller/kargo"
+	"github.com/slipramp/slipramp/internal/controller/preflight"
+	"github.com/slipramp/slipramp/internal/controller/runjob"
 	"github.com/slipramp/slipramp/internal/metricsserver"
 )
 
@@ -158,16 +161,27 @@ func New(
 		promotionReconciliationReports: server,
 		preflightReports:               server,
 		logs:                           server,
-		jobs:                           newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
-		preflightJobs:                  newKubernetesPlacementPreflightJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
-		retryDelay:                     pollRetryDelay,
-		observeEvery:                   jobObservationPeriod,
-		heartbeatEvery:                 observationHeartbeatPeriod,
-		now:                            time.Now,
-		activeRuns:                     make(map[uuid.UUID]*runWorker),
-		activePreflights:               make(map[uuid.UUID]struct{}),
-		preflightSlots:                 make(chan struct{}, 1),
-		runSlots:                       make(chan struct{}, cfg.MaximumActiveRuns),
+		jobs: runjob.New(runjob.Config{
+			ClusterName:         cfg.ClusterName,
+			ServerURL:           cfg.ServerURL,
+			CheckoutImage:       cfg.CheckoutImage,
+			HarnessImage:        cfg.HarnessImage,
+			GitCredentials:      cfg.GitCredentials,
+			ExecutionNamespaces: cfg.ExecutionNamespaces,
+		}, kubeClient.BatchV1(), kubeClient.CoreV1()),
+		preflightJobs: preflight.New(preflight.Config{
+			ClusterName:         cfg.ClusterName,
+			CheckoutImage:       cfg.CheckoutImage,
+			ExecutionNamespaces: cfg.ExecutionNamespaces,
+		}, kubeClient.BatchV1(), kubeClient.CoreV1()),
+		retryDelay:       pollRetryDelay,
+		observeEvery:     jobObservationPeriod,
+		heartbeatEvery:   observationHeartbeatPeriod,
+		now:              time.Now,
+		activeRuns:       make(map[uuid.UUID]*runWorker),
+		activePreflights: make(map[uuid.UUID]struct{}),
+		preflightSlots:   make(chan struct{}, 1),
+		runSlots:         make(chan struct{}, cfg.MaximumActiveRuns),
 	}
 	if settings.metricsHandler != nil {
 		controller.metrics = metricsserver.New(
@@ -177,13 +191,13 @@ func New(
 		)
 	}
 	if len(cfg.KargoIntegrations) > 0 {
+		kargoConfig := controllerkargo.Config{Integrations: cfg.KargoIntegrations}
 		controller.stageObservers = newKargoStageObservers(
-			cfg.KargoIntegrations,
-			dynamicClient,
+			controllerkargo.NewStageSnapshotters(kargoConfig, dynamicClient),
 			server,
 			logger,
 		)
-		promotionManager := newDynamicKargoPromotionCreator(cfg.KargoIntegrations, dynamicClient)
+		promotionManager := controllerkargo.NewPromotionManager(kargoConfig, dynamicClient)
 		controller.promotions = promotionManager
 		controller.promotionReconciler = promotionManager
 	}

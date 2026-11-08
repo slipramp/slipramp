@@ -91,6 +91,14 @@ type serverClient struct {
 	api             controllerAPI
 }
 
+func optionalStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
+}
+
 func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCursor, error) {
 	response, err := c.api.GetRunLogCursorWithResponse(ctx, runID, controllerAuthorization(c.bearerToken))
 	if err != nil {
@@ -104,14 +112,14 @@ func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCu
 		}
 		cursor := response.JSON200
 		if cursor.NextOffsetBytes < 0 || !cursor.State.Valid() ||
-			(cursor.State == api.LogCursorStateSealed) != (valueOrEmpty(cursor.Sha256) != "") {
+			(cursor.State == api.LogCursorStateSealed) != (optionalStringValue(cursor.Sha256) != "") {
 			return logCursor{}, invalidServerResponse("get Run log cursor", "cursor state is invalid")
 		}
 		return logCursor{
 			nextOffsetBytes: response.JSON200.NextOffsetBytes,
 			sealed:          response.JSON200.State == api.LogCursorStateSealed,
 			failed:          response.JSON200.State == api.LogCursorStateFailed,
-			sha256:          valueOrEmpty(response.JSON200.Sha256),
+			sha256:          optionalStringValue(response.JSON200.Sha256),
 		}, nil
 	default:
 		return logCursor{}, newServerResponseError("get Run log cursor", response.StatusCode())

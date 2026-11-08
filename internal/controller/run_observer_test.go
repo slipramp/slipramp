@@ -5,19 +5,20 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/controller/runjob"
 )
 
 func TestShouldReportRunObservation(t *testing.T) {
 	t.Parallel()
 
 	reportedAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
-	reported := runObservation{phase: api.RunObservationPhasePreparing}
-	running := runObservation{phase: api.RunObservationPhaseRunning}
+	reported := runjob.Observation{Phase: api.RunObservationPhasePreparing}
+	running := runjob.Observation{Phase: api.RunObservationPhaseRunning}
 	heartbeatEvery := 15 * time.Second
 	tests := []struct {
 		name        string
-		observation runObservation
-		reported    *runObservation
+		observation runjob.Observation
+		reported    *runjob.Observation
 		now         time.Time
 		want        bool
 	}{
@@ -73,9 +74,9 @@ func TestObservationRequestIncludesExecutionImages(t *testing.T) {
 	action := "registry.example.com/tools@sha256:action"
 	checkout := "registry.example.com/checkout@sha256:checkout"
 	harness := "registry.example.com/harness@sha256:harness"
-	request := observationRequest(runObservation{
-		phase: api.RunObservationPhaseRunning,
-		images: api.ExecutionImages{
+	request := observationRequest(runjob.Observation{
+		Phase: api.RunObservationPhaseRunning,
+		Images: api.ExecutionImages{
 			Action: &action, Checkout: &checkout, Harness: &harness,
 		},
 	})

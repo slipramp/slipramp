@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/controller/runjob"
 )
 
 const (
@@ -50,7 +52,7 @@ type batchingLogReader struct {
 	period     time.Duration
 }
 
-func (c *Controller) startLogSession(ctx context.Context, handle jobHandle, follow bool) (*logSession, error) {
+func (c *Controller) startLogSession(ctx context.Context, handle runjob.Handle, follow bool) (*logSession, error) {
 	stream, err := c.jobs.OpenLog(ctx, handle, follow)
 	if err != nil {
 		return nil, err
@@ -58,7 +60,7 @@ func (c *Controller) startLogSession(ctx context.Context, handle jobHandle, foll
 
 	result := make(chan logStreamResult, 1)
 	go func() {
-		summary, streamErr := c.forwardLog(ctx, handle.runID, stream)
+		summary, streamErr := c.forwardLog(ctx, handle.RunID, stream)
 		closeErr := stream.Close()
 		if streamErr == nil && closeErr != nil {
 			streamErr = fmt.Errorf("close execution log stream: %w", closeErr)

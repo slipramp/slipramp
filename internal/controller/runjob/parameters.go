@@ -1,4 +1,4 @@
-package controller
+package runjob
 
 import (
 	"encoding/json"

@@ -3,340 +3,20 @@ package controller
 import (
 	"context"
 	"errors"
-	"fmt"
-	"maps"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
-	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/controller/preflight"
 )
 
-const (
-	preflightIDLabel            = "slipramp.com/preflight-id"
-	preflightContainerName      = "probe"
-	preflightCleanupTimeout     = 30 * time.Second
-	maximumPreflightReason      = 200
-	maximumPreflightMessage     = 4096
-	maximumDiagnosticMessage    = 1024
-	maximumPreflightDiagnostics = 20
-)
-
-type placementPreflightHandle struct {
-	id        uuid.UUID
-	namespace string
-	name      string
-	uid       string
-}
-
-type placementPreflightObservation struct {
-	finished    bool
-	succeeded   bool
-	reason      string
-	message     string
-	diagnostics []api.PlacementPreflightDiagnostic
-}
+const preflightCleanupTimeout = 30 * time.Second
 
 type placementPreflightJobs interface {
-	Ensure(context.Context, api.PlacementPreflightCommand) (placementPreflightHandle, error)
-	Observe(context.Context, placementPreflightHandle) (placementPreflightObservation, error)
-	Delete(context.Context, placementPreflightHandle) error
-}
-
-type kubernetesPlacementPreflightJobs struct {
-	config Config
-	jobs   batchv1client.BatchV1Interface
-	pods   corev1client.PodsGetter
-	events corev1client.EventsGetter
-}
-
-func newKubernetesPlacementPreflightJobs(
-	config Config,
-	jobs batchv1client.BatchV1Interface,
-	core corev1client.CoreV1Interface,
-) *kubernetesPlacementPreflightJobs {
-	return &kubernetesPlacementPreflightJobs{config: config, jobs: jobs, pods: core, events: core}
-}
-
-func (j *kubernetesPlacementPreflightJobs) Ensure(
-	ctx context.Context,
-	command api.PlacementPreflightCommand,
-) (placementPreflightHandle, error) {
-	if command.ID == uuid.Nil || command.PlacementName == "" || command.ConfigurationChecksum == "" {
-		return placementPreflightHandle{}, errors.New("placement preflight identity is incomplete")
-	}
-	if command.TimeoutSeconds < 10 || command.TimeoutSeconds > 600 {
-		return placementPreflightHandle{}, errors.New("placement preflight timeout is invalid")
-	}
-	if string(command.Cluster) != j.config.ClusterName {
-		return placementPreflightHandle{}, fmt.Errorf(
-			"preflight cluster %q does not match Controller cluster %q",
-			command.Cluster,
-			j.config.ClusterName,
-		)
-	}
-	if !j.config.OwnsExecutionNamespace(string(command.JobNamespace)) {
-		return placementPreflightHandle{}, fmt.Errorf(
-			"preflight namespace %q is not owned by this Controller",
-			command.JobNamespace,
-		)
-	}
-	job, err := renderPlacementPreflightJob(j.config, command)
-	if err != nil {
-		return placementPreflightHandle{}, err
-	}
-	handle := placementPreflightHandle{
-		id: command.ID, namespace: job.Namespace, name: job.Name,
-	}
-
-	created, err := j.jobs.Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
-	if err == nil {
-		if err := validatePlacementPreflightJob(j.config.ClusterName, handle, created); err != nil {
-			return placementPreflightHandle{}, err
-		}
-		handle.uid = string(created.UID)
-		return handle, nil
-	}
-	if !apierrors.IsAlreadyExists(err) {
-		return placementPreflightHandle{}, fmt.Errorf("create Placement preflight Job: %w", err)
-	}
-
-	existing, err := j.jobs.Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
-	if err != nil {
-		return placementPreflightHandle{}, fmt.Errorf("get existing Placement preflight Job: %w", err)
-	}
-	if err := validatePlacementPreflightJob(j.config.ClusterName, handle, existing); err != nil {
-		return placementPreflightHandle{}, err
-	}
-	handle.uid = string(existing.UID)
-	return handle, nil
-}
-
-func renderPlacementPreflightJob(
-	config Config,
-	command api.PlacementPreflightCommand,
-) (*batchv1.Job, error) {
-	template, err := podTemplateFromAPI(command.PodTemplate)
-	if err != nil {
-		return nil, err
-	}
-	probeLabels := map[string]string{
-		managedByLabel:   managedByLabelValue,
-		preflightIDLabel: command.ID.String(),
-		clusterLabel:     config.ClusterName,
-	}
-	if template.Labels == nil {
-		template.Labels = map[string]string{}
-	}
-	maps.Copy(template.Labels, probeLabels)
-	resources, err := parseResourceRequirements(resourceRequirementValues(command.Resources))
-	if err != nil {
-		return nil, err
-	}
-
-	template.Spec.Containers = []corev1.Container{{
-		Name:      preflightContainerName,
-		Image:     config.CheckoutImage,
-		Command:   []string{"/bin/sh", "-c", "exit 0"},
-		Resources: resources,
-	}}
-	template.Spec.InitContainers = nil
-	template.Spec.RestartPolicy = corev1.RestartPolicyNever
-	template.Spec.ServiceAccountName = valueOrEmpty(command.ServiceAccountName)
-	template.Spec.NodeSelector = cloneOptionalMap(command.NodeSelector)
-
-	backoffLimit := int32(0)
-	deadline := int64(command.TimeoutSeconds)
-	name := placementPreflightJobName(command.ID)
-	metadata := metav1.ObjectMeta{
-		Name: name, Namespace: string(command.JobNamespace), Labels: maps.Clone(probeLabels),
-	}
-	return &batchv1.Job{
-		ObjectMeta: metadata,
-		Spec: batchv1.JobSpec{
-			BackoffLimit:          &backoffLimit,
-			ActiveDeadlineSeconds: &deadline,
-			Template:              template,
-		},
-	}, nil
-}
-
-func placementPreflightJobName(id uuid.UUID) string {
-	return "slipramp-preflight-" + id.String()
-}
-
-func validatePlacementPreflightJob(
-	clusterName string,
-	handle placementPreflightHandle,
-	job *batchv1.Job,
-) error {
-	if job.Namespace != handle.namespace || job.Name != handle.name ||
-		job.Labels[managedByLabel] != managedByLabelValue ||
-		job.Labels[preflightIDLabel] != handle.id.String() ||
-		job.Labels[clusterLabel] != clusterName || job.UID == "" ||
-		(handle.uid != "" && string(job.UID) != handle.uid) {
-		return errors.New("placement preflight Job identity does not match the command")
-	}
-	return nil
-}
-
-func (j *kubernetesPlacementPreflightJobs) Observe(
-	ctx context.Context,
-	handle placementPreflightHandle,
-) (placementPreflightObservation, error) {
-	job, err := j.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return placementPreflightObservation{
-			finished: true, reason: "JobDisappeared", message: "The preflight Job disappeared before completion.",
-		}, nil
-	}
-	if err != nil {
-		return placementPreflightObservation{}, fmt.Errorf("get Placement preflight Job: %w", err)
-	}
-	if err := validatePlacementPreflightJob(j.config.ClusterName, handle, job); err != nil {
-		return placementPreflightObservation{}, err
-	}
-
-	diagnostics := j.placementPreflightDiagnostics(ctx, handle, job)
-	for _, condition := range job.Status.Conditions {
-		if condition.Status != corev1.ConditionTrue {
-			continue
-		}
-		switch condition.Type {
-		case batchv1.JobComplete:
-			return placementPreflightObservation{
-				finished: true, succeeded: true, reason: "ProbeSucceeded",
-				message:     "The Placement successfully launched and completed the probe Job.",
-				diagnostics: diagnostics,
-			}, nil
-		case batchv1.JobFailed:
-			return placementPreflightObservation{
-				finished:    true,
-				reason:      boundedPreflightText(condition.Reason, maximumPreflightReason, "ProbeFailed"),
-				message:     boundedPreflightText(condition.Message, maximumPreflightMessage, "The preflight Job failed."),
-				diagnostics: diagnostics,
-			}, nil
-		}
-	}
-
-	return placementPreflightObservation{diagnostics: diagnostics}, nil
-}
-
-func (j *kubernetesPlacementPreflightJobs) placementPreflightDiagnostics(
-	ctx context.Context,
-	handle placementPreflightHandle,
-	job *batchv1.Job,
-) []api.PlacementPreflightDiagnostic {
-	uids := []string{string(job.UID)}
-	podSelector := labels.Set{
-		batchv1.JobNameLabel:       handle.name,
-		batchv1.ControllerUidLabel: handle.uid,
-		managedByLabel:             managedByLabelValue,
-		preflightIDLabel:           handle.id.String(),
-		clusterLabel:               j.config.ClusterName,
-	}.AsSelector()
-	pods, err := j.pods.Pods(handle.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: podSelector.String(),
-	})
-	if err == nil {
-		for index := range pods.Items {
-			pod := &pods.Items[index]
-			owner := metav1.GetControllerOf(pod)
-			if pod.Namespace == handle.namespace && podSelector.Matches(labels.Set(pod.Labels)) &&
-				owner != nil && owner.APIVersion == "batch/v1" && owner.Kind == "Job" &&
-				owner.Name == handle.name && string(owner.UID) == handle.uid {
-				uids = append(uids, string(pod.UID))
-			}
-		}
-	}
-
-	result := make([]api.PlacementPreflightDiagnostic, 0)
-	for _, uid := range uids {
-		events, err := j.events.Events(handle.namespace).List(ctx, metav1.ListOptions{
-			FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", uid).String(),
-		})
-		if err != nil {
-			continue
-		}
-		for _, event := range events.Items {
-			if event.Type != corev1.EventTypeWarning || len(result) >= maximumPreflightDiagnostics {
-				continue
-			}
-			count := event.Count
-			count = max(count, 1)
-			diagnostic := api.PlacementPreflightDiagnostic{
-				Reason:  boundedPreflightText(event.Reason, maximumPreflightReason, "KubernetesWarning"),
-				Message: boundedPreflightText(event.Message, maximumDiagnosticMessage, "Kubernetes reported a warning."),
-				Count:   count,
-			}
-			if !event.FirstTimestamp.IsZero() {
-				value := event.FirstTimestamp.UTC()
-				diagnostic.FirstObservedAt = &value
-			}
-			if !event.LastTimestamp.IsZero() {
-				value := event.LastTimestamp.UTC()
-				diagnostic.LastObservedAt = &value
-			}
-			result = append(result, diagnostic)
-		}
-	}
-	return result
-}
-
-func boundedPreflightText(value string, limit int, fallback string) string {
-	value = strings.Map(func(character rune) rune {
-		if unicode.IsControl(character) && !unicode.IsSpace(character) {
-			return -1
-		}
-		return character
-	}, strings.TrimSpace(value))
-	if value == "" {
-		value = fallback
-	}
-	characters := []rune(value)
-	if len(characters) > limit {
-		value = string(characters[:limit])
-	}
-	return value
-}
-
-func (j *kubernetesPlacementPreflightJobs) Delete(
-	ctx context.Context,
-	handle placementPreflightHandle,
-) error {
-	uid := types.UID(handle.uid)
-	propagation := metav1.DeletePropagationForeground
-	err := j.jobs.Jobs(handle.namespace).Delete(ctx, handle.name, metav1.DeleteOptions{
-		PropagationPolicy: &propagation,
-		Preconditions:     &metav1.Preconditions{UID: &uid},
-	})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("delete Placement preflight Job: %w", err)
-	}
-
-	for {
-		_, err := j.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("confirm Placement preflight Job deletion: %w", err)
-		}
-		if !waitForRetry(ctx, jobObservationPeriod) {
-			return ctx.Err()
-		}
-	}
+	Ensure(context.Context, api.PlacementPreflightCommand) (preflight.Handle, error)
+	Observe(context.Context, preflight.Handle) (preflight.Observation, error)
+	Delete(context.Context, preflight.Handle) error
 }
 
 func (c *Controller) handlePlacementPreflight(ctx context.Context, command api.PlacementPreflightCommand) {
@@ -371,7 +51,7 @@ func (c *Controller) executePlacementPreflight(ctx context.Context, command api.
 	handle, err := c.preflightJobs.Ensure(ctx, command)
 	if err != nil {
 		reason := "MaterializationFailed"
-		message := boundedPreflightText(err.Error(), maximumPreflightMessage, "The preflight Job could not be created.")
+		message := preflight.BoundMessage(err.Error(), "The preflight Job could not be created.")
 		c.reportPlacementPreflightUntilAccepted(ctx, command.ID, api.PlacementPreflightReport{
 			State:        api.PlacementPreflightReportStateFailed,
 			CleanupState: api.PlacementPreflightReportCleanupStateNotRequired,
@@ -381,7 +61,7 @@ func (c *Controller) executePlacementPreflight(ctx context.Context, command api.
 		return
 	}
 
-	jobUID := handle.uid
+	jobUID := handle.UID
 	if !c.reportPlacementPreflightUntilAccepted(ctx, command.ID, api.PlacementPreflightReport{
 		State:        api.PlacementPreflightReportStateRunning,
 		CleanupState: api.PlacementPreflightReportCleanupStatePending,
@@ -393,10 +73,10 @@ func (c *Controller) executePlacementPreflight(ctx context.Context, command api.
 		return
 	}
 
-	var terminal placementPreflightObservation
+	var terminal preflight.Observation
 	for {
 		observation, err := c.preflightJobs.Observe(ctx, handle)
-		if err == nil && observation.finished {
+		if err == nil && observation.Finished {
 			terminal = observation
 			break
 		}
@@ -414,18 +94,18 @@ func (c *Controller) executePlacementPreflight(ctx context.Context, command api.
 	cancelCleanup()
 	if cleanupErr != nil {
 		cleanupState = api.PlacementPreflightReportCleanupStateFailed
-		terminal.succeeded = false
-		terminal.reason = "CleanupFailed"
-		terminal.message = boundedPreflightText(cleanupErr.Error(), maximumPreflightMessage, "The probe Job could not be cleaned up.")
+		terminal.Succeeded = false
+		terminal.Reason = "CleanupFailed"
+		terminal.Message = preflight.BoundMessage(cleanupErr.Error(), "The probe Job could not be cleaned up.")
 	}
 
 	state := api.PlacementPreflightReportStateFailed
-	if terminal.succeeded {
+	if terminal.Succeeded {
 		state = api.PlacementPreflightReportStateSucceeded
 	}
-	diagnostics := terminal.diagnostics
-	reason := boundedPreflightText(terminal.reason, maximumPreflightReason, "ProbeFailed")
-	message := boundedPreflightText(terminal.message, maximumPreflightMessage, "The Placement preflight failed.")
+	diagnostics := terminal.Diagnostics
+	reason := preflight.BoundReason(terminal.Reason, "ProbeFailed")
+	message := preflight.BoundMessage(terminal.Message, "The Placement preflight failed.")
 	c.reportPlacementPreflightUntilAccepted(ctx, command.ID, api.PlacementPreflightReport{
 		State:        state,
 		CleanupState: cleanupState,

@@ -6,34 +6,25 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	dynamicfake "k8s.io/client-go/dynamic/fake"
-	kubetesting "k8s.io/client-go/testing"
 
 	"github.com/slipramp/slipramp/internal/api"
-	"github.com/slipramp/slipramp/internal/promotion"
+	controllerkargo "github.com/slipramp/slipramp/internal/controller/kargo"
 )
 
 type kargoPromotionCreatorFunc func(
 	context.Context,
 	api.KargoPromotionCreationCommand,
-) (kargoPromotionMaterialization, error)
+) (controllerkargo.PromotionMaterialization, error)
 
 func (f kargoPromotionCreatorFunc) Ensure(
 	ctx context.Context,
 	command api.KargoPromotionCreationCommand,
-) (kargoPromotionMaterialization, error) {
+) (controllerkargo.PromotionMaterialization, error) {
 	return f(ctx, command)
 }
 
@@ -65,126 +56,12 @@ func (f kargoPromotionReconciliationReporterFunc) ReportKargoPromotionReconcilia
 	return f(ctx, promotionID, report)
 }
 
-func TestKargoPromotionCreatorCreatesAndRecoversMatchingObject(t *testing.T) {
-	t.Parallel()
-
-	stage := testKargoStage("stage-uid")
-	client := newTestKargoDynamicClient(stage)
-	client.PrependReactor("create", "promotions", func(action kubetesting.Action) (bool, runtime.Object, error) {
-		create := action.(kubetesting.CreateAction)
-		object := create.GetObject().(*unstructured.Unstructured).DeepCopy()
-		object.SetName("external-dns-prod.01test.freight")
-		object.SetUID(types.UID("promotion-uid"))
-		err := client.Tracker().Create(kargoPromotionResource, object, create.GetNamespace())
-		return true, object, err
-	})
-	creator := newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		client,
-	)
-	command := testKargoPromotionCommand()
-
-	result, err := creator.Ensure(t.Context(), command)
-	if err != nil {
-		t.Fatalf("first Ensure() error = %v", err)
-	}
-	if result.Name != "external-dns-prod.01test.freight" || result.UID != "promotion-uid" || !result.Created {
-		t.Errorf("first Ensure() = %#v", result)
-	}
-
-	result, err = creator.Ensure(t.Context(), command)
-	if err != nil {
-		t.Fatalf("repeated Ensure() error = %v", err)
-	}
-	if result.Name != "external-dns-prod.01test.freight" || result.UID != "promotion-uid" || result.Created {
-		t.Errorf("repeated Ensure() = %#v", result)
-	}
-	stored, err := client.Resource(kargoPromotionResource).Namespace("kargo-core").Get(
-		t.Context(),
-		result.Name,
-		metav1.GetOptions{},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.GetAnnotations()[promotionIDAnnotation] != command.ID.String() {
-		t.Errorf("Promotion annotations = %#v", stored.GetAnnotations())
-	}
-}
-
-func TestKargoPromotionCreatorRejectsIdentityAndStageConflicts(t *testing.T) {
-	t.Parallel()
-
-	command := testKargoPromotionCommand()
-	existing := testKargoPromotion(command, "different-freight")
-	existing.SetUID(types.UID("promotion-uid"))
-	client := newTestKargoDynamicClient(testKargoStage("stage-uid"), existing)
-	creator := newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		client,
-	)
-	if _, err := creator.Ensure(t.Context(), command); !isPermanentKargoPromotionError(err) {
-		t.Fatalf("collision error = %v, want permanent", err)
-	}
-
-	client = newTestKargoDynamicClient(testKargoStage("new-stage-uid"))
-	creator = newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		client,
-	)
-	if _, err := creator.Ensure(t.Context(), command); !isPermanentKargoPromotionError(err) {
-		t.Fatalf("Stage UID error = %v, want permanent", err)
-	}
-}
-
-func TestKargoPromotionCreatorClassifiesAdmissionFailures(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		err       error
-		permanent bool
-	}{
-		{
-			name: "forbidden",
-			err: apierrors.NewForbidden(
-				schema.GroupResource{Group: "kargo.akuity.io", Resource: "promotions"},
-				"slipramp-test",
-				errors.New("admission denied"),
-			),
-			permanent: true,
-		},
-		{
-			name: "unavailable",
-			err:  apierrors.NewServiceUnavailable("apiserver unavailable"),
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			client := newTestKargoDynamicClient(testKargoStage("stage-uid"))
-			client.PrependReactor("create", "promotions", func(kubetesting.Action) (bool, runtime.Object, error) {
-				return true, nil, test.err
-			})
-			creator := newDynamicKargoPromotionCreator(
-				[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-				client,
-			)
-			_, err := creator.Ensure(t.Context(), testKargoPromotionCommand())
-			if isPermanentKargoPromotionError(err) != test.permanent {
-				t.Errorf("Ensure() error = %v, permanent = %t", err, isPermanentKargoPromotionError(err))
-			}
-		})
-	}
-}
-
 func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 	t.Parallel()
 
 	type creationResult struct {
 		name       string
-		ensure     kargoPromotionMaterialization
+		ensure     controllerkargo.PromotionMaterialization
 		ensureErr  error
 		result     api.KargoPromotionDispatchReportResult
 		reportErr  error
@@ -193,13 +70,8 @@ func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 	tests := []creationResult{
 		{
 			name:   "created",
-			ensure: kargoPromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
+			ensure: controllerkargo.PromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
 			result: api.KargoPromotionDispatchReportResultCreated,
-		},
-		{
-			name:      "terminal failure",
-			ensureErr: permanentKargoPromotionFailure("admission denied"),
-			result:    api.KargoPromotionDispatchReportResultFailed,
 		},
 		{
 			name:      "retryable failure",
@@ -210,7 +82,7 @@ func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 	for _, report := range kargoPromotionReportErrors() {
 		result := creationResult{
 			name:      report.name,
-			ensure:    kargoPromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
+			ensure:    controllerkargo.PromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
 			result:    api.KargoPromotionDispatchReportResultCreated,
 			reportErr: report.err,
 		}
@@ -229,7 +101,7 @@ func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 				promotions: kargoPromotionCreatorFunc(func(
 					context.Context,
 					api.KargoPromotionCreationCommand,
-				) (kargoPromotionMaterialization, error) {
+				) (controllerkargo.PromotionMaterialization, error) {
 					return test.ensure, test.ensureErr
 				}),
 				promotionReports: kargoPromotionDispatchReporterFunc(func(
@@ -259,138 +131,6 @@ func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 	}
 }
 
-func TestKargoPromotionReconcilerReportsOnlyCanonicalTerminalObjects(t *testing.T) {
-	t.Parallel()
-
-	for _, phase := range []api.KargoPromotionReconciliationReportPhase{
-		api.KargoPromotionReconciliationReportPhaseFailed,
-		api.KargoPromotionReconciliationReportPhaseErrored,
-		api.KargoPromotionReconciliationReportPhaseAborted,
-		api.KargoPromotionReconciliationReportPhaseSucceeded,
-	} {
-		t.Run(string(phase), func(t *testing.T) {
-			t.Parallel()
-
-			command := testKargoPromotionCommand()
-			object := testKargoPromotion(command, command.Freight)
-			object.SetUID(types.UID("promotion-uid"))
-			if err := unstructured.SetNestedField(object.Object, string(phase), "status", "phase"); err != nil {
-				t.Fatal(err)
-			}
-			if err := unstructured.SetNestedField(object.Object, "Kargo terminal\ndetail\x00", "status", "message"); err != nil {
-				t.Fatal(err)
-			}
-			client := newTestKargoDynamicClient(object)
-			reconciler := newDynamicKargoPromotionCreator(
-				[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-				client,
-			)
-
-			observed, err := reconciler.Reconcile(t.Context(), testKargoPromotionReconciliationCommand())
-			if err != nil {
-				t.Fatalf("Reconcile() error = %v", err)
-			}
-			if observed == nil || observed.Name != command.ExternalName || observed.UID != "promotion-uid" ||
-				observed.Phase == nil || *observed.Phase != phase || observed.Diagnostic == nil ||
-				!strings.Contains(*observed.Diagnostic, "Kargo terminal detail") {
-				t.Errorf("observation = %#v", observed)
-			}
-		})
-	}
-}
-
-func TestBoundedKargoPromotionDiagnosticSanitizesAndBoundsText(t *testing.T) {
-	t.Parallel()
-
-	if diagnostic := boundedKargoPromotionDiagnostic("\x00\n\t"); diagnostic != "" {
-		t.Errorf("control-only diagnostic = %q, want empty", diagnostic)
-	}
-
-	diagnostic := boundedKargoPromotionDiagnostic("  detail\n" + strings.Repeat("é", 5000) + "  ")
-	if !strings.HasPrefix(diagnostic, "detail ") || len([]rune(diagnostic)) != 4096 ||
-		strings.ContainsAny(diagnostic, "\x00\n\t") {
-		t.Errorf("sanitized diagnostic length = %d, value prefix = %q", len([]rune(diagnostic)), diagnostic[:8])
-	}
-}
-
-func TestKargoPromotionReconcilerIgnoresNonterminalPhaseAndRejectsUIDReplacement(t *testing.T) {
-	t.Parallel()
-
-	command := testKargoPromotionCommand()
-	object := testKargoPromotion(command, command.Freight)
-	object.SetUID(types.UID("promotion-uid"))
-	if err := unstructured.SetNestedField(object.Object, "Running", "status", "phase"); err != nil {
-		t.Fatal(err)
-	}
-	client := newTestKargoDynamicClient(object)
-	reconciler := newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		client,
-	)
-
-	observed, err := reconciler.Reconcile(t.Context(), testKargoPromotionReconciliationCommand())
-	if err != nil || observed == nil || observed.Phase != nil || observed.UID != "promotion-uid" {
-		t.Errorf("nonterminal Reconcile() = %#v, %v", observed, err)
-	}
-	replacement := testKargoPromotionReconciliationCommand()
-	replacementUID := "replacement-uid"
-	replacement.KargoUID = &replacementUID
-	if _, err := reconciler.Reconcile(t.Context(), replacement); err == nil {
-		t.Fatal("replacement UID was accepted")
-	}
-}
-
-func TestKargoPromotionReconcilerBindsKargoOriginatedIdentityAndRejectsCoordinateConflicts(t *testing.T) {
-	t.Parallel()
-
-	creation := testKargoPromotionCommand()
-	object := testKargoPromotion(creation, creation.Freight)
-	object.SetUID(types.UID("promotion-uid"))
-	object.SetAnnotations(nil)
-	reconciler := newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		newTestKargoDynamicClient(object),
-	)
-	command := testKargoPromotionReconciliationCommand()
-	command.Source = api.Kargo
-	command.KargoUID = nil
-
-	observed, err := reconciler.Reconcile(t.Context(), command)
-	if err != nil || observed == nil || observed.UID != "promotion-uid" || observed.Phase != nil {
-		t.Fatalf("unbound Kargo-originated Reconcile() = %#v, %v", observed, err)
-	}
-
-	conflicts := map[string]func(*api.KargoPromotionReconciliationCommand){
-		"name": func(value *api.KargoPromotionReconciliationCommand) {
-			value.KargoName = "another-promotion"
-		},
-		"namespace": func(value *api.KargoPromotionReconciliationCommand) {
-			value.Project = "another-project"
-		},
-		"Stage": func(value *api.KargoPromotionReconciliationCommand) {
-			value.Stage = "another-stage"
-		},
-	}
-	for name, mutate := range conflicts {
-		t.Run(name, func(t *testing.T) {
-			conflict := command
-			mutate(&conflict)
-			if _, err := reconciler.Reconcile(t.Context(), conflict); err == nil {
-				t.Fatalf("%s conflict was accepted", name)
-			}
-		})
-	}
-
-	object.SetAnnotations(map[string]string{promotionIDAnnotation: uuid.NewString()})
-	conflictingReconciler := newDynamicKargoPromotionCreator(
-		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
-		newTestKargoDynamicClient(object),
-	)
-	if _, err := conflictingReconciler.Reconcile(t.Context(), command); err == nil {
-		t.Fatal("conflicting Slipramp annotation was accepted")
-	}
-}
-
 func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 	t.Parallel()
 
@@ -402,7 +142,7 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 			command := testKargoPromotionReconciliationCommand()
 			phase := api.KargoPromotionReconciliationReportPhaseSucceeded
 			diagnostic := "Kargo completed the Promotion."
-			observation := &kargoPromotionObservation{
+			observation := &controllerkargo.PromotionObservation{
 				Name:       command.KargoName,
 				UID:        *command.KargoUID,
 				Phase:      &phase,
@@ -414,7 +154,7 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 				promotionReconciler: kargoPromotionReconcilerFunc(func(
 					context.Context,
 					api.KargoPromotionReconciliationCommand,
-				) (*kargoPromotionObservation, error) {
+				) (*controllerkargo.PromotionObservation, error) {
 					return observation, nil
 				}),
 				promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
@@ -454,14 +194,14 @@ func TestControllerReportsUnboundKargoPromotionIdentity(t *testing.T) {
 	command := testKargoPromotionReconciliationCommand()
 	command.Source = api.Kargo
 	command.KargoUID = nil
-	observation := &kargoPromotionObservation{Name: command.KargoName, UID: "promotion-uid"}
+	observation := &controllerkargo.PromotionObservation{Name: command.KargoName, UID: "promotion-uid"}
 	var reported api.KargoPromotionReconciliationReport
 	app := &Controller{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		promotionReconciler: kargoPromotionReconcilerFunc(func(
 			context.Context,
 			api.KargoPromotionReconciliationCommand,
-		) (*kargoPromotionObservation, error) {
+		) (*controllerkargo.PromotionObservation, error) {
 			return observation, nil
 		}),
 		promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
@@ -557,13 +297,13 @@ func TestControllerResumesPollingAfterKargoOperationDeadline(t *testing.T) {
 				app.promotions = kargoPromotionCreatorFunc(func(
 					ctx context.Context,
 					_ api.KargoPromotionCreationCommand,
-				) (kargoPromotionMaterialization, error) {
-					return kargoPromotionMaterialization{}, waitForDeadline(ctx)
+				) (controllerkargo.PromotionMaterialization, error) {
+					return controllerkargo.PromotionMaterialization{}, waitForDeadline(ctx)
 				})
 				app.promotionReconciler = kargoPromotionReconcilerFunc(func(
 					ctx context.Context,
 					_ api.KargoPromotionReconciliationCommand,
-				) (*kargoPromotionObservation, error) {
+				) (*controllerkargo.PromotionObservation, error) {
 					return nil, waitForDeadline(ctx)
 				})
 				var reported bool
@@ -608,12 +348,12 @@ func TestControllerResumesPollingAfterKargoOperationDeadline(t *testing.T) {
 type kargoPromotionReconcilerFunc func(
 	context.Context,
 	api.KargoPromotionReconciliationCommand,
-) (*kargoPromotionObservation, error)
+) (*controllerkargo.PromotionObservation, error)
 
 func (f kargoPromotionReconcilerFunc) Reconcile(
 	ctx context.Context,
 	command api.KargoPromotionReconciliationCommand,
-) (*kargoPromotionObservation, error) {
+) (*controllerkargo.PromotionObservation, error) {
 	return f(ctx, command)
 }
 
@@ -646,47 +386,25 @@ func testKargoPromotionReconciliationCommand() api.KargoPromotionReconciliationC
 	}
 }
 
-func newTestKargoDynamicClient(objects ...runtime.Object) *dynamicfake.FakeDynamicClient {
-	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
-		runtime.NewScheme(),
-		map[schema.GroupVersionResource]string{
-			kargoStageResource:     "StageList",
-			kargoPromotionResource: "PromotionList",
-		},
-		objects...,
-	)
-}
+func TestControllerReportsUnconfiguredKargoPromotion(t *testing.T) {
+	t.Parallel()
 
-func testKargoStage(uid string) *unstructured.Unstructured {
-	stage := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "kargo.akuity.io/v1alpha1",
-		"kind":       "Stage",
-		"metadata": map[string]any{
-			"name":      "external-dns-prod",
-			"namespace": "kargo-core",
-		},
-	}}
-	stage.SetUID(types.UID(uid))
-	return stage
-}
-
-func testKargoPromotion(
-	command api.KargoPromotionCreationCommand,
-	freight string,
-) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "kargo.akuity.io/v1alpha1",
-		"kind":       "Promotion",
-		"metadata": map[string]any{
-			"name":      command.ExternalName,
-			"namespace": string(command.Project),
-			"annotations": map[string]any{
-				promotionIDAnnotation: command.ID.String(),
-			},
-		},
-		"spec": map[string]any{
-			"stage":   command.Stage,
-			"freight": freight,
-		},
-	}}
+	var reported api.KargoPromotionDispatchReport
+	app := &Controller{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		promotionReports: kargoPromotionDispatchReporterFunc(func(
+			_ context.Context,
+			_ uuid.UUID,
+			report api.KargoPromotionDispatchReport,
+		) error {
+			reported = report
+			return nil
+		}),
+	}
+	if err := app.handleKargoPromotionCreation(t.Context(), testKargoPromotionCommand()); err != nil {
+		t.Fatalf("handleKargoPromotionCreation() error = %v", err)
+	}
+	if reported.Result != api.KargoPromotionDispatchReportResultFailed || reported.Diagnostic == nil {
+		t.Fatalf("report = %#v", reported)
+	}
 }

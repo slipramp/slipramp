@@ -1,4 +1,4 @@
-package controller
+package runjob
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/controller/jobpolicy"
 )
 
 func TestRenderJobBuildsFrozenRun(t *testing.T) {
@@ -24,8 +25,8 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 		t.Errorf("Job identity = %s/%s, want slipramp-runs/%s", job.Namespace, job.Name, wantName)
 	}
 	if job.Labels[runIDLabel] != assignment.ID.String() ||
-		job.Labels[clusterLabel] != "colo" ||
-		job.Labels[managedByLabel] != managedByLabelValue {
+		job.Labels[jobpolicy.ClusterLabel] != "colo" ||
+		job.Labels[jobpolicy.ManagedByLabel] != jobpolicy.ManagedByLabelValue {
 		t.Errorf("Job labels = %#v", job.Labels)
 	}
 	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 0 {

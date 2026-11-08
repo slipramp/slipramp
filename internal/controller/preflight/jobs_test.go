@@ -1,4 +1,4 @@
-package controller
+package preflight
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/controller/jobpolicy"
 )
 
 func TestRenderPlacementPreflightJobUsesPlacementExecutionPolicy(t *testing.T) {
@@ -62,14 +63,14 @@ func TestValidatePlacementPreflightJobPinsIdentity(t *testing.T) {
 		t.Fatalf("renderPlacementPreflightJob() error = %v", err)
 	}
 	job.UID = "preflight-job-uid"
-	handle := placementPreflightHandle{
-		id: command.ID, namespace: job.Namespace, name: job.Name, uid: string(job.UID),
+	handle := Handle{
+		ID: command.ID, Namespace: job.Namespace, Name: job.Name, UID: string(job.UID),
 	}
 	tests := []struct {
 		name   string
 		mutate func(*batchv1.Job)
 	}{
-		{name: "different Cluster", mutate: func(job *batchv1.Job) { job.Labels[clusterLabel] = "other" }},
+		{name: "different Cluster", mutate: func(job *batchv1.Job) { job.Labels[jobpolicy.ClusterLabel] = "other" }},
 		{name: "missing admitted UID", mutate: func(job *batchv1.Job) { job.UID = "" }},
 		{name: "replacement UID", mutate: func(job *batchv1.Job) { job.UID = "replacement-uid" }},
 	}
@@ -95,35 +96,35 @@ func TestKubernetesPlacementPreflightJobsObserveWarningsAndCleanup(t *testing.T)
 		job.UID = types.UID("preflight-job-uid")
 		return false, nil, nil
 	})
-	jobs := newKubernetesPlacementPreflightJobs(validConfig(), client.BatchV1(), client.CoreV1())
+	jobs := New(validConfig(), client.BatchV1(), client.CoreV1())
 	command := testPlacementPreflightCommand()
 	handle, err := jobs.Ensure(context.Background(), command)
 	if err != nil {
 		t.Fatalf("Ensure() error = %v", err)
 	}
-	if handle.uid != "preflight-job-uid" {
+	if handle.UID != "preflight-job-uid" {
 		t.Fatalf("handle = %#v", handle)
 	}
 
-	job, err := client.BatchV1().Jobs(handle.namespace).Get(context.Background(), handle.name, metav1.GetOptions{})
+	job, err := client.BatchV1().Jobs(handle.Namespace).Get(context.Background(), handle.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get Job: %v", err)
 	}
 	job.Status.Conditions = []batchv1.JobCondition{{
 		Type: batchv1.JobComplete, Status: corev1.ConditionTrue,
 	}}
-	if _, err := client.BatchV1().Jobs(handle.namespace).Update(context.Background(), job, metav1.UpdateOptions{}); err != nil {
+	if _, err := client.BatchV1().Jobs(handle.Namespace).Update(context.Background(), job, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("update Job: %v", err)
 	}
 	event := &corev1.Event{
-		InvolvedObject: corev1.ObjectReference{UID: types.UID(handle.uid)},
+		InvolvedObject: corev1.ObjectReference{UID: types.UID(handle.UID)},
 		Type:           corev1.EventTypeWarning, Reason: "AdmissionNotice", Message: "policy emitted a warning", Count: 2,
 		FirstTimestamp: metav1.NewTime(time.Now().Add(-time.Second)),
 		LastTimestamp:  metav1.NewTime(time.Now()),
 	}
 	event.Name = "probe-warning"
-	event.Namespace = handle.namespace
-	_, err = client.CoreV1().Events(handle.namespace).Create(context.Background(), event, metav1.CreateOptions{})
+	event.Namespace = handle.Namespace
+	_, err = client.CoreV1().Events(handle.Namespace).Create(context.Background(), event, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("create Event: %v", err)
 	}
@@ -132,8 +133,8 @@ func TestKubernetesPlacementPreflightJobsObserveWarningsAndCleanup(t *testing.T)
 	if err != nil {
 		t.Fatalf("Observe() error = %v", err)
 	}
-	if !observation.finished || !observation.succeeded || observation.reason != "ProbeSucceeded" ||
-		len(observation.diagnostics) != 1 || observation.diagnostics[0].Count != 2 {
+	if !observation.Finished || !observation.Succeeded || observation.Reason != "ProbeSucceeded" ||
+		len(observation.Diagnostics) != 1 || observation.Diagnostics[0].Count != 2 {
 		t.Errorf("observation = %#v", observation)
 	}
 	if err := jobs.Delete(context.Background(), handle); err != nil {
