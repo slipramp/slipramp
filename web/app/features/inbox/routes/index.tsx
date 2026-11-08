@@ -34,6 +34,7 @@ import {
   acknowledgeInboxProblems,
   getInbox,
   getReadiness,
+  listPromotionBranchDrift,
   listPromotionPipelines,
   type Inbox as InboxProjection,
   type InboxItem,
@@ -57,9 +58,10 @@ export function meta() {
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [inboxResult, pipelineResult, readinessResult] = await Promise.all([
+  const [inboxResult, pipelineResult, branchDriftResult, readinessResult] = await Promise.all([
     getInbox({ client }),
     listPromotionPipelines({ client, query: { limit: 1 } }),
+    listPromotionBranchDrift({ client, query: { limit: 1, status: "drifted" } }),
     getReadiness({ client }),
   ]);
 
@@ -73,6 +75,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       : undefined,
     pipelineSummary: pipelineResult.data?.summary,
     pipelineTotal: pipelineResult.data?.total,
+    branchDriftError: branchDriftResult.error
+      ? problemDetail(branchDriftResult.error, "Kargo Stage branch drift could not be loaded.")
+      : undefined,
+    branchDriftTotal: branchDriftResult.data?.total,
     readiness: asReadinessResponse(readinessResult.data ?? readinessResult.error),
   };
 }
@@ -150,6 +156,8 @@ export default function Inbox({ loaderData }: Route.ComponentProps) {
           <Stack gap="lg">
             <RunActivity activity={inbox?.activity} />
             <PipelineStatus
+              branchDriftError={loaderData.branchDriftError}
+              branchDriftTotal={loaderData.branchDriftTotal}
               error={loaderData.pipelineError}
               summary={loaderData.pipelineSummary}
               total={loaderData.pipelineTotal}
@@ -382,10 +390,14 @@ function RunActivity({
 }
 
 function PipelineStatus({
+  branchDriftError,
+  branchDriftTotal,
   error,
   summary,
   total,
 }: Readonly<{
+  branchDriftError?: string;
+  branchDriftTotal?: number;
   error?: string;
   summary?: PromotionPipelineSummary;
   total?: number;
@@ -427,9 +439,29 @@ function PipelineStatus({
             value={summary?.upToDate}
           />
         </SimpleGrid>
+        <Button
+          component={Link}
+          fullWidth
+          justify="space-between"
+          leftSection={<IconGitBranch aria-hidden size={16} />}
+          rightSection={
+            <Badge color="gray" size="sm" variant="light">
+              {branchDriftTotal ?? "—"}
+            </Badge>
+          }
+          to="/promotion-branch-drift?status=drifted"
+          variant="default"
+        >
+          Stages behind
+        </Button>
         {error ? (
           <Text c="red" size="xs">
             {error}
+          </Text>
+        ) : null}
+        {branchDriftError ? (
+          <Text c="red" size="xs">
+            {branchDriftError}
           </Text>
         ) : null}
         <Button
