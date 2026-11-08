@@ -21,13 +21,18 @@ ON CONFLICT DO NOTHING;
 SELECT
     id,
     phase,
+    outcome,
+    outcome_reason,
     target_name,
     action_name,
     cluster_name,
     created_at,
     review_state,
     assigned_at,
-    last_observed_at
+    finished_at,
+    last_observed_at,
+    cancellation_requested_at,
+    canceled_by_principal_id
 FROM runs
 WHERE phase IN ('queued', 'assigned', 'preparing', 'running')
 ORDER BY created_at, id;

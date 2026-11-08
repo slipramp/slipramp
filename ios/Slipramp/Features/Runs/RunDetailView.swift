@@ -285,10 +285,15 @@ struct RunDetailView: View {
             if let state = run.observationState {
                 LabeledContent("Observation", value: display(state.rawValue))
             }
-            if let requestedAt = run.cancellationRequestedAt, run.phase != .finished {
-                LabeledContent("Cancellation requested") {
+            LabeledContent("Cancellation", value: display(run.cancellationState.rawValue))
+            if let requestedAt = run.cancellationRequestedAt {
+                LabeledContent("Requested") {
                     Text(requestedAt, style: .relative)
-                        .foregroundStyle(SliprampTone.warning.color)
+                        .foregroundStyle(
+                            run.cancellationState == .completed
+                                ? SliprampTone.success.color
+                                : SliprampTone.warning.color
+                        )
                 }
             }
             if let operationError = model.operationError {

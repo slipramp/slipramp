@@ -88,7 +88,12 @@ func (s *toolHandler) createRun(
 		return nil, runOutput{}, s.createRunError(err)
 	}
 
-	return nil, newRunOutput(created), nil
+	output, err := newRunOutput(created)
+	if err != nil {
+		return nil, runOutput{}, s.internalError("derive created Run cancellation state", err)
+	}
+
+	return nil, output, nil
 }
 
 func artifactInputBindings(values map[string]string) (map[string]uuid.UUID, error) {
@@ -151,7 +156,11 @@ func (s *toolHandler) listRuns(
 
 	items := make([]runOutput, 0, len(records.Items))
 	for _, record := range records.Items {
-		items = append(items, newRunOutput(record))
+		item, err := newRunOutput(record)
+		if err != nil {
+			return nil, runListOutput{}, s.internalError("derive Run cancellation state", err)
+		}
+		items = append(items, item)
 	}
 
 	return nil, runListOutput{
@@ -221,7 +230,12 @@ func (s *toolHandler) getRun(
 		return nil, runOutput{}, s.internalError("get Run", err)
 	}
 
-	return nil, newRunOutput(record), nil
+	output, err := newRunOutput(record)
+	if err != nil {
+		return nil, runOutput{}, s.internalError("derive Run cancellation state", err)
+	}
+
+	return nil, output, nil
 }
 
 func (s *toolHandler) cancelRun(
@@ -252,7 +266,12 @@ func (s *toolHandler) cancelRun(
 		return nil, runOutput{}, s.internalError("cancel Run", err)
 	}
 
-	return nil, newRunOutput(record), nil
+	output, err := newRunOutput(record)
+	if err != nil {
+		return nil, runOutput{}, s.internalError("derive Run cancellation state", err)
+	}
+
+	return nil, output, nil
 }
 
 func (s *toolHandler) createRunError(err error) error {

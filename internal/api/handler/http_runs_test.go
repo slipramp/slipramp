@@ -512,6 +512,7 @@ func TestCancelRun(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if result.ID != runID || result.Phase != api.RunPhaseRunning ||
+		result.CancellationState != api.RunCancellationStateRequested ||
 		result.CancellationRequestedAt == nil ||
 		!result.CancellationRequestedAt.Equal(requestedAt) {
 		t.Errorf("Run response = %#v", result)

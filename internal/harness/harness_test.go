@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -114,7 +115,9 @@ func TestRunForwardsCancellationFile(t *testing.T) {
 			name = "before starting"
 		}
 		t.Run(name, func(t *testing.T) {
-			cancellationFile := t.TempDir() + "/cancellation-requested"
+			directory := t.TempDir()
+			cancellationFile := directory + "/cancellation-requested"
+			acknowledgementFile := directory + "/cancellation-acknowledged"
 			initialValue := "false"
 			command := helperCommand("signal")
 			wantExitCode := 23
@@ -137,9 +140,10 @@ func TestRunForwardsCancellationFile(t *testing.T) {
 					command,
 					Streams{Stdout: stdout},
 					Options{
-						CancellationFile:         cancellationFile,
-						cancellationPollInterval: pollInterval,
-						cancellationGracePeriod:  time.Second,
+						CancellationFile:                cancellationFile,
+						CancellationAcknowledgementFile: acknowledgementFile,
+						cancellationPollInterval:        pollInterval,
+						cancellationGracePeriod:         time.Second,
 					},
 				)
 				result <- runResult{exitCode: exitCode, err: err}
@@ -170,7 +174,112 @@ func TestRunForwardsCancellationFile(t *testing.T) {
 			if alreadyCanceled && stdout.String() != "" {
 				t.Errorf("canceled action started: stdout = %q", stdout.String())
 			}
+			acknowledgement, err := os.ReadFile(acknowledgementFile)
+			if err != nil {
+				t.Fatalf("read cancellation acknowledgement: %v", err)
+			}
+			if strings.TrimSpace(string(acknowledgement)) != CancellationAcknowledgement {
+				t.Errorf("cancellation acknowledgement = %q", acknowledgement)
+			}
 		})
+	}
+}
+
+func TestRunForcesCanceledProcessAfterGracePeriod(t *testing.T) {
+	t.Setenv("SLIPRAMP_HARNESS_HELPER", "1")
+
+	directory := t.TempDir()
+	cancellationFile := directory + "/cancellation-requested"
+	acknowledgementFile := directory + "/cancellation-acknowledged"
+	if err := os.WriteFile(cancellationFile, []byte("false"), 0o600); err != nil {
+		t.Fatalf("write cancellation file: %v", err)
+	}
+	stdout := newReadyWriter("ready\n")
+	result := make(chan runResult, 1)
+	go func() {
+		exitCode, err := Run(
+			context.Background(),
+			helperCommand("ignore-signal"),
+			Streams{Stdout: stdout},
+			Options{
+				CancellationFile:                cancellationFile,
+				CancellationAcknowledgementFile: acknowledgementFile,
+				cancellationPollInterval:        time.Millisecond,
+				cancellationGracePeriod:         10 * time.Millisecond,
+			},
+		)
+		result <- runResult{exitCode: exitCode, err: err}
+	}()
+
+	select {
+	case <-stdout.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("action did not become ready")
+	}
+	if err := os.WriteFile(cancellationFile, []byte("true\n"), 0o600); err != nil {
+		t.Fatalf("request cancellation: %v", err)
+	}
+
+	select {
+	case received := <-result:
+		if received.err != nil {
+			t.Fatalf("Run() error = %v", received.err)
+		}
+		if received.exitCode != 128+int(syscall.SIGKILL) {
+			t.Errorf("Run() exit code = %d, want forced termination", received.exitCode)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not force the canceled action to stop")
+	}
+}
+
+func TestRunPreservesProcessExitThatOvertakesCancellation(t *testing.T) {
+	t.Setenv("SLIPRAMP_HARNESS_HELPER", "1")
+
+	directory := t.TempDir()
+	cancellationFile := directory + "/cancellation-requested"
+	acknowledgementFile := directory + "/cancellation-acknowledged"
+	if err := os.WriteFile(cancellationFile, []byte("false"), 0o600); err != nil {
+		t.Fatalf("write cancellation file: %v", err)
+	}
+	stdout := newReadyWriter("ready\n")
+	result := make(chan runResult, 1)
+	go func() {
+		exitCode, err := Run(
+			context.Background(),
+			helperCommand("ready-exit"),
+			Streams{Stdout: stdout},
+			Options{
+				CancellationFile:                cancellationFile,
+				CancellationAcknowledgementFile: acknowledgementFile,
+				cancellationPollInterval:        50 * time.Millisecond,
+			},
+		)
+		result <- runResult{exitCode: exitCode, err: err}
+	}()
+
+	select {
+	case <-stdout.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("action did not become ready")
+	}
+	if err := os.WriteFile(cancellationFile, []byte("true\n"), 0o600); err != nil {
+		t.Fatalf("request cancellation: %v", err)
+	}
+
+	select {
+	case received := <-result:
+		if received.err != nil {
+			t.Fatalf("Run() error = %v", received.err)
+		}
+		if received.exitCode != 29 {
+			t.Errorf("Run() exit code = %d, want natural exit 29", received.exitCode)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not preserve the process exit")
+	}
+	if _, err := os.Stat(acknowledgementFile); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("cancellation acknowledgement error = %v, want absent file", err)
 	}
 }
 
@@ -290,6 +399,9 @@ func TestHarnessHelperProcess(t *testing.T) {
 		os.Exit(0)
 	case "exit":
 		os.Exit(42)
+	case "ready-exit":
+		_, _ = fmt.Fprintln(os.Stdout, "ready")
+		os.Exit(29)
 	case "signal":
 		received := make(chan os.Signal, 1)
 		signal.Notify(received, syscall.SIGTERM)
@@ -299,6 +411,14 @@ func TestHarnessHelperProcess(t *testing.T) {
 		forwarded := <-received
 		_, _ = fmt.Fprintf(os.Stdout, "signal=%s\n", forwarded)
 		os.Exit(23)
+	case "ignore-signal":
+		received := make(chan os.Signal, 1)
+		signal.Notify(received, syscall.SIGTERM)
+		defer signal.Stop(received)
+
+		_, _ = fmt.Fprintln(os.Stdout, "ready")
+		<-received
+		select {}
 	default:
 		os.Exit(91)
 	}

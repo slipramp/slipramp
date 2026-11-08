@@ -428,7 +428,7 @@ final class AppModelTests: XCTestCase {
               "capabilities": { "acknowledgeProblems": true },
               "decisions": [],
               "problems": [],
-              "activity": { "queued": 0, "starting": 0, "running": 0 }
+              "activity": { "queued": 0, "starting": 0, "running": 0, "canceling": 0 }
             }
             """.utf8
         )

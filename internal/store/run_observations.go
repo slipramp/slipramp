@@ -36,15 +36,19 @@ func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Obse
 	}
 
 	state := run.ObservationTransitionState{
-		Phase:   run.Phase(current.Phase),
-		Outcome: runOutcome(current.Outcome),
-		JobUID:  current.JobUid,
+		Phase:                   run.Phase(current.Phase),
+		Outcome:                 runOutcome(current.Outcome),
+		OutcomeReason:           current.OutcomeReason,
+		CreatedAt:               current.CreatedAt.Time.UTC(),
+		FinishedAt:              applicationTime(current.FinishedAt),
+		CancellationRequestedAt: applicationTime(current.CancellationRequestedAt),
+		CanceledByPresent:       current.CanceledByPrincipalID.Valid,
+		JobUID:                  current.JobUid,
 		Images: run.ExecutionImages{
 			Action:   current.ActionImageID,
 			Checkout: current.CheckoutImageID,
 			Harness:  current.HarnessImageID,
 		},
-		CancellationRequested: current.CancellationRequestedAt.Valid,
 	}
 	if err := run.ValidateObservationTransition(state, observation); err != nil {
 		return err

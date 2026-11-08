@@ -42,6 +42,7 @@ InboxActivity:
     - queued
     - starting
     - running
+    - canceling
   properties:
     queued:
       type: integer
@@ -52,6 +53,10 @@ InboxActivity:
     running:
       type: integer
       minimum: 0
+    canceling:
+      type: integer
+      minimum: 0
+      description: Active Runs with persisted operator cancellation intent.
 
 InboxItem:
   type: object

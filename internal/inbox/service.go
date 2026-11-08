@@ -217,15 +217,19 @@ func buildSnapshot(query Query, generatedAt time.Time, source projectionSource) 
 	unknownRuns := make([]ActiveRun, 0)
 	unknownRunCounts := make(map[string]int)
 	for _, record := range source.runs {
-		switch record.Status.Phase {
-		case run.PhaseQueued:
-			result.Activity.Queued++
-		case run.PhaseAssigned, run.PhasePreparing:
-			result.Activity.Starting++
-		case run.PhaseRunning:
-			result.Activity.Running++
-		default:
-			return Snapshot{}, fmt.Errorf("active Run %s has phase %q", record.ID, record.Status.Phase)
+		if record.Cancellation == run.CancellationStateRequested {
+			result.Activity.Canceling++
+		} else {
+			switch record.Status.Phase {
+			case run.PhaseQueued:
+				result.Activity.Queued++
+			case run.PhaseAssigned, run.PhasePreparing:
+				result.Activity.Starting++
+			case run.PhaseRunning:
+				result.Activity.Running++
+			default:
+				return Snapshot{}, fmt.Errorf("active Run %s has phase %q", record.ID, record.Status.Phase)
+			}
 		}
 		if query.IncludeRunDecisions && record.Status.Phase == run.PhaseQueued &&
 			record.Review == run.ReviewStatePending {

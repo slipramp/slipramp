@@ -154,6 +154,12 @@ private struct ActivitySummary: View {
                     symbol: "play.fill",
                     tone: .accent
                 )
+                SliprampMetricCard(
+                    label: "Canceling",
+                    value: activity.canceling,
+                    symbol: "xmark.circle.fill",
+                    tone: .danger
+                )
             }
         }
     }

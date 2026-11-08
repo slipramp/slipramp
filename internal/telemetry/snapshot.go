@@ -22,13 +22,18 @@ const (
 )
 
 type MetricsSnapshot struct {
-	ActiveRuns                 map[string]int64
+	ActiveRuns                 map[ActiveRunState]int64
 	PendingRunReviews          int64
 	OldestEligibleRunCreatedAt *time.Time
 	ConnectedControllers       int64
 	ControllerLastSeenAt       *time.Time
 	RepositoryRefreshStates    map[string]int64
 	NotificationDeliveryStates map[string]int64
+}
+
+type ActiveRunState struct {
+	Phase        run.Phase
+	Cancellation run.CancellationState
 }
 
 type DatabasePoolMetrics struct {
@@ -93,7 +98,7 @@ func newSnapshotPublisher(
 	}
 	publisher.published.Store(&publishedSnapshot{
 		state: MetricsSnapshot{
-			ActiveRuns:                 map[string]int64{},
+			ActiveRuns:                 map[ActiveRunState]int64{},
 			RepositoryRefreshStates:    map[string]int64{},
 			NotificationDeliveryStates: map[string]int64{},
 		},
@@ -131,7 +136,7 @@ func newSnapshotInstruments(meter metric.Meter) (snapshotInstruments, error) {
 	instruments.activeRuns, err = meter.Int64ObservableGauge(
 		"slipramp.run.active",
 		metric.WithUnit("{run}"),
-		metric.WithDescription("Active Runs by lifecycle phase."),
+		metric.WithDescription("Active Runs by lifecycle phase and operator-cancellation state."),
 	)
 	if err != nil {
 		return snapshotInstruments{}, fmt.Errorf("create active Runs metric: %w", err)
@@ -281,11 +286,19 @@ func (p *snapshotPublisher) observe(instruments snapshotInstruments) metric.Call
 	return func(_ context.Context, observer metric.Observer) error {
 		snapshot := p.published.Load()
 		for _, phase := range []run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning} {
-			observer.ObserveInt64(
-				instruments.activeRuns,
-				snapshot.state.ActiveRuns[string(phase)],
-				metric.WithAttributes(attribute.String("phase", string(phase))),
-			)
+			for _, cancellation := range []run.CancellationState{
+				run.CancellationStateNotRequested,
+				run.CancellationStateRequested,
+			} {
+				observer.ObserveInt64(
+					instruments.activeRuns,
+					snapshot.state.ActiveRuns[ActiveRunState{Phase: phase, Cancellation: cancellation}],
+					metric.WithAttributes(
+						attribute.String("phase", string(phase)),
+						attribute.String("cancellation_state", string(cancellation)),
+					),
+				)
+			}
 		}
 		observer.ObserveInt64(instruments.pendingRunReviews, snapshot.state.PendingRunReviews)
 		if snapshot.state.OldestEligibleRunCreatedAt != nil {

@@ -54,9 +54,10 @@ type Snapshot struct {
 }
 
 type Activity struct {
-	Queued   int
-	Starting int
-	Running  int
+	Queued    int
+	Starting  int
+	Running   int
+	Canceling int
 }
 
 type Item struct {

@@ -38,7 +38,7 @@ enum ClientCompatibilityPolicy {
 
 extension Components.Schemas.InboxActivity {
     var total: Int {
-        queued + starting + running
+        queued + starting + running + canceling
     }
 }
 
@@ -85,7 +85,7 @@ extension Components.Schemas.Run: Identifiable {
     }
 
     var canCancel: Bool {
-        phase != .finished && cancellationRequestedAt == nil
+        phase != .finished && cancellationState == .notRequested
     }
 }
 

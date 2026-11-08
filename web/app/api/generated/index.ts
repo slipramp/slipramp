@@ -607,6 +607,7 @@ export type {
   RunAssignmentRepository,
   RunAssignmentRuntime,
   RunAssignmentTarget,
+  RunCancellationState,
   RunCreate,
   RunList,
   RunObservation,

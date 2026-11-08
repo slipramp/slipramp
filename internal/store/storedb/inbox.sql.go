@@ -40,28 +40,38 @@ const listInboxActiveRuns = `-- name: ListInboxActiveRuns :many
 SELECT
     id,
     phase,
+    outcome,
+    outcome_reason,
     target_name,
     action_name,
     cluster_name,
     created_at,
     review_state,
     assigned_at,
-    last_observed_at
+    finished_at,
+    last_observed_at,
+    cancellation_requested_at,
+    canceled_by_principal_id
 FROM runs
 WHERE phase IN ('queued', 'assigned', 'preparing', 'running')
 ORDER BY created_at, id
 `
 
 type ListInboxActiveRunsRow struct {
-	ID             pgtype.UUID
-	Phase          string
-	TargetName     string
-	ActionName     string
-	ClusterName    string
-	CreatedAt      pgtype.Timestamptz
-	ReviewState    string
-	AssignedAt     pgtype.Timestamptz
-	LastObservedAt pgtype.Timestamptz
+	ID                      pgtype.UUID
+	Phase                   string
+	Outcome                 *string
+	OutcomeReason           *string
+	TargetName              string
+	ActionName              string
+	ClusterName             string
+	CreatedAt               pgtype.Timestamptz
+	ReviewState             string
+	AssignedAt              pgtype.Timestamptz
+	FinishedAt              pgtype.Timestamptz
+	LastObservedAt          pgtype.Timestamptz
+	CancellationRequestedAt pgtype.Timestamptz
+	CanceledByPrincipalID   pgtype.UUID
 }
 
 func (q *Queries) ListInboxActiveRuns(ctx context.Context) ([]ListInboxActiveRunsRow, error) {
@@ -76,13 +86,18 @@ func (q *Queries) ListInboxActiveRuns(ctx context.Context) ([]ListInboxActiveRun
 		if err := rows.Scan(
 			&i.ID,
 			&i.Phase,
+			&i.Outcome,
+			&i.OutcomeReason,
 			&i.TargetName,
 			&i.ActionName,
 			&i.ClusterName,
 			&i.CreatedAt,
 			&i.ReviewState,
 			&i.AssignedAt,
+			&i.FinishedAt,
 			&i.LastObservedAt,
+			&i.CancellationRequestedAt,
+			&i.CanceledByPrincipalID,
 		); err != nil {
 			return nil, err
 		}

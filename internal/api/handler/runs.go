@@ -414,6 +414,10 @@ func runResponse(
 	if err != nil {
 		return api.Run{}, err
 	}
+	cancellationState, err := record.CancellationState()
+	if err != nil {
+		return api.Run{}, fmt.Errorf("derive Run cancellation state: %w", err)
+	}
 
 	return api.Run{
 		ID:                     record.ID,
@@ -453,6 +457,7 @@ func runResponse(
 		FinishedAt:              record.FinishedAt,
 		LastObservedAt:          record.LastObservedAt,
 		CancellationRequestedAt: record.CancellationRequestedAt,
+		CancellationState:       api.RunCancellationState(cancellationState),
 		JobUID:                  record.JobUID,
 		Images:                  apiExecutionImages(record.Images),
 		OutcomeReason:           record.OutcomeReason,

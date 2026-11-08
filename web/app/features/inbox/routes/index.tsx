@@ -340,8 +340,12 @@ function useAcknowledgementError(actionData: AcknowledgementActionResult | undef
 
 function RunActivity({
   activity,
-}: Readonly<{ activity?: { queued: number; running: number; starting: number } }>) {
-  const active = activity ? activity.queued + activity.starting + activity.running : undefined;
+}: Readonly<{
+  activity?: { canceling: number; queued: number; running: number; starting: number };
+}>) {
+  const active = activity
+    ? activity.queued + activity.starting + activity.running + activity.canceling
+    : undefined;
 
   return (
     <Paper p="md" withBorder>
@@ -357,10 +361,11 @@ function RunActivity({
             {active ?? "—"}
           </Badge>
         </Group>
-        <SimpleGrid cols={3} spacing="xs">
+        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
           <ActivityCount label="Queued" value={activity?.queued} />
           <ActivityCount label="Starting" value={activity?.starting} />
           <ActivityCount label="Running" value={activity?.running} />
+          <ActivityCount label="Canceling" value={activity?.canceling} />
         </SimpleGrid>
         <Button
           component={Link}

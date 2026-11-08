@@ -19,6 +19,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/harness"
 )
 
 type runJobs interface {
@@ -298,11 +299,12 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 	terminal := terminalJobObservation(job.Status.Conditions, uid, actionAlreadyTerminated(pods))
 
 	cancellationRequested := false
+	cancellationAcknowledged := false
 	for index := range pods {
 		if pods[index].Annotations[cancellationAnnotation] == "true" {
 			cancellationRequested = true
-			break
 		}
+		cancellationAcknowledged = cancellationAcknowledged || podAcknowledgedCancellation(pods[index])
 	}
 	images, err := observedExecutionImages(pods)
 	if err != nil {
@@ -321,7 +323,7 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 
 			if status.State.Running != nil {
 				if terminal != nil {
-					return canceledIfRequested(*terminal, cancellationRequested), nil
+					return canceledIfAcknowledged(*terminal, cancellationRequested, cancellationAcknowledged), nil
 				}
 
 				return runObservation{
@@ -351,7 +353,7 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 					observation := terminatedObservation(terminated, uid)
 					observation.images = images
 
-					return canceledIfRequested(observation, cancellationRequested), nil
+					return canceledIfAcknowledged(observation, cancellationRequested, cancellationAcknowledged), nil
 				}
 
 				terminal.exitCode = &terminated.ExitCode
@@ -362,12 +364,12 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 					terminal.message = optionalNonemptyString(terminated.Message)
 				}
 
-				return canceledIfRequested(*terminal, cancellationRequested), nil
+				return canceledIfAcknowledged(*terminal, cancellationRequested, cancellationAcknowledged), nil
 			}
 		}
 	}
 	if terminal != nil {
-		return canceledIfRequested(*terminal, cancellationRequested), nil
+		return canceledIfAcknowledged(*terminal, cancellationRequested, cancellationAcknowledged), nil
 	}
 
 	return runObservation{
@@ -427,8 +429,27 @@ func recordObservedImageID(containerName, imageID string, destination **string) 
 	return nil
 }
 
-func canceledIfRequested(observation runObservation, requested bool) runObservation {
-	if !requested || !observation.terminal() {
+func podAcknowledgedCancellation(pod corev1.Pod) bool {
+	statuses := make([]corev1.ContainerStatus, 0,
+		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses))
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	statuses = append(statuses, pod.Status.ContainerStatuses...)
+	for index := range statuses {
+		terminated := statuses[index].State.Terminated
+		if terminated != nil && strings.TrimSpace(terminated.Message) == harness.CancellationAcknowledgement {
+			return true
+		}
+	}
+
+	return false
+}
+
+func canceledIfAcknowledged(observation runObservation, requested, acknowledged bool) runObservation {
+	if !requested || !acknowledged || !observation.terminal() {
+		return observation
+	}
+	if (observation.outcome != nil && *observation.outcome == api.RunObservationOutcomeTimedOut) ||
+		(observation.reason != nil && *observation.reason == "PodFailurePolicy") {
 		return observation
 	}
 
@@ -436,6 +457,9 @@ func canceledIfRequested(observation runObservation, requested bool) runObservat
 	reason := "CancelRequested"
 	observation.outcome = &outcome
 	observation.reason = &reason
+	if observation.message != nil && strings.TrimSpace(*observation.message) == harness.CancellationAcknowledgement {
+		observation.message = nil
+	}
 
 	return observation
 }

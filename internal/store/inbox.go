@@ -68,13 +68,26 @@ func (d *Database) ListInboxActiveRuns(ctx context.Context) ([]inbox.ActiveRun, 
 
 	records := make([]inbox.ActiveRun, 0, len(rows))
 	for _, row := range rows {
+		cancellationState, err := (run.CancellationStatus{
+			Phase:                   run.Phase(row.Phase),
+			Outcome:                 runOutcome(row.Outcome),
+			OutcomeReason:           row.OutcomeReason,
+			CreatedAt:               row.CreatedAt.Time.UTC(),
+			FinishedAt:              applicationTime(row.FinishedAt),
+			CancellationRequestedAt: applicationTime(row.CancellationRequestedAt),
+			CanceledByPresent:       row.CanceledByPrincipalID.Valid,
+		}).CancellationState()
+		if err != nil {
+			return nil, fmt.Errorf("derive Inbox Run cancellation state: %w", err)
+		}
 		records = append(records, inbox.ActiveRun{
-			ID:          uuid.UUID(row.ID.Bytes),
-			TargetName:  row.TargetName,
-			ActionName:  row.ActionName,
-			ClusterName: row.ClusterName,
-			CreatedAt:   row.CreatedAt.Time.UTC(),
-			Review:      run.ReviewState(row.ReviewState),
+			ID:           uuid.UUID(row.ID.Bytes),
+			TargetName:   row.TargetName,
+			ActionName:   row.ActionName,
+			ClusterName:  row.ClusterName,
+			CreatedAt:    row.CreatedAt.Time.UTC(),
+			Review:       run.ReviewState(row.ReviewState),
+			Cancellation: cancellationState,
 			Status: run.ObservationStatus{
 				Phase:          run.Phase(row.Phase),
 				AssignedAt:     applicationTime(row.AssignedAt),

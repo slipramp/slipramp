@@ -78,6 +78,7 @@ var (
 	ErrRunFinished         = errors.New("run already finished")
 	ErrNoRunAssignment     = errors.New("no run assignment available")
 	ErrNoRunToCancel       = errors.New("no run to cancel")
+	ErrInvalidCancellation = errors.New("invalid run cancellation state")
 	ErrObservationConflict = errors.New("run observation conflict")
 	ErrReviewConflict      = errors.New("run review decision conflicts with current state")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
@@ -101,6 +102,15 @@ type ReviewDecision string
 type ObservationState string
 
 type SchedulingState string
+
+type CancellationState string
+
+const (
+	CancellationStateNotRequested CancellationState = "not-requested"
+	CancellationStateRequested    CancellationState = "requested"
+	CancellationStateCompleted    CancellationState = "completed"
+	CancellationStateOvertaken    CancellationState = "overtaken"
+)
 
 const (
 	ObservationStateCurrent ObservationState = "current"

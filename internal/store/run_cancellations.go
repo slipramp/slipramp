@@ -42,31 +42,49 @@ func (d *Database) CancelRun(
 		return run.Run{}, fmt.Errorf("get Run to cancel: %w", err)
 	}
 
-	if current.Phase == string(run.PhaseFinished) {
-		if !current.CancellationRequestedAt.Valid {
-			return run.Run{}, run.ErrRunFinished
-		}
-
+	currentRecord, err := runFromRow(current)
+	if err != nil {
+		return run.Run{}, err
+	}
+	transition, err := run.PlanCancellationRequest(currentRecord.CancellationStatus(), requestedAt)
+	if err != nil {
+		return run.Run{}, err
+	}
+	if transition.Operation == run.CancellationOperationNone {
 		return commitCancelResult(ctx, transaction, current)
 	}
-	if current.CancellationRequestedAt.Valid {
-		return commitCancelResult(ctx, transaction, current)
-	}
 
-	updated, err := queries.CancelRun(
-		ctx,
-		storedb.CancelRunParams{
+	var updated storedb.Run
+	switch transition.Operation {
+	case run.CancellationOperationRequestActive:
+		updated, err = queries.RequestActiveRunCancellation(ctx, storedb.RequestActiveRunCancellationParams{
 			RequestedAt:           databaseTime(requestedAt),
 			CanceledByPrincipalID: canceledByPrincipalID,
 			CanceledBySnapshot:    canceledBySnapshot,
 			ID:                    databaseUUID(runID),
-		},
-	)
+		})
+	case run.CancellationOperationFinishQueued:
+		updated, err = queries.FinishQueuedRunCancellation(ctx, storedb.FinishQueuedRunCancellationParams{
+			RequestedAt:           databaseTime(requestedAt),
+			CanceledByPrincipalID: canceledByPrincipalID,
+			CanceledBySnapshot:    canceledBySnapshot,
+			ID:                    databaseUUID(runID),
+		})
+	default:
+		return run.Run{}, fmt.Errorf(
+			"%w: unsupported cancellation operation %q",
+			run.ErrInvalidCancellation,
+			transition.Operation,
+		)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return run.Run{}, run.ErrInvalidCancellation
+	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("cancel Run: %w", err)
 	}
 
-	if current.Phase == string(run.PhaseQueued) {
+	if transition.Operation == run.CancellationOperationFinishQueued {
 		outcome := string(run.OutcomeCanceled)
 		reason := run.ReasonCancelRequested
 		if err := queries.CreateRunPhaseTransition(
@@ -99,18 +117,28 @@ func (d *Database) GetRunToCancelForCluster(ctx context.Context, clusterName str
 	if err != nil {
 		return run.Run{}, err
 	}
+	state, err := record.CancellationState()
+	if err != nil {
+		return run.Run{}, err
+	}
+	if state != run.CancellationStateRequested {
+		return run.Run{}, fmt.Errorf(
+			"%w: cancellation command selected Run in state %q",
+			run.ErrInvalidCancellation,
+			state,
+		)
+	}
 
 	return record, nil
 }
 
 func commitCancelResult(ctx context.Context, transaction pgx.Tx, row storedb.Run) (run.Run, error) {
-	if err := transaction.Commit(ctx); err != nil {
-		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
-	}
-
 	record, err := runFromRow(row)
 	if err != nil {
 		return run.Run{}, err
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
 	}
 
 	return record, nil

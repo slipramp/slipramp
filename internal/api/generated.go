@@ -1176,16 +1176,16 @@ func (e RepositoryRefreshAttemptOutcome) Valid() bool {
 
 // Defines values for RepositoryRefreshAttemptSource.
 const (
-	Periodic  RepositoryRefreshAttemptSource = "periodic"
-	Requested RepositoryRefreshAttemptSource = "requested"
+	RepositoryRefreshAttemptSourcePeriodic  RepositoryRefreshAttemptSource = "periodic"
+	RepositoryRefreshAttemptSourceRequested RepositoryRefreshAttemptSource = "requested"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryRefreshAttemptSource enum.
 func (e RepositoryRefreshAttemptSource) Valid() bool {
 	switch e {
-	case Periodic:
+	case RepositoryRefreshAttemptSourcePeriodic:
 		return true
-	case Requested:
+	case RepositoryRefreshAttemptSourceRequested:
 		return true
 	default:
 		return false
@@ -1273,6 +1273,30 @@ func (e RunArtifactInputRetentionState) Valid() bool {
 	case RunArtifactInputRetentionStateExpired:
 		return true
 	case RunArtifactInputRetentionStateRetained:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunCancellationState.
+const (
+	RunCancellationStateCompleted    RunCancellationState = "completed"
+	RunCancellationStateNotRequested RunCancellationState = "not-requested"
+	RunCancellationStateOvertaken    RunCancellationState = "overtaken"
+	RunCancellationStateRequested    RunCancellationState = "requested"
+)
+
+// Valid indicates whether the value is a known member of the RunCancellationState enum.
+func (e RunCancellationState) Valid() bool {
+	switch e {
+	case RunCancellationStateCompleted:
+		return true
+	case RunCancellationStateNotRequested:
+		return true
+	case RunCancellationStateOvertaken:
+		return true
+	case RunCancellationStateRequested:
 		return true
 	default:
 		return false
@@ -2384,9 +2408,11 @@ type Inbox struct {
 
 // InboxActivity defines model for InboxActivity.
 type InboxActivity struct {
-	Queued   int `json:"queued"`
-	Running  int `json:"running"`
-	Starting int `json:"starting"`
+	// Canceling Active Runs with persisted operator cancellation intent.
+	Canceling int `json:"canceling"`
+	Queued    int `json:"queued"`
+	Running   int `json:"running"`
+	Starting  int `json:"starting"`
 }
 
 // InboxCapabilities defines model for InboxCapabilities.
@@ -3774,14 +3800,19 @@ type Run struct {
 	AssignedAt        *time.Time                       `json:"assignedAt,omitempty"`
 
 	// BlockingRunID Active Run serializing the same Target. Present only when schedulingState is target-busy.
-	BlockingRunID           *openapi_types.UUID `json:"blockingRunId,omitempty"`
-	CanceledBy              *RunActor           `json:"canceledBy,omitempty"`
-	CancellationRequestedAt *time.Time          `json:"cancellationRequestedAt,omitempty"`
-	CatalogRevisionID       openapi_types.UUID  `json:"catalogRevisionId"`
-	Cluster                 CatalogName         `json:"cluster"`
-	Commit                  GitCommit           `json:"commit"`
-	CreatedAt               time.Time           `json:"createdAt"`
-	CreatedBy               *RunActor           `json:"createdBy,omitempty"`
+	BlockingRunID *openapi_types.UUID `json:"blockingRunId,omitempty"`
+	CanceledBy    *RunActor           `json:"canceledBy,omitempty"`
+
+	// CancellationRequestedAt Time operator cancellation intent was first persisted.
+	CancellationRequestedAt *time.Time `json:"cancellationRequestedAt,omitempty"`
+
+	// CancellationState Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
+	CancellationState RunCancellationState `json:"cancellationState"`
+	CatalogRevisionID openapi_types.UUID   `json:"catalogRevisionId"`
+	Cluster           CatalogName          `json:"cluster"`
+	Commit            GitCommit            `json:"commit"`
+	CreatedAt         time.Time            `json:"createdAt"`
+	CreatedBy         *RunActor            `json:"createdBy,omitempty"`
 
 	// EligiblePosition One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
 	EligiblePosition *int32     `json:"eligiblePosition,omitempty"`
@@ -3979,6 +4010,9 @@ type RunAssignmentTarget struct {
 	Name CatalogName `json:"name"`
 	Path *string     `json:"path,omitempty"`
 }
+
+// RunCancellationState Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
+type RunCancellationState string
 
 // RunCreate defines model for RunCreate.
 type RunCreate struct {
@@ -5698,7 +5732,7 @@ type ClientInterface interface {
 
 	// CancelRun Cancel a Run
 	//
-	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7090,7 +7124,7 @@ func (c *Client) ListRunArtifacts(ctx context.Context, runID openapi_types.UUID,
 
 // CancelRun Cancel a Run
 //
-// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
 //
 // Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -12475,7 +12509,7 @@ type ClientWithResponsesInterface interface {
 
 	// CancelRunWithResponse Cancel a Run
 	//
-	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19664,7 +19698,7 @@ func (c *ClientWithResponses) ListRunArtifactsWithResponse(ctx context.Context, 
 
 // CancelRunWithResponse Cancel a Run
 //
-// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
 //
 // Returns a wrapper object for the known response body format(s).
 //

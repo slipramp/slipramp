@@ -433,7 +433,7 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		return run.Run{}, fmt.Errorf("decode Run review actor: %w", err)
 	}
 
-	return run.Run{
+	record := run.Run{
 		ID:                       uuid.UUID(row.ID.Bytes),
 		Phase:                    run.Phase(row.Phase),
 		Outcome:                  runOutcome(row.Outcome),
@@ -477,7 +477,12 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		OutcomeReason:  row.OutcomeReason,
 		OutcomeMessage: row.OutcomeMessage,
 		ExitCode:       row.ExitCode,
-	}, nil
+	}
+	if _, err := record.CancellationState(); err != nil {
+		return run.Run{}, fmt.Errorf("validate Run cancellation state: %w", err)
+	}
+
+	return record, nil
 }
 
 func optionalRerunMode(value *run.RerunMode) *string {

@@ -22,27 +22,28 @@ import (
 )
 
 const (
-	actionContainerName         = "action"
-	checkoutContainerName       = "checkout"
-	harnessContainerName        = "install-harness"
-	workspaceVolumeName         = "slipramp-workspace"
-	harnessVolumeName           = "slipramp-bin"
-	runStateVolumeName          = "slipramp-run-state"
-	artifactWorkspaceVolumeName = "slipramp-artifact-workspace"
-	gitCredentialVolumeName     = "slipramp-git-credential"
-	checkoutWorkspaceMountPath  = "/slipramp/checkout"
-	harnessMountPath            = "/slipramp/bin"
-	harnessExecutablePath       = harnessMountPath + "/slipramp-harness"
-	runStateMountPath           = "/slipramp/run-state"
-	artifactWorkspaceMountPath  = "/slipramp"
-	cancellationFileName        = "cancellation-requested"
-	cancellationFilePath        = runStateMountPath + "/" + cancellationFileName
-	gitCredentialMountPath      = "/slipramp/git-credential"
-	managedByLabel              = "app.kubernetes.io/managed-by"
-	managedByLabelValue         = "slipramp-controller"
-	runIDLabel                  = "slipramp.com/run-id"
-	clusterLabel                = "slipramp.com/cluster"
-	cancellationAnnotation      = "slipramp.com/cancellation-requested"
+	actionContainerName                 = "action"
+	checkoutContainerName               = "checkout"
+	harnessContainerName                = "install-harness"
+	workspaceVolumeName                 = "slipramp-workspace"
+	harnessVolumeName                   = "slipramp-bin"
+	runStateVolumeName                  = "slipramp-run-state"
+	artifactWorkspaceVolumeName         = "slipramp-artifact-workspace"
+	gitCredentialVolumeName             = "slipramp-git-credential"
+	checkoutWorkspaceMountPath          = "/slipramp/checkout"
+	harnessMountPath                    = "/slipramp/bin"
+	harnessExecutablePath               = harnessMountPath + "/slipramp-harness"
+	runStateMountPath                   = "/slipramp/run-state"
+	artifactWorkspaceMountPath          = "/slipramp"
+	cancellationFileName                = "cancellation-requested"
+	cancellationFilePath                = runStateMountPath + "/" + cancellationFileName
+	cancellationAcknowledgementFilePath = "/dev/termination-log"
+	gitCredentialMountPath              = "/slipramp/git-credential"
+	managedByLabel                      = "app.kubernetes.io/managed-by"
+	managedByLabelValue                 = "slipramp-controller"
+	runIDLabel                          = "slipramp.com/run-id"
+	clusterLabel                        = "slipramp.com/cluster"
+	cancellationAnnotation              = "slipramp.com/cancellation-requested"
 )
 
 //go:embed scripts/checkout.sh
@@ -281,6 +282,10 @@ func checkoutContainer(config Config, assignment api.RunAssignment) (corev1.Cont
 				Name:  harness.CancellationFileEnvironment,
 				Value: cancellationFilePath,
 			},
+			{
+				Name:  harness.CancellationAcknowledgementFileEnvironment,
+				Value: cancellationAcknowledgementFilePath,
+			},
 		},
 		VolumeMounts: volumeMounts,
 	}, volumes, nil
@@ -292,6 +297,10 @@ func actionContainer(config Config, assignment api.RunAssignment) (corev1.Contai
 		{
 			Name:  harness.CancellationFileEnvironment,
 			Value: cancellationFilePath,
+		},
+		{
+			Name:  harness.CancellationAcknowledgementFileEnvironment,
+			Value: cancellationAcknowledgementFilePath,
 		},
 	}
 	artifactEnvironment, err := assignmentArtifactEnvironment(config, assignment)

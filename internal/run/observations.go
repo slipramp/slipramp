@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,11 +18,15 @@ type ObservationStore interface {
 // observation. Storage must read this state and validate the transition under
 // the same lock used to update the Run.
 type ObservationTransitionState struct {
-	Phase                 Phase
-	Outcome               *Outcome
-	JobUID                *string
-	Images                ExecutionImages
-	CancellationRequested bool
+	Phase                   Phase
+	Outcome                 *Outcome
+	OutcomeReason           *string
+	CreatedAt               time.Time
+	FinishedAt              *time.Time
+	CancellationRequestedAt *time.Time
+	CanceledByPresent       bool
+	JobUID                  *string
+	Images                  ExecutionImages
 }
 
 func (s *Service) ReportObservation(ctx context.Context, observation Observation) error {
@@ -57,15 +62,51 @@ func ValidateObservationTransition(current ObservationTransitionState, observati
 	if err := validateObservation(observation); err != nil {
 		return err
 	}
+	cancellation := current.cancellationStatus()
+	cancellationState, err := cancellation.CancellationState()
+	if err != nil {
+		return ErrObservationConflict
+	}
 	if !validObservationPhaseTransition(current.Phase, observation.Phase) ||
 		!sameObservationJob(current.JobUID, observation.JobUID) ||
 		!sameExecutionImages(current.Images, observation.Images) ||
-		!sameFinishedOutcome(current, observation.Outcome) ||
-		(observation.Outcome != nil && *observation.Outcome == OutcomeCanceled && !current.CancellationRequested) {
+		!sameFinishedOutcome(current, observation.Outcome) {
+		return ErrObservationConflict
+	}
+	if observation.Outcome != nil && *observation.Outcome == OutcomeCanceled {
+		if (cancellationState != CancellationStateRequested &&
+			cancellationState != CancellationStateCompleted) ||
+			!reasonIs(observation.Reason, ReasonCancelRequested) {
+			return ErrObservationConflict
+		}
+	}
+
+	nextCancellation := cancellation
+	nextCancellation.Phase = observation.Phase
+	nextCancellation.Outcome = observation.Outcome
+	if current.Phase != PhaseFinished && observation.Phase == PhaseFinished {
+		nextCancellation.OutcomeReason = observation.Reason
+		if !observation.ObservedAt.IsZero() {
+			nextCancellation.FinishedAt = &observation.ObservedAt
+		}
+	}
+	if err := ValidateCancellationTransition(cancellation, nextCancellation); err != nil {
 		return ErrObservationConflict
 	}
 
 	return nil
+}
+
+func (s ObservationTransitionState) cancellationStatus() CancellationStatus {
+	return CancellationStatus{
+		Phase:                   s.Phase,
+		Outcome:                 s.Outcome,
+		OutcomeReason:           s.OutcomeReason,
+		CreatedAt:               s.CreatedAt,
+		FinishedAt:              s.FinishedAt,
+		CancellationRequestedAt: s.CancellationRequestedAt,
+		CanceledByPresent:       s.CanceledByPresent,
+	}
 }
 
 func validateObservation(observation Observation) error {

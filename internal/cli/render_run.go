@@ -96,10 +96,11 @@ func renderRunSource(source api.RunSource) string {
 }
 
 func renderCancellation(runRecord api.Run) string {
+	result := string(runRecord.CancellationState)
 	if runRecord.CancellationRequestedAt == nil {
-		return "not requested"
+		return result
 	}
-	result := "requested at " + renderTime(runRecord.CancellationRequestedAt)
+	result += " · requested at " + renderTime(runRecord.CancellationRequestedAt)
 	if runRecord.CanceledBy != nil {
 		result += " by " + runRecord.CanceledBy.DisplayName
 	}

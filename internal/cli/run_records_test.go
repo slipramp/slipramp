@@ -21,13 +21,14 @@ func TestRunCancelPrintsCanonicalState(t *testing.T) {
 		}
 		response := runResponse("running", nil)
 		response["cancellationRequestedAt"] = "2026-10-25T12:00:30Z"
+		response["cancellationState"] = "requested"
 		writeJSON(t, writer, http.StatusOK, response)
 	}))
 	defer server.Close()
 
 	code, output, stderr := runRemoteApp(t, context.Background(), server, "run", "cancel", testRunID)
 	if code != cli.ExitValid || stderr != "" ||
-		!strings.Contains(output, "Phase: running") || !strings.Contains(output, "Cancellation: requested at") {
+		!strings.Contains(output, "Phase: running") || !strings.Contains(output, "Cancellation: requested · requested at") {
 		t.Fatalf("text exit = %d, stdout = %q, stderr = %q", code, output, stderr)
 	}
 

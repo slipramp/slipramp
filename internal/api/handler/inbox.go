@@ -48,9 +48,10 @@ func (h *Handler) GetInbox(
 		Decisions: inboxItemResponses(snapshot.Decisions),
 		Problems:  inboxItemResponses(snapshot.Problems),
 		Activity: api.InboxActivity{
-			Queued:   snapshot.Activity.Queued,
-			Starting: snapshot.Activity.Starting,
-			Running:  snapshot.Activity.Running,
+			Queued:    snapshot.Activity.Queued,
+			Starting:  snapshot.Activity.Starting,
+			Running:   snapshot.Activity.Running,
+			Canceling: snapshot.Activity.Canceling,
 		},
 	}
 

@@ -121,14 +121,14 @@ final class APIClientTests: XCTestCase {
               "capabilities": { "acknowledgeProblems": true },
               "decisions": [],
               "problems": [],
-              "activity": { "queued": 1, "starting": 2, "running": 3 }
+              "activity": { "queued": 1, "starting": 2, "running": 3, "canceling": 4 }
             }
             """#.data(using: .utf8)!
             return (self.response(for: request, status: 200), body)
         }
 
         let inbox = try await client.getInbox()
-        XCTAssertEqual(inbox.activity.total, 6)
+        XCTAssertEqual(inbox.activity.total, 10)
         XCTAssertTrue(inbox.capabilities.acknowledgeProblems)
     }
 
@@ -954,6 +954,7 @@ final class APIClientTests: XCTestCase {
             {
               "id": "\(id)",
               "phase": "\(phase)"\(outcomeField)\(rerunFields),
+              "cancellationState": "not-requested",
               "targetId": "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
               "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
               "catalogRevisionId": "ced99dba-bb0b-4a8a-a9be-a5ef9875b945",

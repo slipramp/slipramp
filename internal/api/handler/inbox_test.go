@@ -47,7 +47,7 @@ func TestGetInboxMapsSnapshotAndPermissions(t *testing.T) {
 				ID:   "00000000-0000-0000-0000-000000000020",
 			},
 		}},
-		Activity: inbox.Activity{Queued: 1, Starting: 2, Running: 3},
+		Activity: inbox.Activity{Queued: 1, Starting: 2, Running: 3, Canceling: 4},
 	}}
 	authentication := inboxHandlerAuthentication(
 		productidentity.RoleAdmin,
@@ -71,7 +71,7 @@ func TestGetInboxMapsSnapshotAndPermissions(t *testing.T) {
 		t.Errorf("query = %#v", service.query)
 	}
 	if !body.GeneratedAt.Equal(at) || !body.Capabilities.AcknowledgeProblems ||
-		body.Activity != (api.InboxActivity{Queued: 1, Starting: 2, Running: 3}) {
+		body.Activity != (api.InboxActivity{Queued: 1, Starting: 2, Running: 3, Canceling: 4}) {
 		t.Errorf("Inbox response = %#v", body)
 	}
 	if len(body.Decisions) != 1 || body.Decisions[0].Kind != api.InboxItemKindPromotionReview ||

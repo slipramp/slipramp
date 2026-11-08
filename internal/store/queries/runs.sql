@@ -173,12 +173,16 @@ AND (
     OR review_state = sqlc.narg(review_state)
 );
 
--- name: CountActiveRunsByPhase :many
-SELECT phase, count(*)::bigint AS run_count
+-- name: ListActiveRunStatesForMetrics :many
+SELECT phase,
+       outcome,
+       outcome_reason,
+       created_at,
+       finished_at,
+       cancellation_requested_at,
+       canceled_by_principal_id
 FROM runs
-WHERE phase IN ('assigned', 'preparing', 'running')
-GROUP BY phase
-ORDER BY phase;
+WHERE phase IN ('assigned', 'preparing', 'running');
 
 -- name: CountPendingRunReviews :one
 SELECT count(*)
@@ -267,22 +271,28 @@ SET review_state = sqlc.arg(review_state),
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
--- name: CancelRun :one
+-- name: RequestActiveRunCancellation :one
+UPDATE runs
+SET cancellation_requested_at = sqlc.arg(requested_at),
+    canceled_by_principal_id = sqlc.narg(canceled_by_principal_id),
+    canceled_by_snapshot = sqlc.narg(canceled_by_snapshot)
+WHERE id = sqlc.arg(id)
+  AND phase IN ('assigned', 'preparing', 'running')
+  AND cancellation_requested_at IS NULL
+RETURNING *;
+
+-- name: FinishQueuedRunCancellation :one
 UPDATE runs
 SET cancellation_requested_at = sqlc.arg(requested_at),
     canceled_by_principal_id = sqlc.narg(canceled_by_principal_id),
     canceled_by_snapshot = sqlc.narg(canceled_by_snapshot),
-    phase = CASE WHEN phase = 'queued' THEN 'finished' ELSE phase END,
-    outcome = CASE WHEN phase = 'queued' THEN 'canceled' ELSE outcome END,
-    finished_at = CASE
-        WHEN phase = 'queued' THEN sqlc.arg(requested_at)
-        ELSE finished_at
-    END,
-    outcome_reason = CASE
-        WHEN phase = 'queued' THEN 'CancelRequested'
-        ELSE outcome_reason
-    END
+    phase = 'finished',
+    outcome = 'canceled',
+    finished_at = sqlc.arg(requested_at),
+    outcome_reason = 'CancelRequested'
 WHERE id = sqlc.arg(id)
+  AND phase = 'queued'
+  AND cancellation_requested_at IS NULL
 RETURNING *;
 
 -- name: GetRunToCancelForCluster :one
@@ -318,11 +328,15 @@ SELECT target_id,
        action_name,
        phase,
        outcome,
+       outcome_reason,
+       created_at,
+       finished_at,
        job_uid,
        action_image_id,
        checkout_image_id,
        harness_image_id,
-       cancellation_requested_at
+       cancellation_requested_at,
+       canceled_by_principal_id
 FROM runs
 WHERE id = sqlc.arg(id)
   AND cluster_name = sqlc.arg(cluster_name)

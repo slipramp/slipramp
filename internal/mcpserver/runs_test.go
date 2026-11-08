@@ -19,9 +19,11 @@ func TestHTTPListRunsFilters(t *testing.T) {
 	artifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1252")
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1253")
 	commitSHA := testCommitSHA("d")
+	succeeded := run.OutcomeSucceeded
 	record := run.Run{
 		ID:                runID,
 		Phase:             run.PhaseFinished,
+		Outcome:           &succeeded,
 		TargetID:          targetID,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1254"),

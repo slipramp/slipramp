@@ -58,8 +58,9 @@ func run(command []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 			Stderr: stderr,
 		},
 		harness.Options{
-			Signals:          signals,
-			CancellationFile: os.Getenv(harness.CancellationFileEnvironment),
+			Signals:                         signals,
+			CancellationFile:                os.Getenv(harness.CancellationFileEnvironment),
+			CancellationAcknowledgementFile: os.Getenv(harness.CancellationAcknowledgementFileEnvironment),
 		},
 	)
 	if err != nil {

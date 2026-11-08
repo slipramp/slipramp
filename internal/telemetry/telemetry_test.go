@@ -19,6 +19,7 @@ import (
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
+	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/runreport"
 )
 
@@ -37,7 +38,9 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	lastSeen := now.Add(-10 * time.Second)
 	snapshotSource := &testSnapshotSource{
 		snapshot: MetricsSnapshot{
-			ActiveRuns:                 map[string]int64{"running": 2},
+			ActiveRuns: map[ActiveRunState]int64{
+				{Phase: run.PhaseRunning, Cancellation: run.CancellationStateNotRequested}: 2,
+			},
 			PendingRunReviews:          3,
 			OldestEligibleRunCreatedAt: &oldest,
 			ConnectedControllers:       1,
@@ -69,7 +72,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	})
 	metrics.snapshots.now = func() time.Time { return now }
 	initialScrape := scrape(t, metrics.Handler())
-	assertMetricLine(t, initialScrape, "slipramp_run_active", `phase="running"`, " 0")
+	assertMetricLine(t, initialScrape, "slipramp_run_active", `cancellation_state="not-requested"`,
+		`phase="running"`, " 0")
 	assertMetricLine(t, initialScrape, "slipramp_metrics_snapshot_success_ratio", " 0")
 	metrics.snapshots.refresh(t.Context())
 	if snapshotSource.snapshotCalls != 1 {
@@ -156,7 +160,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	if strings.Contains(firstScrape, "unbounded-name") {
 		t.Fatal("HTTP metrics contain the raw URI path")
 	}
-	assertMetricLine(t, firstScrape, "slipramp_run_active", `phase="running"`, " 2")
+	assertMetricLine(t, firstScrape, "slipramp_run_active", `cancellation_state="not-requested"`,
+		`phase="running"`, " 2")
 	assertMetricLine(t, firstScrape, "slipramp_run_review_pending", " 3")
 	assertMetricLine(t, firstScrape, "slipramp_run_queue_oldest_eligible_age_seconds", " 90")
 	assertMetricLine(t, firstScrape, "slipramp_metrics_snapshot_success_ratio", " 1")
@@ -243,7 +248,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	metrics.snapshots.refresh(t.Context())
 	failedScrape := scrape(t, handler)
 	assertMetricLine(t, failedScrape, "slipramp_metrics_snapshot_success_ratio", " 0")
-	assertMetricLine(t, failedScrape, "slipramp_run_active", `phase="running"`, " 2")
+	assertMetricLine(t, failedScrape, "slipramp_run_active", `cancellation_state="not-requested"`,
+		`phase="running"`, " 2")
 	if got := metricLine(t, failedScrape, "slipramp_metrics_snapshot_last_success_time_seconds"); got != lastSuccess {
 		t.Errorf("last-success metric changed after failed refresh: %q, want %q", got, lastSuccess)
 	}

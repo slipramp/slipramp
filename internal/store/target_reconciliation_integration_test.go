@@ -261,11 +261,16 @@ func finishReconciliationRun(
 	finishedAt time.Time,
 ) {
 	t.Helper()
+	var reason *string
+	if outcome == run.OutcomeCanceled {
+		reason = new(run.ReasonCancelRequested)
+	}
 	if err := database.ApplyRunObservation(ctx, run.Observation{
 		ID:          runID,
 		ClusterName: "colo",
 		Phase:       run.PhaseFinished,
 		Outcome:     &outcome,
+		Reason:      reason,
 		ObservedAt:  finishedAt,
 	}); err != nil {
 		t.Fatalf("finish Run %s as %s: %v", runID, outcome, err)

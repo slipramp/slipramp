@@ -151,7 +151,7 @@ values; it never publishes a partially refreshed view.
 
 | OTel instrument | Prometheus metric | Type / UCUM unit | Attributes | Meaning |
 | --- | --- | --- | --- | --- |
-| `slipramp.run.active` | `slipramp_run_active` | observable gauge / `{run}` | `phase=assigned|preparing|running` | Active Runs in each bounded phase. |
+| `slipramp.run.active` | `slipramp_run_active` | observable gauge / `{run}` | `phase=assigned|preparing|running`, `cancellation_state=not-requested|requested` | Active Runs by execution phase and orthogonal operator-cancellation state. |
 | `slipramp.run.review.pending` | `slipramp_run_review_pending` | observable gauge / `{run}` | none | Queued Runs awaiting review. |
 | `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest review-eligible queued Run not blocked by an active Run for its Target. Absent when none is eligible. |
 | `slipramp.controller.connected` | `slipramp_controller_connected` | observable gauge / `{controller}` | none | Controllers whose latest contact is within the connection window. |

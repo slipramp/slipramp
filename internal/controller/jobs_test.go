@@ -20,6 +20,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/harness"
 )
 
 func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
@@ -137,6 +138,25 @@ func TestKubernetesRunJobsDeletesJobWithoutPodOnCancellation(t *testing.T) {
 	_, err = client.BatchV1().Jobs(job.Namespace).Get(context.Background(), job.Name, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("get canceled Job error = %v, want not found", err)
+	}
+}
+
+func TestKubernetesRunJobsTreatsAbsentJobCancellationAsComplete(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	client := fake.NewClientset()
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
+	result, err := jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
+		ID:           assignment.ID,
+		JobNamespace: assignment.Placement.JobNamespace,
+		JobUID:       new("previous-job-uid"),
+	})
+	if err != nil {
+		t.Fatalf("RequestCancellation() error = %v", err)
+	}
+	if result.jobRetained || result.handle.uid != "previous-job-uid" {
+		t.Errorf("RequestCancellation() result = %#v", result)
 	}
 }
 
@@ -353,6 +373,29 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			wantExit:    new(int32(137)),
 		},
 		{
+			name:     "timeout overtakes acknowledged cancellation",
+			canceled: true,
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:    batchv1.JobFailed,
+				Status:  corev1.ConditionTrue,
+				Reason:  "DeadlineExceeded",
+				Message: "Job was active longer than specified deadline",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 137,
+						Message:  harness.CancellationAcknowledgement,
+					},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeTimedOut),
+			wantReason:  "DeadlineExceeded",
+			wantExit:    new(int32(137)),
+		},
+		{
 			name: "deadline termination still running",
 			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
 				Type:   batchv1.JobFailureTarget,
@@ -464,6 +507,7 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 					Terminated: &corev1.ContainerStateTerminated{
 						ExitCode: 143,
 						Reason:   "Error",
+						Message:  harness.CancellationAcknowledgement,
 					},
 				},
 			},
@@ -471,6 +515,23 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			wantOutcome: new(api.RunObservationOutcomeCanceled),
 			wantReason:  "CancelRequested",
 			wantExit:    new(int32(143)),
+		},
+		{
+			name:     "process completion overtakes cancellation",
+			canceled: true,
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobComplete,
+				Status: corev1.ConditionTrue,
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeSucceeded),
+			wantExit:    new(int32(0)),
 		},
 		{
 			name:        "missing Job",

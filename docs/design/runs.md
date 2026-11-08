@@ -66,6 +66,44 @@ validates the new observation, and writes current facts plus phase history in on
 transaction. Duplicate terminal reports are idempotent and cannot move a Run or
 Target checkpoint backward.
 
+## Operator cancellation
+
+Operator cancellation is derived from lifecycle phase, terminal outcome and
+reason, and `cancellation_requested_at`; it is not another persisted status or
+execution phase. The derived states are:
+
+- `not-requested`: no operator intent exists, including queued Runs canceled by
+  Git supersession or review rejection;
+- `requested`: intent is durable while the Run remains assigned, preparing, or
+  running;
+- `completed`: the requested cancellation produced a terminal canceled outcome
+  with reason `CancelRequested`;
+- `overtaken`: another terminal outcome won the race before cancellation
+  completed.
+
+| Current phase / cancellation state | Authoritative operation | Resulting phase / cancellation state | Terminal outcome |
+| --- | --- | --- | --- |
+| queued / not-requested | Operator requests cancellation under the Run row lock | finished / completed | canceled with `CancelRequested`; no Controller command |
+| assigned, preparing, or running / not-requested | Operator requests cancellation under the Run row lock | same phase / requested | none; intent becomes eligible for Controller delivery |
+| assigned, preparing, or running / requested | Controller reports canceled with `CancelRequested` | finished / completed | canceled with `CancelRequested` |
+| assigned, preparing, or running / requested | Controller reports succeeded, failed, or timed-out | finished / overtaken | reported outcome and reason |
+| assigned, preparing, or running / not-requested | Controller reports an ordinary terminal outcome | finished / not-requested | reported outcome and reason |
+| queued / not-requested | Git latest-wins supersedes the Run | finished / not-requested | canceled with `SupersededByGitChange` |
+| queued / not-requested | Review is rejected | finished / not-requested | canceled with `ReviewRejected` |
+| any phase / requested, completed, or overtaken | Operator repeats cancellation | unchanged | unchanged |
+| finished / not-requested | Operator requests cancellation | unchanged; request is rejected | unchanged |
+
+The request and an ordinary terminal observation serialize on the same Run row.
+If completion commits first, the new request is rejected. If intent commits
+first, the terminal outcome is accepted and cancellation becomes overtaken.
+Equal request and observation timestamps are valid; row-lock order, not clock
+precision, determines which operation established intent first.
+
+Only a Controller observation backed by current cancellation intent may report
+the canceled outcome, and it must use `CancelRequested`. Git supersession and
+review rejection finish queued Runs with their own reasons and never set
+operator cancellation intent.
+
 ## Reconciliation markers
 
 `sync` is an optional recognized Action name. Each new Run freezes the Target's

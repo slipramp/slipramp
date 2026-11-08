@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/telemetry"
 )
 
@@ -27,17 +28,30 @@ func (d *Database) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telem
 
 	queries := d.queries.WithTx(transaction)
 	snapshot := telemetry.MetricsSnapshot{
-		ActiveRuns:                 make(map[string]int64),
+		ActiveRuns:                 make(map[telemetry.ActiveRunState]int64),
 		RepositoryRefreshStates:    make(map[string]int64),
 		NotificationDeliveryStates: make(map[string]int64),
 	}
 
-	activeRuns, err := queries.CountActiveRunsByPhase(ctx)
+	activeRuns, err := queries.ListActiveRunStatesForMetrics(ctx)
 	if err != nil {
 		return telemetry.MetricsSnapshot{}, fmt.Errorf("count active Runs: %w", err)
 	}
 	for _, row := range activeRuns {
-		snapshot.ActiveRuns[row.Phase] = row.RunCount
+		cancellationState, err := (run.CancellationStatus{
+			Phase:                   run.Phase(row.Phase),
+			Outcome:                 runOutcome(row.Outcome),
+			OutcomeReason:           row.OutcomeReason,
+			CreatedAt:               row.CreatedAt.Time.UTC(),
+			FinishedAt:              applicationTime(row.FinishedAt),
+			CancellationRequestedAt: applicationTime(row.CancellationRequestedAt),
+			CanceledByPresent:       row.CanceledByPrincipalID.Valid,
+		}).CancellationState()
+		if err != nil {
+			return telemetry.MetricsSnapshot{}, fmt.Errorf("derive active Run cancellation state: %w", err)
+		}
+		state := telemetry.ActiveRunState{Phase: run.Phase(row.Phase), Cancellation: cancellationState}
+		snapshot.ActiveRuns[state]++
 	}
 
 	snapshot.PendingRunReviews, err = queries.CountPendingRunReviews(ctx)

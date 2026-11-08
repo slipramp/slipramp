@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	CancellationFileEnvironment = "SLIPRAMP_CANCELLATION_FILE"
-	cancellationPollInterval    = 250 * time.Millisecond
-	cancellationGracePeriod     = 30 * time.Second
+	CancellationFileEnvironment                = "SLIPRAMP_CANCELLATION_FILE"
+	CancellationAcknowledgementFileEnvironment = "SLIPRAMP_CANCELLATION_ACKNOWLEDGEMENT_FILE"
+	CancellationAcknowledgement                = "slipramp-cancellation-observed"
+	cancellationPollInterval                   = 250 * time.Millisecond
+	cancellationGracePeriod                    = 30 * time.Second
 )
 
 // Streams are connected directly to the action process.
@@ -27,8 +29,9 @@ type Streams struct {
 }
 
 type Options struct {
-	Signals          <-chan os.Signal
-	CancellationFile string
+	Signals                         <-chan os.Signal
+	CancellationFile                string
+	CancellationAcknowledgementFile string
 
 	cancellationPollInterval time.Duration
 	cancellationGracePeriod  time.Duration
@@ -52,6 +55,9 @@ func Run(ctx context.Context, command []string, streams Streams, options Options
 			return 0, fmt.Errorf("read cancellation file before starting action: %w", err)
 		}
 		if requested {
+			if err := acknowledgeCancellation(options.CancellationAcknowledgementFile); err != nil {
+				return 0, fmt.Errorf("acknowledge cancellation before starting action: %w", err)
+			}
 			return 128 + int(syscall.SIGTERM), nil
 		}
 	}
@@ -104,6 +110,12 @@ func Run(ctx context.Context, command []string, streams Streams, options Options
 				signalError = errors.Join(signalError, fmt.Errorf("forward signal %s: %w", received, err))
 			}
 		case <-cancellationChecks:
+			select {
+			case err := <-waitResult:
+				exitCode, err := exitResult(err)
+				return exitCode, errors.Join(err, signalError)
+			default:
+			}
 			requested, err := cancellationRequested(options.CancellationFile)
 			if err != nil {
 				signalError = errors.Join(signalError, fmt.Errorf("read cancellation file: %w", err))
@@ -113,10 +125,17 @@ func Run(ctx context.Context, command []string, streams Streams, options Options
 				continue
 			}
 
-			cancellationChecks = nil
-			if err := process.Process.Signal(syscall.SIGTERM); err != nil &&
-				!errors.Is(err, os.ErrProcessDone) {
+			if err := process.Process.Signal(syscall.SIGTERM); errors.Is(err, os.ErrProcessDone) {
+				waitErr := <-waitResult
+				exitCode, waitErr := exitResult(waitErr)
+				return exitCode, errors.Join(waitErr, signalError)
+			} else if err != nil {
 				signalError = errors.Join(signalError, fmt.Errorf("forward cancellation signal: %w", err))
+				continue
+			}
+			cancellationChecks = nil
+			if err := acknowledgeCancellation(options.CancellationAcknowledgementFile); err != nil {
+				signalError = errors.Join(signalError, fmt.Errorf("acknowledge cancellation: %w", err))
 			}
 			gracePeriod := options.cancellationGracePeriod
 			if gracePeriod <= 0 {
@@ -155,6 +174,14 @@ func cancellationRequested(path string) (bool, error) {
 	}
 
 	return strings.TrimSpace(string(contents)) == "true", nil
+}
+
+func acknowledgeCancellation(path string) error {
+	if path == "" {
+		return nil
+	}
+
+	return os.WriteFile(path, []byte(CancellationAcknowledgement+"\n"), 0o600)
 }
 
 func exitResult(err error) (int, error) {

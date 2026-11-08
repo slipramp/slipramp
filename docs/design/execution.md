@@ -210,6 +210,15 @@ exists, cancellation is delivered before new assignment. The Controller marks
 intent for the checkout and Action containers; the Harness sends `SIGTERM` and
 force-stops the child after its grace period.
 
+The Harness records an internal cancellation acknowledgement in its Kubernetes
+termination message when it observes the projected cancellation file. The
+Controller reports `canceled` only when both the Pod intent annotation and this
+acknowledgement are present. A process that reaches a terminal result before the
+Harness observes intent retains its normal success, failure, or timeout outcome,
+so the Server derives the operator request as overtaken. A signal handler may
+exit gracefully with any child exit code after `SIGTERM`; the acknowledgement,
+not a rewritten exit code, establishes cancellation completion.
+
 For terminal Jobs, durable log closure and accepted terminal reporting precede
 UID-checked Job deletion. Complete logs seal with size and digest. If the log
 source disappears after a nonempty durable prefix, that prefix becomes an

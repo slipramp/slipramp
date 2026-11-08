@@ -11,13 +11,14 @@ import (
 
 // ActiveRun contains only the lifecycle facts used by the Inbox.
 type ActiveRun struct {
-	ID          uuid.UUID
-	TargetName  string
-	ActionName  string
-	ClusterName string
-	CreatedAt   time.Time
-	Review      run.ReviewState
-	Status      run.ObservationStatus
+	ID           uuid.UUID
+	TargetName   string
+	ActionName   string
+	ClusterName  string
+	CreatedAt    time.Time
+	Review       run.ReviewState
+	Cancellation run.CancellationState
+	Status       run.ObservationStatus
 }
 
 // PromotionState contains only the current Promotion facts used by the Inbox.

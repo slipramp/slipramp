@@ -63,6 +63,7 @@ type runOutput struct {
 	FinishedAt               *string                           `json:"finishedAt,omitempty"`
 	LastObservedAt           *string                           `json:"lastObservedAt,omitempty"`
 	CancellationRequestedAt  *string                           `json:"cancellationRequestedAt,omitempty"`
+	CancellationState        string                            `json:"cancellationState"`
 	OutcomeReason            *string                           `json:"outcomeReason,omitempty"`
 	OutcomeMessage           *string                           `json:"outcomeMessage,omitempty"`
 	ExitCode                 *int32                            `json:"exitCode,omitempty"`
@@ -92,7 +93,12 @@ type actorOutput struct {
 	DisplayName string `json:"displayName"`
 }
 
-func newRunOutput(record run.Run) runOutput {
+func newRunOutput(record run.Run) (runOutput, error) {
+	cancellationState, err := record.CancellationState()
+	if err != nil {
+		return runOutput{}, err
+	}
+
 	return runOutput{
 		ID:                       record.ID.String(),
 		Phase:                    string(record.Phase),
@@ -120,10 +126,11 @@ func newRunOutput(record run.Run) runOutput {
 		FinishedAt:               optionalTime(record.FinishedAt),
 		LastObservedAt:           optionalTime(record.LastObservedAt),
 		CancellationRequestedAt:  optionalTime(record.CancellationRequestedAt),
+		CancellationState:        string(cancellationState),
 		OutcomeReason:            record.OutcomeReason,
 		OutcomeMessage:           record.OutcomeMessage,
 		ExitCode:                 record.ExitCode,
-	}
+	}, nil
 }
 
 func runArtifactInputs(inputs map[string]run.ArtifactInput) map[string]runArtifactInputOutput {

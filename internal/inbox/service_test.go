@@ -31,6 +31,13 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 		at,
 	)
 	pendingReview.Review = run.ReviewStatePending
+	cancelingRun := activeRun(
+		uuid.MustParse("00000000-0000-0000-0000-000000000103"),
+		run.PhaseRunning,
+		"connected",
+		at.Add(-30*time.Second),
+	)
+	cancelingRun.Cancellation = run.CancellationStateRequested
 	store := &serviceStore{
 		repositories: []repository.Repository{
 			failedRepository(uuid.MustParse("00000000-0000-0000-0000-000000000201"), "infrastructure", at.Add(-10*time.Minute)),
@@ -43,7 +50,7 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 			pendingReview,
 			activeRun(offlineRunID, run.PhasePreparing, "offline", at.Add(-3*time.Minute)),
 			activeRun(staleRunID, run.PhaseAssigned, "connected", at.Add(-2*time.Minute)),
-			activeRun(uuid.MustParse("00000000-0000-0000-0000-000000000103"), run.PhaseRunning, "connected", at.Add(-30*time.Second)),
+			cancelingRun,
 		},
 		promotions: []PromotionState{
 			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000301"), promotion.LifecyclePending, at.Add(-8*time.Minute)),
@@ -75,7 +82,7 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 	if result.GeneratedAt != at || store.expiredAt != at {
 		t.Errorf("evaluation time = %s, expiry time = %s, want %s", result.GeneratedAt, store.expiredAt, at)
 	}
-	if result.Activity != (Activity{Queued: 1, Starting: 2, Running: 1}) {
+	if result.Activity != (Activity{Queued: 1, Starting: 2, Canceling: 1}) {
 		t.Errorf("activity = %#v", result.Activity)
 	}
 	if len(result.Decisions) != 2 || result.Decisions[0].Kind != KindRunReview ||
@@ -355,11 +362,12 @@ func failedRepository(id uuid.UUID, name string, attemptedAt time.Time) reposito
 
 func activeRun(id uuid.UUID, phase run.Phase, clusterName string, observedAt time.Time) ActiveRun {
 	record := ActiveRun{
-		ID:          id,
-		TargetName:  "network",
-		ActionName:  "sync",
-		ClusterName: clusterName,
-		CreatedAt:   observedAt.Add(-time.Minute),
+		ID:           id,
+		TargetName:   "network",
+		ActionName:   "sync",
+		ClusterName:  clusterName,
+		CreatedAt:    observedAt.Add(-time.Minute),
+		Cancellation: run.CancellationStateNotRequested,
 		Status: run.ObservationStatus{
 			Phase: phase,
 		},

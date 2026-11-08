@@ -372,14 +372,12 @@ test("unknown observations never claim current execution activity", () => {
 });
 
 test("cancellation intent shows stopping until the Run finishes", () => {
-  const cancellationRequestedAt = "2026-10-24T00:00:00Z";
-
-  for (const phase of ["queued", "assigned", "preparing", "running"]) {
-    const activity = runActivity({ cancellationRequestedAt, phase });
+  for (const phase of ["assigned", "preparing", "running"]) {
+    const activity = runActivity({ cancellationState: "requested", phase });
     assert.equal(activity.title, "Stopping your run", phase);
-    assert.equal(activity.animation, phase === "queued" ? "waiting" : "working", phase);
+    assert.equal(activity.animation, "working", phase);
   }
-  assert.equal(runActivity({ cancellationRequestedAt, phase: "finished" }), undefined);
+  assert.equal(runActivity({ cancellationState: "completed", phase: "finished" }), undefined);
 });
 
 test("active Promotions show creation, preparation, and post-approval Kargo work", () => {

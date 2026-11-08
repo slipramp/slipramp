@@ -11,87 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const cancelRun = `-- name: CancelRun :one
-UPDATE runs
-SET cancellation_requested_at = $1,
-    canceled_by_principal_id = $2,
-    canceled_by_snapshot = $3,
-    phase = CASE WHEN phase = 'queued' THEN 'finished' ELSE phase END,
-    outcome = CASE WHEN phase = 'queued' THEN 'canceled' ELSE outcome END,
-    finished_at = CASE
-        WHEN phase = 'queued' THEN $1
-        ELSE finished_at
-    END,
-    outcome_reason = CASE
-        WHEN phase = 'queued' THEN 'CancelRequested'
-        ELSE outcome_reason
-    END
-WHERE id = $4
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
-`
-
-type CancelRunParams struct {
-	RequestedAt           pgtype.Timestamptz
-	CanceledByPrincipalID pgtype.UUID
-	CanceledBySnapshot    []byte
-	ID                    pgtype.UUID
-}
-
-func (q *Queries) CancelRun(ctx context.Context, arg CancelRunParams) (Run, error) {
-	row := q.db.QueryRow(ctx, cancelRun,
-		arg.RequestedAt,
-		arg.CanceledByPrincipalID,
-		arg.CanceledBySnapshot,
-		arg.ID,
-	)
-	var i Run
-	err := row.Scan(
-		&i.ID,
-		&i.Phase,
-		&i.Outcome,
-		&i.RepositoryID,
-		&i.CatalogRevisionID,
-		&i.CommitSha,
-		&i.TargetName,
-		&i.ActionName,
-		&i.Parameters,
-		&i.PlacementName,
-		&i.ClusterName,
-		&i.Source,
-		&i.IdempotencyKey,
-		&i.RequestDigest,
-		&i.Snapshot,
-		&i.CreatedAt,
-		&i.AssignedAt,
-		&i.PreparingAt,
-		&i.StartedAt,
-		&i.FinishedAt,
-		&i.LastObservedAt,
-		&i.CancellationRequestedAt,
-		&i.JobUid,
-		&i.OutcomeReason,
-		&i.OutcomeMessage,
-		&i.ExitCode,
-		&i.CreatedByPrincipalID,
-		&i.CreatedBySnapshot,
-		&i.CanceledByPrincipalID,
-		&i.CanceledBySnapshot,
-		&i.RerunOfRunID,
-		&i.RerunMode,
-		&i.TargetID,
-		&i.TargetRelevanceCommitSha,
-		&i.ReviewState,
-		&i.ReviewDecidedByPrincipalID,
-		&i.ReviewDecidedBySnapshot,
-		&i.ReviewDecidedAt,
-		&i.ReviewComment,
-		&i.ActionImageID,
-		&i.CheckoutImageID,
-		&i.HarnessImageID,
-	)
-	return i, err
-}
-
 const claimQueuedRun = `-- name: ClaimQueuedRun :one
 WITH active_runs AS (
 	SELECT active.placement_name
@@ -194,39 +113,6 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 		&i.HarnessImageID,
 	)
 	return i, err
-}
-
-const countActiveRunsByPhase = `-- name: CountActiveRunsByPhase :many
-SELECT phase, count(*)::bigint AS run_count
-FROM runs
-WHERE phase IN ('assigned', 'preparing', 'running')
-GROUP BY phase
-ORDER BY phase
-`
-
-type CountActiveRunsByPhaseRow struct {
-	Phase    string
-	RunCount int64
-}
-
-func (q *Queries) CountActiveRunsByPhase(ctx context.Context) ([]CountActiveRunsByPhaseRow, error) {
-	rows, err := q.db.Query(ctx, countActiveRunsByPhase)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CountActiveRunsByPhaseRow
-	for rows.Next() {
-		var i CountActiveRunsByPhaseRow
-		if err := rows.Scan(&i.Phase, &i.RunCount); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const countPendingRunReviews = `-- name: CountPendingRunReviews :one
@@ -585,6 +471,83 @@ func (q *Queries) DecideRunReview(ctx context.Context, arg DecideRunReviewParams
 		arg.ReviewDecidedBySnapshot,
 		arg.ReviewDecidedAt,
 		arg.ReviewComment,
+		arg.ID,
+	)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.Source,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+		&i.CreatedByPrincipalID,
+		&i.CreatedBySnapshot,
+		&i.CanceledByPrincipalID,
+		&i.CanceledBySnapshot,
+		&i.RerunOfRunID,
+		&i.RerunMode,
+		&i.TargetID,
+		&i.TargetRelevanceCommitSha,
+		&i.ReviewState,
+		&i.ReviewDecidedByPrincipalID,
+		&i.ReviewDecidedBySnapshot,
+		&i.ReviewDecidedAt,
+		&i.ReviewComment,
+		&i.ActionImageID,
+		&i.CheckoutImageID,
+		&i.HarnessImageID,
+	)
+	return i, err
+}
+
+const finishQueuedRunCancellation = `-- name: FinishQueuedRunCancellation :one
+UPDATE runs
+SET cancellation_requested_at = $1,
+    canceled_by_principal_id = $2,
+    canceled_by_snapshot = $3,
+    phase = 'finished',
+    outcome = 'canceled',
+    finished_at = $1,
+    outcome_reason = 'CancelRequested'
+WHERE id = $4
+  AND phase = 'queued'
+  AND cancellation_requested_at IS NULL
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+`
+
+type FinishQueuedRunCancellationParams struct {
+	RequestedAt           pgtype.Timestamptz
+	CanceledByPrincipalID pgtype.UUID
+	CanceledBySnapshot    []byte
+	ID                    pgtype.UUID
+}
+
+func (q *Queries) FinishQueuedRunCancellation(ctx context.Context, arg FinishQueuedRunCancellationParams) (Run, error) {
+	row := q.db.QueryRow(ctx, finishQueuedRunCancellation,
+		arg.RequestedAt,
+		arg.CanceledByPrincipalID,
+		arg.CanceledBySnapshot,
 		arg.ID,
 	)
 	var i Run
@@ -1028,11 +991,15 @@ SELECT target_id,
        action_name,
        phase,
        outcome,
+       outcome_reason,
+       created_at,
+       finished_at,
        job_uid,
        action_image_id,
        checkout_image_id,
        harness_image_id,
-       cancellation_requested_at
+       cancellation_requested_at,
+       canceled_by_principal_id
 FROM runs
 WHERE id = $1
   AND cluster_name = $2
@@ -1049,11 +1016,15 @@ type GetRunObservationStateForUpdateRow struct {
 	ActionName              string
 	Phase                   string
 	Outcome                 *string
+	OutcomeReason           *string
+	CreatedAt               pgtype.Timestamptz
+	FinishedAt              pgtype.Timestamptz
 	JobUid                  *string
 	ActionImageID           *string
 	CheckoutImageID         *string
 	HarnessImageID          *string
 	CancellationRequestedAt pgtype.Timestamptz
+	CanceledByPrincipalID   pgtype.UUID
 }
 
 func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRunObservationStateForUpdateParams) (GetRunObservationStateForUpdateRow, error) {
@@ -1064,11 +1035,15 @@ func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRu
 		&i.ActionName,
 		&i.Phase,
 		&i.Outcome,
+		&i.OutcomeReason,
+		&i.CreatedAt,
+		&i.FinishedAt,
 		&i.JobUid,
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
 		&i.CancellationRequestedAt,
+		&i.CanceledByPrincipalID,
 	)
 	return i, err
 }
@@ -1246,6 +1221,56 @@ func (q *Queries) GetRunToCancelForCluster(ctx context.Context, clusterName stri
 		&i.HarnessImageID,
 	)
 	return i, err
+}
+
+const listActiveRunStatesForMetrics = `-- name: ListActiveRunStatesForMetrics :many
+SELECT phase,
+       outcome,
+       outcome_reason,
+       created_at,
+       finished_at,
+       cancellation_requested_at,
+       canceled_by_principal_id
+FROM runs
+WHERE phase IN ('assigned', 'preparing', 'running')
+`
+
+type ListActiveRunStatesForMetricsRow struct {
+	Phase                   string
+	Outcome                 *string
+	OutcomeReason           *string
+	CreatedAt               pgtype.Timestamptz
+	FinishedAt              pgtype.Timestamptz
+	CancellationRequestedAt pgtype.Timestamptz
+	CanceledByPrincipalID   pgtype.UUID
+}
+
+func (q *Queries) ListActiveRunStatesForMetrics(ctx context.Context) ([]ListActiveRunStatesForMetricsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveRunStatesForMetrics)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveRunStatesForMetricsRow
+	for rows.Next() {
+		var i ListActiveRunStatesForMetricsRow
+		if err := rows.Scan(
+			&i.Phase,
+			&i.Outcome,
+			&i.OutcomeReason,
+			&i.CreatedAt,
+			&i.FinishedAt,
+			&i.CancellationRequestedAt,
+			&i.CanceledByPrincipalID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRuns = `-- name: ListRuns :many
@@ -1429,6 +1454,79 @@ func (q *Queries) RecordTargetSyncSuccess(ctx context.Context, arg RecordTargetS
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const requestActiveRunCancellation = `-- name: RequestActiveRunCancellation :one
+UPDATE runs
+SET cancellation_requested_at = $1,
+    canceled_by_principal_id = $2,
+    canceled_by_snapshot = $3
+WHERE id = $4
+  AND phase IN ('assigned', 'preparing', 'running')
+  AND cancellation_requested_at IS NULL
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+`
+
+type RequestActiveRunCancellationParams struct {
+	RequestedAt           pgtype.Timestamptz
+	CanceledByPrincipalID pgtype.UUID
+	CanceledBySnapshot    []byte
+	ID                    pgtype.UUID
+}
+
+func (q *Queries) RequestActiveRunCancellation(ctx context.Context, arg RequestActiveRunCancellationParams) (Run, error) {
+	row := q.db.QueryRow(ctx, requestActiveRunCancellation,
+		arg.RequestedAt,
+		arg.CanceledByPrincipalID,
+		arg.CanceledBySnapshot,
+		arg.ID,
+	)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.Source,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+		&i.CreatedByPrincipalID,
+		&i.CreatedBySnapshot,
+		&i.CanceledByPrincipalID,
+		&i.CanceledBySnapshot,
+		&i.RerunOfRunID,
+		&i.RerunMode,
+		&i.TargetID,
+		&i.TargetRelevanceCommitSha,
+		&i.ReviewState,
+		&i.ReviewDecidedByPrincipalID,
+		&i.ReviewDecidedBySnapshot,
+		&i.ReviewDecidedAt,
+		&i.ReviewComment,
+		&i.ActionImageID,
+		&i.CheckoutImageID,
+		&i.HarnessImageID,
+	)
+	return i, err
 }
 
 const updateRunObservation = `-- name: UpdateRunObservation :exec

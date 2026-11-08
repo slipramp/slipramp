@@ -294,14 +294,13 @@ export function activityAnimationPose(
 }
 
 export function runActivity(
-  run: Pick<Run, "phase" | "observationState" | "cancellationRequestedAt"> &
-    Partial<Pick<Run, "review">>,
+  run: Pick<Run, "phase" | "observationState"> & Partial<Pick<Run, "review" | "cancellationState">>,
 ): ExecutionActivity | undefined {
   if (run.phase === "finished" || run.observationState === "unknown") {
     return undefined;
   }
 
-  if (run.cancellationRequestedAt) {
+  if (run.cancellationState === "requested") {
     return {
       animation: run.phase === "queued" ? "waiting" : "working",
       title: "Stopping your run",

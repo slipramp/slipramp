@@ -79,7 +79,9 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 	observedAt := createdAt.Add(time.Minute)
 	if _, err := database.pool.Exec(
 		ctx,
-		`UPDATE runs SET phase = 'running', assigned_at = $2, last_observed_at = $2 WHERE id = $1`,
+		`UPDATE runs
+		 SET phase = 'running', assigned_at = $2, last_observed_at = $2, cancellation_requested_at = $2
+		 WHERE id = $1`,
 		runID,
 		observedAt,
 	); err != nil {
@@ -91,6 +93,7 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 		t.Fatalf("ListInboxActiveRuns() error = %v", err)
 	}
 	if len(active) != 1 || active[0].ID != runID || active[0].Status.Phase != run.PhaseRunning ||
+		active[0].Cancellation != run.CancellationStateRequested ||
 		active[0].Review != run.ReviewStateNotRequired ||
 		active[0].Status.LastObservedAt == nil || !active[0].Status.LastObservedAt.Equal(observedAt) {
 		t.Errorf("active Runs = %#v", active)

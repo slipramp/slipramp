@@ -97,6 +97,10 @@ export type InboxActivity = {
   queued: number;
   starting: number;
   running: number;
+  /**
+   * Active Runs with persisted operator cancellation intent.
+   */
+  canceling: number;
 };
 
 export type InboxItem = {
@@ -833,7 +837,11 @@ export type Run = {
    * Time the controller most recently confirmed execution state.
    */
   lastObservedAt?: string;
+  /**
+   * Time operator cancellation intent was first persisted.
+   */
   cancellationRequestedAt?: string;
+  cancellationState: RunCancellationState;
   /**
    * Kubernetes UID of the materialized Job.
    */
@@ -2214,6 +2222,11 @@ export type RunArtifactConsumer = {
   actionTitle?: string;
   input: CatalogName;
 };
+
+/**
+ * Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
+ */
+export type RunCancellationState = "not-requested" | "requested" | "completed" | "overtaken";
 
 export type RunReviewDecision = "approved" | "rejected";
 

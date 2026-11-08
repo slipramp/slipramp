@@ -374,7 +374,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 </Menu.Dropdown>
               </Menu>
             </Group>
-          ) : run.cancellationRequestedAt === undefined ? (
+          ) : run.cancellationState === "not-requested" ? (
             <Form method="post">
               <input name="intent" type="hidden" value="cancel" />
               <Button
@@ -397,7 +397,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         badges={
           <>
             <RunStatusBadge run={run} />
-            {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
+            {run.cancellationState === "requested" ? (
               <Badge color="yellow" variant="outline">
                 Cancellation requested
               </Badge>
@@ -494,9 +494,22 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       {run.cancellationRequestedAt ? (
-        <Alert color="yellow" title="Cancellation requested">
+        <Alert
+          color={run.cancellationState === "completed" ? "green" : "yellow"}
+          title={
+            run.cancellationState === "completed"
+              ? "Cancellation completed"
+              : run.cancellationState === "overtaken"
+                ? "Cancellation overtaken"
+                : "Cancellation requested"
+          }
+        >
           <Group gap="xs" wrap="wrap">
-            <Text span>This Run was asked to stop</Text>
+            <Text span>
+              {run.cancellationState === "overtaken"
+                ? "This Run finished before the cancellation request completed. It was asked to stop"
+                : "This Run was asked to stop"}
+            </Text>
             <RelativeTime span value={run.cancellationRequestedAt} />
             {run.canceledBy ? (
               <>

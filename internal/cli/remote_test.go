@@ -88,7 +88,8 @@ func runResponse(phase string, outcome *string) map[string]any {
 		"runtime": "terraform", "placement": "admin", "cluster": "colo",
 		"source": map[string]any{"type": "api"}, "inputs": map[string]any{},
 		"artifactConsumers": map[string]any{}, "review": map[string]any{"state": "not-required"},
-		"createdAt": "2026-10-25T12:00:00Z",
+		"cancellationState": "not-requested",
+		"createdAt":         "2026-10-25T12:00:00Z",
 	}
 	if outcome != nil {
 		response["outcome"] = *outcome

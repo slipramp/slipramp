@@ -74,7 +74,10 @@ func TestValidateObservationTransitionAllowsPhaseSkipsAndRepeatedReports(t *test
 			t.Parallel()
 
 			for _, phase := range []Phase{PhaseQueued, PhaseAssigned, PhasePreparing, PhaseRunning, PhaseFinished, "unknown"} {
-				current := ObservationTransitionState{Phase: phase, Outcome: &succeeded}
+				current := ObservationTransitionState{Phase: phase}
+				if phase == PhaseFinished {
+					current.Outcome = &succeeded
+				}
 				err := ValidateObservationTransition(current, test.observation)
 				if slices.Contains(test.from, phase) {
 					if err != nil {
@@ -152,6 +155,8 @@ func TestValidateObservationTransitionChecksPinnedJobAndTerminalOutcome(t *testi
 	succeeded := OutcomeSucceeded
 	failed := OutcomeFailed
 	canceled := OutcomeCanceled
+	cancelReason := ReasonCancelRequested
+	requestedAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name        string
 		current     ObservationTransitionState
@@ -208,9 +213,34 @@ func TestValidateObservationTransitionChecksPinnedJobAndTerminalOutcome(t *testi
 			wantError:   true,
 		},
 		{
-			name:        "requested cancellation",
-			current:     ObservationTransitionState{Phase: PhaseAssigned, CancellationRequested: true},
+			name: "requested cancellation",
+			current: ObservationTransitionState{
+				Phase: PhaseAssigned, CancellationRequestedAt: &requestedAt,
+			},
+			observation: Observation{Phase: PhaseFinished, Outcome: &canceled, Reason: &cancelReason},
+		},
+		{
+			name: "repeated completed cancellation",
+			current: ObservationTransitionState{
+				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &cancelReason,
+				CancellationRequestedAt: &requestedAt,
+			},
+			observation: Observation{Phase: PhaseFinished, Outcome: &canceled, Reason: &cancelReason},
+		},
+		{
+			name: "requested cancellation overtaken by success",
+			current: ObservationTransitionState{
+				Phase: PhaseRunning, CancellationRequestedAt: &requestedAt,
+			},
+			observation: Observation{Phase: PhaseFinished, Outcome: &succeeded},
+		},
+		{
+			name: "reject canceled observation without cancellation reason",
+			current: ObservationTransitionState{
+				Phase: PhaseRunning, CancellationRequestedAt: &requestedAt,
+			},
 			observation: Observation{Phase: PhaseFinished, Outcome: &canceled},
+			wantError:   true,
 		},
 	}
 

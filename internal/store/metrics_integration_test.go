@@ -9,6 +9,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/telemetry"
 )
 
 func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
@@ -59,6 +60,9 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	}
 	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), now.Add(-9*time.Minute)); err != nil {
 		t.Fatalf("claim active Run: %v", err)
+	}
+	if _, err := database.CancelRun(ctx, active.ID, now.Add(-8*time.Minute-30*time.Second), nil); err != nil {
+		t.Fatalf("request active Run cancellation: %v", err)
 	}
 
 	blocked := queuedTestRun(
@@ -154,8 +158,11 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadMetricsSnapshot() error = %v", err)
 	}
-	if snapshot.ActiveRuns[string(run.PhaseAssigned)] != 1 {
-		t.Errorf("assigned Runs = %d, want 1", snapshot.ActiveRuns[string(run.PhaseAssigned)])
+	assignedState := telemetry.ActiveRunState{
+		Phase: run.PhaseAssigned, Cancellation: run.CancellationStateRequested,
+	}
+	if snapshot.ActiveRuns[assignedState] != 1 {
+		t.Errorf("assigned Runs = %d, want 1", snapshot.ActiveRuns[assignedState])
 	}
 	if snapshot.PendingRunReviews != 1 {
 		t.Errorf("pending Run reviews = %d, want 1", snapshot.PendingRunReviews)

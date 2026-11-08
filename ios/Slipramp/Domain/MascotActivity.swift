@@ -34,7 +34,7 @@ enum MascotActivityResolver {
             return nil
         }
 
-        if run.cancellationRequestedAt != nil {
+        if run.cancellationState == .requested {
             return MascotActivity(
                 animation: run.phase == .queued ? .waiting : .working,
                 title: "Stopping your run",

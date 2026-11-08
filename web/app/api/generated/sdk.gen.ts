@@ -1300,7 +1300,7 @@ export const getRun = <ThrowOnError extends boolean = false>(
 /**
  * Cancel a Run
  *
- * Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+ * Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
  */
 export const cancelRun = <ThrowOnError extends boolean = false>(
   options: Options<CancelRunData, ThrowOnError>,

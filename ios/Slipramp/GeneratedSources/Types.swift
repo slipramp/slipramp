@@ -60,7 +60,7 @@ internal protocol APIProtocol: Sendable {
     func getRun(_ input: Operations.GetRun.Input) async throws -> Operations.GetRun.Output
     /// Cancel a Run
     ///
-    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
     ///
     /// - Remark: HTTP `POST /api/v1/runs/{runId}/cancel`.
     /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/cancel/post(cancelRun)`.
@@ -210,7 +210,7 @@ extension APIProtocol {
     }
     /// Cancel a Run
     ///
-    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
     ///
     /// - Remark: HTTP `POST /api/v1/runs/{runId}/cancel`.
     /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/cancel/post(cancelRun)`.
@@ -670,25 +670,33 @@ internal enum Components {
             internal var starting: Swift.Int
             /// - Remark: Generated from `#/components/schemas/InboxActivity/running`.
             internal var running: Swift.Int
+            /// Active Runs with persisted operator cancellation intent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InboxActivity/canceling`.
+            internal var canceling: Swift.Int
             /// Creates a new `InboxActivity`.
             ///
             /// - Parameters:
             ///   - queued:
             ///   - starting:
             ///   - running:
+            ///   - canceling: Active Runs with persisted operator cancellation intent.
             internal init(
                 queued: Swift.Int,
                 starting: Swift.Int,
-                running: Swift.Int
+                running: Swift.Int,
+                canceling: Swift.Int
             ) {
                 self.queued = queued
                 self.starting = starting
                 self.running = running
+                self.canceling = canceling
             }
             internal enum CodingKeys: String, CodingKey {
                 case queued
                 case starting
                 case running
+                case canceling
             }
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -704,10 +712,15 @@ internal enum Components {
                     Swift.Int.self,
                     forKey: .running
                 )
+                self.canceling = try container.decode(
+                    Swift.Int.self,
+                    forKey: .canceling
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "queued",
                     "starting",
-                    "running"
+                    "running",
+                    "canceling"
                 ])
             }
         }
@@ -1285,8 +1298,12 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Run/lastObservedAt`.
             internal var lastObservedAt: Foundation.Date?
+            /// Time operator cancellation intent was first persisted.
+            ///
             /// - Remark: Generated from `#/components/schemas/Run/cancellationRequestedAt`.
             internal var cancellationRequestedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Run/cancellationState`.
+            internal var cancellationState: Components.Schemas.RunCancellationState
             /// Kubernetes UID of the materialized Job.
             ///
             /// - Remark: Generated from `#/components/schemas/Run/jobUid`.
@@ -1339,7 +1356,8 @@ internal enum Components {
             ///   - startedAt:
             ///   - finishedAt:
             ///   - lastObservedAt: Time the controller most recently confirmed execution state.
-            ///   - cancellationRequestedAt:
+            ///   - cancellationRequestedAt: Time operator cancellation intent was first persisted.
+            ///   - cancellationState:
             ///   - jobUid: Kubernetes UID of the materialized Job.
             ///   - images:
             ///   - outcomeReason:
@@ -1384,6 +1402,7 @@ internal enum Components {
                 finishedAt: Foundation.Date? = nil,
                 lastObservedAt: Foundation.Date? = nil,
                 cancellationRequestedAt: Foundation.Date? = nil,
+                cancellationState: Components.Schemas.RunCancellationState,
                 jobUid: Swift.String? = nil,
                 images: Components.Schemas.ExecutionImages? = nil,
                 outcomeReason: Swift.String? = nil,
@@ -1428,6 +1447,7 @@ internal enum Components {
                 self.finishedAt = finishedAt
                 self.lastObservedAt = lastObservedAt
                 self.cancellationRequestedAt = cancellationRequestedAt
+                self.cancellationState = cancellationState
                 self.jobUid = jobUid
                 self.images = images
                 self.outcomeReason = outcomeReason
@@ -1473,6 +1493,7 @@ internal enum Components {
                 case finishedAt
                 case lastObservedAt
                 case cancellationRequestedAt
+                case cancellationState
                 case jobUid
                 case images
                 case outcomeReason
@@ -4523,6 +4544,15 @@ internal enum Components {
                 case actionTitle
                 case input
             }
+        }
+        /// Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
+        ///
+        /// - Remark: Generated from `#/components/schemas/RunCancellationState`.
+        internal enum RunCancellationState: String, Codable, Hashable, Sendable, CaseIterable {
+            case notRequested = "not-requested"
+            case requested = "requested"
+            case completed = "completed"
+            case overtaken = "overtaken"
         }
         /// - Remark: Generated from `#/components/schemas/RunReviewDecision`.
         internal enum RunReviewDecision: String, Codable, Hashable, Sendable, CaseIterable {
@@ -8264,7 +8294,7 @@ internal enum Operations {
     }
     /// Cancel a Run
     ///
-    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+    /// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
     ///
     /// - Remark: HTTP `POST /api/v1/runs/{runId}/cancel`.
     /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/cancel/post(cancelRun)`.

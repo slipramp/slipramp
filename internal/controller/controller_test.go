@@ -713,6 +713,66 @@ func TestControllerCancellationWinsBeforeMaterialization(t *testing.T) {
 	}
 }
 
+func TestControllerCancellationWhileAssignmentAwaitsJobCreation(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.New()
+	ensureCalls := 0
+	jobs := &stubRunJobs{
+		ensure: func(context.Context, api.RunAssignment) (ensuredRunJob, error) {
+			ensureCalls++
+
+			return ensuredRunJob{}, nil
+		},
+		requestCancellation: func(_ context.Context, command api.CancelRunCommand) (cancellationResult, error) {
+			return cancellationResult{handle: jobHandle{
+				runID: command.ID, namespace: string(command.JobNamespace), name: runJobName(command.ID),
+			}}, nil
+		},
+	}
+	logs := &memoryLogReporter{}
+	var reported api.RunObservation
+	app := newTestController(jobs, logs)
+	app.runSlots = make(chan struct{}, 1)
+	app.runSlots <- struct{}{}
+	app.reports = runObservationReporterFunc(func(
+		_ context.Context,
+		_ uuid.UUID,
+		observation api.RunObservation,
+	) error {
+		reported = observation
+
+		return nil
+	})
+
+	assignment := api.RunAssignment{ID: runID}
+	assignment.Placement.JobNamespace = "slipramp-runs"
+	worker := app.startRunWorker(
+		context.Background(),
+		jobHandle{runID: runID, namespace: "slipramp-runs", name: runJobName(runID)},
+		&assignment,
+		nil,
+	)
+	command := api.CancelRunCommand{ID: runID, JobNamespace: "slipramp-runs"}
+	if err := app.handleCancellation(context.Background(), command); err != nil {
+		t.Fatalf("first handleCancellation() error = %v", err)
+	}
+	if err := app.handleCancellation(context.Background(), command); err != nil {
+		t.Fatalf("duplicate handleCancellation() error = %v", err)
+	}
+	select {
+	case <-worker.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancellation did not finish while assignment awaited Job creation")
+	}
+	if ensureCalls != 0 {
+		t.Errorf("Job creation calls = %d, want 0", ensureCalls)
+	}
+	if reported.Outcome == nil || *reported.Outcome != api.RunObservationOutcomeCanceled {
+		t.Errorf("terminal observation = %#v", reported)
+	}
+}
+
 func TestControllerRetainsJobAfterPermanentLogRejection(t *testing.T) {
 	t.Parallel()
 

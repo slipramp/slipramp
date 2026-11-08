@@ -136,6 +136,7 @@ Run:
     - inputs
     - artifactConsumers
     - review
+    - cancellationState
     - createdAt
   properties:
     id:
@@ -305,6 +306,9 @@ Run:
     cancellationRequestedAt:
       type: string
       format: date-time
+      description: Time operator cancellation intent was first persisted.
+    cancellationState:
+      $ref: "#/RunCancellationState"
     jobUid:
       type: string
       minLength: 1
@@ -330,6 +334,20 @@ RunPhase:
     - preparing
     - running
     - finished
+
+RunCancellationState:
+  type: string
+  enum:
+    - not-requested
+    - requested
+    - completed
+    - overtaken
+  description: >-
+    Derived operator-cancellation workflow state. Completed means an operator
+    request produced the terminal canceled outcome. Overtaken means the Run
+    reached another terminal outcome before cancellation completed. Canceled
+    outcomes caused by Git supersession or review rejection remain
+    not-requested.
 
 RunOutcome:
   type: string
