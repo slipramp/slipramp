@@ -218,19 +218,18 @@ only and does not add an independent Argo CD health check.
 
 ### Kargo Stage metadata
 
-A Stage participates in exactly one integration by setting
-`slipramp.com/integration` to that integration's name. The Controller reads it
-only in that integration's configured Stage namespaces. Unlabeled Stages and
-Stages labeled for another integration are excluded from its complete snapshot.
-Removing or changing the label archives the Stage in the old integration after
-its next successful snapshot.
+The Controller's configured Stage namespaces determine integration membership.
+Every Kargo Stage in a namespace assigned to an integration belongs to that
+integration, and each namespace must be assigned to exactly one integration in
+a Controller configuration. Stage labels do not affect enrollment or ownership.
+Deleting a Stage, moving it out of an integration's assigned namespaces, or
+removing its namespace from the integration archives it only after the next
+successful complete snapshot.
 
-Participating Stages may supply Slipramp enrichment annotations:
+Enrolled Stages may supply Slipramp enrichment annotations:
 
 ```yaml
 metadata:
-  labels:
-    slipramp.com/integration: prod
   annotations:
     slipramp.com/promotion-application: external-dns
     slipramp.com/promotion-environment: prod
@@ -240,7 +239,7 @@ metadata:
 ```
 
 These annotations enrich the native Kargo Stage inventory; none are required to
-retain and display a participating Stage. The Repository URL must exactly match
+retain and display an enrolled Stage. The Repository URL must exactly match
 one Repository in the integration's allowlist before Slipramp enables Promotion
 creation, review preparation, or branch-drift analysis for that Stage. The
 application identifies the Argo CD Application used for review. The environment
@@ -285,8 +284,10 @@ environment variables:
 Each Controller owns its configured execution namespaces and uses
 namespace-scoped RBAC. Git checkout and execution Secrets remain in that
 Cluster. Optional Kargo observers submit complete Stage snapshots only after
-all configured namespace listings succeed. The same configured Kargo access is
-used by ordinary outbound Controller commands to create and observe Promotions;
+all configured namespace listings and Stage normalization succeed. Each Kargo
+Stage namespace belongs to exactly one integration in the complete observer
+configuration. The same configured Kargo access is used by ordinary outbound
+Controller commands to create and observe Promotions;
 the Server never receives Kubernetes credentials. Kargo-originated Promotions
 bind their exact namespace, name, Stage, and first observed UID before terminal
 reporting, while Slipramp-originated Promotions also require their stable

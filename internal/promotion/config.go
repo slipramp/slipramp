@@ -245,6 +245,7 @@ func (s IntegrationSet) ArgoCDApplicationURL(
 
 func ValidateObserverConfigs(configs []ObserverConfig) error {
 	seenIntegrations := make(map[string]struct{}, len(configs))
+	namespaceOwners := make(map[string][]string)
 	for _, observer := range configs {
 		if err := observer.Validate(); err != nil {
 			return err
@@ -253,6 +254,24 @@ func ValidateObserverConfigs(configs []ObserverConfig) error {
 			return fmt.Errorf("kargo integration %q is configured more than once", observer.Name)
 		}
 		seenIntegrations[observer.Name] = struct{}{}
+		for _, namespace := range observer.StageNamespaces {
+			namespaceOwners[namespace] = append(namespaceOwners[namespace], observer.Name)
+		}
+	}
+
+	for _, namespace := range slices.Sorted(maps.Keys(namespaceOwners)) {
+		owners := namespaceOwners[namespace]
+		if len(owners) < 2 {
+			continue
+		}
+		slices.Sort(owners)
+
+		return fmt.Errorf(
+			"kargo Stage namespace %q is configured for both integrations %q and %q",
+			namespace,
+			owners[0],
+			owners[1],
+		)
 	}
 
 	return nil

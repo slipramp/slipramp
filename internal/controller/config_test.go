@@ -205,6 +205,16 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantError: "at least one Stage namespace",
 		},
+		{
+			name: "Kargo observers sharing a namespace",
+			configure: func(settings *Config) {
+				settings.KargoIntegrations = []promotion.ObserverConfig{
+					{Name: "internal", StageNamespaces: []string{"shared-kargo"}},
+					{Name: "customer", StageNamespaces: []string{"shared-kargo"}},
+				}
+			},
+			wantError: `namespace "shared-kargo" is configured for both integrations "customer" and "internal"`,
+		},
 	}
 
 	for _, test := range tests {

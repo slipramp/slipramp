@@ -41,7 +41,7 @@ func TestNormalizeKargoStage(t *testing.T) {
         "name":"external-dns-prod",
         "uid":"stage-uid",
         "resourceVersion":"42",
-        "labels":{"slipramp.com/integration":"prod","app":"ignored","env":"ignored"},
+        "labels":{"app":"ignored","env":"ignored"},
         "annotations":{
           "slipramp.com/promotion-application":"external-dns-phi",
           "slipramp.com/promotion-environment":"prod",
@@ -206,6 +206,54 @@ func TestNormalizeKargoStageRetainsUnannotatedControlFlowStage(t *testing.T) {
 	}
 }
 
+func TestKargoStageSnapshotterIgnoresLegacyIntegrationLabel(t *testing.T) {
+	t.Parallel()
+
+	stage := minimalUnstructuredStage(t, "kargo-core", "release-gate")
+	stage.SetAnnotations(nil)
+	observedAt := time.Date(2026, time.November, 8, 12, 0, 0, 0, time.UTC)
+	snapshotID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1902")
+	observer := &StageSnapshotter{
+		integration: "internal",
+		namespaces:  []string{"kargo-core"},
+		lister: kargoStagePageListerFunc(func(
+			_ context.Context,
+			_ string,
+			_ metav1.ListOptions,
+		) (*unstructured.UnstructuredList, error) {
+			return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*stage}}, nil
+		}),
+		newID: func() uuid.UUID { return snapshotID },
+		now:   func() time.Time { return observedAt },
+	}
+
+	var want api.KargoStageSnapshot
+	for index, labels := range []map[string]string{
+		nil,
+		{"slipramp.com/integration": "internal"},
+		{"slipramp.com/integration": "customer"},
+		{"slipramp.com/integration": "changed"},
+		nil,
+	} {
+		stage.SetLabels(labels)
+		snapshot, err := observer.Snapshot(t.Context())
+		if err != nil {
+			t.Fatalf("Snapshot() with labels %#v error = %v", labels, err)
+		}
+		if len(snapshot.Stages) != 1 || snapshot.Stages[0].Project != "kargo-core" ||
+			snapshot.Stages[0].Name != "release-gate" {
+			t.Fatalf("Snapshot() with labels %#v = %#v", labels, snapshot)
+		}
+		if index == 0 {
+			want = snapshot
+			continue
+		}
+		if !reflect.DeepEqual(snapshot, want) {
+			t.Errorf("Snapshot() changed with legacy integration label: got %#v, want %#v", snapshot, want)
+		}
+	}
+}
+
 func TestNormalizeKargoFreightPreservesEligibilityEvidence(t *testing.T) {
 	t.Parallel()
 
@@ -259,7 +307,7 @@ func TestNormalizeKargoStageExcludesFailedPromotionAcknowledgement(t *testing.T)
 	}
 }
 
-func TestKargoStageObserverPaginatesConfiguredNamespaces(t *testing.T) {
+func TestKargoStageObserverPaginatesEveryConfiguredNamespaceOnly(t *testing.T) {
 	t.Parallel()
 
 	type request struct {
@@ -275,17 +323,9 @@ func TestKargoStageObserverPaginatesConfiguredNamespaces(t *testing.T) {
 	) (*unstructured.UnstructuredList, error) {
 		requests = append(requests, request{namespace, options.Limit, options.Continue})
 		if namespace == "kargo-core" && options.Continue == "" {
-			unrelated := minimalUnstructuredStage(t, namespace, "unrelated")
-			unrelated.SetLabels(nil)
-			unrelated.SetAnnotations(nil)
-			otherIntegration := minimalUnstructuredStage(t, namespace, "another-integration")
-			otherIntegration.SetLabels(map[string]string{promotionIntegrationLabel: "another"})
-			otherIntegration.SetAnnotations(nil)
 			return &unstructured.UnstructuredList{
 				Object: map[string]any{"metadata": map[string]any{"continue": "next"}},
-				Items: []unstructured.Unstructured{
-					*minimalUnstructuredStage(t, namespace, "first"), *unrelated, *otherIntegration,
-				},
+				Items:  []unstructured.Unstructured{*minimalUnstructuredStage(t, namespace, "first")},
 			}, nil
 		}
 		if namespace == "kargo-core" && options.Continue == "next" {
@@ -361,6 +401,18 @@ func TestKargoStageObserverRejectsInvalidSnapshots(t *testing.T) {
 				}, nil
 			}),
 		},
+		{
+			name: "normalization failure",
+			lister: kargoStagePageListerFunc(func(
+				_ context.Context,
+				namespace string,
+				_ metav1.ListOptions,
+			) (*unstructured.UnstructuredList, error) {
+				invalid := minimalUnstructuredStage(t, namespace, "first")
+				invalid.SetUID("")
+				return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*invalid}}, nil
+			}),
+		},
 	}
 
 	for _, test := range tests {
@@ -374,8 +426,12 @@ func TestKargoStageObserverRejectsInvalidSnapshots(t *testing.T) {
 				newID:       uuid.New,
 				now:         time.Now,
 			}
-			if _, err := observer.Snapshot(t.Context()); err == nil {
+			snapshot, err := observer.Snapshot(t.Context())
+			if err == nil {
 				t.Fatal("Snapshot() error = nil")
+			}
+			if snapshot.SnapshotID != uuid.Nil || !snapshot.ObservedAt.IsZero() || len(snapshot.Stages) != 0 {
+				t.Fatalf("Snapshot() returned a partial complete snapshot: %#v", snapshot)
 			}
 		})
 	}
@@ -399,7 +455,6 @@ func minimalUnstructuredStage(t *testing.T, namespace string, name string) *unst
       "apiVersion":"kargo.akuity.io/v1alpha1",
       "kind":"Stage",
       "metadata":{
-        "labels":{"slipramp.com/integration":"prod"},
         "annotations":{
           "slipramp.com/promotion-application":"application",
           "slipramp.com/promotion-environment":"prod",

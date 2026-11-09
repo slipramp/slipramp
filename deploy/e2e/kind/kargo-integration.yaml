@@ -82,8 +82,6 @@ kind: Stage
 metadata:
   name: acceptance
   namespace: kargo-acceptance
-  labels:
-    slipramp.com/integration: acceptance
   annotations:
     slipramp.com/promotion-application: acceptance
     slipramp.com/promotion-environment: acceptance

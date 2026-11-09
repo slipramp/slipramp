@@ -74,3 +74,52 @@ func TestKargoStageObserverRetriesTheSameSnapshotAfterAmbiguousFailure(t *testin
 		t.Fatalf("observations = %d, reported snapshots = %#v", observations, reported)
 	}
 }
+
+func TestKargoStageObserverDoesNotReportFailedObservations(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	complete := api.KargoStageSnapshot{
+		SnapshotID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1905"),
+		ObservedAt: time.Date(2026, time.October, 21, 12, 1, 0, 0, time.UTC),
+		Stages: []api.PromotionStageObservation{
+			{Project: "kargo-core", Name: "external-dns-prod", KubernetesUID: "stage-uid", ResourceVersion: "1"},
+		},
+	}
+	partial := complete
+	partial.Stages = nil
+	observations := 0
+	reports := 0
+	observer := &kargoStageObserver{
+		integration: "prod",
+		snapshotter: kargoStageSnapshotterFunc(func(context.Context) (api.KargoStageSnapshot, error) {
+			observations++
+			if observations == 1 {
+				return partial, errors.New("namespace listing failed")
+			}
+			return complete, nil
+		}),
+		reporter: kargoStageSnapshotReporterFunc(func(
+			_ context.Context,
+			_ string,
+			snapshot api.KargoStageSnapshot,
+		) error {
+			reports++
+			if !reflect.DeepEqual(snapshot, complete) {
+				t.Errorf("reported snapshot = %#v, want %#v", snapshot, complete)
+			}
+			cancel()
+			return nil
+		}),
+		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		interval: time.Millisecond,
+	}
+
+	if err := observer.Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if observations != 2 || reports != 1 {
+		t.Fatalf("observations = %d, reports = %d", observations, reports)
+	}
+}

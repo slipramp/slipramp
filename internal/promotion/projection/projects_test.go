@@ -46,7 +46,7 @@ func TestProjectServiceGroupsActiveStages(t *testing.T) {
 	}
 }
 
-func TestProjectServiceBuildsNativeTopologyWithinExactProjectBoundary(t *testing.T) {
+func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.November, 8, 12, 0, 0, 0, time.UTC)

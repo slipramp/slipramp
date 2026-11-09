@@ -25,7 +25,6 @@ const (
 	kargoStageListLimit             = 500
 	kargoFreightListLimit           = 500
 	maximumKargoHealthStatusLength  = 200
-	promotionIntegrationLabel       = "slipramp.com/integration"
 	promotionApplicationAnnotation  = "slipramp.com/promotion-application"
 	promotionEnvironmentAnnotation  = "slipramp.com/promotion-environment"
 	promotionRepositoryAnnotation   = "slipramp.com/promotion-repository-url"
@@ -120,9 +119,6 @@ func (o *StageSnapshotter) Snapshot(ctx context.Context) (api.KargoStageSnapshot
 						item.GetName(),
 						namespace,
 					)
-				}
-				if item.GetLabels()[promotionIntegrationLabel] != o.integration {
-					continue
 				}
 				observed, err := normalizeKargoStageWithCandidateFreight(item, candidateFreight)
 				if err != nil {

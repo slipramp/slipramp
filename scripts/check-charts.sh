@@ -287,12 +287,13 @@ kargo_controller_render="$test_directory/controller-kargo.yaml"
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
   --namespace slipramp-system \
   --values "$testdata/controller-required.yaml" \
-  --set-json 'kargo.integrations=[{"name":"prod","stageNamespaces":["kargo-core","kargo-platform"]},{"name":"edge","stageNamespaces":["kargo-core"]}]' \
+  --set-json 'kargo.integrations=[{"name":"prod","stageNamespaces":["kargo-core","kargo-platform"]},{"name":"edge","stageNamespaces":["kargo-edge"]}]' \
   >"$kargo_controller_render"
-test "$(grep -Ec '^kind: Role$' "$kargo_controller_render")" = 3 || fail "Controller chart did not create one execution Role and one Role per distinct Kargo namespace"
-test "$(grep -Ec '^kind: RoleBinding$' "$kargo_controller_render")" = 3 || fail "Controller chart did not bind every namespaced Controller Role"
+test "$(grep -Ec '^kind: Role$' "$kargo_controller_render")" = 4 || fail "Controller chart did not create one execution Role and one Role per Kargo namespace"
+test "$(grep -Ec '^kind: RoleBinding$' "$kargo_controller_render")" = 4 || fail "Controller chart did not bind every namespaced Controller Role"
 assert_contains "$kargo_controller_render" 'namespace: kargo-core'
 assert_contains "$kargo_controller_render" 'namespace: kargo-platform'
+assert_contains "$kargo_controller_render" 'namespace: kargo-edge'
 assert_contains "$kargo_controller_render" 'apiGroups: \[kargo.akuity.io\]'
 assert_contains "$kargo_controller_render" 'resources: \[stages\]'
 assert_contains "$kargo_controller_render" 'verbs: \[get, list, promote\]'

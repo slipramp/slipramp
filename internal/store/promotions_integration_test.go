@@ -1213,7 +1213,7 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	firstSnapshot := promotionTestSnapshot(uuid.New(), "prod", "colo", observedAt)
 	firstStages := []promotion.Stage{
 		promotionTestStage("prod", "colo", "kargo-core", "external-dns-prod", observedAt),
-		promotionTestStage("prod", "colo", "kargo-core", "metrics-server-prod", observedAt),
+		promotionTestStage("prod", "colo", "kargo-platform", "metrics-server-prod", observedAt),
 	}
 	if err := database.ReplacePromotionStageSnapshot(ctx, firstSnapshot, firstStages); err != nil {
 		t.Fatalf("first ReplacePromotionStageSnapshot() error = %v", err)
@@ -1267,7 +1267,7 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 		active.ArgoApplicationNamespace == nil || *active.ArgoApplicationNamespace != "argocd" {
 		t.Errorf("active Stage = %#v", active)
 	}
-	archived, err := database.GetPromotionStageByIdentity(ctx, "prod", "kargo-core", "metrics-server-prod")
+	archived, err := database.GetPromotionStageByIdentity(ctx, "prod", "kargo-platform", "metrics-server-prod")
 	if err != nil {
 		t.Fatalf("get archived Stage: %v", err)
 	}

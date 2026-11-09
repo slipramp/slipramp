@@ -1,6 +1,7 @@
 package promotion
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -129,16 +130,93 @@ func TestIntegrationSetBuildsArgoCDApplicationLinks(t *testing.T) {
 func TestValidateObserverConfigs(t *testing.T) {
 	t.Parallel()
 
-	configs := []ObserverConfig{{
-		Name:            "prod",
-		StageNamespaces: []string{"kargo-core", "kargo-platform"},
-	}}
-	if err := ValidateObserverConfigs(configs); err != nil {
-		t.Fatalf("ValidateObserverConfigs() error = %v", err)
+	tests := []struct {
+		name      string
+		configs   []ObserverConfig
+		wantError string
+	}{
+		{
+			name: "distinct namespace owners",
+			configs: []ObserverConfig{
+				{Name: "internal", StageNamespaces: []string{"kargo-internal", "kargo-platform"}},
+				{Name: "customer", StageNamespaces: []string{"kargo-customer"}},
+			},
+		},
+		{
+			name: "duplicate integration",
+			configs: []ObserverConfig{
+				{Name: "prod", StageNamespaces: []string{"kargo-core"}},
+				{Name: "prod", StageNamespaces: []string{"kargo-platform"}},
+			},
+			wantError: `kargo integration "prod" is configured more than once`,
+		},
+		{
+			name:      "integration without namespaces",
+			configs:   []ObserverConfig{{Name: "prod"}},
+			wantError: `kargo integration "prod" requires at least one Stage namespace`,
+		},
+		{
+			name: "duplicate namespace in one integration",
+			configs: []ObserverConfig{
+				{Name: "prod", StageNamespaces: []string{"kargo-core", "kargo-core"}},
+			},
+			wantError: `kargo Stage namespace "kargo-core" is configured more than once for integration "prod"`,
+		},
+		{
+			name: "shared namespace",
+			configs: []ObserverConfig{
+				{Name: "internal", StageNamespaces: []string{"shared-kargo"}},
+				{Name: "customer", StageNamespaces: []string{"shared-kargo"}},
+			},
+			wantError: `kargo Stage namespace "shared-kargo" is configured for both integrations "customer" and "internal"`,
+		},
+		{
+			name: "shared namespace in reverse order",
+			configs: []ObserverConfig{
+				{Name: "customer", StageNamespaces: []string{"shared-kargo"}},
+				{Name: "internal", StageNamespaces: []string{"shared-kargo"}},
+			},
+			wantError: `kargo Stage namespace "shared-kargo" is configured for both integrations "customer" and "internal"`,
+		},
 	}
 
-	configs = append(configs, configs[0])
-	if err := ValidateObserverConfigs(configs); err == nil {
-		t.Fatal("ValidateObserverConfigs() error = nil for duplicate integration")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateObserverConfigs(test.configs)
+			if test.wantError == "" && err != nil {
+				t.Fatalf("ValidateObserverConfigs() error = %v", err)
+			}
+			if test.wantError != "" && (err == nil || err.Error() != test.wantError) {
+				t.Fatalf("ValidateObserverConfigs() error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name        string
+		config      ObserverConfig
+		wantSubject string
+	}{
+		{
+			name:        "invalid integration name",
+			config:      ObserverConfig{Name: "Internal", StageNamespaces: []string{"kargo-internal"}},
+			wantSubject: "Kargo integration name",
+		},
+		{
+			name:        "invalid namespace name",
+			config:      ObserverConfig{Name: "internal", StageNamespaces: []string{"Shared_Kargo"}},
+			wantSubject: "Kargo Stage namespace",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateObserverConfigs([]ObserverConfig{test.config})
+			if err == nil || !strings.Contains(err.Error(), test.wantSubject) {
+				t.Fatalf("ValidateObserverConfigs() error = %v, want subject %q", err, test.wantSubject)
+			}
+		})
 	}
 }

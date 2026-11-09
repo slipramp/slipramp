@@ -94,8 +94,13 @@ image:
 ```
 
 Kargo Stage observation is optional and configured separately from execution
-namespaces. For every distinct configured Stage namespace, the chart creates a
-dedicated Role and RoleBinding. It can get, list, and promote
+namespaces. Every Stage in a configured namespace belongs to the integration
+that names it; labels are not required for enrollment. Each Stage namespace
+must appear under exactly one integration. The Controller rejects overlapping
+namespace ownership at startup.
+
+For every configured Stage namespace, the chart creates a dedicated Role and
+RoleBinding. It can get, list, and promote
 `kargo.akuity.io/v1alpha1` Stage resources, get and list Freight resources, and
 create, get, and list Promotion resources for idempotent operator-started
 Promotions. No cluster-wide Kargo permission is created.
@@ -103,11 +108,13 @@ Promotions. No cluster-wide Kargo permission is created.
 ```yaml
 kargo:
   integrations:
-    - name: prod
+    - name: internal
       stageNamespaces:
-        - kargo-core
-        - kargo-devops
+        - kargo-internal
         - kargo-platform
+    - name: customer
+      stageNamespaces:
+        - kargo-customer
 ```
 
 Released chart versions are published as OCI artifacts in GHCR. Pin the chart

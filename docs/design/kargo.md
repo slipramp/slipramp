@@ -27,22 +27,24 @@ Named integrations are strict versioned Server startup configuration. Each
 selects a Cluster, Repository allowlist,
 preparation Target and Action, freshness and review retention, optional Kargo
 and Argo CD links, and optional candidate-branch cleanup policy. Controller
-configuration selects the Stage namespaces observed for an integration.
+configuration assigns Stage namespaces to integrations. Every Stage in an
+assigned namespace belongs to that integration, and a namespace may be assigned
+to exactly one integration in a Controller configuration.
 
-An optional Controller observer reads every Stage page from configured
-namespaces and selects Stages whose `slipramp.com/integration` label equals the
-integration name. Optional Stage annotations enrich the inventory with
-application, environment, Repository URL, target branch, and source paths; the
-observer does not infer those coordinates from promotion-template variables or
-repository layout.
+An optional Controller observer reads every Stage page from each assigned
+namespace. Stage labels do not affect enrollment or integration ownership.
+Optional Stage annotations enrich the inventory with application, environment,
+Repository URL, target branch, and source paths; the observer does not infer
+those coordinates from promotion-template variables or repository layout.
 See the [Stage metadata contract](../CONFIGURATION.md#kargo-stage-metadata).
 
-The observer submits complete authenticated snapshots of participating Stages.
-A partial list is never accepted as complete;
-unselected Stages do not affect inventory. Repeated snapshot identity is
-idempotent; successful snapshots archive missing or deselected Stages while
+The observer submits complete authenticated snapshots of every Stage in the
+assigned namespaces. Listing, pagination, and structural normalization must all
+succeed before a snapshot is complete. Repeated snapshot identity is idempotent;
+successful snapshots archive Stages that were deleted, moved to another
+namespace owner, or belonged to a namespace removed from the integration while
 retaining policy and history. Inventory failure affects Stage freshness without
-interrupting ordinary Run delivery.
+archiving Stages or interrupting ordinary Run delivery.
 
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace and Cluster supplied by the authenticated Controller.
@@ -213,9 +215,10 @@ Promotion command.
 
 The Project inventory is the canonical product topology. Its identity is the
 exact `(integration, cluster, project)` boundary, and it retains every observed
-participating Stage. Relationships are resolved only from Kargo's native
-requested-Freight source references. Slipramp does not reconstruct pipelines,
-infer environment adjacency, or merge Projects across integrations or Clusters.
+Stage in an assigned namespace. Relationships are resolved only from Kargo's
+native requested-Freight source references. Slipramp does not reconstruct
+pipelines, infer environment adjacency, or merge Projects across integrations or
+Clusters.
 Project list summaries derive Stage count, unhealthy and stale Stage counts,
 pending reviews, and latest observation time from the same Stage observations.
 
