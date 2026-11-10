@@ -123,11 +123,22 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 	if capabilities.Review.Reason == "" || capabilities.BranchDrift.Reason == "" {
 		t.Errorf("unannotated Stage limitations = %#v", capabilities)
 	}
-	controlFlow := source
+	controlFlow := target
 	controlFlow.ControlFlow = true
-	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{ClusterName: "colo"}, "")
-	if controlFlowCapabilities.Promotion.Ready || controlFlowCapabilities.Promotion.Reason == "" {
+	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{
+		ClusterName: "colo", Repositories: []string{"ops"},
+		Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
+	}, target.RepositoryURL)
+	if controlFlowCapabilities.Promotion.Ready ||
+		controlFlowCapabilities.Promotion.Reason != controlFlowPromotionReason {
 		t.Errorf("control-flow Stage capabilities = %#v", controlFlowCapabilities)
+	}
+	if controlFlowCapabilities.Review.Ready ||
+		controlFlowCapabilities.Review.Reason != controlFlowPromotionReason {
+		t.Errorf("control-flow Stage review capability = %#v", controlFlowCapabilities.Review)
+	}
+	if !controlFlowCapabilities.BranchDrift.Ready {
+		t.Errorf("control-flow Stage branch-drift capability = %#v", controlFlowCapabilities.BranchDrift)
 	}
 }
 

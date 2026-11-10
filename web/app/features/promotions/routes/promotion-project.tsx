@@ -41,6 +41,7 @@ import {
   freightComparisonStageIds,
   freightRowStatus,
 } from "~/features/promotions/promotion-freight";
+import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
 import { topologyLanes } from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { RelativeTime } from "~/shared/display-values";
@@ -123,7 +124,10 @@ function ProjectDetail({
   project: PromotionProjectDetail;
 }>) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const policyStage = project.stages.find((stage) => stage.id === searchParams.get("policy"));
+  const policyStage = project.stages.find(
+    (stage) =>
+      stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
+  );
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
   const selectedStages = project.stages.filter((stage) => selectedStageIds.includes(stage.id));
   const lanes = topologyLanes(project.stages);
@@ -210,6 +214,7 @@ function StageCard({
   const nonReady = stage.conditions.find(
     (condition) => condition.type === "Ready" && condition.status !== "True",
   );
+  const policyPresentation = promotionStagePolicyPresentation(stage);
 
   return (
     <Paper p="md" withBorder>
@@ -335,12 +340,16 @@ function StageCard({
         <Group justify="space-between" wrap="wrap">
           <Group gap="xs">
             <Badge
-              color={stage.policy.effectiveMode === "review-required" ? "yellow" : "green"}
+              color={
+                !policyPresentation.editable
+                  ? "gray"
+                  : stage.policy.effectiveMode === "review-required"
+                    ? "yellow"
+                    : "green"
+              }
               variant="light"
             >
-              {stage.policy.effectiveMode === "review-required"
-                ? "Review required"
-                : "Automatic policy"}
+              {policyPresentation.label}
             </Badge>
             {stage.pendingPromotionCount > 0 ? (
               <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
@@ -349,7 +358,7 @@ function StageCard({
             ) : null}
           </Group>
           <Group gap="xs">
-            {canWrite ? (
+            {canWrite && policyPresentation.editable ? (
               <Button
                 leftSection={<IconSettings size={14} />}
                 onClick={onEditPolicy}
@@ -537,6 +546,7 @@ function PolicyForm({
   const navigation = useNavigation();
   const submitting = navigation.formData?.get("stageId") === stage.id;
   const policyActionData = actionData && "stageId" in actionData ? actionData : undefined;
+  const policyPresentation = promotionStagePolicyPresentation(stage);
 
   return (
     <Form method="post">
@@ -555,13 +565,13 @@ function PolicyForm({
           data={[
             { label: "Automatic", value: "automatic" },
             {
-              disabled: stage.capabilities.review.status !== "ready",
+              disabled: policyPresentation.reviewRequiredDisabled,
               label: "Review required",
               value: "review-required",
             },
           ]}
         />
-        {stage.capabilities.review.status !== "ready" ? (
+        {policyPresentation.reviewRequiredDisabled ? (
           <Text c="dimmed" size="sm">
             {stage.capabilities.review.reason} The existing policy is preserved until you save an
             explicit change.

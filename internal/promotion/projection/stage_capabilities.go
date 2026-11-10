@@ -19,6 +19,8 @@ type StageCapability struct {
 	Reason string
 }
 
+const controlFlowPromotionReason = "Control-flow Stages do not materialize Promotions."
+
 func stageCapabilities(
 	stage promotion.Stage,
 	integration promotion.IntegrationConfig,
@@ -26,12 +28,14 @@ func stageCapabilities(
 ) StageCapabilities {
 	native := StageCapability{Ready: !stage.ControlFlow}
 	if stage.ControlFlow {
-		native.Reason = "Control-flow Stages do not materialize Promotions."
+		native.Reason = controlFlowPromotionReason
 	}
 
 	repositoryMatches := activeRepositoryURL != "" && activeRepositoryURL == stage.RepositoryURL
-	review := StageCapability{Ready: repositoryMatches && integration.CanReview(stage)}
-	if !review.Ready {
+	review := StageCapability{Ready: !stage.ControlFlow && repositoryMatches && integration.CanReview(stage)}
+	if stage.ControlFlow {
+		review.Reason = controlFlowPromotionReason
+	} else if !review.Ready {
 		review.Reason = "Review requires application, environment, a matching allowed Repository, target branch, " +
 			"source paths, and review configuration."
 	}
