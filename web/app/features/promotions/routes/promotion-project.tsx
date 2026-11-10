@@ -1,4 +1,5 @@
 import {
+  Accordion,
   Alert,
   Anchor,
   Badge,
@@ -12,11 +13,18 @@ import {
   SimpleGrid,
   Stack,
   Table,
+  Tabs,
   Text,
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconArrowsDiff, IconSettings } from "@tabler/icons-react";
+import {
+  IconArrowsDiff,
+  IconListDetails,
+  IconRoute,
+  IconSearch,
+  IconSettings,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
@@ -39,14 +47,18 @@ import {
   freightAlignmentForSource,
   freightAlignmentPresentation,
   freightComparisonStageIds,
+  freightNames,
   freightRowStatus,
 } from "~/features/promotions/promotion-freight";
 import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
-import { topologyLanes } from "~/features/promotions/promotion-topology";
+import {
+  topologyPipelines,
+  type PromotionTopologyPipeline,
+} from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { RelativeTime } from "~/shared/display-values";
 import { formValue, optionalFormValue, problemDetail } from "~/shared/form-data";
-import { PageHeader } from "~/shared/page";
+import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
 
 import type { Route } from "./+types/promotion-project";
@@ -124,18 +136,48 @@ function ProjectDetail({
   project: PromotionProjectDetail;
 }>) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeView, setActiveView] = useState<ProjectView>("pipelines");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [query, setQuery] = useState("");
   const policyStage = project.stages.find(
     (stage) =>
       stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
   );
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
   const selectedStages = project.stages.filter((stage) => selectedStageIds.includes(stage.id));
-  const lanes = topologyLanes(project.stages);
+  const pipelines = topologyPipelines(project.stages)
+    .map((pipeline, index) => ({
+      ...pipeline,
+      key: pipeline.stages.map((stage) => stage.id).join(":"),
+      label: pipelineLabel(pipeline, index),
+    }))
+    .toSorted((left, right) => left.label.localeCompare(right.label, undefined, { numeric: true }));
+  const visiblePipelines = pipelines.filter(
+    (pipeline) =>
+      pipeline.stages.some((stage) => stageMatchesQuery(stage, query)) &&
+      (!attentionOnly || pipeline.stages.some(stageNeedsAttention)),
+  );
+  const visibleStages = project.stages.filter(
+    (stage) => stageMatchesQuery(stage, query) && (!attentionOnly || stageNeedsAttention(stage)),
+  );
 
   function closePolicy() {
     const next = new URLSearchParams(searchParams);
     next.delete("policy");
     setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
+  function editPolicy(stage: PromotionProjectStage) {
+    const next = new URLSearchParams(searchParams);
+    next.set("policy", stage.id);
+    setSearchParams(next, { preventScrollReset: true });
+  }
+
+  function compareFreight(alignment: PromotionFreightAlignment) {
+    const ids = freightComparisonStageIds(alignment);
+    if (!ids) return;
+    setSelectedStageIds(ids);
+    setActiveView("compare");
   }
 
   return (
@@ -144,46 +186,110 @@ function ProjectDetail({
         actions={
           project.kargoUrl ? <KargoLink url={project.kargoUrl}>Open in Kargo</KargoLink> : null
         }
-        description={`${project.integration} · ${project.cluster}`}
+        details={
+          <PageHeaderFacts>
+            <PageHeaderFact label="Integration">
+              <Anchor
+                component={Link}
+                to={`/promotion-projects?integration=${encodeURIComponent(project.integration)}`}
+              >
+                {project.integration}
+              </Anchor>
+            </PageHeaderFact>
+            <PageHeaderFact label="Cluster">
+              <Anchor component={Link} to={`/clusters/${encodeURIComponent(project.cluster)}`}>
+                {project.cluster}
+              </Anchor>
+            </PageHeaderFact>
+          </PageHeaderFacts>
+        }
         title={project.project}
       />
 
-      <Stack gap="md">
-        {lanes.map((lane, index) => (
-          <Paper key={index} p="md" withBorder>
-            <Stack gap="sm">
-              <Text c="dimmed" fw={600} size="xs" tt="uppercase">
-                Topology lane {index + 1}
-              </Text>
-              <SimpleGrid cols={{ base: 1, lg: Math.min(3, lane.length) }}>
-                {lane.map((stage) => (
-                  <StageCard
-                    canWrite={canWrite}
-                    key={stage.id}
-                    onEditPolicy={() => {
-                      const next = new URLSearchParams(searchParams);
-                      next.set("policy", stage.id);
-                      setSearchParams(next, { preventScrollReset: true });
-                    }}
-                    onCompareFreight={(alignment) => {
-                      const ids = freightComparisonStageIds(alignment);
-                      if (ids) setSelectedStageIds(ids);
-                    }}
-                    stage={stage}
-                  />
-                ))}
-              </SimpleGrid>
-            </Stack>
-          </Paper>
-        ))}
-      </Stack>
+      <ProjectSummary pipelineCount={pipelines.length} stages={project.stages} />
 
-      <FreightComparison
-        selectedStageIds={selectedStageIds}
-        selectedStages={selectedStages}
-        setSelectedStageIds={setSelectedStageIds}
-        stages={project.stages}
-      />
+      <Tabs
+        onChange={(value) => {
+          if (value) setActiveView(value as ProjectView);
+        }}
+        value={activeView}
+        variant="outline"
+      >
+        <Tabs.List
+          aria-label="Kargo Project views"
+          style={{ flexWrap: "nowrap", overflowX: "auto" }}
+        >
+          <Tabs.Tab
+            leftSection={<IconRoute aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            value="pipelines"
+          >
+            Pipelines
+          </Tabs.Tab>
+          <Tabs.Tab
+            leftSection={<IconListDetails aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            value="stages"
+          >
+            Stages
+          </Tabs.Tab>
+          <Tabs.Tab
+            leftSection={<IconArrowsDiff aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            value="compare"
+          >
+            Compare Freight
+          </Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel pt="lg" value="pipelines">
+          <Stack gap="md">
+            <ProjectFilter
+              attentionOnly={attentionOnly}
+              count={visiblePipelines.length}
+              noun="pipeline"
+              onAttentionOnlyChange={setAttentionOnly}
+              onChange={setQuery}
+              query={query}
+            />
+            <PipelineList
+              canWrite={canWrite}
+              onCompareFreight={compareFreight}
+              onEditPolicy={editPolicy}
+              pipelines={visiblePipelines}
+              query={query}
+            />
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel pt="lg" value="stages">
+          <Stack gap="md">
+            <ProjectFilter
+              attentionOnly={attentionOnly}
+              count={visibleStages.length}
+              noun="Stage"
+              onAttentionOnlyChange={setAttentionOnly}
+              onChange={setQuery}
+              query={query}
+            />
+            <StageInventory
+              canWrite={canWrite}
+              onEditPolicy={editPolicy}
+              query={query}
+              stages={visibleStages}
+            />
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel pt="lg" value="compare">
+          <FreightComparison
+            selectedStageIds={selectedStageIds}
+            selectedStages={selectedStages}
+            setSelectedStageIds={setSelectedStageIds}
+            stages={project.stages}
+          />
+        </Tabs.Panel>
+      </Tabs>
 
       <Modal
         centered
@@ -200,6 +306,454 @@ function ProjectDetail({
   );
 }
 
+type ProjectView = "pipelines" | "stages" | "compare";
+
+type ProjectPipeline = PromotionTopologyPipeline & {
+  key: string;
+  label: string;
+};
+
+function ProjectSummary({
+  pipelineCount,
+  stages,
+}: Readonly<{ pipelineCount: number; stages: PromotionProjectStage[] }>) {
+  const stale = stages.filter((stage) => stage.observationStale).length;
+  const unhealthy = stages.filter(stageIsUnhealthy).length;
+  const pending = stages.reduce((count, stage) => count + stage.pendingPromotionCount, 0);
+  const differences = stages.reduce(
+    (count, stage) =>
+      count +
+      stage.freightAlignments.filter((alignment) => alignment.status === "different").length,
+    0,
+  );
+
+  return (
+    <Paper p="md" withBorder>
+      <Group align="flex-start" justify="space-between" wrap="wrap">
+        <Stack gap={3}>
+          <Text fw={650}>
+            {pipelineCount} pipeline{pipelineCount === 1 ? "" : "s"} across {stages.length} Stage
+            {stages.length === 1 ? "" : "s"}
+          </Text>
+          <Text c="dimmed" size="sm">
+            Disconnected Stage graphs are separated into pipelines. The Stage inventory remains
+            available for scanning the entire Project.
+          </Text>
+        </Stack>
+        <Group gap="xs" wrap="wrap">
+          {unhealthy > 0 ? <Badge color="red">{unhealthy} non-ready</Badge> : null}
+          {stale > 0 ? <Badge color="gray">{stale} stale</Badge> : null}
+          {pending > 0 ? <Badge color="yellow">{pending} pending</Badge> : null}
+          {differences > 0 ? <Badge color="yellow">{differences} Freight differences</Badge> : null}
+          {unhealthy === 0 && stale === 0 && pending === 0 && differences === 0 ? (
+            <Badge color="green" variant="light">
+              No reported issues
+            </Badge>
+          ) : null}
+        </Group>
+      </Group>
+    </Paper>
+  );
+}
+
+function ProjectFilter({
+  attentionOnly,
+  count,
+  noun,
+  onAttentionOnlyChange,
+  onChange,
+  query,
+}: Readonly<{
+  attentionOnly: boolean;
+  count: number;
+  noun: string;
+  onAttentionOnlyChange: (value: boolean) => void;
+  onChange: (value: string) => void;
+  query: string;
+}>) {
+  return (
+    <Group align="flex-end" justify="space-between" wrap="wrap">
+      <TextInput
+        aria-label={`Filter ${noun}s`}
+        leftSection={<IconSearch aria-hidden size={15} />}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        placeholder="Filter by application, Stage, environment, or Warehouse"
+        style={{ flex: "1 1 24rem" }}
+        value={query}
+      />
+      <Checkbox
+        checked={attentionOnly}
+        label="Attention only"
+        onChange={(event) => onAttentionOnlyChange(event.currentTarget.checked)}
+      />
+      <Text c="dimmed" size="sm">
+        {count} {noun}
+        {count === 1 ? "" : "s"}
+      </Text>
+    </Group>
+  );
+}
+
+function PipelineList({
+  canWrite,
+  onCompareFreight,
+  onEditPolicy,
+  pipelines,
+  query,
+}: Readonly<{
+  canWrite: boolean;
+  onCompareFreight: (alignment: PromotionFreightAlignment) => void;
+  onEditPolicy: (stage: PromotionProjectStage) => void;
+  pipelines: ProjectPipeline[];
+  query: string;
+}>) {
+  if (pipelines.length === 0) {
+    return (
+      <EmptyState
+        description={
+          query.trim()
+            ? `No pipelines match “${query.trim()}”.`
+            : "No pipelines match the active filters."
+        }
+        title="No matching pipelines"
+      />
+    );
+  }
+
+  const values = pipelines.length <= 4 ? pipelines.map((pipeline) => pipeline.key) : [];
+
+  return (
+    <Accordion
+      defaultValue={values}
+      key={pipelines.map((pipeline) => pipeline.key).join("|")}
+      multiple
+      variant="separated"
+    >
+      {pipelines.map((pipeline) => (
+        <Accordion.Item key={pipeline.key} value={pipeline.key}>
+          <Accordion.Control>
+            <Group justify="space-between" mr="sm" wrap="wrap">
+              <Stack gap={2}>
+                <Text fw={650}>{pipeline.label}</Text>
+                <Text c="dimmed" size="sm">
+                  {pipelinePath(pipeline)}
+                </Text>
+              </Stack>
+              <PipelineBadges pipeline={pipeline} />
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <PipelineTopology
+              canWrite={canWrite}
+              onCompareFreight={onCompareFreight}
+              onEditPolicy={onEditPolicy}
+              pipeline={pipeline}
+            />
+          </Accordion.Panel>
+        </Accordion.Item>
+      ))}
+    </Accordion>
+  );
+}
+
+function PipelineBadges({ pipeline }: Readonly<{ pipeline: ProjectPipeline }>) {
+  const stale = pipeline.stages.filter((stage) => stage.observationStale).length;
+  const unhealthy = pipeline.stages.filter(stageIsUnhealthy).length;
+  const pending = pipeline.stages.reduce((count, stage) => count + stage.pendingPromotionCount, 0);
+  const differences = pipeline.stages.reduce(
+    (count, stage) =>
+      count +
+      stage.freightAlignments.filter((alignment) => alignment.status === "different").length,
+    0,
+  );
+
+  return (
+    <Group gap={6} wrap="wrap">
+      <Badge variant="light">
+        {pipeline.stages.length} Stage{pipeline.stages.length === 1 ? "" : "s"}
+      </Badge>
+      {unhealthy > 0 ? <Badge color="red">{unhealthy} non-ready</Badge> : null}
+      {stale > 0 ? <Badge color="gray">{stale} stale</Badge> : null}
+      {pending > 0 ? <Badge color="yellow">{pending} pending</Badge> : null}
+      {differences > 0 ? <Badge color="yellow">{differences} different</Badge> : null}
+    </Group>
+  );
+}
+
+function PipelineTopology({
+  canWrite,
+  onCompareFreight,
+  onEditPolicy,
+  pipeline,
+}: Readonly<{
+  canWrite: boolean;
+  onCompareFreight: (alignment: PromotionFreightAlignment) => void;
+  onEditPolicy: (stage: PromotionProjectStage) => void;
+  pipeline: ProjectPipeline;
+}>) {
+  return (
+    <SimpleGrid
+      cols={{
+        base: 1,
+        md: Math.min(2, pipeline.lanes.length),
+        xl: Math.min(3, pipeline.lanes.length),
+      }}
+    >
+      {pipeline.lanes.map((lane, index) => (
+        <Stack gap="xs" key={lane.map((stage) => stage.id).join(":")}>
+          <Group gap="xs">
+            <Text c="dimmed" fw={600} size="xs" tt="uppercase">
+              {index === 0 ? "Entry" : `Downstream ${index}`}
+            </Text>
+            {lane.length > 1 ? (
+              <Badge color="gray" size="xs" variant="light">
+                {lane.length} Stages
+              </Badge>
+            ) : null}
+          </Group>
+          {lane.map((stage) => (
+            <StageCard
+              canWrite={canWrite}
+              key={stage.id}
+              onCompareFreight={onCompareFreight}
+              onEditPolicy={() => onEditPolicy(stage)}
+              stage={stage}
+            />
+          ))}
+        </Stack>
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function StageInventory({
+  canWrite,
+  onEditPolicy,
+  query,
+  stages,
+}: Readonly<{
+  canWrite: boolean;
+  onEditPolicy: (stage: PromotionProjectStage) => void;
+  query: string;
+  stages: PromotionProjectStage[];
+}>) {
+  if (stages.length === 0) {
+    return (
+      <EmptyState
+        description={
+          query.trim()
+            ? `No Stages match “${query.trim()}”.`
+            : "No Stages match the active filters."
+        }
+        title="No matching Stages"
+      />
+    );
+  }
+
+  return (
+    <Paper withBorder>
+      <Table.ScrollContainer minWidth={1040} type="native">
+        <Table verticalSpacing="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Stage</Table.Th>
+              <Table.Th>Application / Environment</Table.Th>
+              <Table.Th>Health</Table.Th>
+              <Table.Th>Current Freight</Table.Th>
+              <Table.Th>Policy</Table.Th>
+              <Table.Th>Last observed</Table.Th>
+              <Table.Th>Actions</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {stages
+              .toSorted((left, right) => left.name.localeCompare(right.name))
+              .map((stage) => {
+                const policy = promotionStagePolicyPresentation(stage);
+                const names = freightNames(stage);
+
+                return (
+                  <Table.Tr key={stage.id}>
+                    <Table.Td>
+                      <Stack gap={3}>
+                        {stage.kargoUrl ? (
+                          <KargoLink fw={650} url={stage.kargoUrl}>
+                            {stage.name}
+                          </KargoLink>
+                        ) : (
+                          <Text fw={650}>{stage.name}</Text>
+                        )}
+                        {stage.controlFlow ? (
+                          <Badge size="xs" variant="light">
+                            Control flow
+                          </Badge>
+                        ) : null}
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>
+                      <Stack gap={2}>
+                        <Text size="sm">{stage.enrichment?.application ?? "Kargo native"}</Text>
+                        <Text c="dimmed" size="xs">
+                          {stage.enrichment?.environment ?? "No environment metadata"}
+                        </Text>
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>
+                      <StageHealthBadge stage={stage} />
+                    </Table.Td>
+                    <Table.Td>
+                      {names.length > 0 ? (
+                        <Stack gap={3}>
+                          {names.slice(0, 2).map((name) => (
+                            <Code key={name}>{name}</Code>
+                          ))}
+                          {names.length > 2 ? (
+                            <Text c="dimmed" size="xs">
+                              +{names.length - 2} more
+                            </Text>
+                          ) : null}
+                        </Stack>
+                      ) : (
+                        <Text c="dimmed" size="sm">
+                          None observed
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Stack gap={4}>
+                        <Badge
+                          color={
+                            !policy.editable
+                              ? "gray"
+                              : stage.policy.effectiveMode === "review-required"
+                                ? "yellow"
+                                : "green"
+                          }
+                          variant="light"
+                        >
+                          {policy.label}
+                        </Badge>
+                        {stage.pendingPromotionCount > 0 ? (
+                          <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
+                            {stage.pendingPromotionCount} pending
+                          </Anchor>
+                        ) : null}
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>
+                      <RelativeTime size="sm" value={stage.lastObservedAt} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        {canWrite && policy.editable ? (
+                          <Button
+                            aria-label={`Edit ${stage.name} policy`}
+                            onClick={() => onEditPolicy(stage)}
+                            size="compact-xs"
+                            variant="default"
+                          >
+                            Policy
+                          </Button>
+                        ) : null}
+                        {canWrite ? (
+                          <PromotionCreateButton
+                            stage={stage}
+                            freight={eligibleStageFreight(stage)}
+                            environment={stage.enrichment?.environment}
+                          />
+                        ) : null}
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Paper>
+  );
+}
+
+function pipelineLabel(pipeline: PromotionTopologyPipeline, index: number) {
+  const applications = pipelineApplications(pipeline);
+  if (applications.length === 1) return applications[0] ?? `Pipeline ${index + 1}`;
+  if (applications.length > 1) return `${applications[0]} + ${applications.length - 1} more`;
+  if (pipeline.stages.length === 1) return pipeline.stages[0]?.name ?? `Pipeline ${index + 1}`;
+  return `Pipeline ${index + 1}`;
+}
+
+function pipelinePath(pipeline: PromotionTopologyPipeline) {
+  const useEnvironment = pipelineApplications(pipeline).length === 1;
+  return pipeline.lanes
+    .map((lane) =>
+      lane
+        .map((stage) =>
+          useEnvironment ? (stage.enrichment?.environment ?? stage.name) : stage.name,
+        )
+        .join(" + "),
+    )
+    .join(" → ");
+}
+
+function pipelineApplications(pipeline: PromotionTopologyPipeline) {
+  return pipeline.stages
+    .flatMap((stage) => (stage.enrichment?.application ? [stage.enrichment.application] : []))
+    .filter((application, index, applications) => applications.indexOf(application) === index)
+    .toSorted((left, right) => left.localeCompare(right));
+}
+
+function stageMatchesQuery(stage: PromotionProjectStage, query: string) {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return true;
+
+  return [
+    stage.name,
+    stage.enrichment?.application,
+    stage.enrichment?.environment,
+    stage.enrichment?.repository,
+    ...stage.requestedFreight.map((request) => request.origin.replace(/^Warehouse\//, "")),
+    ...freightNames(stage),
+  ].some((value) => value?.toLocaleLowerCase().includes(normalized));
+}
+
+function stageIsUnhealthy(stage: PromotionProjectStage) {
+  if (stage.observationStale) return false;
+  if (stage.healthStatus) return stage.healthStatus !== "Healthy";
+  return stage.conditions.some(
+    (condition) => condition.type === "Ready" && condition.status !== "True",
+  );
+}
+
+function stageNeedsAttention(stage: PromotionProjectStage) {
+  return (
+    stage.observationStale ||
+    stageIsUnhealthy(stage) ||
+    stage.pendingPromotionCount > 0 ||
+    stage.freightAlignments.some((alignment) => alignment.status === "different")
+  );
+}
+
+function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
+  const nonReady = stage.conditions.find(
+    (condition) => condition.type === "Ready" && condition.status !== "True",
+  );
+  const presentation = stage.observationStale
+    ? { color: "gray", label: "Observation stale" }
+    : stage.healthStatus === "Healthy"
+      ? { color: "green", label: "Healthy" }
+      : stage.healthStatus
+        ? { color: "red", label: stage.healthStatus }
+        : nonReady
+          ? { color: "red", label: "Not ready" }
+          : { color: "gray", label: "Health unknown" };
+
+  return (
+    <Badge color={presentation.color} variant="light">
+      {presentation.label}
+    </Badge>
+  );
+}
+
 function StageCard({
   canWrite,
   onCompareFreight,
@@ -211,9 +765,6 @@ function StageCard({
   onEditPolicy: () => void;
   stage: PromotionProjectStage;
 }>) {
-  const nonReady = stage.conditions.find(
-    (condition) => condition.type === "Ready" && condition.status !== "True",
-  );
   const policyPresentation = promotionStagePolicyPresentation(stage);
 
   return (
@@ -238,22 +789,7 @@ function StageCard({
             </Text>
           </Stack>
           <Stack align="flex-end" gap={5}>
-            <Badge
-              color={
-                stage.observationStale
-                  ? "gray"
-                  : stage.healthStatus === "Healthy"
-                    ? "green"
-                    : stage.healthStatus
-                      ? "red"
-                      : "gray"
-              }
-              variant="light"
-            >
-              {stage.observationStale
-                ? "Observation stale"
-                : (stage.healthStatus ?? (nonReady ? "Not ready" : "Health unknown"))}
-            </Badge>
+            <StageHealthBadge stage={stage} />
             <RelativeTime size="xs" value={stage.lastObservedAt} />
           </Stack>
         </Group>
