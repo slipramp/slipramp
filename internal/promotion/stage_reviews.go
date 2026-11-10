@@ -37,7 +37,7 @@ func (s *ReviewService) ListStages(ctx context.Context, filter StageListFilter) 
 	for _, record := range page.Items {
 		items = append(items, StageReview{
 			Stage:                 record.Stage,
-			Policy:                policyView(record.Policy, now),
+			Policy:                SnapshotStagePolicy(record.Policy, now),
 			PendingPromotionCount: record.PendingPromotionCount,
 		})
 	}

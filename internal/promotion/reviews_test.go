@@ -3,7 +3,6 @@ package promotion
 import (
 	"context"
 	"errors"
-	"slices"
 	"testing"
 	"time"
 
@@ -25,11 +24,6 @@ type reviewStore struct {
 	promotionFilter PromotionListFilter
 	promotionCalls  int
 	promotionReadAt time.Time
-	pendingStageIDs []uuid.UUID
-}
-
-func (s *reviewStore) ListPromotionStages(context.Context) ([]Stage, error) {
-	return s.stages, nil
 }
 
 func (s *reviewStore) ListPromotionStageReviews(_ context.Context, filter StageListFilter) (StageReviewPage, error) {
@@ -47,29 +41,6 @@ func (s *reviewStore) GetPromotionStage(_ context.Context, id uuid.UUID) (Stage,
 	}
 
 	return Stage{}, ErrStageNotFound
-}
-
-func (s *reviewStore) GetPromotionStagePolicy(_ context.Context, id uuid.UUID) (StagePolicy, error) {
-	record, ok := s.policies[id]
-	if !ok {
-		return StagePolicy{}, ErrPolicyNotFound
-	}
-
-	return record, nil
-}
-
-func (s *reviewStore) ListPromotionStagePolicies(
-	_ context.Context,
-	stageIDs []uuid.UUID,
-) (map[uuid.UUID]StagePolicy, error) {
-	policies := make(map[uuid.UUID]StagePolicy, len(stageIDs))
-	for _, stageID := range stageIDs {
-		if policy, ok := s.policies[stageID]; ok {
-			policies[stageID] = policy
-		}
-	}
-
-	return policies, nil
 }
 
 func (s *reviewStore) UpsertPromotionStagePolicy(
@@ -90,21 +61,6 @@ func (s *reviewStore) ListPromotionReviews(_ context.Context, filter PromotionLi
 	s.promotionReadAt = s.expiredAt
 
 	return s.promotionPage, nil
-}
-
-func (s *reviewStore) CountPendingPromotionsByStage(
-	_ context.Context,
-	stageIDs []uuid.UUID,
-) (map[uuid.UUID]int, error) {
-	s.pendingStageIDs = slices.Clone(stageIDs)
-	counts := make(map[uuid.UUID]int)
-	for _, record := range s.promotions {
-		if record.Lifecycle.State == LifecyclePending && slices.Contains(stageIDs, record.StageID) {
-			counts[record.StageID]++
-		}
-	}
-
-	return counts, nil
 }
 
 func (s *reviewStore) GetPromotion(_ context.Context, id uuid.UUID) (Promotion, error) {
@@ -298,15 +254,17 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		t.Fatalf("unconfigured review-required UpdateStagePolicy() error = %v", err)
 	}
 
-	active.Application = ""
-	store.stages[0] = active
-	if _, err := service.UpdateStagePolicy(
-		t.Context(),
-		active.ID,
-		PolicyUpdate{Mode: PolicyModeReviewRequired},
-		principal,
-	); !errors.Is(err, ErrReviewContextUnavailable) {
-		t.Fatalf("unenriched review-required UpdateStagePolicy() error = %v", err)
+	for _, edit := range []func(*Stage){
+		func(stage *Stage) { stage.Application = "" },
+		func(stage *Stage) { stage.RepositoryName = "removed-from-allowlist" },
+	} {
+		stage := active
+		edit(&stage)
+		store.stages[0] = stage
+		_, err := service.UpdateStagePolicy(t.Context(), stage.ID, PolicyUpdate{Mode: PolicyModeReviewRequired}, principal)
+		if !errors.Is(err, ErrReviewContextUnavailable) {
+			t.Errorf("review-required policy for %#v: %v", stage, err)
+		}
 	}
 	if _, err := service.UpdateStagePolicy(
 		t.Context(),

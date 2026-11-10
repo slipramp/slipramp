@@ -3222,15 +3222,16 @@ type PromotionBranchDriftRepository struct {
 
 // PromotionBranchDriftStage defines model for PromotionBranchDriftStage.
 type PromotionBranchDriftStage struct {
-	AcknowledgedRenderBaseCommit *GitCommit         `json:"acknowledgedRenderBaseCommit,omitempty"`
-	AcknowledgedRenderCommit     *GitCommit         `json:"acknowledgedRenderCommit,omitempty"`
-	AcknowledgedSourceCommit     *GitCommit         `json:"acknowledgedSourceCommit,omitempty"`
-	Application                  *string            `json:"application,omitempty"`
-	Cluster                      CatalogName        `json:"cluster"`
-	Environment                  *string            `json:"environment,omitempty"`
-	Freight                      PromotionFreight   `json:"freight"`
-	ID                           openapi_types.UUID `json:"id"`
-	Integration                  CatalogName        `json:"integration"`
+	AcknowledgedRenderBaseCommit *GitCommit                 `json:"acknowledgedRenderBaseCommit,omitempty"`
+	AcknowledgedRenderCommit     *GitCommit                 `json:"acknowledgedRenderCommit,omitempty"`
+	AcknowledgedSourceCommit     *GitCommit                 `json:"acknowledgedSourceCommit,omitempty"`
+	Application                  *string                    `json:"application,omitempty"`
+	Capabilities                 PromotionStageCapabilities `json:"capabilities"`
+	Cluster                      CatalogName                `json:"cluster"`
+	Environment                  *string                    `json:"environment,omitempty"`
+	Freight                      PromotionFreight           `json:"freight"`
+	ID                           openapi_types.UUID         `json:"id"`
+	Integration                  CatalogName                `json:"integration"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
 	KargoURL           *string                    `json:"kargoUrl,omitempty"`
@@ -3240,7 +3241,6 @@ type PromotionBranchDriftStage struct {
 	NoOpRender         *bool                      `json:"noOpRender,omitempty"`
 	Policy             PromotionStagePolicy       `json:"policy"`
 	Project            CatalogName                `json:"project"`
-	ReviewCapability   PromotionStageCapability   `json:"reviewCapability"`
 	SourceBranchCommit *GitCommit                 `json:"sourceBranchCommit,omitempty"`
 	SourceDrift        *bool                      `json:"sourceDrift,omitempty"`
 	SourcePaths        []string                   `json:"sourcePaths"`

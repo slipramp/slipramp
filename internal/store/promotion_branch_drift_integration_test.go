@@ -83,7 +83,7 @@ func TestPromotionBranchDriftRetainsLastSuccessAfterFailedPromotionIntegration(t
 
 	scanner := &failedPromotionBranchScanner{}
 	service := projection.NewBranchDriftService(
-		promotion.IntegrationSet{"prod": {}},
+		promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{record.Name}}},
 		database,
 		scanner,
 		time.Minute,

@@ -7,13 +7,18 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type projectionTestStore struct {
-	stages          []promotion.Stage
-	policies        map[uuid.UUID]promotion.StagePolicy
-	pendingCounts   map[uuid.UUID]int
-	pendingStageIDs []uuid.UUID
+	repositories  []repository.Repository
+	stages        []promotion.Stage
+	policies      map[uuid.UUID]promotion.StagePolicy
+	pendingCounts map[uuid.UUID]int
+}
+
+func (s *projectionTestStore) ListRepositories(context.Context) ([]repository.Repository, error) {
+	return s.repositories, nil
 }
 
 func (s *projectionTestStore) ListPromotionStages(context.Context) ([]promotion.Stage, error) {
@@ -38,7 +43,6 @@ func (s *projectionTestStore) CountPendingPromotionsByStage(
 	_ context.Context,
 	stageIDs []uuid.UUID,
 ) (map[uuid.UUID]int, error) {
-	s.pendingStageIDs = append([]uuid.UUID(nil), stageIDs...)
 	counts := make(map[uuid.UUID]int, len(stageIDs))
 	for _, stageID := range stageIDs {
 		counts[stageID] = s.pendingCounts[stageID]

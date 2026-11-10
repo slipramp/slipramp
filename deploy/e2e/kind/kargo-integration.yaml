@@ -102,3 +102,28 @@ spec:
             name: promote-acceptance
             kind: PromotionTask
           as: promotion-process
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: native
+  namespace: kargo-acceptance
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: acceptance
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      vars:
+        - name: repoURL
+          value: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.repoURL }}
+            checkout:
+              - commit: ${{ commitFrom(vars.repoURL).ID }}
+                path: ./src

@@ -1,28 +1,11 @@
 package handler
 
 import (
-	"time"
-
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 func promotionStageSnapshotResponse(value promotion.PromotionStageSnapshot) api.PromotionStageSnapshot {
-	var enrichment *api.PromotionStageEnrichment
-	if value.Enrichment != nil {
-		var repository *api.CatalogName
-		if value.Enrichment.RepositoryName != "" {
-			name := api.CatalogName(value.Enrichment.RepositoryName)
-			repository = &name
-		}
-		paths := append([]string(nil), value.Enrichment.SourcePaths...)
-		enrichment = &api.PromotionStageEnrichment{
-			Application: optionalString(value.Enrichment.Application),
-			Environment: optionalString(value.Enrichment.Environment),
-			Repository:  repository, RepositoryURL: optionalString(value.Enrichment.RepositoryURL),
-			TargetBranch: optionalString(value.Enrichment.TargetBranch), SourcePaths: &paths,
-		}
-	}
 	return api.PromotionStageSnapshot{
 		ID:                              value.ID,
 		Integration:                     api.CatalogName(value.Integration),
@@ -31,11 +14,34 @@ func promotionStageSnapshotResponse(value promotion.PromotionStageSnapshot) api.
 		Name:                            value.Name,
 		KubernetesUID:                   value.KubernetesUID,
 		ResourceVersion:                 value.ResourceVersion,
-		Enrichment:                      enrichment,
+		Enrichment:                      promotionStageEnrichmentResponse(value.Enrichment),
 		RequestedFreight:                promotionFreightRequestResponse(value.RequestedFreight),
 		Freight:                         promotionFreightResponse(value.Freight),
 		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(value.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  value.LastObservedAt,
+	}
+}
+
+func promotionStageEnrichmentResponse(value *promotion.PromotionStageEnrichment) *api.PromotionStageEnrichment {
+	if value == nil {
+		return nil
+	}
+	var repository *api.CatalogName
+	if value.RepositoryName != "" {
+		repository = new(api.CatalogName(value.RepositoryName))
+	}
+	var paths *[]string
+	if len(value.SourcePaths) > 0 {
+		paths = &value.SourcePaths
+	}
+
+	return &api.PromotionStageEnrichment{
+		Application:   optionalString(value.Application),
+		Environment:   optionalString(value.Environment),
+		Repository:    repository,
+		RepositoryURL: optionalString(value.RepositoryURL),
+		TargetBranch:  optionalString(value.TargetBranch),
+		SourcePaths:   paths,
 	}
 }
 
@@ -89,69 +95,6 @@ func promotionRepositorySnapshotResponse(value promotion.PromotionRepositorySnap
 		Branch:                 value.Branch,
 		CheckoutCredentialName: value.CheckoutCredentialName,
 	}
-}
-
-func promotionFreightFromRequest(value api.PromotionFreight) promotion.Freight {
-	items := make([]promotion.FreightItem, 0, len(value.Items))
-	for _, item := range value.Items {
-		artifacts := make([]promotion.FreightArtifact, 0, len(item.Artifacts))
-		for _, artifact := range item.Artifacts {
-			artifacts = append(artifacts, promotion.FreightArtifact{
-				Kind: string(artifact.Kind), Repository: artifact.Repository, Version: artifact.Version,
-			})
-		}
-		approvedFor := []string{}
-		if item.ApprovedFor != nil {
-			approvedFor = append(approvedFor, (*item.ApprovedFor)...)
-		}
-		verifiedIn := []promotion.FreightVerification{}
-		if item.VerifiedIn != nil {
-			for _, evidence := range *item.VerifiedIn {
-				longestSoak, err := time.ParseDuration(evidence.LongestCompletedSoak)
-				if err != nil {
-					longestSoak = 0
-				}
-				verifiedIn = append(verifiedIn, promotion.FreightVerification{
-					Stage: evidence.Stage, LongestCompletedSoak: longestSoak,
-				})
-			}
-		}
-		currentlyIn := []promotion.FreightOccupancy{}
-		if item.CurrentlyIn != nil {
-			for _, evidence := range *item.CurrentlyIn {
-				currentlyIn = append(currentlyIn, promotion.FreightOccupancy{
-					Stage: evidence.Stage, Since: evidence.Since,
-				})
-			}
-		}
-		items = append(items, promotion.FreightItem{
-			Origin: item.Origin, Name: item.Name, Artifacts: artifacts,
-			ApprovedFor: approvedFor, VerifiedIn: verifiedIn, CurrentlyIn: currentlyIn,
-			EvidenceObserved: item.ApprovedFor != nil && item.VerifiedIn != nil && item.CurrentlyIn != nil,
-		})
-	}
-
-	return promotion.Freight{Items: items}
-}
-
-func promotionAcknowledgementFromRequest(
-	value *api.SuccessfulRenderAcknowledgement,
-) *promotion.SuccessfulRenderAcknowledgement {
-	if value == nil {
-		return nil
-	}
-	result := &promotion.SuccessfulRenderAcknowledgement{}
-	if value.SourceRevision != nil {
-		result.SourceRevision = *value.SourceRevision
-	}
-	if value.TargetRevision != nil {
-		result.TargetRevision = *value.TargetRevision
-	}
-	if value.ResultRevision != nil {
-		result.ResultRevision = *value.ResultRevision
-	}
-
-	return result
 }
 
 func promotionAcknowledgementResponse(

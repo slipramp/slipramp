@@ -63,20 +63,53 @@ type PromotionPolicySnapshot struct {
 	UpdatedAt      *time.Time                     `json:"updatedAt,omitempty"`
 }
 
+func SnapshotStagePolicy(record *StagePolicy, at time.Time) PromotionPolicySnapshot {
+	if record == nil {
+		return PromotionPolicySnapshot{
+			ConfiguredMode: PolicyModeAutomatic,
+			EffectiveMode:  PolicyModeAutomatic,
+		}
+	}
+
+	updatedBy := record.UpdatedBySnapshot
+	updatedAt := record.UpdatedAt
+
+	return PromotionPolicySnapshot{
+		ConfiguredMode: record.Mode,
+		EffectiveMode:  record.Mode.Effective(record.ExpiresAt, at),
+		ExpiresAt:      record.ExpiresAt,
+		Reason:         record.Reason,
+		UpdatedBy:      &updatedBy,
+		UpdatedAt:      &updatedAt,
+	}
+}
+
 type SuccessfulRenderAcknowledgement struct {
 	SourceRevision string `json:"sourceRevision,omitempty"`
 	TargetRevision string `json:"targetRevision,omitempty"`
 	ResultRevision string `json:"resultRevision,omitempty"`
 }
 
+func (s Stage) Enrichment() *PromotionStageEnrichment {
+	if s.Application == "" && s.Environment == "" && s.RepositoryName == "" && s.RepositoryURL == "" &&
+		s.TargetBranch == "" && len(s.SourcePaths) == 0 {
+		return nil
+	}
+
+	return &PromotionStageEnrichment{
+		Application:    s.Application,
+		Environment:    s.Environment,
+		RepositoryName: s.RepositoryName,
+		RepositoryURL:  s.RepositoryURL,
+		TargetBranch:   s.TargetBranch,
+		SourcePaths:    s.SourcePaths,
+	}
+}
+
 func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
-	var enrichment *PromotionStageEnrichment
-	if s.Application != "" || s.Environment != "" || s.RepositoryName != "" || s.RepositoryURL != "" ||
-		s.TargetBranch != "" || len(s.SourcePaths) > 0 {
-		enrichment = &PromotionStageEnrichment{
-			Application: s.Application, Environment: s.Environment, RepositoryName: s.RepositoryName,
-			RepositoryURL: s.RepositoryURL, TargetBranch: s.TargetBranch, SourcePaths: slices.Clone(s.SourcePaths),
-		}
+	enrichment := s.Enrichment()
+	if enrichment != nil {
+		enrichment.SourcePaths = slices.Clone(enrichment.SourcePaths)
 	}
 	return PromotionStageSnapshot{
 		ID:                              s.ID,
@@ -95,13 +128,8 @@ func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
 	}
 }
 
-func (s Stage) ReviewReady() bool {
-	return s.Application != "" && s.Environment != "" && s.RepositoryName != "" && s.RepositoryURL != "" &&
-		s.TargetBranch != "" && len(s.SourcePaths) > 0
-}
-
-func (e PromotionStageEnrichment) ReviewReady() bool {
-	return e.Application != "" && e.Environment != "" && e.RepositoryName != "" && e.RepositoryURL != "" &&
+func (e *PromotionStageEnrichment) ReviewReady() bool {
+	return e != nil && e.Application != "" && e.Environment != "" && e.RepositoryName != "" && e.RepositoryURL != "" &&
 		e.TargetBranch != "" && len(e.SourcePaths) > 0
 }
 

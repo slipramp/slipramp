@@ -2511,7 +2511,7 @@ export type PromotionBranchDriftStage = {
   sourcePaths: Array<string>;
   freight: PromotionFreight;
   policy: PromotionStagePolicy;
-  reviewCapability: PromotionStageCapability;
+  capabilities: PromotionStageCapabilities;
   status: PromotionBranchDriftStatus;
   acknowledgedSourceCommit?: GitCommit;
   acknowledgedRenderBaseCommit?: GitCommit;

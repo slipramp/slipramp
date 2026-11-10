@@ -164,6 +164,11 @@ func (c IntegrationConfig) ReviewConfigured() bool {
 		c.Preparation.Action != ""
 }
 
+func (c IntegrationConfig) CanReview(stage Stage) bool {
+	return c.ReviewConfigured() && c.ClusterName == stage.ClusterName &&
+		slices.Contains(c.Repositories, stage.RepositoryName) && stage.Enrichment().ReviewReady()
+}
+
 func validateUIURL(subject, value string) error {
 	if value == "" {
 		return nil

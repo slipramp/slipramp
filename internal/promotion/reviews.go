@@ -41,17 +41,8 @@ type PromotionListFilter struct {
 
 type StageReview struct {
 	Stage                 Stage
-	Policy                PolicyView
+	Policy                PromotionPolicySnapshot
 	PendingPromotionCount int
-}
-
-type PolicyView struct {
-	ConfiguredMode PolicyMode
-	EffectiveMode  PolicyMode
-	ExpiresAt      *time.Time
-	Reason         *string
-	UpdatedBy      *productidentity.ActorSnapshot
-	UpdatedAt      *time.Time
 }
 
 type StageReviewList struct {
@@ -127,23 +118,23 @@ func (s *ReviewService) UpdateStagePolicy(
 	stageID uuid.UUID,
 	update PolicyUpdate,
 	principal productidentity.Principal,
-) (PolicyView, error) {
+) (PromotionPolicySnapshot, error) {
 	stage, err := s.store.GetPromotionStage(ctx, stageID)
 	if err != nil {
-		return PolicyView{}, err
+		return PromotionPolicySnapshot{}, err
 	}
 	if stage.ArchivedAt != nil {
-		return PolicyView{}, ErrStageArchived
+		return PromotionPolicySnapshot{}, ErrStageArchived
 	}
 	if update.Mode == PolicyModeReviewRequired {
 		integration, configured := s.integrations.Lookup(stage.Integration)
-		if !configured || !integration.ReviewConfigured() || !stage.ReviewReady() {
-			return PolicyView{}, ErrReviewContextUnavailable
+		if !configured || !integration.CanReview(stage) {
+			return PromotionPolicySnapshot{}, ErrReviewContextUnavailable
 		}
 	}
 	actor, err := principal.ActorSnapshot()
 	if err != nil {
-		return PolicyView{}, fmt.Errorf("%w: policy actor is invalid: %w", ErrInvalid, err)
+		return PromotionPolicySnapshot{}, fmt.Errorf("%w: policy actor is invalid: %w", ErrInvalid, err)
 	}
 	now := s.currentTime()
 	record := StagePolicy{
@@ -157,10 +148,10 @@ func (s *ReviewService) UpdateStagePolicy(
 	}
 	stored, err := s.store.UpsertPromotionStagePolicy(ctx, record)
 	if err != nil {
-		return PolicyView{}, err
+		return PromotionPolicySnapshot{}, err
 	}
 
-	return policyView(&stored, now), nil
+	return SnapshotStagePolicy(&stored, now), nil
 }
 
 func (s *ReviewService) ListPromotions(
@@ -249,27 +240,6 @@ func (s *ReviewService) Decide(
 
 func (s *ReviewService) currentTime() time.Time {
 	return s.now().UTC().Truncate(time.Microsecond)
-}
-
-func policyView(record *StagePolicy, at time.Time) PolicyView {
-	if record == nil {
-		return PolicyView{
-			ConfiguredMode: PolicyModeAutomatic,
-			EffectiveMode:  PolicyModeAutomatic,
-		}
-	}
-
-	updatedBy := record.UpdatedBySnapshot
-	updatedAt := record.UpdatedAt
-
-	return PolicyView{
-		ConfiguredMode: record.Mode,
-		EffectiveMode:  record.Mode.Effective(record.ExpiresAt, at),
-		ExpiresAt:      record.ExpiresAt,
-		Reason:         record.Reason,
-		UpdatedBy:      &updatedBy,
-		UpdatedAt:      &updatedAt,
-	}
 }
 
 func validateListWindow(limit, offset int) error {

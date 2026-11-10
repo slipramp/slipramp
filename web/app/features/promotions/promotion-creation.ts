@@ -1,24 +1,9 @@
 import type {
   ProductPrincipal,
-  PromotionBranchDriftStage,
   PromotionFreightItem,
   PromotionProjectStage,
-  PromotionStageCapability,
-  PromotionStagePolicy,
   PromotionStagePolicyUpdate,
 } from "~/api/generated";
-
-export type PromotionChoice = {
-  targetStageId: string;
-  targetStageName: string;
-  targetEnvironment: string;
-  targetPolicy: PromotionStagePolicy;
-  reviewCapability: PromotionStageCapability;
-  sourceStageId?: string;
-  sourceStageName: string;
-  sourceEnvironment: string;
-  freight: PromotionFreightItem;
-};
 
 export type PromotionCreationActionResult = {
   error?: string;
@@ -70,41 +55,14 @@ export function promotionReviewPolicyUpdate(
   };
 }
 
-export function projectPromotionChoices(stage: PromotionProjectStage): PromotionChoice[] {
+export function eligibleStageFreight(stage: PromotionProjectStage): PromotionFreightItem[] {
   if (stage.capabilities.promotion.status !== "ready") return [];
 
   return stage.requestedFreight.flatMap((request) =>
     request.candidates
       .filter((candidate) => candidate.readiness === "ready")
-      .map((candidate) => ({
-        freight: candidate.freight,
-        sourceEnvironment: "Kargo eligible",
-        sourceStageName: candidate.freight.origin,
-        targetEnvironment: stage.enrichment?.environment ?? stage.name,
-        targetStageId: stage.id,
-        targetStageName: stage.name,
-        targetPolicy: stage.policy,
-        reviewCapability: stage.capabilities.review,
-      })),
+      .map((candidate) => candidate.freight),
   );
-}
-
-export function inPlacePromotionChoices(stage: PromotionBranchDriftStage): PromotionChoice[] {
-  return stage.freight.items.map((freight) => ({
-    freight,
-    sourceEnvironment: stage.environment ?? stage.name,
-    sourceStageId: stage.id,
-    sourceStageName: stage.name,
-    targetEnvironment: stage.environment ?? stage.name,
-    targetStageId: stage.id,
-    targetStageName: stage.name,
-    targetPolicy: stage.policy,
-    reviewCapability: stage.reviewCapability,
-  }));
-}
-
-export function promotionChoiceKey(choice: PromotionChoice) {
-  return JSON.stringify([choice.sourceStageId ?? null, choice.freight.origin, choice.freight.name]);
 }
 
 export function canWritePromotions(principal?: ProductPrincipal) {

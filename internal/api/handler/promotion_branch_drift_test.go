@@ -57,12 +57,12 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 						Freight:        promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{}}}},
 						LastObservedAt: now.Add(-time.Minute),
 					},
-					Policy: promotion.PolicyView{
+					Policy: promotion.PromotionPolicySnapshot{
 						ConfiguredMode: promotion.PolicyModeReviewRequired,
 						EffectiveMode:  promotion.PolicyModeReviewRequired,
 						ExpiresAt:      &policyExpiresAt,
 					},
-					ReviewCapability:               projection.StageCapability{Ready: true},
+					Capabilities:                   projection.StageCapabilities{Review: projection.StageCapability{Ready: true}},
 					Status:                         projection.BranchDriftStatusCurrent,
 					AcknowledgedSourceRevision:     strings.Repeat("a", 40),
 					AcknowledgedRenderBaseRevision: strings.Repeat("b", 40),
@@ -123,7 +123,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 		`"limit":10`,
 		`"offset":2`,
 		`"status":"current"`,
-		`"reviewCapability":{"status":"ready"}`,
+		`"review":{"status":"ready"}`,
 		`"policy":{"configuredMode":"review-required","effectiveMode":"review-required","expiresAt":"2026-10-23T12:00:00Z"}`,
 		`"name":"freight-1"`,
 		`"noOpRender":true`,

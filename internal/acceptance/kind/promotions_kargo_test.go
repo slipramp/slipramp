@@ -24,7 +24,25 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 	s.applyKargoCallbackSecret(t, kargoAPIKey)
 	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-integration.yaml"))
 
-	stage, freightName := s.waitForKargoFreight(t)
+	t.Run("native", s.testNativeKargoPromotion)
+	t.Run("review-required", s.testReviewedKargoPromotion)
+}
+
+func (s *suite) testNativeKargoPromotion(t *testing.T) {
+	stage, freight := s.waitForKargoFreight(t, "native")
+	if stage.Enrichment != nil || stage.Capabilities.Promotion.Status != api.PromotionStageCapabilityStatusReady ||
+		stage.Capabilities.Review.Status != api.PromotionStageCapabilityStatusUnavailable {
+		t.Fatalf("native Stage = %#v", stage)
+	}
+	created := s.createKargoPromotion(t, stage.ID, freight)
+	final := s.waitForPromotionKargoOutcome(t, created.ID)
+	if final.ReviewRequired || final.ReviewContext != nil || final.PreparationRunID != nil || final.KargoPromotionUID == nil {
+		t.Fatalf("native Promotion = %#v", final)
+	}
+}
+
+func (s *suite) testReviewedKargoPromotion(t *testing.T) {
+	stage, freightName := s.waitForKargoFreight(t, "acceptance")
 	reason := "Kargo acceptance review"
 	policyResponse, err := s.productClient.UpdatePromotionStagePolicyWithResponse(
 		t.Context(),
@@ -36,21 +54,9 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 	}
 	requireStatus(t, policyResponse.StatusCode(), policyResponse.Body, http.StatusOK)
 
-	t.Logf("starting a Kargo Promotion with Freight %s", freightName)
-	creationResponse, err := s.productClient.CreatePromotionWithResponse(t.Context(), stage.ID, api.PromotionCreate{
-		FreightName: freightName,
-	})
-	if err != nil {
-		t.Fatalf("create Kargo Promotion: %v", err)
-	}
-	requireStatus(t, creationResponse.StatusCode(), creationResponse.Body, http.StatusCreated)
-	if creationResponse.JSON201 == nil {
-		t.Fatal("Kargo Promotion creation returned no Promotion")
-	}
-	promotion := *creationResponse.JSON201
-	if promotion.Source != api.Slipramp || promotion.Status != api.PromotionStatusCreating ||
-		promotion.SelectedFreight == nil || promotion.SelectedFreight.Name != freightName {
-		t.Fatalf("Kargo Promotion creation = %#v", promotion)
+	promotion := s.createKargoPromotion(t, stage.ID, freightName)
+	if promotion.Status != api.PromotionStatusCreating {
+		t.Fatalf("review-required Promotion status = %s", promotion.Status)
 	}
 
 	dispatched := s.waitForOperatorPromotionDispatch(t, promotion.ID)
@@ -107,6 +113,28 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 		pending.ExternalPromotionID, targetCommit)
 }
 
+func (s *suite) createKargoPromotion(t *testing.T, stageID uuid.UUID, freightName string) api.Promotion {
+	t.Helper()
+
+	t.Logf("starting a Kargo Promotion with Freight %s", freightName)
+	creationResponse, err := s.productClient.CreatePromotionWithResponse(t.Context(), stageID, api.PromotionCreate{
+		FreightName: freightName,
+	})
+	if err != nil {
+		t.Fatalf("create Kargo Promotion: %v", err)
+	}
+	requireStatus(t, creationResponse.StatusCode(), creationResponse.Body, http.StatusCreated)
+	if creationResponse.JSON201 == nil {
+		t.Fatal("Kargo Promotion creation returned no Promotion")
+	}
+	promotion := *creationResponse.JSON201
+	if promotion.Source != api.Slipramp || promotion.SelectedFreight == nil || promotion.SelectedFreight.Name != freightName {
+		t.Fatalf("Kargo Promotion creation = %#v", promotion)
+	}
+
+	return promotion
+}
+
 func (s *suite) applyKargoGitCredentials(t *testing.T) {
 	t.Helper()
 
@@ -158,7 +186,7 @@ func (s *suite) applyKargoCallbackSecret(t *testing.T, token string) {
 	s.kubectlApplyInput(t, manifest)
 }
 
-func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionProjectStage, string) {
+func (s *suite) waitForKargoFreight(t *testing.T, stageName string) (api.PromotionProjectStage, string) {
 	t.Helper()
 
 	integration := api.CatalogName("acceptance")
@@ -172,7 +200,7 @@ func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionProjectStage, st
 			lastBody = response.Body
 			if response.JSON200 != nil {
 				for _, stage := range response.JSON200.Stages {
-					if stage.Name != "acceptance" {
+					if stage.Name != stageName {
 						continue
 					}
 					for _, request := range stage.RequestedFreight {
@@ -198,7 +226,7 @@ func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionProjectStage, st
 		}
 		wait(t, time.Second)
 	}
-	t.Fatalf("Kargo Freight was not observed: %s", lastBody)
+	t.Fatalf("Kargo Freight for Stage %s was not observed: %s", stageName, lastBody)
 	return api.PromotionProjectStage{}, ""
 }
 

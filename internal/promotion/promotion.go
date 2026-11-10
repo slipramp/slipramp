@@ -15,6 +15,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 const (
@@ -233,14 +234,7 @@ func (s Stage) Validate() error {
 		"Kubernetes UID":   s.KubernetesUID,
 		"resource version": s.ResourceVersion,
 	} {
-		maximum := maximumTextLength
-		if label == "repository URL" {
-			maximum = maximumURLLength
-		}
-		if label == "target branch" {
-			maximum = maximumBranchLength
-		}
-		if err := validateText(label, value, maximum); err != nil {
+		if err := validateText(label, value, maximumTextLength); err != nil {
 			return err
 		}
 	}
@@ -462,7 +456,7 @@ func (c PromotionReviewContext) Validate(stage PromotionStageSnapshot) error {
 	if err := validateText("target branch", c.TargetBranch, maximumBranchLength); err != nil {
 		return err
 	}
-	if stage.Enrichment == nil || !stage.Enrichment.ReviewReady() {
+	if !stage.Enrichment.ReviewReady() {
 		return fmt.Errorf("%w: Promotion Stage snapshot lacks complete review enrichment", ErrInvalid)
 	}
 	if stage.Enrichment.RepositoryName != c.RepositorySnapshot.Name ||
@@ -478,6 +472,9 @@ func (c PromotionReviewContext) Validate(stage PromotionStageSnapshot) error {
 }
 
 func (c PromotionGitContext) Validate() error {
+	if c.BaseRevision == "" || c.CandidateRevision == "" || c.CandidateBranch == "" {
+		return fmt.Errorf("%w: base revision, candidate revision, and candidate branch must be supplied together", ErrInvalid)
+	}
 	if err := validateRevision("base revision", c.BaseRevision); err != nil {
 		return err
 	}
@@ -487,7 +484,7 @@ func (c PromotionGitContext) Validate() error {
 	if err := validateText("candidate branch", c.CandidateBranch, maximumBranchLength); err != nil {
 		return err
 	}
-	if !strings.HasPrefix(c.CandidateBranch, "kargo/promotion/") {
+	if branch, ok := strings.CutPrefix(c.CandidateBranch, "kargo/promotion/"); !ok || branch == "" {
 		return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
 	}
 
@@ -568,15 +565,8 @@ func validateText(label, value string, maximumLength int) error {
 }
 
 func validateRevision(label, revision string) error {
-	if len(revision) != 40 && len(revision) != 64 {
-		return fmt.Errorf("%w: %s must be a full Git object ID", ErrInvalid, label)
-	}
-	for _, character := range revision {
-		if character < '0' || character > '9' {
-			if character < 'a' || character > 'f' {
-				return fmt.Errorf("%w: %s must be a lowercase full Git object ID", ErrInvalid, label)
-			}
-		}
+	if !repository.ValidCommitSHA(revision) {
+		return fmt.Errorf("%w: %s must be a lowercase full Git object ID", ErrInvalid, label)
 	}
 
 	return nil

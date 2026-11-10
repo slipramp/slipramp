@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 func TestProjectServiceGroupsActiveStages(t *testing.T) {
@@ -76,10 +77,13 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 	otherProject := projectTestStage("prod", "colo", "kargo-platform", "test", now)
 	otherIntegration := projectTestStage("dev", "colo", "kargo-core", "test", now)
 	store := &projectionTestStore{
-		stages: []promotion.Stage{otherCluster, target, otherProject, otherIntegration, source},
+		repositories: []repository.Repository{{Name: target.RepositoryName, CloneURL: target.RepositoryURL}},
+		stages:       []promotion.Stage{otherCluster, target, otherProject, otherIntegration, source},
 	}
 	service := NewProjectService(
-		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{"ops"},
+			Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
+		}},
 		store,
 	)
 	service.now = func() time.Time { return now }
@@ -109,6 +113,9 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 		candidates[0].Evidence.Readiness != promotion.FreightReadinessReady {
 		t.Errorf("direct Freight candidates = %#v", candidates)
 	}
+	if caps := result.Stages[0].Capabilities; !caps.Review.Ready || !caps.BranchDrift.Ready {
+		t.Errorf("enriched Stage capabilities = %#v", caps)
+	}
 	capabilities := result.Stages[1].Capabilities
 	if !capabilities.Promotion.Ready || capabilities.Review.Ready || capabilities.BranchDrift.Ready {
 		t.Errorf("unannotated Stage capabilities = %#v", result.Stages[1].Capabilities)
@@ -118,7 +125,7 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 	}
 	controlFlow := source
 	controlFlow.ControlFlow = true
-	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{ClusterName: "colo"})
+	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{ClusterName: "colo"}, "")
 	if controlFlowCapabilities.Promotion.Ready || controlFlowCapabilities.Promotion.Reason == "" {
 		t.Errorf("control-flow Stage capabilities = %#v", controlFlowCapabilities)
 	}

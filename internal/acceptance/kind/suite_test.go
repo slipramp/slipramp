@@ -153,6 +153,10 @@ func newSuite(t *testing.T, kargoIntegration bool) *suite {
 	}
 
 	temporaryDirectory := t.TempDir()
+	keepCluster := environmentString("SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER", "false") == "true"
+	if !keepCluster {
+		t.Setenv("KUBECONFIG", filepath.Join(temporaryDirectory, "kubeconfig"))
+	}
 	serverPort := environmentInt(t, "SLIPRAMP_ACCEPTANCE_SERVER_PORT", 18080)
 	webPort := environmentInt(t, "SLIPRAMP_ACCEPTANCE_WEB_PORT", 13000)
 	oidcPort := environmentInt(t, "SLIPRAMP_ACCEPTANCE_OIDC_PORT", 18081)
@@ -170,7 +174,7 @@ func newSuite(t *testing.T, kargoIntegration bool) *suite {
 		serverPort:         serverPort,
 		webPort:            webPort,
 		oidcPort:           oidcPort,
-		keepCluster:        environmentString("SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER", "false") == "true",
+		keepCluster:        keepCluster,
 		timeout:            time.Duration(timeoutSeconds) * time.Second,
 		serverURL:          "http://127.0.0.1:" + strconv.Itoa(serverPort),
 		webURL:             "http://127.0.0.1:" + strconv.Itoa(webPort),

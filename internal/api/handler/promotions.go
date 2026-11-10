@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -52,7 +51,7 @@ type PromotionReviewService interface {
 		uuid.UUID,
 		promotion.PolicyUpdate,
 		productidentity.Principal,
-	) (promotion.PolicyView, error)
+	) (promotion.PromotionPolicySnapshot, error)
 	ListPromotions(context.Context, promotion.PromotionListFilter) (promotion.PromotionReviewList, error)
 	GetPromotion(context.Context, uuid.UUID) (promotion.PromotionReview, error)
 	Decide(context.Context, promotion.DecisionRequest) (promotion.PromotionReview, error)
@@ -474,97 +473,6 @@ func (h *Handler) DecidePromotion(
 	return api.DecidePromotion200JSONResponse(body), nil
 }
 
-func (h *Handler) ReplaceKargoStageSnapshot(
-	ctx context.Context,
-	request api.ReplaceKargoStageSnapshotRequestObject,
-) (api.ReplaceKargoStageSnapshotResponseObject, error) {
-	principal, err := controllerPrincipal(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if request.Body == nil {
-		problem := NewProblem(http.StatusBadRequest, "A complete Kargo Stage snapshot is required.")
-
-		return api.ReplaceKargoStageSnapshot400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
-		}, nil
-	}
-
-	stages := make([]promotion.StageObservation, 0, len(request.Body.Stages))
-	for _, observed := range request.Body.Stages {
-		sourcePaths := []string{}
-		if observed.SourcePaths != nil {
-			sourcePaths = append(sourcePaths, (*observed.SourcePaths)...)
-		}
-		stages = append(stages, promotion.StageObservation{
-			Project:                         string(observed.Project),
-			Name:                            observed.Name,
-			KubernetesUID:                   observed.KubernetesUID,
-			ResourceVersion:                 observed.ResourceVersion,
-			Application:                     optionalStringValue(observed.Application),
-			Environment:                     optionalStringValue(observed.Environment),
-			RepositoryURL:                   optionalStringValue(observed.RepositoryURL),
-			TargetBranch:                    optionalStringValue(observed.TargetBranch),
-			SourcePaths:                     sourcePaths,
-			RequestedFreight:                promotionFreightRequests(observed.RequestedFreight),
-			Freight:                         promotionFreightFromRequest(observed.Freight),
-			CandidateFreight:                promotionFreightFromRequest(observed.CandidateFreight),
-			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
-			ControlFlow:                     observed.ControlFlow,
-			Conditions:                      promotionStageConditionsFromRequest(observed.Conditions),
-			CurrentPromotion:                promotionStagePromotionFromRequest(observed.CurrentPromotion),
-			LastPromotion:                   promotionStagePromotionFromRequest(observed.LastPromotion),
-			HealthStatus:                    observed.HealthStatus,
-			ArgoApplicationNamespace:        observed.ArgoApplicationNamespace,
-			SuccessfulRenderAcknowledgement: promotionAcknowledgementFromRequest(observed.SuccessfulRenderAcknowledgement),
-		})
-	}
-
-	err = h.promotionStages.ReplaceStageSnapshot(
-		ctx,
-		string(request.Integration),
-		principal.ClusterName,
-		promotion.StageSnapshotReplacement{
-			SnapshotID: request.Body.SnapshotID,
-			ObservedAt: request.Body.ObservedAt,
-			Stages:     stages,
-		},
-	)
-	if err != nil {
-		switch {
-		case errors.Is(err, promotion.ErrInvalid):
-			problem := NewProblem(http.StatusBadRequest, err.Error())
-
-			return api.ReplaceKargoStageSnapshot400ApplicationProblemPlusJSONResponse{
-				BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
-			}, nil
-		case errors.Is(err, promotion.ErrIntegrationNotFound):
-			problem := NewProblem(http.StatusNotFound, "The Kargo integration does not exist.")
-
-			return api.ReplaceKargoStageSnapshot404ApplicationProblemPlusJSONResponse{
-				NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
-			}, nil
-		case errors.Is(err, promotion.ErrIntegrationCluster):
-			problem := NewProblem(http.StatusForbidden, "The Kargo integration belongs to another cluster.")
-
-			return api.ReplaceKargoStageSnapshot403ApplicationProblemPlusJSONResponse{
-				ForbiddenApplicationProblemPlusJSONResponse: api.ForbiddenApplicationProblemPlusJSONResponse(problem),
-			}, nil
-		case errors.Is(err, promotion.ErrSnapshotConflict),
-			errors.Is(err, promotion.ErrStaleSnapshot):
-			problem := NewProblem(http.StatusConflict, err.Error())
-
-			return api.ReplaceKargoStageSnapshot409ApplicationProblemPlusJSONResponse{
-				ConflictApplicationProblemPlusJSONResponse: api.ConflictApplicationProblemPlusJSONResponse(problem),
-			}, nil
-		default:
-			return nil, err
-		}
-	}
-
-	return api.ReplaceKargoStageSnapshot204Response{}, nil
-}
-
 func optionalCatalogName(value *api.CatalogName) string {
 	if value == nil {
 		return ""
@@ -610,25 +518,6 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) api.Promo
 	}
 }
 
-func promotionFreightRequests(values []api.PromotionFreightRequest) []promotion.FreightRequest {
-	requests := make([]promotion.FreightRequest, 0, len(values))
-	for _, value := range values {
-		requiredSoakTime := time.Duration(0)
-		if value.RequiredSoakTime != nil {
-			requiredSoakTime, _ = time.ParseDuration(*value.RequiredSoakTime)
-		}
-		requests = append(requests, promotion.FreightRequest{
-			Origin:               value.Origin,
-			Direct:               value.Direct,
-			SourceStages:         value.SourceStages,
-			AvailabilityStrategy: promotion.FreightAvailabilityStrategy(value.AvailabilityStrategy),
-			RequiredSoakTime:     requiredSoakTime,
-		})
-	}
-
-	return requests
-}
-
 func promotionFreightRequestResponse(values []promotion.FreightRequest) []api.PromotionFreightRequest {
 	if values == nil {
 		return []api.PromotionFreightRequest{}
@@ -652,42 +541,7 @@ func promotionFreightRequestResponse(values []promotion.FreightRequest) []api.Pr
 	return requests
 }
 
-func optionalStringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-
-	return *value
-}
-
-func promotionStageConditionsFromRequest(values []api.PromotionStageCondition) []promotion.StageCondition {
-	conditions := make([]promotion.StageCondition, 0, len(values))
-	for _, value := range values {
-		conditions = append(conditions, promotion.StageCondition{
-			Type:               value.Type,
-			Status:             value.Status,
-			Reason:             optionalStringValue(value.Reason),
-			Message:            optionalStringValue(value.Message),
-			LastTransitionTime: value.LastTransitionTime,
-		})
-	}
-
-	return conditions
-}
-
-func promotionStagePromotionFromRequest(
-	value *api.PromotionStagePromotionReference,
-) *promotion.StagePromotionReference {
-	if value == nil {
-		return nil
-	}
-
-	return &promotion.StagePromotionReference{
-		Name: value.Name, Phase: optionalStringValue(value.Phase), FinishedAt: value.FinishedAt,
-	}
-}
-
-func promotionPolicyResponse(value promotion.PolicyView) api.PromotionStagePolicy {
+func promotionPolicyResponse(value promotion.PromotionPolicySnapshot) api.PromotionStagePolicy {
 	return api.PromotionStagePolicy{
 		ConfiguredMode: api.PromotionPolicyMode(value.ConfiguredMode),
 		EffectiveMode:  api.PromotionPolicyMode(value.EffectiveMode),
@@ -740,7 +594,7 @@ func promotionResponse(
 		SourceStageID:       record.SourceStageID,
 		StageSnapshot:       promotionStageSnapshotResponse(record.StageSnapshot),
 		ReviewContext:       reviewContext,
-		PolicySnapshot:      promotionPolicyResponse(promotion.PolicyView(record.PolicySnapshot)),
+		PolicySnapshot:      promotionPolicyResponse(record.PolicySnapshot),
 		SelectedFreight:     selectedFreight,
 		ReviewRequired:      record.ReviewRequired,
 		Status:              api.PromotionStatus(record.Lifecycle.State),

@@ -29,15 +29,8 @@ import {
   type PromotionProjectStage,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
-import {
-  PromotionCreateButton,
-  PromotionCreateDialog,
-} from "~/features/promotions/promotion-create-dialog";
-import {
-  canWritePromotions,
-  projectPromotionChoices,
-  type PromotionChoice,
-} from "~/features/promotions/promotion-creation";
+import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import { canWritePromotions, eligibleStageFreight } from "~/features/promotions/promotion-creation";
 import { submitPromotionCreation } from "~/features/promotions/promotion-creation.server";
 import {
   buildFreightColumns,
@@ -127,7 +120,6 @@ function ProjectDetail({
 }>) {
   const [searchParams, setSearchParams] = useSearchParams();
   const policyStage = project.stages.find((stage) => stage.id === searchParams.get("policy"));
-  const [promotionChoices, setPromotionChoices] = useState<PromotionChoice[]>();
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
   const selectedStages = project.stages.filter((stage) => selectedStageIds.includes(stage.id));
   const lanes = topologyLanes(project.stages);
@@ -165,7 +157,6 @@ function ProjectDetail({
                       next.set("policy", stage.id);
                       setSearchParams(next, { preventScrollReset: true });
                     }}
-                    onPromote={(choices) => setPromotionChoices(choices)}
                     stage={stage}
                   />
                 ))}
@@ -193,13 +184,6 @@ function ProjectDetail({
           <PolicyForm actionData={actionData} onCancel={closePolicy} stage={policyStage} />
         ) : null}
       </Modal>
-
-      {promotionChoices ? (
-        <PromotionCreateDialog
-          choices={promotionChoices}
-          onClose={() => setPromotionChoices(undefined)}
-        />
-      ) : null}
     </Stack>
   );
 }
@@ -207,15 +191,12 @@ function ProjectDetail({
 function StageCard({
   canWrite,
   onEditPolicy,
-  onPromote,
   stage,
 }: Readonly<{
   canWrite: boolean;
   onEditPolicy: () => void;
-  onPromote: (choices: PromotionChoice[]) => void;
   stage: PromotionProjectStage;
 }>) {
-  const choices = projectPromotionChoices(stage);
   const nonReady = stage.conditions.find(
     (condition) => condition.type === "Ready" && condition.status !== "True",
   );
@@ -372,9 +353,9 @@ function StageCard({
             ) : null}
             {canWrite ? (
               <PromotionCreateButton
-                choices={choices}
-                onClick={() => onPromote(choices)}
-                unavailableLabel={stage.capabilities.promotion.reason}
+                stage={stage}
+                freight={eligibleStageFreight(stage)}
+                environment={stage.enrichment?.environment}
               />
             ) : null}
           </Group>

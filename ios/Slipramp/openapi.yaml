@@ -10042,7 +10042,7 @@ components:
         - sourcePaths
         - freight
         - policy
-        - reviewCapability
+        - capabilities
         - status
         - lastObservedAt
       properties:
@@ -10083,8 +10083,8 @@ components:
           $ref: '#/components/schemas/PromotionFreight'
         policy:
           $ref: '#/components/schemas/PromotionStagePolicy'
-        reviewCapability:
-          $ref: '#/components/schemas/PromotionStageCapability'
+        capabilities:
+          $ref: '#/components/schemas/PromotionStageCapabilities'
         status:
           $ref: '#/components/schemas/PromotionBranchDriftStatus'
         acknowledgedSourceCommit:

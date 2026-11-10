@@ -299,6 +299,7 @@ func newTestKargoDynamicClient(objects ...runtime.Object) *dynamicfake.FakeDynam
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
 			kargoStageResource:     "StageList",
+			kargoFreightResource:   "FreightList",
 			kargoPromotionResource: "PromotionList",
 		},
 		objects...,

@@ -99,7 +99,7 @@ func (s *CreationService) Create(
 		return Promotion{}, ErrIntegrationNotFound
 	}
 	if request.Policy != nil && request.Policy.Mode == PolicyModeReviewRequired &&
-		(!integration.ReviewConfigured() || !target.ReviewReady()) {
+		!integration.CanReview(target) {
 		return Promotion{}, ErrReviewContextUnavailable
 	}
 	acceptedAt := s.now().UTC().Truncate(time.Microsecond)

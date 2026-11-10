@@ -35,7 +35,7 @@ type recordingPromotionReviewService struct {
 	stages          promotion.StageReviewList
 	promotions      promotion.PromotionReviewList
 	review          promotion.PromotionReview
-	policy          promotion.PolicyView
+	policy          promotion.PromotionPolicySnapshot
 	err             error
 }
 
@@ -68,7 +68,7 @@ func (s *recordingPromotionReviewService) UpdateStagePolicy(
 	stageID uuid.UUID,
 	update promotion.PolicyUpdate,
 	_ productidentity.Principal,
-) (promotion.PolicyView, error) {
+) (promotion.PromotionPolicySnapshot, error) {
 	s.policyStageID = stageID
 	s.policyUpdate = update
 
@@ -124,60 +124,6 @@ func (s *recordingPromotionService) ReplaceStageSnapshot(
 	s.replacement = replacement
 
 	return s.err
-}
-
-func TestReplaceKargoStageSnapshotUsesAuthenticatedCluster(t *testing.T) {
-	t.Parallel()
-
-	promotions := &recordingPromotionService{}
-	httpHandler := NewHTTP(
-		Dependencies{
-			ControllerIdentities: controllerIdentityFor("controller-token", "colo"),
-			PromotionStages:      promotions,
-		},
-		HTTPOptions{},
-	)
-	request := httptest.NewRequestWithContext(
-		t.Context(),
-		http.MethodPut,
-		"/controller/v1/kargo/prod/stages",
-		strings.NewReader(`{
-          "snapshotId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1903",
-          "observedAt":"2026-10-21T12:00:00Z",
-          "stages":[{
-            "project":"kargo-core",
-            "name":"external-dns-prod",
-            "kubernetesUid":"stage-uid",
-            "resourceVersion":"42",
-            "application":"external-dns",
-            "environment":"prod",
-            "repositoryUrl":"https://example.com/ops.git",
-            "targetBranch":"stage/external-dns/prod",
-            "sourcePaths":["k8s/external-dns/base"],
-            "requestedFreight":[],
-            "freight":{"items":[]},
-            "candidateFreight":{"items":[]},
-            "autoPromotionEnabled":false
-          }]
-        }`),
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-
-	httpHandler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
-	}
-	if promotions.integration != "prod" || promotions.cluster != "colo" ||
-		len(promotions.replacement.Stages) != 1 {
-		t.Fatalf("submission = %#v", promotions)
-	}
-	stage := promotions.replacement.Stages[0]
-	if stage.RepositoryURL != "https://example.com/ops.git" || stage.Freight.Items == nil || len(stage.Freight.Items) != 0 {
-		t.Errorf("Stage observation = %#v", stage)
-	}
 }
 
 func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
@@ -362,36 +308,6 @@ func TestPromotionResponseOmitsUnavailableReviewContext(t *testing.T) {
 			t.Errorf("native Promotion response includes %s: %s", unavailable, encoded)
 		}
 	}
-}
-
-func TestReplaceKargoStageSnapshotRejectsClusterMismatch(t *testing.T) {
-	t.Parallel()
-
-	promotions := &recordingPromotionService{err: promotion.ErrIntegrationCluster}
-	httpHandler := NewHTTP(
-		Dependencies{
-			ControllerIdentities: controllerIdentityFor("controller-token", "edge"),
-			PromotionStages:      promotions,
-		},
-		HTTPOptions{},
-	)
-	request := httptest.NewRequestWithContext(
-		t.Context(),
-		http.MethodPut,
-		"/controller/v1/kargo/prod/stages",
-		strings.NewReader(`{
-          "snapshotId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1903",
-          "observedAt":"2026-10-21T12:00:00Z",
-          "stages":[]
-        }`),
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-
-	httpHandler.ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusForbidden)
 }
 
 func TestSubmitKargoPromotionReturnsDurableState(t *testing.T) {

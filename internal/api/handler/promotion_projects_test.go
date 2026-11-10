@@ -138,7 +138,7 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 					Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
 					FirstObservedAt: now.Add(-time.Hour), LastObservedAt: now,
 				},
-				Policy: promotion.PolicyView{
+				Policy: promotion.PromotionPolicySnapshot{
 					ConfiguredMode: promotion.PolicyModeAutomatic,
 					EffectiveMode:  promotion.PolicyModeAutomatic,
 				},

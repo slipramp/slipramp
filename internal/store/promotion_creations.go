@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -84,15 +83,11 @@ func (d *Database) CreateOperatorPromotion(
 		}
 	}
 
-	policySnapshot, err := operatorPromotionPolicySnapshot(ctx, queries, target.ID, acceptance.AcceptedAt)
+	policySnapshot, err := loadPromotionPolicySnapshot(ctx, queries, target.ID, acceptance.AcceptedAt)
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
 	stageSnapshot := target.PromotionSnapshot()
-	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode operator Promotion requesting actor: %w", err)
-	}
 
 	nextDispatchAt := acceptance.AcceptedAt
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
@@ -138,7 +133,7 @@ func (d *Database) CreateOperatorPromotion(
 		return promotion.Promotion{}, err
 	}
 
-	params, err := promotionDatabaseParams(record, requestedBy)
+	params, err := promotionDatabaseParams(record)
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
@@ -169,47 +164,13 @@ func getOperatorPromotionStage(
 	return promotionStageFromRow(row)
 }
 
-func operatorPromotionPolicySnapshot(
-	ctx context.Context,
-	queries *storedb.Queries,
-	stageID uuid.UUID,
-	acceptedAt time.Time,
-) (promotion.PromotionPolicySnapshot, error) {
-	snapshot := promotion.PromotionPolicySnapshot{
-		ConfiguredMode: promotion.PolicyModeAutomatic,
-		EffectiveMode:  promotion.PolicyModeAutomatic,
-	}
-	row, err := queries.GetPromotionStagePolicy(ctx, databaseUUID(stageID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return snapshot, nil
-	}
-	if err != nil {
-		return promotion.PromotionPolicySnapshot{}, fmt.Errorf("get operator Promotion Stage policy: %w", err)
-	}
-	policy, err := promotionStagePolicyFromRow(row)
-	if err != nil {
-		return promotion.PromotionPolicySnapshot{}, err
-	}
-	updatedAt := policy.UpdatedAt
-	updatedBy := policy.UpdatedBySnapshot
-
-	return promotion.PromotionPolicySnapshot{
-		ConfiguredMode: policy.Mode,
-		EffectiveMode:  policy.Mode.Effective(policy.ExpiresAt, acceptedAt),
-		ExpiresAt:      policy.ExpiresAt,
-		Reason:         policy.Reason,
-		UpdatedBy:      &updatedBy,
-		UpdatedAt:      &updatedAt,
-	}, nil
-}
-
 func resolvePromotionReviewContext(
 	ctx context.Context,
 	queries *storedb.Queries,
 	stage promotion.Stage,
 	allowedRepositories []string,
 ) (*promotion.PromotionReviewContext, error) {
-	if !stage.ReviewReady() || !slices.Contains(allowedRepositories, stage.RepositoryName) {
+	if !stage.Enrichment().ReviewReady() || !slices.Contains(allowedRepositories, stage.RepositoryName) {
 		return nil, nil
 	}
 	repositoryRow, err := queries.GetActivePromotionRepositoryByName(ctx, stage.RepositoryName)

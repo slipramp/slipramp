@@ -88,40 +88,19 @@ func (r KargoRequest) Validate() error {
 }
 
 func (r KargoRequest) GitContext() (*PromotionGitContext, error) {
-	provided := 0
-	for _, value := range []string{r.BaseRevision, r.CandidateRevision, r.CandidateBranch} {
-		if value != "" {
-			provided++
-		}
-	}
-	if provided == 0 {
-		return nil, nil
-	}
-	if provided != 3 {
-		return nil, fmt.Errorf(
-			"%w: base revision, candidate revision, and candidate branch must be supplied together",
-			ErrInvalid,
-		)
-	}
-	if err := validateRevision("base revision", r.BaseRevision); err != nil {
-		return nil, err
-	}
-	if err := validateRevision("candidate revision", r.CandidateRevision); err != nil {
-		return nil, err
-	}
-	if err := validateText("candidate branch", r.CandidateBranch, maximumBranchLength); err != nil {
-		return nil, err
-	}
-	if len(r.CandidateBranch) <= len("kargo/promotion/") ||
-		r.CandidateBranch[:len("kargo/promotion/")] != "kargo/promotion/" {
-		return nil, fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
-	}
-
-	return &PromotionGitContext{
+	git := PromotionGitContext{
 		BaseRevision:      r.BaseRevision,
 		CandidateRevision: r.CandidateRevision,
 		CandidateBranch:   r.CandidateBranch,
-	}, nil
+	}
+	if git == (PromotionGitContext{}) {
+		return nil, nil
+	}
+	if err := git.Validate(); err != nil {
+		return nil, err
+	}
+
+	return &git, nil
 }
 
 func (r KargoRequest) Digest() (RequestDigest, error) {
@@ -143,9 +122,6 @@ func (a PromotionAcceptance) Validate() error {
 	}
 	if err := kubevalidate.DNSLabel("Kargo integration name", a.Integration); err != nil {
 		return invalid(err)
-	}
-	if err := a.Request.Validate(); err != nil {
-		return err
 	}
 	digest, err := a.Request.Digest()
 	if err != nil {
@@ -177,8 +153,8 @@ func (a PromotionAcceptance) Validate() error {
 
 func (p Promotion) PreparationParameters() (map[string]any, error) {
 	stage := p.StageSnapshot
-	if stage.ID == uuid.Nil || stage.Name == "" || stage.Project == "" || stage.Enrichment == nil ||
-		!stage.Enrichment.ReviewReady() || p.ReviewContext == nil || p.ReviewContext.Git == nil {
+	if stage.ID == uuid.Nil || stage.Name == "" || stage.Project == "" || !stage.Enrichment.ReviewReady() ||
+		p.ReviewContext == nil || p.ReviewContext.Git == nil {
 		return nil, fmt.Errorf("%w: Promotion Stage snapshot is incomplete", ErrInvalid)
 	}
 	enrichment := stage.Enrichment

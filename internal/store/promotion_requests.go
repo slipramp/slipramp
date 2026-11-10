@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -42,7 +41,6 @@ func (d *Database) acceptPromotionRequest(
 	ctx context.Context,
 	acceptance promotion.PromotionAcceptance,
 ) (promotion.Promotion, error) {
-
 	transaction, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("begin Kargo Promotion request: %w", err)
@@ -99,35 +97,12 @@ func (d *Database) acceptPromotionRequest(
 		return promotion.Promotion{}, err
 	}
 
-	policySnapshot := promotion.PromotionPolicySnapshot{
-		ConfiguredMode: promotion.PolicyModeAutomatic,
-		EffectiveMode:  promotion.PolicyModeAutomatic,
-	}
-	policyRow, err := queries.GetPromotionStagePolicy(ctx, databaseUUID(stage.ID))
-	if err == nil {
-		policy, decodeErr := promotionStagePolicyFromRow(policyRow)
-		if decodeErr != nil {
-			return promotion.Promotion{}, decodeErr
-		}
-		updatedAt := policy.UpdatedAt
-		updatedBy := policy.UpdatedBySnapshot
-		policySnapshot = promotion.PromotionPolicySnapshot{
-			ConfiguredMode: policy.Mode,
-			EffectiveMode:  policy.Mode.Effective(policy.ExpiresAt, acceptance.AcceptedAt),
-			ExpiresAt:      policy.ExpiresAt,
-			Reason:         policy.Reason,
-			UpdatedBy:      &updatedBy,
-			UpdatedAt:      &updatedAt,
-		}
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return promotion.Promotion{}, fmt.Errorf("get Kargo Promotion Stage policy: %w", err)
+	policySnapshot, err := loadPromotionPolicySnapshot(ctx, queries, stage.ID, acceptance.AcceptedAt)
+	if err != nil {
+		return promotion.Promotion{}, err
 	}
 
 	stageSnapshot := stage.PromotionSnapshot()
-	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode Kargo Promotion requesting actor: %w", err)
-	}
 
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
 	if reviewRequired && (reviewContext == nil || gitContext == nil) {
@@ -184,7 +159,7 @@ func (d *Database) acceptPromotionRequest(
 		}
 	}
 
-	params, err := promotionDatabaseParams(record, requestedBy)
+	params, err := promotionDatabaseParams(record)
 	if err != nil {
 		return promotion.Promotion{}, err
 	}

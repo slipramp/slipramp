@@ -86,7 +86,7 @@ func (s *recordingBranchScanner) ScanBranches(
 	s.calls = append(s.calls, record)
 	s.requests = append(s.requests, requests)
 
-	return slicesClone(s.results), s.err
+	return slices.Clone(s.results), s.err
 }
 
 func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) {
@@ -112,6 +112,7 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 		strings.Repeat("e", 40),
 		now,
 	)
+	driftedStage.ControlFlow = true
 	store := &branchDriftTestStore{
 		stages: []promotion.Stage{driftedStage, noOpStage},
 		policies: map[uuid.UUID]promotion.StagePolicy{
@@ -142,7 +143,10 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 		},
 	}
 	service := NewBranchDriftService(
-		promotion.IntegrationSet{"prod": {}, "edge": {}},
+		promotion.IntegrationSet{
+			"prod": {ClusterName: "colo", Repositories: []string{"ops"}},
+			"edge": {ClusterName: "colo", Repositories: []string{"ops"}},
+		},
 		store,
 		scanner,
 		time.Minute,
@@ -161,6 +165,9 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	}
 	if result.Total != 2 || len(result.Items) != 1 || len(result.Items[0].Stages) != 2 {
 		t.Fatalf("List() = %#v", result)
+	}
+	if result.Items[0].Stages[0].Capabilities.Promotion.Ready || !result.Items[0].Stages[1].Capabilities.Promotion.Ready {
+		t.Errorf("Stage promotion capabilities = %#v", result.Items[0].Stages)
 	}
 	if result.Items[0].Stages[0].Policy.EffectiveMode != promotion.PolicyModeReviewRequired ||
 		result.Items[0].Stages[1].Policy.EffectiveMode != promotion.PolicyModeAutomatic {
@@ -210,6 +217,15 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	if len(scanner.calls) != 2 {
 		t.Errorf("expired-cache repository scans = %d, want 2", len(scanner.calls))
 	}
+
+	store.repositories[0].CloneURL = "https://example.com/replaced.git"
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	unknown, err := service.List(t.Context(), BranchDriftListFilter{Status: BranchDriftStatusUnknown, Limit: 10})
+	if err != nil || unknown.Total != 2 || len(scanner.calls) != 2 {
+		t.Errorf("changed Repository URL: %d unknown Stages, %d scans, %v", unknown.Total, len(scanner.calls), err)
+	}
 }
 
 func TestBranchDriftServiceRefreshesRepositoriesWithoutBlockingReads(t *testing.T) {
@@ -221,9 +237,10 @@ func TestBranchDriftServiceRefreshesRepositoriesWithoutBlockingReads(t *testing.
 			strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40), now,
 		))
 		store.repositories = append(store.repositories, repository.Repository{
-			ID:     uuid.New(),
-			Name:   name,
-			Branch: "main",
+			ID:       uuid.New(),
+			Name:     name,
+			CloneURL: "https://example.com/" + name + ".git",
+			Branch:   "main",
 		})
 	}
 	scanner := &blockingBranchScanner{
@@ -231,7 +248,7 @@ func TestBranchDriftServiceRefreshesRepositoriesWithoutBlockingReads(t *testing.
 		release: make(chan struct{}),
 	}
 	service := NewBranchDriftService(
-		promotion.IntegrationSet{"prod": {}},
+		promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{"alpha", "beta"}}},
 		store,
 		scanner,
 		time.Minute,
@@ -343,9 +360,10 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 		}
 		if name != "missing" {
 			store.repositories = append(store.repositories, repository.Repository{
-				ID:     uuid.New(),
-				Name:   name,
-				Branch: "main",
+				ID:       uuid.New(),
+				Name:     name,
+				CloneURL: "https://example.com/" + name + ".git",
+				Branch:   "main",
 			})
 		}
 	}
@@ -355,7 +373,10 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 	unconfiguredStage := store.stages[0]
 	unconfiguredStage.ID = uuid.New()
 	unconfiguredStage.Integration = "unconfigured"
-	store.stages = append(store.stages, archivedStage, unconfiguredStage)
+	disallowedStage := store.stages[0]
+	disallowedStage.ID = uuid.New()
+	disallowedStage.RepositoryName = "removed-from-allowlist"
+	store.stages = append(store.stages, archivedStage, unconfiguredStage, disallowedStage)
 	slices.Reverse(store.stages)
 
 	for _, test := range []struct {
@@ -440,7 +461,7 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 				{}, {SourceDrift: true}, {},
 			}}
 			service := NewBranchDriftService(
-				promotion.IntegrationSet{"prod": {}}, store, scanner, time.Minute, 30*time.Second,
+				promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{"alpha", "beta", "missing"}}}, store, scanner, time.Minute, 30*time.Second,
 				branchDriftTestLogger(),
 			)
 			if _, err := service.Refresh(t.Context()); err != nil {
@@ -507,7 +528,7 @@ func TestBranchDriftServiceAppliesStatusFilterToMissingRepositories(t *testing.T
 		now,
 	)}}
 	service := NewBranchDriftService(
-		promotion.IntegrationSet{"prod": {}},
+		promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{"missing"}}},
 		store,
 		&recordingBranchScanner{},
 		time.Minute,
@@ -574,7 +595,10 @@ func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownS
 		}},
 	}
 	service := NewBranchDriftService(
-		promotion.IntegrationSet{"prod": {}, "edge": {}},
+		promotion.IntegrationSet{
+			"prod": {ClusterName: "colo", Repositories: []string{"ops"}},
+			"edge": {ClusterName: "colo", Repositories: []string{"ops"}},
+		},
 		store,
 		scanner,
 		time.Minute,
@@ -651,7 +675,7 @@ func branchDriftTestStage(
 		Application:                     name,
 		Environment:                     "prod",
 		RepositoryName:                  repositoryName,
-		RepositoryURL:                   "https://example.com/ops.git",
+		RepositoryURL:                   "https://example.com/" + repositoryName + ".git",
 		TargetBranch:                    "stage/" + name + "/prod",
 		SourcePaths:                     []string{"apps/" + name},
 		SuccessfulRenderAcknowledgement: acknowledgement,
@@ -661,8 +685,4 @@ func branchDriftTestStage(
 
 func branchDriftTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func slicesClone(values []repository.BranchComparison) []repository.BranchComparison {
-	return append([]repository.BranchComparison(nil), values...)
 }

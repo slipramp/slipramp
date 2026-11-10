@@ -18,28 +18,36 @@ import { IconArrowUp, IconExternalLink } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 
-import {
-  promotionChoiceKey,
-  type PromotionChoice,
-  type PromotionCreationActionResult,
-} from "~/features/promotions/promotion-creation";
-import type { PromotionStageCapability, PromotionStagePolicy } from "~/api/generated";
+import type { PromotionCreationActionResult } from "~/features/promotions/promotion-creation";
+import type {
+  PromotionFreightItem,
+  PromotionProjectStage,
+  PromotionStageCapability,
+  PromotionStagePolicy,
+} from "~/api/generated";
 import { formatTimestamp } from "~/shared/display";
 import { useTimeZone } from "~/shared/time-zone-preference";
 
-export function PromotionCreateDialog({
-  choices,
+type PromotionCreateProps = Readonly<{
+  stage: Pick<PromotionProjectStage, "id" | "name" | "policy" | "capabilities">;
+  freight: PromotionFreightItem[];
+  environment?: string;
+  inPlace?: boolean;
+}>;
+
+function PromotionCreateDialog({
+  stage,
+  freight,
+  environment,
+  inPlace,
   onClose,
-}: Readonly<{
-  choices: PromotionChoice[];
-  onClose: () => void;
-}>) {
+}: PromotionCreateProps & { onClose: () => void }) {
   const fetcher = useFetcher<PromotionCreationActionResult>();
-  const [selectedKey, setSelectedKey] = useState(
-    choices.length === 1 && choices[0] ? promotionChoiceKey(choices[0]) : "",
+  const [selectedName, setSelectedName] = useState(
+    freight.length === 1 ? (freight[0]?.name ?? "") : "",
   );
   const handledPromotionID = useRef<string | undefined>(undefined);
-  const selected = choices.find((choice) => promotionChoiceKey(choice) === selectedKey);
+  const selected = freight.find((item) => item.name === selectedName);
   const submittingMode = fetcher.formData?.get("mode");
 
   useEffect(() => {
@@ -63,35 +71,24 @@ export function PromotionCreateDialog({
   }, [fetcher.data, onClose]);
 
   return (
-    <Modal
-      centered
-      onClose={onClose}
-      opened
-      size="lg"
-      title={`Promote to ${choices[0]?.targetStageName ?? "Stage"}`}
-    >
+    <Modal centered onClose={onClose} opened size="lg" title={`Promote to ${stage.name}`}>
       <fetcher.Form method="post">
         <Stack gap="md">
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <PromotionFact label="Target Stage" value={choices[0]?.targetStageName ?? "Unknown"} />
-            <PromotionFact label="Environment" value={choices[0]?.targetEnvironment ?? "Unknown"} />
-          </SimpleGrid>
+          {environment ? <PromotionFact label="Environment" value={environment} /> : null}
 
-          {choices.length > 1 ? (
+          {freight.length > 1 || !selected ? (
             <NativeSelect
               data={[
                 { label: "Choose exact Freight", value: "" },
-                ...choices.map((choice) => ({
-                  label: choice.sourceStageId
-                    ? `${choice.sourceEnvironment} · ${choice.sourceStageName} · ${choice.freight.name}`
-                    : `${choice.freight.origin} · ${choice.freight.name}`,
-                  value: promotionChoiceKey(choice),
+                ...freight.map((item) => ({
+                  label: `${item.origin} · ${item.name}`,
+                  value: item.name,
                 })),
               ]}
               label="Source Freight"
-              onChange={(event) => setSelectedKey(event.currentTarget.value)}
+              onChange={(event) => setSelectedName(event.currentTarget.value)}
               required
-              value={selectedKey}
+              value={selected?.name ?? ""}
             />
           ) : null}
 
@@ -101,31 +98,18 @@ export function PromotionCreateDialog({
             </Alert>
           ) : null}
 
-          {selected ? <PromotionChoiceDetails choice={selected} /> : null}
+          {selected ? <FreightDetails freight={selected} /> : null}
 
-          {choices[0]?.reviewCapability.status === "unavailable" ? (
-            <Alert color="blue" title="Kargo-native Promotion">
-              Slipramp will promote the exact eligible Freight through Kargo. Change preview and
-              Slipramp review are unavailable for this Stage.
-            </Alert>
-          ) : null}
-
-          {selected?.sourceStageId && selected.sourceStageId === selected.targetStageId ? (
+          {inPlace ? (
             <Alert color="yellow" title="In-place Promotion">
               This reruns the Stage&apos;s Kargo promotion template with the same Freight.
             </Alert>
           ) : null}
 
-          {choices[0] ? (
-            <StagePolicyControl
-              policy={choices[0].targetPolicy}
-              reviewCapability={choices[0].reviewCapability}
-            />
-          ) : null}
-
-          <input name="targetStageId" type="hidden" value={selected?.targetStageId ?? ""} />
-          <input name="sourceStageId" type="hidden" value={selected?.sourceStageId ?? ""} />
-          <input name="freightName" type="hidden" value={selected?.freight.name ?? ""} />
+          <StagePolicyControl policy={stage.policy} reviewCapability={stage.capabilities.review} />
+          <input name="targetStageId" type="hidden" value={stage.id} />
+          {inPlace ? <input name="sourceStageId" type="hidden" value={stage.id} /> : null}
+          <input name="freightName" type="hidden" value={selected?.name ?? ""} />
 
           <Group justify="space-between" wrap="wrap">
             <Button onClick={onClose} type="button" variant="default">
@@ -230,13 +214,14 @@ function stagePolicyDescription(policy: PromotionStagePolicy, timeZone: string) 
 }
 
 export function PromotionCreateButton({
-  choices,
-  onClick,
   unavailableLabel = "No eligible Freight is currently observed.",
-}: Readonly<{ choices: PromotionChoice[]; onClick: () => void; unavailableLabel?: string }>) {
-  if (choices.length === 0) {
+  ...props
+}: PromotionCreateProps & { unavailableLabel?: string }) {
+  const [opened, setOpened] = useState(false);
+  const capability = props.stage.capabilities.promotion;
+  if (capability.status === "unavailable" || (props.freight.length === 0 && !opened)) {
     return (
-      <Tooltip label={unavailableLabel}>
+      <Tooltip label={capability.reason ?? unavailableLabel}>
         <span>
           <Button disabled leftSection={<IconArrowUp aria-hidden size={14} />} size="compact-xs">
             Promote
@@ -247,33 +232,29 @@ export function PromotionCreateButton({
   }
 
   return (
-    <Button
-      leftSection={<IconArrowUp aria-hidden size={14} />}
-      onClick={onClick}
-      size="compact-xs"
-      variant="light"
-    >
-      Promote
-    </Button>
+    <>
+      <Button
+        leftSection={<IconArrowUp aria-hidden size={14} />}
+        onClick={() => setOpened(true)}
+        size="compact-xs"
+        variant="light"
+      >
+        Promote
+      </Button>
+      {opened ? <PromotionCreateDialog {...props} onClose={() => setOpened(false)} /> : null}
+    </>
   );
 }
 
-function PromotionChoiceDetails({ choice }: Readonly<{ choice: PromotionChoice }>) {
+function FreightDetails({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
   return (
     <Paper p="md" withBorder>
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {choice.sourceStageId ? (
-            <>
-              <PromotionFact label="Source Stage" value={choice.sourceStageName} />
-              <PromotionFact label="Source environment" value={choice.sourceEnvironment} />
-              <PromotionFact label="Origin" value={choice.freight.origin} />
-            </>
-          ) : (
-            <PromotionFact label="Direct source" value={choice.freight.origin} />
-          )}
+          <PromotionFact label="Freight" value={freight.name} />
+          <PromotionFact label="Origin" value={freight.origin} />
         </SimpleGrid>
-        {choice.freight.artifacts.length === 0 ? (
+        {freight.artifacts.length === 0 ? (
           <Text c="dimmed" size="sm">
             This Freight does not report versioned artifacts.
           </Text>
@@ -282,7 +263,7 @@ function PromotionChoiceDetails({ choice }: Readonly<{ choice: PromotionChoice }
             <Text c="dimmed" size="xs">
               Versions
             </Text>
-            {choice.freight.artifacts.map((artifact) => (
+            {freight.artifacts.map((artifact) => (
               <Group
                 key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
                 gap="xs"

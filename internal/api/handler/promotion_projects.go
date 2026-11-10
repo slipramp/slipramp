@@ -147,17 +147,21 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 		RequestedFreight: requests, Freight: promotionFreightResponse(stage.Freight),
 		AutoPromotionEnabled: stage.AutoPromotionEnabled, HealthStatus: stage.HealthStatus,
 		Policy: promotionPolicyResponse(value.Policy), PendingPromotionCount: value.PendingPromotionCount,
-		Enrichment: promotionStageEnrichmentResponse(stage),
-		Capabilities: api.PromotionStageCapabilities{
-			Promotion:   promotionStageCapabilityResponse(value.Capabilities.Promotion),
-			Review:      promotionStageCapabilityResponse(value.Capabilities.Review),
-			BranchDrift: promotionStageCapabilityResponse(value.Capabilities.BranchDrift),
-		},
+		Enrichment:      promotionStageEnrichmentResponse(stage.Enrichment()),
+		Capabilities:    promotionStageCapabilitiesResponse(value.Capabilities),
 		FirstObservedAt: stage.FirstObservedAt, LastObservedAt: stage.LastObservedAt,
 		KargoURL: h.kargoIntegrations.KargoStageURL(stage.Integration, stage.Project, stage.Name),
 		ArgoCdURL: h.kargoIntegrations.ArgoCDApplicationURL(
-			stage.Integration, stage.Environment, optionalStringValue(stage.ArgoApplicationNamespace), stage.Application,
+			stage.Integration, stage.Environment, valueOrEmptyString(stage.ArgoApplicationNamespace), stage.Application,
 		),
+	}
+}
+
+func promotionStageCapabilitiesResponse(value projection.StageCapabilities) api.PromotionStageCapabilities {
+	return api.PromotionStageCapabilities{
+		Promotion:   promotionStageCapabilityResponse(value.Promotion),
+		Review:      promotionStageCapabilityResponse(value.Review),
+		BranchDrift: promotionStageCapabilityResponse(value.BranchDrift),
 	}
 }
 
@@ -177,24 +181,5 @@ func promotionStagePromotionResponse(value *promotion.StagePromotionReference) *
 
 	return &api.PromotionStagePromotionReference{
 		Name: value.Name, Phase: optionalString(value.Phase), FinishedAt: value.FinishedAt,
-	}
-}
-
-func promotionStageEnrichmentResponse(stage promotion.Stage) *api.PromotionStageEnrichment {
-	if stage.Application == "" && stage.Environment == "" && stage.RepositoryName == "" &&
-		stage.RepositoryURL == "" && stage.TargetBranch == "" && len(stage.SourcePaths) == 0 {
-		return nil
-	}
-	var repository *api.CatalogName
-	if stage.RepositoryName != "" {
-		value := api.CatalogName(stage.RepositoryName)
-		repository = &value
-	}
-	paths := append([]string(nil), stage.SourcePaths...)
-
-	return &api.PromotionStageEnrichment{
-		Application: optionalString(stage.Application), Environment: optionalString(stage.Environment),
-		Repository: repository, RepositoryURL: optionalString(stage.RepositoryURL),
-		TargetBranch: optionalString(stage.TargetBranch), SourcePaths: &paths,
 	}
 }

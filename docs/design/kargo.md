@@ -263,7 +263,11 @@ when exact eligible Freight exists, including a Stage with no Slipramp
 annotations. Control-flow Stages remain visible but non-promotable.
 
 Project and Promotion reads do not query Kargo or Argo CD. Branch drift uses
-cached read-only Git evidence and remains a separate workflow. It compares
-watched source paths and target movement independently, preserves the last
-successful render acknowledgement, and reports stale, failed, or unknown
-evidence rather than treating absence as agreement.
+cached read-only Git evidence. Project and branch-drift responses report the
+same Stage capabilities. Both views evaluate review and branch drift against
+the current Repository allowlist and clone URL. A changed URL leaves drift
+unknown until the Stage mapping matches again.
+
+Branch drift compares watched source paths and target movement independently.
+It preserves the last successful render acknowledgement and reports stale,
+failed, or unknown evidence.

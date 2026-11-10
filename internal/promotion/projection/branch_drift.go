@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -40,8 +41,8 @@ type BranchDriftListFilter struct {
 
 type BranchDriftStage struct {
 	Stage                          promotion.Stage
-	Policy                         promotion.PolicyView
-	ReviewCapability               StageCapability
+	Policy                         promotion.PromotionPolicySnapshot
+	Capabilities                   StageCapabilities
 	Status                         BranchDriftStatus
 	AcknowledgedSourceRevision     string
 	AcknowledgedRenderBaseRevision string
@@ -73,7 +74,7 @@ type BranchDriftList struct {
 type BranchDriftStore interface {
 	StagePolicyStore
 	ListPromotionStages(context.Context) ([]promotion.Stage, error)
-	ListRepositories(context.Context) ([]repository.Repository, error)
+	promotion.RepositoryLister
 }
 
 type BranchDriftService struct {
@@ -107,23 +108,6 @@ type branchDriftEvidence struct {
 	sourceDrift          bool
 	targetDrift          bool
 	message              string
-}
-
-type branchDriftEvidenceError struct {
-	message string
-	cause   error
-}
-
-func (e branchDriftEvidenceError) Error() string {
-	if e.cause == nil {
-		return e.message
-	}
-
-	return e.message + ": " + e.cause.Error()
-}
-
-func (e branchDriftEvidenceError) Unwrap() error {
-	return e.cause
 }
 
 func NewBranchDriftService(
@@ -184,38 +168,18 @@ func (s *BranchDriftService) List(
 		return BranchDriftList{}, fmt.Errorf("%w: branch drift status filter is invalid", promotion.ErrInvalid)
 	}
 
-	stages, err := s.store.ListPromotionStages(ctx)
+	stagesByRepository, repositoriesByName, err := s.inventory(ctx)
 	if err != nil {
 		return BranchDriftList{}, err
 	}
-	repositories, err := s.store.ListRepositories(ctx)
-	if err != nil {
-		return BranchDriftList{}, err
-	}
-
-	repositoriesByName := make(map[string]repository.Repository, len(repositories))
-	for _, record := range repositories {
-		repositoriesByName[record.Name] = record
-	}
-	stagesByRepository := make(map[string][]promotion.Stage)
 	matchingStageCounts := make(map[string]int)
-	for _, stage := range stages {
-		if stage.ArchivedAt != nil {
-			continue
-		}
-		integration, configured := s.integrations.Lookup(stage.Integration)
-		if !configured {
-			continue
-		}
-		if !stageCapabilities(stage, integration).BranchDrift.Ready {
-			continue
-		}
-		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
-		if stageMatchesBranchDriftFilter(stage, filter) {
-			matchingStageCounts[stage.RepositoryName]++
+	for name, stages := range stagesByRepository {
+		for _, stage := range stages {
+			if stageMatchesBranchDriftFilter(stage, filter) {
+				matchingStageCounts[name]++
+			}
 		}
 	}
-
 	names := slices.Sorted(maps.Keys(matchingStageCounts))
 
 	items := make([]BranchDriftRepository, 0, min(len(names), filter.Limit))
@@ -276,8 +240,11 @@ func (s *BranchDriftService) List(
 		for stageIndex := range items[itemIndex].Stages {
 			stage := &items[itemIndex].Stages[stageIndex]
 			stage.Policy = policies[stage.Stage.ID]
-			integration, _ := s.integrations.Lookup(stage.Stage.Integration)
-			stage.ReviewCapability = stageCapabilities(stage.Stage, integration).Review
+			stage.Capabilities = stageCapabilities(
+				stage.Stage,
+				s.integrations[stage.Stage.Integration],
+				items[itemIndex].Repository.CloneURL,
+			)
 		}
 	}
 
@@ -306,15 +273,12 @@ func (s *BranchDriftService) scanRepository(
 	requests := make([]repository.BranchComparisonRequest, 0, len(stages))
 	requestStageIDs := make([]uuid.UUID, 0, len(stages))
 	for _, stage := range stages {
-		acknowledgement, err := validatedRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
-		if err != nil {
-			entry.stages[stage.ID] = branchDriftEvidence{
-				status:  BranchDriftStatusUnknown,
-				message: err.Error(),
-			}
+		evidence := branchDriftObservation(record, stage)
+		entry.stages[stage.ID] = evidence
+		if evidence.message != "" {
 			continue
 		}
-
+		acknowledgement := evidence.acknowledgement
 		requests = append(requests, repository.BranchComparisonRequest{
 			TargetBranch:             stage.TargetBranch,
 			AcknowledgedSourceCommit: acknowledgement.SourceRevision,
@@ -322,10 +286,6 @@ func (s *BranchDriftService) scanRepository(
 			SourcePaths:              slices.Clone(stage.SourcePaths),
 		})
 		requestStageIDs = append(requestStageIDs, stage.ID)
-		entry.stages[stage.ID] = branchDriftEvidence{
-			status:          BranchDriftStatusUnknown,
-			acknowledgement: acknowledgement,
-		}
 	}
 
 	if len(requests) > 0 {
@@ -378,30 +338,37 @@ func (s *BranchDriftService) scanRepository(
 	return entry, nil
 }
 
-func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
+func (s *BranchDriftService) inventory(
+	ctx context.Context,
+) (map[string][]promotion.Stage, map[string]repository.Repository, error) {
 	stages, err := s.store.ListPromotionStages(ctx)
 	if err != nil {
-		return 0, err
+		return nil, nil, err
 	}
-	repositories, err := s.store.ListRepositories(ctx)
+	repositoriesByName, err := activeRepositoriesByName(ctx, s.store)
 	if err != nil {
-		return 0, err
+		return nil, nil, err
 	}
 
-	repositoriesByName := make(map[string]repository.Repository, len(repositories))
-	for _, record := range repositories {
-		repositoriesByName[record.Name] = record
-	}
 	stagesByRepository := make(map[string][]promotion.Stage)
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
 			continue
 		}
 		integration, configured := s.integrations.Lookup(stage.Integration)
-		if !configured || !stageCapabilities(stage, integration).BranchDrift.Ready {
+		if !configured || !hasBranchDriftMapping(stage, integration) {
 			continue
 		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
+	}
+
+	return stagesByRepository, repositoriesByName, nil
+}
+
+func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
+	stagesByRepository, repositoriesByName, err := s.inventory(ctx)
+	if err != nil {
+		return 0, err
 	}
 
 	type scan struct {
@@ -429,7 +396,7 @@ func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
 			cached.refreshing = true
 			s.storeCache(record.ID, cached)
 		} else {
-			s.storeCache(record.ID, pendingBranchDriftCacheEntry(fingerprint, groupStages, now))
+			s.storeCache(record.ID, pendingBranchDriftCacheEntry(record, fingerprint, groupStages, now))
 		}
 		scans = append(scans, scan{record: record, stages: groupStages, fingerprint: fingerprint})
 	}
@@ -493,7 +460,7 @@ func (s *BranchDriftService) readCache(
 			scannedAt = cached.scannedAt
 		}
 
-		return pendingBranchDriftCacheEntry(fingerprint, stages, scannedAt)
+		return pendingBranchDriftCacheEntry(record, fingerprint, stages, scannedAt)
 	}
 	if !cached.refreshing && !s.currentTime().Before(cached.scannedAt.Add(s.cachePeriod)) {
 		s.requestRefresh()
@@ -551,6 +518,7 @@ func (s *BranchDriftService) refreshAndLog(ctx context.Context) {
 }
 
 func pendingBranchDriftCacheEntry(
+	record repository.Repository,
 	fingerprint [sha256.Size]byte,
 	stages []promotion.Stage,
 	scannedAt time.Time,
@@ -562,45 +530,35 @@ func pendingBranchDriftCacheEntry(
 		refreshing:  true,
 	}
 	for _, stage := range stages {
-		acknowledgement, err := validatedRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
-		message := "Branch drift refresh is pending."
-		if err != nil {
-			message = err.Error()
+		evidence := branchDriftObservation(record, stage)
+		if evidence.message == "" {
+			evidence.message = "Branch drift refresh is pending."
 		}
-		entry.stages[stage.ID] = branchDriftEvidence{
-			status:          BranchDriftStatusUnknown,
-			acknowledgement: acknowledgement,
-			message:         message,
-		}
+		entry.stages[stage.ID] = evidence
 	}
 
 	return entry
 }
 
-func validatedRenderAcknowledgement(
-	value *promotion.SuccessfulRenderAcknowledgement,
-) (promotion.SuccessfulRenderAcknowledgement, error) {
-	if value == nil {
-		return promotion.SuccessfulRenderAcknowledgement{}, branchDriftEvidenceError{
-			message: "Stage has no successful-render acknowledgement",
-		}
+func branchDriftObservation(record repository.Repository, stage promotion.Stage) branchDriftEvidence {
+	evidence := branchDriftEvidence{status: BranchDriftStatusUnknown}
+	if stage.RepositoryURL != record.CloneURL {
+		evidence.message = "The Stage repository URL differs from the configured Repository."
+		return evidence
 	}
-
-	acknowledgement := *value
-	for label, revision := range map[string]string{
-		"source revision":        acknowledgement.SourceRevision,
-		"render base revision":   acknowledgement.TargetRevision,
-		"render result revision": acknowledgement.ResultRevision,
-	} {
-		if err := validateRevision(label, revision); err != nil {
-			return promotion.SuccessfulRenderAcknowledgement{}, branchDriftEvidenceError{
-				message: "Stage successful-render acknowledgement is invalid",
-				cause:   err,
-			}
-		}
+	ack := stage.SuccessfulRenderAcknowledgement
+	if ack == nil {
+		evidence.message = "Stage has no successful-render acknowledgement."
+		return evidence
 	}
+	if !repository.ValidCommitSHA(ack.SourceRevision) || !repository.ValidCommitSHA(ack.TargetRevision) ||
+		!repository.ValidCommitSHA(ack.ResultRevision) {
+		evidence.message = "Stage successful-render acknowledgement is invalid. Each revision must be a full Git object ID."
+		return evidence
+	}
+	evidence.acknowledgement = *ack
 
-	return acknowledgement, nil
+	return evidence
 }
 
 func branchDriftStage(stage promotion.Stage, evidence branchDriftEvidence) BranchDriftStage {
@@ -624,6 +582,7 @@ func branchDriftStage(stage promotion.Stage, evidence branchDriftEvidence) Branc
 
 func branchDriftFingerprint(record repository.Repository, stages []promotion.Stage) [sha256.Size]byte {
 	type fingerprintStage struct {
+		RepositoryURL                   string
 		ID                              uuid.UUID
 		TargetBranch                    string
 		SourcePaths                     []string
@@ -643,6 +602,7 @@ func branchDriftFingerprint(record repository.Repository, stages []promotion.Sta
 	}
 	for _, stage := range stages {
 		value.Stages = append(value.Stages, fingerprintStage{
+			RepositoryURL:                   stage.RepositoryURL,
 			ID:                              stage.ID,
 			TargetBranch:                    stage.TargetBranch,
 			SourcePaths:                     slices.Clone(stage.SourcePaths),
@@ -713,7 +673,7 @@ func compareBranchDriftStages(left, right promotion.Stage) int {
 		{left.Name, right.Name},
 		{left.ID.String(), right.ID.String()},
 	} {
-		if value := compareText(values[0], values[1]); value != 0 {
+		if value := cmp.Compare(values[0], values[1]); value != 0 {
 			return value
 		}
 	}

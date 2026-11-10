@@ -77,20 +77,18 @@ func (h *Handler) ListPromotionBranchDrift(
 		for _, stage := range item.Stages {
 			freight := promotionFreightResponse(stage.Stage.Freight)
 			response := api.PromotionBranchDriftStage{
-				ID:           stage.Stage.ID,
-				Integration:  api.CatalogName(stage.Stage.Integration),
-				Cluster:      api.CatalogName(stage.Stage.ClusterName),
-				Project:      api.CatalogName(stage.Stage.Project),
-				Name:         stage.Stage.Name,
-				Application:  optionalString(stage.Stage.Application),
-				Environment:  optionalString(stage.Stage.Environment),
-				TargetBranch: stage.Stage.TargetBranch,
-				SourcePaths:  stage.Stage.SourcePaths,
-				Freight:      freight,
-				Policy:       promotionPolicyResponse(stage.Policy),
-				ReviewCapability: promotionStageCapabilityResponse(
-					stage.ReviewCapability,
-				),
+				ID:             stage.Stage.ID,
+				Integration:    api.CatalogName(stage.Stage.Integration),
+				Cluster:        api.CatalogName(stage.Stage.ClusterName),
+				Project:        api.CatalogName(stage.Stage.Project),
+				Name:           stage.Stage.Name,
+				Application:    optionalString(stage.Stage.Application),
+				Environment:    optionalString(stage.Stage.Environment),
+				TargetBranch:   stage.Stage.TargetBranch,
+				SourcePaths:    stage.Stage.SourcePaths,
+				Freight:        freight,
+				Policy:         promotionPolicyResponse(stage.Policy),
+				Capabilities:   promotionStageCapabilitiesResponse(stage.Capabilities),
 				Status:         api.PromotionBranchDriftStatus(stage.Status),
 				LastObservedAt: stage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(

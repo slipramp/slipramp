@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type ProjectListFilter struct {
@@ -52,7 +54,7 @@ type ProjectDetail struct {
 
 type ProjectStage struct {
 	Stage                 promotion.Stage
-	Policy                promotion.PolicyView
+	Policy                promotion.PromotionPolicySnapshot
 	PendingPromotionCount int
 	ObservationStale      bool
 	RequestedFreight      []ProjectFreightRequest
@@ -75,18 +77,8 @@ type FreightCandidate struct {
 	Evidence promotion.FreightReadinessEvidence
 }
 
-type StageCapabilities struct {
-	Promotion   StageCapability
-	Review      StageCapability
-	BranchDrift StageCapability
-}
-
-type StageCapability struct {
-	Ready  bool
-	Reason string
-}
-
 type ProjectStore interface {
+	promotion.RepositoryLister
 	StagePolicyStore
 	ListPromotionStages(context.Context) ([]promotion.Stage, error)
 	CountPendingPromotionsByStage(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
@@ -197,6 +189,13 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 		return ProjectDetail{}, err
 	}
 
+	var repositories map[string]repository.Repository
+	if len(integration.Repositories) > 0 {
+		repositories, err = activeRepositoriesByName(ctx, s.store)
+		if err != nil {
+			return ProjectDetail{}, err
+		}
+	}
 	items := make([]ProjectStage, 0, len(active))
 	for _, stage := range active {
 		requests := make([]ProjectFreightRequest, 0, len(stage.RequestedFreight))
@@ -228,37 +227,16 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 			PendingPromotionCount: pending[stage.ID],
 			ObservationStale:      stageObservationStale(stage, integration, evaluatedAt),
 			RequestedFreight:      requests,
-			Capabilities:          stageCapabilities(stage, integration),
+			Capabilities:          stageCapabilities(stage, integration, repositories[stage.RepositoryName].CloneURL),
 		})
 	}
 	slices.SortFunc(items, func(left, right ProjectStage) int {
-		return compareText(left.Stage.Name, right.Stage.Name)
+		return cmp.Compare(left.Stage.Name, right.Stage.Name)
 	})
 
 	return ProjectDetail{
 		Integration: key.Integration, ClusterName: key.Cluster, Project: key.Project, Stages: items,
 	}, nil
-}
-
-func stageCapabilities(stage promotion.Stage, integration promotion.IntegrationConfig) StageCapabilities {
-	native := StageCapability{Ready: !stage.ControlFlow}
-	if stage.ControlFlow {
-		native.Reason = "Control-flow Stages do not materialize Promotions."
-	}
-
-	review := StageCapability{Ready: stage.ReviewReady() && integration.ReviewConfigured()}
-	if !review.Ready {
-		review.Reason = "Slipramp change preview and review require complete application, environment, Repository, branch, source-path, and preparation configuration."
-	}
-
-	branchDrift := StageCapability{
-		Ready: stage.RepositoryName != "" && stage.TargetBranch != "" && len(stage.SourcePaths) > 0,
-	}
-	if !branchDrift.Ready {
-		branchDrift.Reason = "Branch drift requires a resolved Repository, target branch, and source paths."
-	}
-
-	return StageCapabilities{Promotion: native, Review: review, BranchDrift: branchDrift}
 }
 
 func stageNonReady(stage promotion.Stage) bool {
@@ -288,7 +266,7 @@ func compareProjects(left, right ProjectSummary) int {
 		{left.Project, right.Project},
 		{left.ClusterName, right.ClusterName},
 	} {
-		if value := compareText(values[0], values[1]); value != 0 {
+		if value := cmp.Compare(values[0], values[1]); value != 0 {
 			return value
 		}
 	}
