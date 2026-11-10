@@ -65,6 +65,14 @@ export function eligibleStageFreight(stage: PromotionProjectStage): PromotionFre
   );
 }
 
+export function initialPromotionFreightName(
+  freight: PromotionFreightItem[],
+  requestedName?: string,
+) {
+  if (requestedName && freight.some((item) => item.name === requestedName)) return requestedName;
+  return freight.length === 1 ? (freight[0]?.name ?? "") : "";
+}
+
 export function canWritePromotions(principal?: ProductPrincipal) {
   return principal?.role === "operator" || principal?.role === "admin";
 }

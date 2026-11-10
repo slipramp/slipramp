@@ -18,14 +18,8 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import {
-  IconArrowsDiff,
-  IconListDetails,
-  IconRoute,
-  IconSearch,
-  IconSettings,
-} from "@tabler/icons-react";
-import { useState } from "react";
+import { IconArrowsDiff, IconListDetails, IconRoute, IconSearch } from "@tabler/icons-react";
+import { useState, type ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -34,6 +28,8 @@ import {
   updatePromotionStagePolicy,
   type PromotionPolicyMode,
   type PromotionFreightAlignment,
+  type PromotionFreightCandidate,
+  type PromotionFreightItem,
   type PromotionProjectDetail,
   type PromotionProjectStage,
 } from "~/api/generated";
@@ -44,11 +40,15 @@ import { submitPromotionCreation } from "~/features/promotions/promotion-creatio
 import {
   buildFreightColumns,
   buildFreightRows,
+  freightArtifactVersionLabel,
   freightAlignmentForSource,
   freightAlignmentPresentation,
   freightComparisonStageIds,
+  freightDisplayLabel,
   freightNames,
+  freightOriginLabel,
   freightRowStatus,
+  otherFreightCandidates,
 } from "~/features/promotions/promotion-freight";
 import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
 import {
@@ -570,7 +570,7 @@ function StageInventory({
               .toSorted((left, right) => left.name.localeCompare(right.name))
               .map((stage) => {
                 const policy = promotionStagePolicyPresentation(stage);
-                const names = freightNames(stage);
+                const currentFreight = stage.freight.items;
 
                 return (
                   <Table.Tr key={stage.id}>
@@ -602,14 +602,21 @@ function StageInventory({
                       <StageHealthBadge stage={stage} />
                     </Table.Td>
                     <Table.Td>
-                      {names.length > 0 ? (
+                      {currentFreight.length > 0 ? (
                         <Stack gap={3}>
-                          {names.slice(0, 2).map((name) => (
-                            <Code key={name}>{name}</Code>
+                          {currentFreight.slice(0, 2).map((freight) => (
+                            <Stack gap={0} key={`${freight.origin}:${freight.name}`}>
+                              <Text fw={600} size="sm">
+                                {freightDisplayLabel(freight)}
+                              </Text>
+                              <Text c="dimmed" size="xs">
+                                {freightOriginLabel(freight.origin)}
+                              </Text>
+                            </Stack>
                           ))}
-                          {names.length > 2 ? (
+                          {currentFreight.length > 2 ? (
                             <Text c="dimmed" size="xs">
-                              +{names.length - 2} more
+                              +{currentFreight.length - 2} more
                             </Text>
                           ) : null}
                         </Stack>
@@ -621,18 +628,14 @@ function StageInventory({
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={4}>
-                        <Badge
-                          color={
-                            !policy.editable
-                              ? "gray"
-                              : stage.policy.effectiveMode === "review-required"
-                                ? "yellow"
-                                : "green"
-                          }
-                          variant="light"
-                        >
-                          {policy.label}
-                        </Badge>
+                        <StagePolicyBadge
+                          canEdit={canWrite && policy.editable}
+                          editable={policy.editable}
+                          label={policy.label}
+                          mode={stage.policy.effectiveMode}
+                          onEdit={() => onEditPolicy(stage)}
+                          stageName={stage.name}
+                        />
                         {stage.pendingPromotionCount > 0 ? (
                           <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
                             {stage.pendingPromotionCount} pending
@@ -645,16 +648,6 @@ function StageInventory({
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
-                        {canWrite && policy.editable ? (
-                          <Button
-                            aria-label={`Edit ${stage.name} policy`}
-                            onClick={() => onEditPolicy(stage)}
-                            size="compact-xs"
-                            variant="default"
-                          >
-                            Policy
-                          </Button>
-                        ) : null}
                         {canWrite ? (
                           <PromotionCreateButton
                             stage={stage}
@@ -747,9 +740,65 @@ function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>)
           ? { color: "red", label: "Not ready" }
           : { color: "gray", label: "Health unknown" };
 
+  if (stage.argoCdUrl) {
+    return (
+      <Badge
+        aria-label={`Open ${stage.name} health in Argo CD`}
+        color={presentation.color}
+        component="a"
+        href={stage.argoCdUrl}
+        rel="noreferrer"
+        style={{ cursor: "pointer" }}
+        target="_blank"
+        variant="light"
+      >
+        {presentation.label}
+      </Badge>
+    );
+  }
+
   return (
     <Badge color={presentation.color} variant="light">
       {presentation.label}
+    </Badge>
+  );
+}
+
+function StagePolicyBadge({
+  canEdit,
+  editable,
+  label,
+  mode,
+  onEdit,
+  stageName,
+}: Readonly<{
+  canEdit: boolean;
+  editable: boolean;
+  label: string;
+  mode: PromotionPolicyMode;
+  onEdit: () => void;
+  stageName: string;
+}>) {
+  const color = !editable ? "gray" : mode === "review-required" ? "yellow" : "green";
+  if (!canEdit) {
+    return (
+      <Badge color={color} variant="light">
+        {label}
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      aria-label={`Edit ${stageName} policy`}
+      color={color}
+      component="button"
+      onClick={onEdit}
+      style={{ cursor: "pointer" }}
+      type="button"
+      variant="light"
+    >
+      {label}
     </Badge>
   );
 }
@@ -784,9 +833,6 @@ function StageCard({
               )}
               {stage.controlFlow ? <Badge variant="light">Control flow</Badge> : null}
             </Group>
-            <Text c="dimmed" size="xs">
-              UID {stage.kubernetesUid} · resource version {stage.resourceVersion}
-            </Text>
           </Stack>
           <Stack align="flex-end" gap={5}>
             <StageHealthBadge stage={stage} />
@@ -794,99 +840,18 @@ function StageCard({
           </Stack>
         </Group>
 
-        {stage.enrichment ? (
-          <Group gap="xs" wrap="wrap">
-            {stage.enrichment.application ? (
-              <Badge variant="outline">{stage.enrichment.application}</Badge>
-            ) : null}
-            {stage.enrichment.environment ? (
-              <Badge variant="outline">{stage.enrichment.environment}</Badge>
-            ) : null}
-            {stage.enrichment.repository ? (
-              <Badge variant="outline">{stage.enrichment.repository}</Badge>
-            ) : null}
-          </Group>
-        ) : (
-          <Text c="dimmed" size="sm">
-            No Slipramp enrichment is attached.
-          </Text>
-        )}
-
-        <Stack gap="xs">
-          <Text fw={600} size="sm">
-            Requested Freight
-          </Text>
-          {stage.requestedFreight.map((request) => (
-            <Paper key={request.origin} p="xs" withBorder>
-              <Stack gap={5}>
-                <Group gap="xs" wrap="wrap">
-                  <Text fw={600} size="sm">
-                    {request.origin.replace(/^Warehouse\//, "")}
-                  </Text>
-                  {request.direct ? <Badge size="xs">Direct</Badge> : null}
-                  <Badge size="xs" variant="outline">
-                    {request.availabilityStrategy}
-                  </Badge>
-                  {request.requiredSoakTime ? (
-                    <Badge size="xs" variant="outline">
-                      Soak {request.requiredSoakTime}
-                    </Badge>
-                  ) : null}
-                </Group>
-                {request.sources.length > 0 ? (
-                  <Stack gap={5}>
-                    {request.sources.map((source) => (
-                      <FreightAlignmentSource
-                        alignment={freightAlignmentForSource(stage, request.origin, source.name)}
-                        key={source.name}
-                        onCompareFreight={onCompareFreight}
-                        sourceStageName={source.name}
-                        targetStageName={stage.name}
-                      />
-                    ))}
-                  </Stack>
-                ) : null}
-                {request.candidates.map((candidate) => (
-                  <Group gap="xs" key={candidate.freight.name} wrap="wrap">
-                    <Code>{candidate.freight.name}</Code>
-                    <Badge
-                      color={
-                        candidate.readiness === "ready"
-                          ? "green"
-                          : candidate.readiness === "unknown"
-                            ? "gray"
-                            : "orange"
-                      }
-                      size="xs"
-                    >
-                      {candidate.readiness}
-                    </Badge>
-                    {candidate.reason ? (
-                      <Text c="dimmed" size="xs">
-                        {candidate.reason}
-                      </Text>
-                    ) : null}
-                  </Group>
-                ))}
-              </Stack>
-            </Paper>
-          ))}
-        </Stack>
+        <StageFreight canWrite={canWrite} onCompareFreight={onCompareFreight} stage={stage} />
 
         <Group justify="space-between" wrap="wrap">
           <Group gap="xs">
-            <Badge
-              color={
-                !policyPresentation.editable
-                  ? "gray"
-                  : stage.policy.effectiveMode === "review-required"
-                    ? "yellow"
-                    : "green"
-              }
-              variant="light"
-            >
-              {policyPresentation.label}
-            </Badge>
+            <StagePolicyBadge
+              canEdit={canWrite && policyPresentation.editable}
+              editable={policyPresentation.editable}
+              label={policyPresentation.label}
+              mode={stage.policy.effectiveMode}
+              onEdit={onEditPolicy}
+              stageName={stage.name}
+            />
             {stage.pendingPromotionCount > 0 ? (
               <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
                 {stage.pendingPromotionCount} pending
@@ -894,16 +859,6 @@ function StageCard({
             ) : null}
           </Group>
           <Group gap="xs">
-            {canWrite && policyPresentation.editable ? (
-              <Button
-                leftSection={<IconSettings size={14} />}
-                onClick={onEditPolicy}
-                size="compact-xs"
-                variant="default"
-              >
-                Policy
-              </Button>
-            ) : null}
             {canWrite ? (
               <PromotionCreateButton
                 stage={stage}
@@ -932,6 +887,261 @@ function StageCard({
   );
 }
 
+function StageFreight({
+  canWrite,
+  onCompareFreight,
+  stage,
+}: Readonly<{
+  canWrite: boolean;
+  onCompareFreight: (alignment: PromotionFreightAlignment) => void;
+  stage: PromotionProjectStage;
+}>) {
+  const activeFreight = stage.freight.items;
+  const requests = stage.requestedFreight.map((request) => ({
+    request,
+    otherCandidates: otherFreightCandidates(activeFreight, request.candidates),
+  }));
+  const otherCount = requests.reduce((count, request) => count + request.otherCandidates.length, 0);
+  const eligibleFreight = eligibleStageFreight(stage);
+  const upstreamPromotions = stage.requestedFreight.flatMap((request) =>
+    request.sources.flatMap((source) => {
+      const alignment = freightAlignmentForSource(stage, request.origin, source.name);
+      const freight = alignment?.sourceCurrentFreight;
+      if (!alignment?.sourceStageId || !freight) return [];
+      const eligible = eligibleFreight.some(
+        (item) => item.origin === freight.origin && item.name === freight.name,
+      );
+      if (!eligible) return [];
+
+      return [
+        {
+          freight,
+          key: `${alignment.sourceStageId}:${freight.origin}:${freight.name}`,
+          sourceStageId: alignment.sourceStageId,
+          sourceStageName: source.name,
+        },
+      ];
+    }),
+  );
+
+  return (
+    <Stack gap="xs">
+      {activeFreight.length > 0 ? (
+        <Stack gap="xs">
+          {activeFreight.map((freight) => (
+            <FreightSummary active freight={freight} key={`${freight.origin}:${freight.name}`} />
+          ))}
+        </Stack>
+      ) : (
+        <Text c="dimmed" size="sm">
+          No active Freight is currently observed.
+        </Text>
+      )}
+
+      {canWrite && upstreamPromotions.length > 0 ? (
+        <Stack gap="xs">
+          <Text fw={600} size="sm">
+            Promote from upstream
+          </Text>
+          {upstreamPromotions.map((promotion) => (
+            <Paper key={promotion.key} p="sm" withBorder>
+              <Group align="center" justify="space-between" wrap="wrap">
+                <Stack gap={2}>
+                  <Text fw={600} size="sm">
+                    {promotion.sourceStageName}
+                  </Text>
+                  <Text c="dimmed" size="xs">
+                    {freightDisplayLabel(promotion.freight)}
+                  </Text>
+                </Stack>
+                <PromotionCreateButton
+                  environment={stage.enrichment?.environment}
+                  freight={[promotion.freight]}
+                  initialFreightName={promotion.freight.name}
+                  sourceStageId={promotion.sourceStageId}
+                  sourceStageName={promotion.sourceStageName}
+                  stage={stage}
+                />
+              </Group>
+            </Paper>
+          ))}
+        </Stack>
+      ) : null}
+
+      {requests.length > 0 ? (
+        <Accordion variant="contained">
+          <Accordion.Item value="other-freight">
+            <Accordion.Control>
+              <Group gap="xs" wrap="wrap">
+                <Text fw={600} size="sm">
+                  Other Freight and source details
+                </Text>
+                <Badge color="gray" size="xs" variant="light">
+                  {otherCount} option{otherCount === 1 ? "" : "s"}
+                </Badge>
+              </Group>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="sm">
+                {requests.map(({ otherCandidates, request }) => (
+                  <Paper key={request.origin} p="sm" withBorder>
+                    <Stack gap="xs">
+                      <Group gap="xs" wrap="wrap">
+                        <Text fw={600} size="sm">
+                          {freightOriginLabel(request.origin)}
+                        </Text>
+                        {request.direct ? <Badge size="xs">Direct</Badge> : null}
+                        <Badge size="xs" variant="outline">
+                          {request.availabilityStrategy}
+                        </Badge>
+                        {request.requiredSoakTime ? (
+                          <Badge size="xs" variant="outline">
+                            Soak {request.requiredSoakTime}
+                          </Badge>
+                        ) : null}
+                      </Group>
+                      {request.sources.map((source) => (
+                        <FreightAlignmentSource
+                          alignment={freightAlignmentForSource(stage, request.origin, source.name)}
+                          key={source.name}
+                          onCompareFreight={onCompareFreight}
+                          sourceStageName={source.name}
+                          targetStageName={stage.name}
+                        />
+                      ))}
+                      {otherCandidates.length > 0 ? (
+                        <Stack gap="xs">
+                          {otherCandidates.map((candidate) => (
+                            <FreightSummary
+                              actionControl={
+                                canWrite && request.direct && candidate.readiness === "ready" ? (
+                                  <PromotionCreateButton
+                                    stage={stage}
+                                    freight={eligibleFreight}
+                                    environment={stage.enrichment?.environment}
+                                    initialFreightName={candidate.freight.name}
+                                  />
+                                ) : null
+                              }
+                              candidate={candidate}
+                              freight={candidate.freight}
+                              key={`${candidate.freight.origin}:${candidate.freight.name}`}
+                            />
+                          ))}
+                        </Stack>
+                      ) : (
+                        <Text c="dimmed" size="xs">
+                          No other Freight is currently observed for this source.
+                        </Text>
+                      )}
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      ) : null}
+    </Stack>
+  );
+}
+
+function FreightSummary({
+  actionControl,
+  active,
+  candidate,
+  freight,
+}: Readonly<{
+  actionControl?: ReactNode;
+  active?: boolean;
+  candidate?: PromotionFreightCandidate;
+  freight: PromotionFreightItem;
+}>) {
+  return (
+    <Paper p="sm" withBorder>
+      <Stack gap="xs">
+        <Group align="flex-start" justify="space-between" wrap="wrap">
+          <Group gap="xs" wrap="wrap">
+            {active ? (
+              <Badge color="green" size="xs">
+                Active
+              </Badge>
+            ) : null}
+            {candidate ? <FreightReadinessBadge candidate={candidate} /> : null}
+            <Text c="dimmed" size="xs">
+              {freightOriginLabel(freight.origin)}
+            </Text>
+          </Group>
+          {actionControl}
+        </Group>
+
+        {freight.artifacts.length > 0 ? (
+          <Stack gap="xs">
+            {freight.artifacts.map((artifact) => (
+              <Group
+                align="flex-end"
+                justify="space-between"
+                key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
+                wrap="wrap"
+              >
+                <Stack gap={2}>
+                  <Group gap={5}>
+                    <Text c="dimmed" size="xs">
+                      Source
+                    </Text>
+                    <Badge size="xs" variant="light">
+                      {artifact.kind}
+                    </Badge>
+                  </Group>
+                  <Text fw={600} size="sm">
+                    {artifact.repository ?? freightOriginLabel(freight.origin)}
+                  </Text>
+                </Stack>
+                <Stack align="flex-end" gap={2}>
+                  <Text c="dimmed" size="xs">
+                    {freightArtifactVersionLabel(artifact.kind)}
+                  </Text>
+                  <Code>{artifact.version}</Code>
+                </Stack>
+              </Group>
+            ))}
+          </Stack>
+        ) : (
+          <Text c="dimmed" size="sm">
+            This Freight does not report versioned artifacts.
+          </Text>
+        )}
+
+        <Text c="dimmed" size="xs">
+          Kargo Freight <Code>{freight.name}</Code>
+        </Text>
+        {candidate?.reason ? (
+          <Text c="dimmed" size="xs">
+            {candidate.reason}
+          </Text>
+        ) : null}
+      </Stack>
+    </Paper>
+  );
+}
+
+function FreightReadinessBadge({ candidate }: Readonly<{ candidate: PromotionFreightCandidate }>) {
+  return (
+    <Badge
+      color={
+        candidate.readiness === "ready"
+          ? "green"
+          : candidate.readiness === "unknown"
+            ? "gray"
+            : "orange"
+      }
+      size="xs"
+    >
+      {candidate.readiness}
+    </Badge>
+  );
+}
+
 function FreightAlignmentSource({
   alignment,
   onCompareFreight,
@@ -944,8 +1154,8 @@ function FreightAlignmentSource({
   targetStageName: string;
 }>) {
   const presentation = freightAlignmentPresentation(alignment?.status ?? "unknown");
-  const sourceFreight = alignment?.sourceCurrentFreight?.name ?? "none observed";
-  const targetFreight = alignment?.targetCurrentFreight?.name ?? "none observed";
+  const sourceFreight = alignment?.sourceCurrentFreight;
+  const targetFreight = alignment?.targetCurrentFreight;
 
   return (
     <Paper p="xs" withBorder>
@@ -972,8 +1182,10 @@ function FreightAlignmentSource({
         </Group>
         {alignment ? (
           <Text c="dimmed" size="xs">
-            {sourceStageName}: <Code>{sourceFreight}</Code> · {targetStageName}:{" "}
-            <Code>{targetFreight}</Code>
+            {sourceStageName}:{" "}
+            {sourceFreight ? freightDisplayLabel(sourceFreight) : "none observed"} ·{" "}
+            {targetStageName}:{" "}
+            {targetFreight ? freightDisplayLabel(targetFreight) : "none observed"}
           </Text>
         ) : null}
         {alignment?.reason ? (

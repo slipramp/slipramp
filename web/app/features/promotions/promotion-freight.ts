@@ -2,6 +2,8 @@ import type {
   PromotionFreightAlignment,
   PromotionFreightAlignmentStatus,
   PromotionFreightArtifact,
+  PromotionFreightCandidate,
+  PromotionFreightItem,
   PromotionProjectStage,
 } from "~/api/generated";
 
@@ -25,6 +27,45 @@ export type FreightAlignmentPresentation = {
   color: "gray" | "green" | "yellow";
   label: "Aligned" | "Different" | "Unknown";
 };
+
+export function freightOriginLabel(origin: string) {
+  return origin.replace(/^Warehouse\//, "");
+}
+
+export function freightArtifactReference(artifact: PromotionFreightArtifact) {
+  return artifact.repository ? `${artifact.repository} · ${artifact.version}` : artifact.version;
+}
+
+export function freightArtifactVersionLabel(kind: PromotionFreightArtifact["kind"]) {
+  switch (kind) {
+    case "image":
+      return "Tag";
+    case "chart":
+      return "Version";
+    case "git":
+      return "Revision";
+  }
+}
+
+export function freightDisplayLabel(freight: PromotionFreightItem) {
+  const first = freight.artifacts[0];
+  if (!first) return freightOriginLabel(freight.origin);
+
+  const reference = freightArtifactReference(first);
+  return freight.artifacts.length === 1
+    ? reference
+    : `${reference} + ${freight.artifacts.length - 1} more`;
+}
+
+export function otherFreightCandidates(
+  activeFreight: PromotionFreightItem[],
+  candidates: PromotionFreightCandidate[],
+) {
+  const activeKeys = new Set(activeFreight.map((item) => `${item.origin}\u0000${item.name}`));
+  return candidates.filter(
+    (candidate) => !activeKeys.has(`${candidate.freight.origin}\u0000${candidate.freight.name}`),
+  );
+}
 
 export function freightAlignmentForSource(
   stage: PromotionProjectStage,

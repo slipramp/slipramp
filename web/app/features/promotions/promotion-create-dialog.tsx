@@ -19,6 +19,12 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 
 import type { PromotionCreationActionResult } from "~/features/promotions/promotion-creation";
+import { initialPromotionFreightName } from "~/features/promotions/promotion-creation";
+import {
+  freightArtifactVersionLabel,
+  freightDisplayLabel,
+  freightOriginLabel,
+} from "~/features/promotions/promotion-freight";
 import type {
   PromotionFreightItem,
   PromotionProjectStage,
@@ -33,6 +39,9 @@ type PromotionCreateProps = Readonly<{
   freight: PromotionFreightItem[];
   environment?: string;
   inPlace?: boolean;
+  initialFreightName?: string;
+  sourceStageId?: string;
+  sourceStageName?: string;
 }>;
 
 function PromotionCreateDialog({
@@ -40,11 +49,14 @@ function PromotionCreateDialog({
   freight,
   environment,
   inPlace,
+  initialFreightName,
+  sourceStageId,
+  sourceStageName,
   onClose,
 }: PromotionCreateProps & { onClose: () => void }) {
   const fetcher = useFetcher<PromotionCreationActionResult>();
-  const [selectedName, setSelectedName] = useState(
-    freight.length === 1 ? (freight[0]?.name ?? "") : "",
+  const [selectedName, setSelectedName] = useState(() =>
+    initialPromotionFreightName(freight, initialFreightName),
   );
   const handledPromotionID = useRef<string | undefined>(undefined);
   const selected = freight.find((item) => item.name === selectedName);
@@ -75,13 +87,14 @@ function PromotionCreateDialog({
       <fetcher.Form method="post">
         <Stack gap="md">
           {environment ? <PromotionFact label="Environment" value={environment} /> : null}
+          {sourceStageName ? <PromotionFact label="Source Stage" value={sourceStageName} /> : null}
 
           {freight.length > 1 || !selected ? (
             <NativeSelect
               data={[
                 { label: "Choose exact Freight", value: "" },
                 ...freight.map((item) => ({
-                  label: `${item.origin} · ${item.name}`,
+                  label: `${freightDisplayLabel(item)} · ${freightOriginLabel(item.origin)}`,
                   value: item.name,
                 })),
               ]}
@@ -108,7 +121,9 @@ function PromotionCreateDialog({
 
           <StagePolicyControl policy={stage.policy} reviewCapability={stage.capabilities.review} />
           <input name="targetStageId" type="hidden" value={stage.id} />
-          {inPlace ? <input name="sourceStageId" type="hidden" value={stage.id} /> : null}
+          {sourceStageId || inPlace ? (
+            <input name="sourceStageId" type="hidden" value={sourceStageId ?? stage.id} />
+          ) : null}
           <input name="freightName" type="hidden" value={selected?.name ?? ""} />
 
           <Group justify="space-between" wrap="wrap">
@@ -250,37 +265,44 @@ function FreightDetails({ freight }: Readonly<{ freight: PromotionFreightItem }>
   return (
     <Paper p="md" withBorder>
       <Stack gap="sm">
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <PromotionFact label="Freight" value={freight.name} />
-          <PromotionFact label="Origin" value={freight.origin} />
-        </SimpleGrid>
-        {freight.artifacts.length === 0 ? (
-          <Text c="dimmed" size="sm">
-            This Freight does not report versioned artifacts.
+        <Group justify="space-between" wrap="wrap">
+          <Text fw={600}>Selected Freight</Text>
+          <Text c="dimmed" size="xs">
+            Kargo ID <Code>{freight.name}</Code>
           </Text>
+        </Group>
+        {freight.artifacts.length === 0 ? (
+          <PromotionFact label="Source" value={freightOriginLabel(freight.origin)} />
         ) : (
-          <Stack gap="xs">
-            <Text c="dimmed" size="xs">
-              Versions
-            </Text>
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
             {freight.artifacts.map((artifact) => (
-              <Group
+              <Paper
                 key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
-                gap="xs"
-                wrap="wrap"
+                p="sm"
+                withBorder
               >
-                <Badge size="sm" variant="light">
-                  {artifact.kind}
-                </Badge>
-                {artifact.repository ? (
-                  <Text c="dimmed" size="sm">
-                    {artifact.repository}
+                <Stack gap={6}>
+                  <Group justify="space-between" wrap="wrap">
+                    <Text c="dimmed" size="xs">
+                      Source
+                    </Text>
+                    <Badge size="xs" variant="light">
+                      {artifact.kind}
+                    </Badge>
+                  </Group>
+                  <Text fw={600} size="sm">
+                    {artifact.repository ?? freightOriginLabel(freight.origin)}
                   </Text>
-                ) : null}
-                <Code>{artifact.version}</Code>
-              </Group>
+                  <Stack gap={2}>
+                    <Text c="dimmed" size="xs">
+                      {freightArtifactVersionLabel(artifact.kind)}
+                    </Text>
+                    <Code>{artifact.version}</Code>
+                  </Stack>
+                </Stack>
+              </Paper>
             ))}
-          </Stack>
+          </SimpleGrid>
         )}
       </Stack>
     </Paper>

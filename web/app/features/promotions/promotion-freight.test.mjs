@@ -4,11 +4,16 @@ import test from "node:test";
 import {
   buildFreightColumns,
   buildFreightRows,
+  freightArtifactReference,
+  freightArtifactVersionLabel,
   freightAlignmentForSource,
   freightAlignmentPresentation,
   freightComparisonStageIds,
+  freightDisplayLabel,
   freightNames,
+  freightOriginLabel,
   freightRowStatus,
+  otherFreightCandidates,
 } from "./promotion-freight.ts";
 
 const stage = (id, name, environment, version) => ({
@@ -64,6 +69,53 @@ test("Freight is not comparable until two Stages are selected", () => {
   const rows = buildFreightRows(columns);
 
   assert.equal(freightRowStatus(rows[0], columns), undefined);
+});
+
+test("Freight presentation favors artifact sources and versions over opaque names", () => {
+  const item = {
+    artifacts: [
+      { kind: "image", repository: "ghcr.io/example/app", version: "1.2.3" },
+      { kind: "git", repository: "https://github.com/example/config", version: "abc123" },
+    ],
+    name: "freight-42",
+    origin: "Warehouse/app",
+  };
+
+  assert.equal(freightOriginLabel(item.origin), "app");
+  assert.equal(freightArtifactReference(item.artifacts[0]), "ghcr.io/example/app · 1.2.3");
+  assert.equal(freightArtifactVersionLabel("image"), "Tag");
+  assert.equal(freightArtifactVersionLabel("git"), "Revision");
+  assert.equal(freightArtifactVersionLabel("chart"), "Version");
+  assert.equal(freightDisplayLabel(item), "ghcr.io/example/app · 1.2.3 + 1 more");
+  assert.equal(freightDisplayLabel({ ...item, artifacts: [] }), "app");
+});
+
+test("other Freight excludes every active item from a multi-Freight Stage", () => {
+  const activeApp = {
+    artifacts: [],
+    name: "freight-app",
+    origin: "Warehouse/app",
+  };
+  const activeConfig = {
+    artifacts: [],
+    name: "freight-config",
+    origin: "Warehouse/config",
+  };
+  const nextApp = {
+    artifacts: [],
+    name: "freight-next",
+    origin: "Warehouse/app",
+  };
+  const candidates = [activeApp, activeConfig, nextApp].map((freight) => ({
+    evidence: [],
+    freight,
+    readiness: "ready",
+  }));
+
+  assert.deepEqual(
+    otherFreightCandidates([activeApp, activeConfig], candidates).map(({ freight }) => freight),
+    [nextApp],
+  );
 });
 
 test("Freight alignment presentation and comparison selection use the exact relationship", () => {

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   eligibleStageFreight,
+  initialPromotionFreightName,
   parsePromotionReviewPolicySelection,
   promotionReviewPolicyUpdate,
 } from "./promotion-creation.ts";
@@ -32,6 +33,15 @@ test("Stage promotion offers only eligible Freight, including when review is una
   assert.deepEqual(eligibleStageFreight(stage), [app, config]);
   stage.capabilities.promotion.status = "unavailable";
   assert.deepEqual(eligibleStageFreight(stage), []);
+});
+
+test("promotion Freight preselection honors a valid requested Freight", () => {
+  const app = freight("Warehouse/app", "freight-42", "1.2.3");
+  const config = freight("Warehouse/config", "freight-43", "abc123");
+
+  assert.equal(initialPromotionFreightName([app, config], "freight-43"), "freight-43");
+  assert.equal(initialPromotionFreightName([app, config], "missing"), "");
+  assert.equal(initialPromotionFreightName([app]), "freight-42");
 });
 
 test("review policy choices produce permanent and time-boxed updates", () => {
