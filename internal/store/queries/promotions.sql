@@ -150,7 +150,7 @@ INSERT INTO promotion_stage_policies (
     updated_by_principal_id,
     updated_by_snapshot,
     updated_at
-) VALUES (
+) SELECT
     sqlc.arg(stage_id),
     sqlc.arg(mode),
     sqlc.narg(expires_at),
@@ -158,7 +158,22 @@ INSERT INTO promotion_stage_policies (
     sqlc.arg(updated_by_principal_id),
     sqlc.arg(updated_by_snapshot),
     sqlc.arg(updated_at)
-)
+WHERE sqlc.arg(mode)::text <> 'review-required'
+   OR EXISTS (
+       SELECT 1
+       FROM promotion_stages
+       JOIN repositories
+         ON repositories.name = promotion_stages.repository_name
+        AND repositories.clone_url = promotion_stages.repository_url
+        AND repositories.removed_at IS NULL
+       WHERE promotion_stages.id = sqlc.arg(stage_id)
+         AND application <> ''
+         AND environment <> ''
+         AND repository_name <> ''
+         AND repository_url <> ''
+         AND target_branch <> ''
+         AND cardinality(source_paths) > 0
+   )
 ON CONFLICT (stage_id) DO UPDATE
 SET mode = EXCLUDED.mode,
     expires_at = EXCLUDED.expires_at,
@@ -255,6 +270,8 @@ INSERT INTO promotions (
     next_dispatch_at,
     last_dispatch_at,
     dispatched_at,
+    dispatch_failed_at,
+    dispatch_diagnostic,
     kargo_promotion_uid,
     next_reconciliation_at,
     preparation_repository_id,
@@ -293,6 +310,8 @@ INSERT INTO promotions (
     sqlc.narg(next_dispatch_at),
     sqlc.narg(last_dispatch_at),
     sqlc.narg(dispatched_at),
+    sqlc.narg(dispatch_failed_at),
+    sqlc.narg(dispatch_diagnostic),
     sqlc.narg(kargo_promotion_uid),
     sqlc.narg(next_reconciliation_at),
     sqlc.narg(preparation_repository_id),
@@ -325,20 +344,28 @@ FOR UPDATE;
 -- name: HydrateOperatorPromotion :one
 UPDATE promotions
 SET request_digest = sqlc.arg(request_digest),
-    base_revision = sqlc.arg(base_revision),
-    candidate_revision = sqlc.arg(candidate_revision),
-    candidate_branch = sqlc.arg(candidate_branch),
+    base_revision = CASE
+        WHEN repository_id IS NOT NULL AND sqlc.arg(has_git_context)::boolean THEN sqlc.arg(base_revision)::text
+        ELSE base_revision
+    END,
+    candidate_revision = CASE
+        WHEN repository_id IS NOT NULL AND sqlc.arg(has_git_context)::boolean THEN sqlc.arg(candidate_revision)::text
+        ELSE candidate_revision
+    END,
+    candidate_branch = CASE
+        WHEN repository_id IS NOT NULL AND sqlc.arg(has_git_context)::boolean THEN sqlc.arg(candidate_branch)::text
+        ELSE candidate_branch
+    END,
     status = CASE WHEN review_required THEN 'preparing' ELSE 'approved' END,
-    next_dispatch_at = NULL,
     next_reconciliation_at = CASE
-        WHEN review_required OR kargo_outcome_phase IS NOT NULL THEN NULL
-        ELSE sqlc.arg(hydrated_at)::timestamptz
+        WHEN review_required THEN NULL
+        ELSE next_reconciliation_at
     END,
     message = NULL,
     updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at)::timestamptz)
 WHERE id = sqlc.arg(id)
   AND source = 'slipramp'
-  AND status = 'creating'
+  AND ((review_required AND status = 'creating') OR (NOT review_required AND status = 'approved'))
   AND request_digest IS NULL
 RETURNING *;
 
@@ -346,8 +373,9 @@ RETURNING *;
 SELECT *
 FROM promotions
 WHERE source = 'slipramp'
-  AND status = 'creating'
   AND next_dispatch_at <= sqlc.arg(due_at)
+  AND dispatched_at IS NULL
+  AND dispatch_failed_at IS NULL
   AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
 ORDER BY next_dispatch_at, created_at, id
 FOR UPDATE SKIP LOCKED
@@ -358,24 +386,25 @@ UPDATE promotions
 SET dispatch_attempt_count = dispatch_attempt_count + 1,
     next_dispatch_at = sqlc.arg(next_dispatch_at),
     last_dispatch_at = sqlc.arg(claimed_at),
-    message = NULL,
+    dispatch_diagnostic = NULL,
     updated_at = sqlc.arg(claimed_at)
 WHERE id = sqlc.arg(id)
   AND source = 'slipramp'
-  AND status = 'creating'
   AND dispatch_attempt_count = sqlc.arg(expected_attempt_count)
 RETURNING *;
 
 -- name: ExhaustPromotionCreationDispatch :one
 UPDATE promotions
-SET status = 'error',
+SET status = sqlc.arg(status),
     next_dispatch_at = NULL,
     next_reconciliation_at = NULL,
-    message = sqlc.arg(message),
+    dispatch_failed_at = sqlc.arg(failed_at),
+    dispatch_diagnostic = sqlc.arg(diagnostic),
     updated_at = sqlc.arg(failed_at)
 WHERE id = sqlc.arg(id)
   AND source = 'slipramp'
-  AND status = 'creating'
+  AND dispatched_at IS NULL
+  AND dispatch_failed_at IS NULL
 RETURNING *;
 
 -- name: LockPromotion :one
@@ -391,6 +420,8 @@ SET external_promotion_id = sqlc.arg(external_promotion_id),
     message = sqlc.narg(message),
     next_dispatch_at = sqlc.narg(next_dispatch_at),
     dispatched_at = sqlc.narg(dispatched_at),
+    dispatch_failed_at = sqlc.narg(dispatch_failed_at),
+    dispatch_diagnostic = sqlc.narg(dispatch_diagnostic),
     kargo_promotion_uid = sqlc.narg(kargo_promotion_uid),
     next_reconciliation_at = sqlc.narg(next_reconciliation_at),
     updated_at = sqlc.arg(updated_at)
@@ -458,7 +489,7 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
   AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
   AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
   AND (sqlc.narg(project)::text IS NULL OR stage_snapshot->>'project' = sqlc.narg(project))
-  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot->>'application' = sqlc.narg(application));
+  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = sqlc.narg(application));
 
 -- name: ListPromotionReviews :many
 SELECT *
@@ -474,7 +505,7 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
   AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
   AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
   AND (sqlc.narg(project)::text IS NULL OR stage_snapshot->>'project' = sqlc.narg(project))
-  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot->>'application' = sqlc.narg(application))
+  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = sqlc.narg(application))
 ORDER BY (status = 'pending') DESC, created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset)::bigint;
@@ -491,6 +522,12 @@ SELECT *
 FROM promotions
 WHERE review_required
   AND status = 'preparing'
+  AND repository_id IS NOT NULL
+  AND repository_snapshot IS NOT NULL
+  AND target_branch IS NOT NULL
+  AND base_revision IS NOT NULL
+  AND candidate_revision IS NOT NULL
+  AND candidate_branch IS NOT NULL
   AND preparation_run_id IS NULL
   AND (next_preparation_attempt_at IS NULL OR next_preparation_attempt_at <= sqlc.arg(attempted_at))
 ORDER BY created_at, id
@@ -520,6 +557,12 @@ FROM promotions
 JOIN runs ON runs.id = promotions.preparation_run_id
 WHERE promotions.review_required
   AND promotions.status = 'preparing'
+  AND promotions.repository_id IS NOT NULL
+  AND promotions.repository_snapshot IS NOT NULL
+  AND promotions.target_branch IS NOT NULL
+  AND promotions.base_revision IS NOT NULL
+  AND promotions.candidate_revision IS NOT NULL
+  AND promotions.candidate_branch IS NOT NULL
   AND runs.phase = 'finished'
   AND (promotions.next_preparation_attempt_at IS NULL
        OR promotions.next_preparation_attempt_at <= sqlc.arg(attempted_at))

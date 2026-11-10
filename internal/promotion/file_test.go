@@ -72,6 +72,27 @@ integrations: {}
 	}
 }
 
+func TestDecodeIntegrationFileAllowsNativePromotionWithoutReviewConfiguration(t *testing.T) {
+	t.Parallel()
+
+	integrations, err := DecodeIntegrationFile(strings.NewReader(`
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: colo
+    maximumStageObservationAge: 5m
+`))
+	if err != nil {
+		t.Fatalf("DecodeIntegrationFile() error = %v", err)
+	}
+	integration, ok := integrations.Lookup("prod")
+	if !ok || integration.ReviewConfigured() || integration.ClusterName != "colo" ||
+		integration.MaximumStageObservationAge != 5*time.Minute {
+		t.Fatalf("native integration = %#v, found = %t", integration, ok)
+	}
+}
+
 func TestDecodeIntegrationFileRejectsInvalidDocuments(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +170,18 @@ integrations:
     pendingReviewRetention: 192h
 `,
 			wantError: "maximum Stage observation age",
+		},
+		{
+			name: "review retention without review configuration",
+			contents: `apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: colo
+    maximumStageObservationAge: 5m
+    pendingReviewRetention: 192h
+`,
+			wantError: "pending Kargo review retention requires review configuration",
 		},
 	}
 

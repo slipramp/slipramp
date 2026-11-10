@@ -158,7 +158,13 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 					}},
 				}},
 				Capabilities: projection.StageCapabilities{
-					Issues: []string{"Control-flow Stages do not materialize Promotions."},
+					Promotion: projection.StageCapability{
+						Reason: "Control-flow Stages do not materialize Promotions.",
+					},
+					Review: projection.StageCapability{Reason: "Slipramp review context is unavailable."},
+					BranchDrift: projection.StageCapability{
+						Reason: "Branch drift mapping is unavailable.",
+					},
 				},
 			}},
 		},
@@ -203,7 +209,7 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 		"\"availabilityStrategy\":\"OneOf\"",
 		"\"readiness\":\"ready\"",
 		"\"conditions\":[{\"status\":\"False\",\"type\":\"Ready\"}]",
-		"\"promotion\":\"unavailable\"",
+		"\"promotion\":{\"reason\":\"Control-flow Stages do not materialize Promotions.\",\"status\":\"unavailable\"}",
 		"\"kargoUrl\":\"https://kargo.example.com/project/kargo-core/stage/prod\"",
 	} {
 		if !strings.Contains(response.Body.String(), expected) {

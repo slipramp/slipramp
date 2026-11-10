@@ -80,9 +80,9 @@ func (h *Handler) SubmitKargoPromotion(
 			ExternalPromotionID: request.Body.ExternalPromotionID,
 			Project:             string(request.Body.Project),
 			Stage:               request.Body.Stage,
-			BaseRevision:        request.Body.BaseRevision,
-			CandidateRevision:   request.Body.CandidateRevision,
-			CandidateBranch:     request.Body.CandidateBranch,
+			BaseRevision:        valueOrEmptyString(request.Body.BaseRevision),
+			CandidateRevision:   valueOrEmptyString(request.Body.CandidateRevision),
+			CandidateBranch:     valueOrEmptyString(request.Body.CandidateBranch),
 		},
 		*principal,
 	)
@@ -109,7 +109,7 @@ func (h *Handler) SubmitKargoPromotion(
 		case errors.Is(err, promotion.ErrIdentityConflict),
 			errors.Is(err, promotion.ErrStageArchived),
 			errors.Is(err, promotion.ErrStageStale),
-			errors.Is(err, promotion.ErrRepositoryNotAllowed),
+			errors.Is(err, promotion.ErrReviewContextUnavailable),
 			errors.Is(err, promotion.ErrRepositoryUnavailable):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
@@ -181,9 +181,9 @@ func (h *Handler) CreatePromotion(
 				NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
 			}, nil
 		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrStageStale),
+			errors.Is(err, promotion.ErrStageControlFlow), errors.Is(err, promotion.ErrReviewContextUnavailable),
 			errors.Is(err, promotion.ErrStageScope), errors.Is(err, promotion.ErrFreightNotFound),
 			errors.Is(err, promotion.ErrFreightSource), errors.Is(err, promotion.ErrFreightUnavailable),
-			errors.Is(err, promotion.ErrRepositoryNotAllowed),
 			errors.Is(err, promotion.ErrRepositoryUnavailable):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
@@ -300,7 +300,8 @@ func (h *Handler) UpdatePromotionStagePolicy(
 			return api.UpdatePromotionStagePolicy404ApplicationProblemPlusJSONResponse{
 				NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
 			}, nil
-		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrTransitionConflict):
+		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrTransitionConflict),
+			errors.Is(err, promotion.ErrReviewContextUnavailable):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
 			return api.UpdatePromotionStagePolicy409ApplicationProblemPlusJSONResponse{
@@ -355,11 +356,12 @@ func (h *Handler) ListPromotions(
 	}
 	keys := make([]repository.CommitKey, 0, len(result.Items)*2)
 	for _, review := range result.Items {
-		if review.Promotion.BaseRevision != "" {
-			keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision))
-		}
-		if review.Promotion.CandidateRevision != "" {
-			keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision))
+		context := review.Promotion.ReviewContext
+		if context != nil && context.Git != nil {
+			keys = append(keys,
+				commitKey(context.RepositoryID, context.Git.BaseRevision),
+				commitKey(context.RepositoryID, context.Git.CandidateRevision),
+			)
 		}
 	}
 	commits, commitErr := h.commitResponses(ctx, keys)
@@ -548,8 +550,7 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 			return api.ReplaceKargoStageSnapshot403ApplicationProblemPlusJSONResponse{
 				ForbiddenApplicationProblemPlusJSONResponse: api.ForbiddenApplicationProblemPlusJSONResponse(problem),
 			}, nil
-		case errors.Is(err, promotion.ErrRepositoryNotAllowed),
-			errors.Is(err, promotion.ErrSnapshotConflict),
+		case errors.Is(err, promotion.ErrSnapshotConflict),
 			errors.Is(err, promotion.ErrStaleSnapshot):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
@@ -713,44 +714,46 @@ func promotionResponse(
 		value := promotionFreightItemResponse(*record.SelectedFreightSnapshot)
 		selectedFreight = &value
 	}
-	var baseCommit *api.GitCommit
-	if record.BaseRevision != "" {
-		value := commits[commitKey(record.RepositoryID, record.BaseRevision)]
-		baseCommit = &value
-	}
-	var candidateCommit *api.GitCommit
-	if record.CandidateRevision != "" {
-		value := commits[commitKey(record.RepositoryID, record.CandidateRevision)]
-		candidateCommit = &value
-	}
-	var candidateBranch *string
-	if record.CandidateBranch != "" {
-		candidateBranch = &record.CandidateBranch
+	var reviewContext *api.PromotionReviewContext
+	if record.ReviewContext != nil {
+		context := record.ReviewContext
+		reviewContext = &api.PromotionReviewContext{
+			RepositoryID:       context.RepositoryID,
+			RepositorySnapshot: promotionRepositorySnapshotResponse(context.RepositorySnapshot),
+			TargetBranch:       context.TargetBranch,
+		}
+		if context.Git != nil {
+			reviewContext.Git = &api.PromotionGitContext{
+				BaseCommit:      commits[commitKey(context.RepositoryID, context.Git.BaseRevision)],
+				CandidateCommit: commits[commitKey(context.RepositoryID, context.Git.CandidateRevision)],
+				CandidateBranch: context.Git.CandidateBranch,
+			}
+		}
 	}
 
 	body := api.Promotion{
-		ID:                     record.ID,
-		Source:                 api.PromotionSource(record.Source),
-		Integration:            api.CatalogName(record.Integration),
-		ExternalPromotionID:    record.ExternalPromotionID,
-		StageID:                record.StageID,
-		SourceStageID:          record.SourceStageID,
-		StageSnapshot:          promotionStageSnapshotResponse(record.StageSnapshot),
-		RepositoryID:           record.RepositoryID,
-		RepositorySnapshot:     promotionRepositorySnapshotResponse(record.RepositorySnapshot),
-		BaseCommit:             baseCommit,
-		CandidateCommit:        candidateCommit,
-		CandidateBranch:        candidateBranch,
-		TargetBranch:           record.TargetBranch,
-		PolicySnapshot:         promotionPolicyResponse(promotion.PolicyView(record.PolicySnapshot)),
-		SelectedFreight:        selectedFreight,
-		ReviewRequired:         record.ReviewRequired,
-		Status:                 api.PromotionStatus(record.Lifecycle.State),
-		Message:                record.Message,
-		DispatchAttemptCount:   record.CreationDispatch.AttemptCount,
-		NextDispatchAt:         record.CreationDispatch.NextAttemptAt,
-		LastDispatchAt:         record.CreationDispatch.LastAttemptAt,
-		DispatchedAt:           record.CreationDispatch.DispatchedAt,
+		ID:                  record.ID,
+		Source:              api.PromotionSource(record.Source),
+		Integration:         api.CatalogName(record.Integration),
+		ExternalPromotionID: record.ExternalPromotionID,
+		StageID:             record.StageID,
+		SourceStageID:       record.SourceStageID,
+		StageSnapshot:       promotionStageSnapshotResponse(record.StageSnapshot),
+		ReviewContext:       reviewContext,
+		PolicySnapshot:      promotionPolicyResponse(promotion.PolicyView(record.PolicySnapshot)),
+		SelectedFreight:     selectedFreight,
+		ReviewRequired:      record.ReviewRequired,
+		Status:              api.PromotionStatus(record.Lifecycle.State),
+		Message:             record.Message,
+		CreationDispatch: api.PromotionCreationDispatch{
+			Phase:         api.PromotionCreationDispatchPhase(record.CreationDispatch.Phase(record.Source)),
+			AttemptCount:  record.CreationDispatch.AttemptCount,
+			NextAttemptAt: record.CreationDispatch.NextAttemptAt,
+			LastAttemptAt: record.CreationDispatch.LastAttemptAt,
+			DeliveredAt:   record.CreationDispatch.DispatchedAt,
+			FailedAt:      record.CreationDispatch.FailedAt,
+			Diagnostic:    record.CreationDispatch.Diagnostic,
+		},
 		KargoPromotionUID:      record.KargoExecution.PromotionUID,
 		NextReconciliationAt:   record.KargoExecution.NextReconciliationAt,
 		LastReconciliationAt:   record.KargoExecution.LastReconciliationAt,
@@ -782,12 +785,14 @@ func promotionResponse(
 	if record.StageSnapshot.ArgoApplicationNamespace != nil {
 		argoApplicationNamespace = *record.StageSnapshot.ArgoApplicationNamespace
 	}
-	body.ArgoCdURL = integrations.ArgoCDApplicationURL(
-		record.Integration,
-		record.StageSnapshot.Environment,
-		argoApplicationNamespace,
-		record.StageSnapshot.Application,
-	)
+	if record.StageSnapshot.Enrichment != nil {
+		body.ArgoCdURL = integrations.ArgoCDApplicationURL(
+			record.Integration,
+			record.StageSnapshot.Enrichment.Environment,
+			argoApplicationNamespace,
+			record.StageSnapshot.Enrichment.Application,
+		)
+	}
 	if review.Decision != nil {
 		decidedBy := apiRunActor(&review.Decision.DecidedBySnapshot)
 		if decidedBy == nil {
@@ -809,11 +814,11 @@ func (h *Handler) promotionDetailResponse(
 	review promotion.PromotionReview,
 ) (api.Promotion, error) {
 	keys := make([]repository.CommitKey, 0, 2)
-	if review.Promotion.BaseRevision != "" {
-		keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision))
-	}
-	if review.Promotion.CandidateRevision != "" {
-		keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision))
+	if context := review.Promotion.ReviewContext; context != nil && context.Git != nil {
+		keys = append(keys,
+			commitKey(context.RepositoryID, context.Git.BaseRevision),
+			commitKey(context.RepositoryID, context.Git.CandidateRevision),
+		)
 	}
 	commits, commitErr := h.commitResponses(ctx, keys)
 	if commitErr != nil {
@@ -879,4 +884,12 @@ func valueOrNilUUID(value *uuid.UUID) uuid.UUID {
 	}
 
 	return *value
+}
+
+func valueOrEmptyString[T ~string](value *T) string {
+	if value == nil {
+		return ""
+	}
+
+	return string(*value)
 }

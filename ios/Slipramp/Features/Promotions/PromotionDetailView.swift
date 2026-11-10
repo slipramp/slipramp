@@ -218,6 +218,14 @@ struct PromotionDetailView: View {
             }
             LabeledContent("Source", value: promotion.source.displayLabel)
             LabeledContent("Requested by", value: promotion.requestedBy.displayName)
+            if promotion.creationDispatch.phase != .notApplicable {
+                LabeledContent("Kargo delivery", value: creationDispatchLabel(promotion))
+                if let diagnostic = promotion.creationDispatch.diagnostic {
+                    Text(diagnostic)
+                        .font(.subheadline)
+                        .foregroundStyle(SliprampTone.danger.color)
+                }
+            }
             if let message = promotion.message {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline)
@@ -237,18 +245,34 @@ struct PromotionDetailView: View {
     @ViewBuilder
     private func contextSection(_ promotion: Promotion) -> some View {
         let stage = promotion.stageSnapshot
-        let repository = promotion.repositorySnapshot
+        let enrichment = stage.enrichment
+        let review = promotion.reviewContext
 
         Section("Promotion context") {
             LabeledContent("Integration", value: promotion.integration)
             LabeledContent("Stage", value: "\(stage.project)/\(stage.name)")
-            LabeledContent("Application", value: stage.application)
-            LabeledContent("Environment", value: stage.environment)
             LabeledContent("Cluster", value: stage.cluster)
-            LabeledContent("Repository", value: repository.name)
             LabeledContent("Policy", value: promotion.policySnapshot.effectiveMode.displayLabel)
-            LabeledContent("Target branch", value: promotion.targetBranch)
-            LabeledContent("Candidate branch", value: promotion.candidateBranch ?? "Waiting for Kargo")
+            if let application = enrichment?.application {
+                LabeledContent("Application", value: application)
+            }
+            if let environment = enrichment?.environment {
+                LabeledContent("Environment", value: environment)
+            }
+            if let review {
+                LabeledContent("Repository", value: review.repositorySnapshot.name)
+                LabeledContent("Target branch", value: review.targetBranch)
+                if let candidateBranch = review.git?.candidateBranch {
+                    LabeledContent("Candidate branch", value: candidateBranch)
+                }
+            } else {
+                Label(
+                    "This is a Kargo-native Promotion. Slipramp change previews and review context are unavailable.",
+                    systemImage: "shippingbox"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
             if let expiresAt = promotion.expiresAt {
                 PromotionTimestampRow(label: "Review expires", date: expiresAt)
             }
@@ -257,9 +281,24 @@ struct PromotionDetailView: View {
 
     @ViewBuilder
     private func revisionSection(_ promotion: Promotion) -> some View {
-        Section("Revisions") {
-            PromotionRevisionRow(label: "Base", commit: promotion.baseCommit)
-            PromotionRevisionRow(label: "Candidate", commit: promotion.candidateCommit)
+        if let git = promotion.reviewContext?.git {
+            Section("Revisions") {
+                PromotionRevisionRow(label: "Base", commit: git.baseCommit)
+                PromotionRevisionRow(label: "Candidate", commit: git.candidateCommit)
+            }
+        }
+    }
+
+    private func creationDispatchLabel(_ promotion: Promotion) -> String {
+        switch promotion.creationDispatch.phase {
+        case .notApplicable:
+            return "Not applicable"
+        case .awaitingDelivery:
+            return "Awaiting delivery"
+        case .delivered:
+            return "Delivered"
+        case .failed:
+            return "Failed"
         }
     }
 

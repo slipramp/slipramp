@@ -109,8 +109,18 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 		candidates[0].Evidence.Readiness != promotion.FreightReadinessReady {
 		t.Errorf("direct Freight candidates = %#v", candidates)
 	}
-	if result.Stages[1].Capabilities.PromotionReady || result.Stages[1].Capabilities.BranchDriftReady {
+	capabilities := result.Stages[1].Capabilities
+	if !capabilities.Promotion.Ready || capabilities.Review.Ready || capabilities.BranchDrift.Ready {
 		t.Errorf("unannotated Stage capabilities = %#v", result.Stages[1].Capabilities)
+	}
+	if capabilities.Review.Reason == "" || capabilities.BranchDrift.Reason == "" {
+		t.Errorf("unannotated Stage limitations = %#v", capabilities)
+	}
+	controlFlow := source
+	controlFlow.ControlFlow = true
+	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{ClusterName: "colo"})
+	if controlFlowCapabilities.Promotion.Ready || controlFlowCapabilities.Promotion.Reason == "" {
+		t.Errorf("control-flow Stage capabilities = %#v", controlFlowCapabilities)
 	}
 }
 

@@ -2635,18 +2635,8 @@ internal enum Components {
             internal var sourceStageId: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Promotion/stageSnapshot`.
             internal var stageSnapshot: Components.Schemas.PromotionStageSnapshot
-            /// - Remark: Generated from `#/components/schemas/Promotion/repositoryId`.
-            internal var repositoryId: Swift.String
-            /// - Remark: Generated from `#/components/schemas/Promotion/repositorySnapshot`.
-            internal var repositorySnapshot: Components.Schemas.PromotionRepositorySnapshot
-            /// - Remark: Generated from `#/components/schemas/Promotion/baseCommit`.
-            internal var baseCommit: Components.Schemas.GitCommit?
-            /// - Remark: Generated from `#/components/schemas/Promotion/candidateCommit`.
-            internal var candidateCommit: Components.Schemas.GitCommit?
-            /// - Remark: Generated from `#/components/schemas/Promotion/candidateBranch`.
-            internal var candidateBranch: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/Promotion/targetBranch`.
-            internal var targetBranch: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Promotion/reviewContext`.
+            internal var reviewContext: Components.Schemas.PromotionReviewContext?
             /// - Remark: Generated from `#/components/schemas/Promotion/policySnapshot`.
             internal var policySnapshot: Components.Schemas.PromotionStagePolicy
             /// - Remark: Generated from `#/components/schemas/Promotion/selectedFreight`.
@@ -2657,17 +2647,11 @@ internal enum Components {
             internal var status: Components.Schemas.PromotionStatus
             /// - Remark: Generated from `#/components/schemas/Promotion/message`.
             internal var message: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/Promotion/dispatchAttemptCount`.
-            internal var dispatchAttemptCount: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/Promotion/nextDispatchAt`.
-            internal var nextDispatchAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/Promotion/lastDispatchAt`.
-            internal var lastDispatchAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/Promotion/dispatchedAt`.
-            internal var dispatchedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Promotion/creationDispatch`.
+            internal var creationDispatch: Components.Schemas.PromotionCreationDispatch
             /// - Remark: Generated from `#/components/schemas/Promotion/kargoPromotionUid`.
             internal var kargoPromotionUid: Swift.String?
-            /// Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
+            /// Next durable inspection time while the responsible Controller awaits a terminal Kargo outcome.
             ///
             /// - Remark: Generated from `#/components/schemas/Promotion/nextReconciliationAt`.
             internal var nextReconciliationAt: Foundation.Date?
@@ -2721,23 +2705,15 @@ internal enum Components {
             ///   - stageId:
             ///   - sourceStageId:
             ///   - stageSnapshot:
-            ///   - repositoryId:
-            ///   - repositorySnapshot:
-            ///   - baseCommit:
-            ///   - candidateCommit:
-            ///   - candidateBranch:
-            ///   - targetBranch:
+            ///   - reviewContext:
             ///   - policySnapshot:
             ///   - selectedFreight:
             ///   - reviewRequired:
             ///   - status:
             ///   - message:
-            ///   - dispatchAttemptCount:
-            ///   - nextDispatchAt:
-            ///   - lastDispatchAt:
-            ///   - dispatchedAt:
+            ///   - creationDispatch:
             ///   - kargoPromotionUid:
-            ///   - nextReconciliationAt: Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
+            ///   - nextReconciliationAt: Next durable inspection time while the responsible Controller awaits a terminal Kargo outcome.
             ///   - lastReconciliationAt: Most recent time reconciliation work was claimed by the responsible Controller.
             ///   - kargoOutcome:
             ///   - preparationRunId:
@@ -2763,21 +2739,13 @@ internal enum Components {
                 stageId: Swift.String,
                 sourceStageId: Swift.String? = nil,
                 stageSnapshot: Components.Schemas.PromotionStageSnapshot,
-                repositoryId: Swift.String,
-                repositorySnapshot: Components.Schemas.PromotionRepositorySnapshot,
-                baseCommit: Components.Schemas.GitCommit? = nil,
-                candidateCommit: Components.Schemas.GitCommit? = nil,
-                candidateBranch: Swift.String? = nil,
-                targetBranch: Swift.String,
+                reviewContext: Components.Schemas.PromotionReviewContext? = nil,
                 policySnapshot: Components.Schemas.PromotionStagePolicy,
                 selectedFreight: Components.Schemas.PromotionFreightItem? = nil,
                 reviewRequired: Swift.Bool,
                 status: Components.Schemas.PromotionStatus,
                 message: Swift.String? = nil,
-                dispatchAttemptCount: Swift.Int,
-                nextDispatchAt: Foundation.Date? = nil,
-                lastDispatchAt: Foundation.Date? = nil,
-                dispatchedAt: Foundation.Date? = nil,
+                creationDispatch: Components.Schemas.PromotionCreationDispatch,
                 kargoPromotionUid: Swift.String? = nil,
                 nextReconciliationAt: Foundation.Date? = nil,
                 lastReconciliationAt: Foundation.Date? = nil,
@@ -2805,21 +2773,13 @@ internal enum Components {
                 self.stageId = stageId
                 self.sourceStageId = sourceStageId
                 self.stageSnapshot = stageSnapshot
-                self.repositoryId = repositoryId
-                self.repositorySnapshot = repositorySnapshot
-                self.baseCommit = baseCommit
-                self.candidateCommit = candidateCommit
-                self.candidateBranch = candidateBranch
-                self.targetBranch = targetBranch
+                self.reviewContext = reviewContext
                 self.policySnapshot = policySnapshot
                 self.selectedFreight = selectedFreight
                 self.reviewRequired = reviewRequired
                 self.status = status
                 self.message = message
-                self.dispatchAttemptCount = dispatchAttemptCount
-                self.nextDispatchAt = nextDispatchAt
-                self.lastDispatchAt = lastDispatchAt
-                self.dispatchedAt = dispatchedAt
+                self.creationDispatch = creationDispatch
                 self.kargoPromotionUid = kargoPromotionUid
                 self.nextReconciliationAt = nextReconciliationAt
                 self.lastReconciliationAt = lastReconciliationAt
@@ -2848,21 +2808,13 @@ internal enum Components {
                 case stageId
                 case sourceStageId
                 case stageSnapshot
-                case repositoryId
-                case repositorySnapshot
-                case baseCommit
-                case candidateCommit
-                case candidateBranch
-                case targetBranch
+                case reviewContext
                 case policySnapshot
                 case selectedFreight
                 case reviewRequired
                 case status
                 case message
-                case dispatchAttemptCount
-                case nextDispatchAt
-                case lastDispatchAt
-                case dispatchedAt
+                case creationDispatch
                 case kargoPromotionUid
                 case nextReconciliationAt
                 case lastReconciliationAt
@@ -2913,29 +2865,9 @@ internal enum Components {
                     Components.Schemas.PromotionStageSnapshot.self,
                     forKey: .stageSnapshot
                 )
-                self.repositoryId = try container.decode(
-                    Swift.String.self,
-                    forKey: .repositoryId
-                )
-                self.repositorySnapshot = try container.decode(
-                    Components.Schemas.PromotionRepositorySnapshot.self,
-                    forKey: .repositorySnapshot
-                )
-                self.baseCommit = try container.decodeIfPresent(
-                    Components.Schemas.GitCommit.self,
-                    forKey: .baseCommit
-                )
-                self.candidateCommit = try container.decodeIfPresent(
-                    Components.Schemas.GitCommit.self,
-                    forKey: .candidateCommit
-                )
-                self.candidateBranch = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .candidateBranch
-                )
-                self.targetBranch = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetBranch
+                self.reviewContext = try container.decodeIfPresent(
+                    Components.Schemas.PromotionReviewContext.self,
+                    forKey: .reviewContext
                 )
                 self.policySnapshot = try container.decode(
                     Components.Schemas.PromotionStagePolicy.self,
@@ -2957,21 +2889,9 @@ internal enum Components {
                     Swift.String.self,
                     forKey: .message
                 )
-                self.dispatchAttemptCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .dispatchAttemptCount
-                )
-                self.nextDispatchAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .nextDispatchAt
-                )
-                self.lastDispatchAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastDispatchAt
-                )
-                self.dispatchedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .dispatchedAt
+                self.creationDispatch = try container.decode(
+                    Components.Schemas.PromotionCreationDispatch.self,
+                    forKey: .creationDispatch
                 )
                 self.kargoPromotionUid = try container.decodeIfPresent(
                     Swift.String.self,
@@ -3057,21 +2977,13 @@ internal enum Components {
                     "stageId",
                     "sourceStageId",
                     "stageSnapshot",
-                    "repositoryId",
-                    "repositorySnapshot",
-                    "baseCommit",
-                    "candidateCommit",
-                    "candidateBranch",
-                    "targetBranch",
+                    "reviewContext",
                     "policySnapshot",
                     "selectedFreight",
                     "reviewRequired",
                     "status",
                     "message",
-                    "dispatchAttemptCount",
-                    "nextDispatchAt",
-                    "lastDispatchAt",
-                    "dispatchedAt",
+                    "creationDispatch",
                     "kargoPromotionUid",
                     "nextReconciliationAt",
                     "lastReconciliationAt",
@@ -4732,6 +4644,88 @@ internal enum Components {
             case expired = "expired"
             case error = "error"
         }
+        /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment`.
+        internal struct PromotionStageEnrichment: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/application`.
+            internal var application: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/environment`.
+            internal var environment: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/repository`.
+            internal var repository: Components.Schemas.CatalogName?
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/repositoryUrl`.
+            internal var repositoryUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/targetBranch`.
+            internal var targetBranch: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PromotionStageEnrichment/sourcePaths`.
+            internal var sourcePaths: [Swift.String]?
+            /// Creates a new `PromotionStageEnrichment`.
+            ///
+            /// - Parameters:
+            ///   - application:
+            ///   - environment:
+            ///   - repository:
+            ///   - repositoryUrl:
+            ///   - targetBranch:
+            ///   - sourcePaths:
+            internal init(
+                application: Swift.String? = nil,
+                environment: Swift.String? = nil,
+                repository: Components.Schemas.CatalogName? = nil,
+                repositoryUrl: Swift.String? = nil,
+                targetBranch: Swift.String? = nil,
+                sourcePaths: [Swift.String]? = nil
+            ) {
+                self.application = application
+                self.environment = environment
+                self.repository = repository
+                self.repositoryUrl = repositoryUrl
+                self.targetBranch = targetBranch
+                self.sourcePaths = sourcePaths
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case application
+                case environment
+                case repository
+                case repositoryUrl
+                case targetBranch
+                case sourcePaths
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.application = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .application
+                )
+                self.environment = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .environment
+                )
+                self.repository = try container.decodeIfPresent(
+                    Components.Schemas.CatalogName.self,
+                    forKey: .repository
+                )
+                self.repositoryUrl = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .repositoryUrl
+                )
+                self.targetBranch = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .targetBranch
+                )
+                self.sourcePaths = try container.decodeIfPresent(
+                    [Swift.String].self,
+                    forKey: .sourcePaths
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "application",
+                    "environment",
+                    "repository",
+                    "repositoryUrl",
+                    "targetBranch",
+                    "sourcePaths"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest`.
         internal struct PromotionFreightRequest: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/origin`.
@@ -5090,18 +5084,8 @@ internal enum Components {
             internal var kubernetesUid: Swift.String
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/resourceVersion`.
             internal var resourceVersion: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/application`.
-            internal var application: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/environment`.
-            internal var environment: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/repository`.
-            internal var repository: Components.Schemas.CatalogName
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/repositoryUrl`.
-            internal var repositoryUrl: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/targetBranch`.
-            internal var targetBranch: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/sourcePaths`.
-            internal var sourcePaths: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/enrichment`.
+            internal var enrichment: Components.Schemas.PromotionStageEnrichment?
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/requestedFreight`.
             internal var requestedFreight: [Components.Schemas.PromotionFreightRequest]
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/freight`.
@@ -5120,12 +5104,7 @@ internal enum Components {
             ///   - name:
             ///   - kubernetesUid:
             ///   - resourceVersion:
-            ///   - application:
-            ///   - environment:
-            ///   - repository:
-            ///   - repositoryUrl:
-            ///   - targetBranch:
-            ///   - sourcePaths:
+            ///   - enrichment:
             ///   - requestedFreight:
             ///   - freight:
             ///   - successfulRenderAcknowledgement:
@@ -5138,12 +5117,7 @@ internal enum Components {
                 name: Swift.String,
                 kubernetesUid: Swift.String,
                 resourceVersion: Swift.String,
-                application: Swift.String,
-                environment: Swift.String,
-                repository: Components.Schemas.CatalogName,
-                repositoryUrl: Swift.String,
-                targetBranch: Swift.String,
-                sourcePaths: [Swift.String],
+                enrichment: Components.Schemas.PromotionStageEnrichment? = nil,
                 requestedFreight: [Components.Schemas.PromotionFreightRequest],
                 freight: Components.Schemas.PromotionFreight,
                 successfulRenderAcknowledgement: Components.Schemas.SuccessfulRenderAcknowledgement? = nil,
@@ -5156,12 +5130,7 @@ internal enum Components {
                 self.name = name
                 self.kubernetesUid = kubernetesUid
                 self.resourceVersion = resourceVersion
-                self.application = application
-                self.environment = environment
-                self.repository = repository
-                self.repositoryUrl = repositoryUrl
-                self.targetBranch = targetBranch
-                self.sourcePaths = sourcePaths
+                self.enrichment = enrichment
                 self.requestedFreight = requestedFreight
                 self.freight = freight
                 self.successfulRenderAcknowledgement = successfulRenderAcknowledgement
@@ -5175,12 +5144,7 @@ internal enum Components {
                 case name
                 case kubernetesUid
                 case resourceVersion
-                case application
-                case environment
-                case repository
-                case repositoryUrl
-                case targetBranch
-                case sourcePaths
+                case enrichment
                 case requestedFreight
                 case freight
                 case successfulRenderAcknowledgement
@@ -5216,29 +5180,9 @@ internal enum Components {
                     Swift.String.self,
                     forKey: .resourceVersion
                 )
-                self.application = try container.decode(
-                    Swift.String.self,
-                    forKey: .application
-                )
-                self.environment = try container.decode(
-                    Swift.String.self,
-                    forKey: .environment
-                )
-                self.repository = try container.decode(
-                    Components.Schemas.CatalogName.self,
-                    forKey: .repository
-                )
-                self.repositoryUrl = try container.decode(
-                    Swift.String.self,
-                    forKey: .repositoryUrl
-                )
-                self.targetBranch = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetBranch
-                )
-                self.sourcePaths = try container.decode(
-                    [Swift.String].self,
-                    forKey: .sourcePaths
+                self.enrichment = try container.decodeIfPresent(
+                    Components.Schemas.PromotionStageEnrichment.self,
+                    forKey: .enrichment
                 )
                 self.requestedFreight = try container.decode(
                     [Components.Schemas.PromotionFreightRequest].self,
@@ -5264,12 +5208,7 @@ internal enum Components {
                     "name",
                     "kubernetesUid",
                     "resourceVersion",
-                    "application",
-                    "environment",
-                    "repository",
-                    "repositoryUrl",
-                    "targetBranch",
-                    "sourcePaths",
+                    "enrichment",
                     "requestedFreight",
                     "freight",
                     "successfulRenderAcknowledgement",
@@ -5337,10 +5276,219 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PromotionGitContext`.
+        internal struct PromotionGitContext: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionGitContext/baseCommit`.
+            internal var baseCommit: Components.Schemas.GitCommit
+            /// - Remark: Generated from `#/components/schemas/PromotionGitContext/candidateCommit`.
+            internal var candidateCommit: Components.Schemas.GitCommit
+            /// - Remark: Generated from `#/components/schemas/PromotionGitContext/candidateBranch`.
+            internal var candidateBranch: Swift.String
+            /// Creates a new `PromotionGitContext`.
+            ///
+            /// - Parameters:
+            ///   - baseCommit:
+            ///   - candidateCommit:
+            ///   - candidateBranch:
+            internal init(
+                baseCommit: Components.Schemas.GitCommit,
+                candidateCommit: Components.Schemas.GitCommit,
+                candidateBranch: Swift.String
+            ) {
+                self.baseCommit = baseCommit
+                self.candidateCommit = candidateCommit
+                self.candidateBranch = candidateBranch
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case baseCommit
+                case candidateCommit
+                case candidateBranch
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.baseCommit = try container.decode(
+                    Components.Schemas.GitCommit.self,
+                    forKey: .baseCommit
+                )
+                self.candidateCommit = try container.decode(
+                    Components.Schemas.GitCommit.self,
+                    forKey: .candidateCommit
+                )
+                self.candidateBranch = try container.decode(
+                    Swift.String.self,
+                    forKey: .candidateBranch
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "baseCommit",
+                    "candidateCommit",
+                    "candidateBranch"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PromotionReviewContext`.
+        internal struct PromotionReviewContext: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionReviewContext/repositoryId`.
+            internal var repositoryId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PromotionReviewContext/repositorySnapshot`.
+            internal var repositorySnapshot: Components.Schemas.PromotionRepositorySnapshot
+            /// - Remark: Generated from `#/components/schemas/PromotionReviewContext/targetBranch`.
+            internal var targetBranch: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PromotionReviewContext/git`.
+            internal var git: Components.Schemas.PromotionGitContext?
+            /// Creates a new `PromotionReviewContext`.
+            ///
+            /// - Parameters:
+            ///   - repositoryId:
+            ///   - repositorySnapshot:
+            ///   - targetBranch:
+            ///   - git:
+            internal init(
+                repositoryId: Swift.String,
+                repositorySnapshot: Components.Schemas.PromotionRepositorySnapshot,
+                targetBranch: Swift.String,
+                git: Components.Schemas.PromotionGitContext? = nil
+            ) {
+                self.repositoryId = repositoryId
+                self.repositorySnapshot = repositorySnapshot
+                self.targetBranch = targetBranch
+                self.git = git
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case repositoryId
+                case repositorySnapshot
+                case targetBranch
+                case git
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.repositoryId = try container.decode(
+                    Swift.String.self,
+                    forKey: .repositoryId
+                )
+                self.repositorySnapshot = try container.decode(
+                    Components.Schemas.PromotionRepositorySnapshot.self,
+                    forKey: .repositorySnapshot
+                )
+                self.targetBranch = try container.decode(
+                    Swift.String.self,
+                    forKey: .targetBranch
+                )
+                self.git = try container.decodeIfPresent(
+                    Components.Schemas.PromotionGitContext.self,
+                    forKey: .git
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "repositoryId",
+                    "repositorySnapshot",
+                    "targetBranch",
+                    "git"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionPolicyMode`.
         internal enum PromotionPolicyMode: String, Codable, Hashable, Sendable, CaseIterable {
             case automatic = "automatic"
             case reviewRequired = "review-required"
+        }
+        /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch`.
+        internal struct PromotionCreationDispatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/phase`.
+            internal enum PhasePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case notApplicable = "not-applicable"
+                case awaitingDelivery = "awaiting-delivery"
+                case delivered = "delivered"
+                case failed = "failed"
+            }
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/phase`.
+            internal var phase: Components.Schemas.PromotionCreationDispatch.PhasePayload
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/attemptCount`.
+            internal var attemptCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/nextAttemptAt`.
+            internal var nextAttemptAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/lastAttemptAt`.
+            internal var lastAttemptAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/deliveredAt`.
+            internal var deliveredAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/failedAt`.
+            internal var failedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/diagnostic`.
+            internal var diagnostic: Swift.String?
+            /// Creates a new `PromotionCreationDispatch`.
+            ///
+            /// - Parameters:
+            ///   - phase:
+            ///   - attemptCount:
+            ///   - nextAttemptAt:
+            ///   - lastAttemptAt:
+            ///   - deliveredAt:
+            ///   - failedAt:
+            ///   - diagnostic:
+            internal init(
+                phase: Components.Schemas.PromotionCreationDispatch.PhasePayload,
+                attemptCount: Swift.Int,
+                nextAttemptAt: Foundation.Date? = nil,
+                lastAttemptAt: Foundation.Date? = nil,
+                deliveredAt: Foundation.Date? = nil,
+                failedAt: Foundation.Date? = nil,
+                diagnostic: Swift.String? = nil
+            ) {
+                self.phase = phase
+                self.attemptCount = attemptCount
+                self.nextAttemptAt = nextAttemptAt
+                self.lastAttemptAt = lastAttemptAt
+                self.deliveredAt = deliveredAt
+                self.failedAt = failedAt
+                self.diagnostic = diagnostic
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case phase
+                case attemptCount
+                case nextAttemptAt
+                case lastAttemptAt
+                case deliveredAt
+                case failedAt
+                case diagnostic
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.phase = try container.decode(
+                    Components.Schemas.PromotionCreationDispatch.PhasePayload.self,
+                    forKey: .phase
+                )
+                self.attemptCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .attemptCount
+                )
+                self.nextAttemptAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .nextAttemptAt
+                )
+                self.lastAttemptAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .lastAttemptAt
+                )
+                self.deliveredAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .deliveredAt
+                )
+                self.failedAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .failedAt
+                )
+                self.diagnostic = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .diagnostic
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "phase",
+                    "attemptCount",
+                    "nextAttemptAt",
+                    "lastAttemptAt",
+                    "deliveredAt",
+                    "failedAt",
+                    "diagnostic"
+                ])
+            }
         }
         /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome`.
         internal struct KargoPromotionOutcome: Codable, Hashable, Sendable {

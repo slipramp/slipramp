@@ -385,6 +385,15 @@ test("active Promotions show creation, preparation, and post-approval Kargo work
   assert.equal(promotionActivity({ status: "preparing" }).animation, "working");
   assert.equal(promotionActivity({ status: "approved" }).animation, "working");
   assert.equal(
+    promotionActivity({ creationDispatch: { phase: "awaiting-delivery" }, status: "approved" })
+      .title,
+    "Delivering to Kargo",
+  );
+  assert.equal(
+    promotionActivity({ creationDispatch: { phase: "failed" }, status: "approved" }),
+    undefined,
+  );
+  assert.equal(
     promotionActivity({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }),
     undefined,
   );

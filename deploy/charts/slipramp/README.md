@@ -84,11 +84,12 @@ The resulting Git config path is
 `/var/run/slipramp/repository-credentials/github-readonly/gitconfig`.
 
 Optional Kargo integrations are static Server configuration. Each integration
-selects a registered Cluster, a repository allowlist, and
-the repository-defined Target and Action that prepare review artifacts. The
-same configuration enables observed-Freight operator creation; Kargo remains
-authoritative for admission and availability. The chart renders these values as
-a strict `slipramp.com/v1alpha1` `KargoIntegrationConfig` document and sets
+selects a registered Cluster and Stage freshness limit, which is enough for
+native observed-Freight promotion. A Repository allowlist, repository-defined
+preparation Target and Action, and pending-review retention may be configured
+together to enable Slipramp review. Kargo remains authoritative for admission
+and availability. The chart renders these values as a strict
+`slipramp.com/v1alpha1` `KargoIntegrationConfig` document and sets
 `SLIPRAMP_KARGO_INTEGRATIONS_FILE` to its mounted path:
 
 ```yaml
@@ -115,6 +116,11 @@ server:
 ```
 
 The selected Cluster must also be present in `controllerEnrollmentTokens`.
+For a native-only integration, omit `repositories`, `preparation`, and
+`pendingReviewRetention`. Their absence does not disable Stage inventory or
+native promotion. When review is enabled, configure all three together;
+Repository allowlists gate only review, Git audit, cleanup, and other Repository
+access.
 The optional `uiUrl` enables direct Project, Stage, and Promotion links from the web UI.
 The optional `argoCdUiUrls` map enables direct Application links for observed
 Stages in each configured environment. Kargo supplies the Application identity;

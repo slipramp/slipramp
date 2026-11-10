@@ -59,9 +59,11 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 	}
 
 	pending := s.waitForKargoCallbackAndPendingPromotion(t, promotion.ID)
-	if pending.BaseCommit == nil || pending.BaseCommit.Sha != s.baseCommit || pending.CandidateCommit == nil ||
-		pending.CandidateCommit.Sha == s.baseCommit || pending.CandidateBranch == nil ||
-		!strings.HasPrefix(*pending.CandidateBranch, "kargo/promotion/") || pending.PreparationRunID == nil ||
+	if pending.ReviewContext == nil || pending.ReviewContext.Git == nil ||
+		pending.ReviewContext.Git.BaseCommit.Sha != s.baseCommit ||
+		pending.ReviewContext.Git.CandidateCommit.Sha == s.baseCommit ||
+		!strings.HasPrefix(pending.ReviewContext.Git.CandidateBranch, "kargo/promotion/") ||
+		pending.PreparationRunID == nil ||
 		pending.GitDiffArtifactID == nil || pending.ArgoDiffArtifactID == nil {
 		t.Fatalf("Kargo Promotion pending state = %#v", pending)
 	}
@@ -84,8 +86,8 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 	targetCommit := strings.TrimSpace(string(s.kubectl(t, "-n", systemNamespace, "exec",
 		"deployment/acceptance-git", "-c", "git", "--",
 		"git", "--git-dir=/srv/repository.git", "rev-parse", "refs/heads/stage/acceptance/acceptance")))
-	if targetCommit != pending.CandidateCommit.Sha {
-		t.Fatalf("target branch commit = %s, want candidate %s", targetCommit, pending.CandidateCommit.Sha)
+	if targetCommit != pending.ReviewContext.Git.CandidateCommit.Sha {
+		t.Fatalf("target branch commit = %s, want candidate %s", targetCommit, pending.ReviewContext.Git.CandidateCommit.Sha)
 	}
 	targetManifest := string(s.kubectl(t, "-n", systemNamespace, "exec",
 		"deployment/acceptance-git", "-c", "git", "--",

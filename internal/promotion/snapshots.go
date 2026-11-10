@@ -17,12 +17,7 @@ type PromotionStageSnapshot struct {
 	Name                            string                           `json:"name"`
 	KubernetesUID                   string                           `json:"kubernetesUid"`
 	ResourceVersion                 string                           `json:"resourceVersion"`
-	Application                     string                           `json:"application"`
-	Environment                     string                           `json:"environment"`
-	RepositoryName                  string                           `json:"repository"`
-	RepositoryURL                   string                           `json:"repositoryUrl"`
-	TargetBranch                    string                           `json:"targetBranch"`
-	SourcePaths                     []string                         `json:"sourcePaths"`
+	Enrichment                      *PromotionStageEnrichment        `json:"enrichment,omitempty"`
 	RequestedFreight                []FreightRequest                 `json:"requestedFreight"`
 	Freight                         Freight                          `json:"freight"`
 	ArgoApplicationNamespace        *string                          `json:"argoApplicationNamespace,omitempty"`
@@ -30,11 +25,33 @@ type PromotionStageSnapshot struct {
 	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
 }
 
+type PromotionStageEnrichment struct {
+	Application    string   `json:"application,omitempty"`
+	Environment    string   `json:"environment,omitempty"`
+	RepositoryName string   `json:"repository,omitempty"`
+	RepositoryURL  string   `json:"repositoryUrl,omitempty"`
+	TargetBranch   string   `json:"targetBranch,omitempty"`
+	SourcePaths    []string `json:"sourcePaths,omitempty"`
+}
+
 type PromotionRepositorySnapshot struct {
 	Name                   string  `json:"name"`
 	CloneURL               string  `json:"cloneUrl"`
 	Branch                 string  `json:"branch"`
 	CheckoutCredentialName *string `json:"checkoutCredentialName,omitempty"`
+}
+
+type PromotionGitContext struct {
+	BaseRevision      string
+	CandidateRevision string
+	CandidateBranch   string
+}
+
+type PromotionReviewContext struct {
+	RepositoryID       uuid.UUID
+	RepositorySnapshot PromotionRepositorySnapshot
+	TargetBranch       string
+	Git                *PromotionGitContext
 }
 
 type PromotionPolicySnapshot struct {
@@ -53,6 +70,14 @@ type SuccessfulRenderAcknowledgement struct {
 }
 
 func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
+	var enrichment *PromotionStageEnrichment
+	if s.Application != "" || s.Environment != "" || s.RepositoryName != "" || s.RepositoryURL != "" ||
+		s.TargetBranch != "" || len(s.SourcePaths) > 0 {
+		enrichment = &PromotionStageEnrichment{
+			Application: s.Application, Environment: s.Environment, RepositoryName: s.RepositoryName,
+			RepositoryURL: s.RepositoryURL, TargetBranch: s.TargetBranch, SourcePaths: slices.Clone(s.SourcePaths),
+		}
+	}
 	return PromotionStageSnapshot{
 		ID:                              s.ID,
 		Integration:                     s.Integration,
@@ -61,18 +86,23 @@ func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
 		Name:                            s.Name,
 		KubernetesUID:                   s.KubernetesUID,
 		ResourceVersion:                 s.ResourceVersion,
-		Application:                     s.Application,
-		Environment:                     s.Environment,
-		RepositoryName:                  s.RepositoryName,
-		RepositoryURL:                   s.RepositoryURL,
-		TargetBranch:                    s.TargetBranch,
-		SourcePaths:                     slices.Clone(s.SourcePaths),
+		Enrichment:                      enrichment,
 		RequestedFreight:                cloneFreightRequests(s.RequestedFreight),
 		Freight:                         cloneFreight(s.Freight),
 		ArgoApplicationNamespace:        cloneOptionalString(s.ArgoApplicationNamespace),
 		SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(s.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  s.LastObservedAt,
 	}
+}
+
+func (s Stage) ReviewReady() bool {
+	return s.Application != "" && s.Environment != "" && s.RepositoryName != "" && s.RepositoryURL != "" &&
+		s.TargetBranch != "" && len(s.SourcePaths) > 0
+}
+
+func (e PromotionStageEnrichment) ReviewReady() bool {
+	return e.Application != "" && e.Environment != "" && e.RepositoryName != "" && e.RepositoryURL != "" &&
+		e.TargetBranch != "" && len(e.SourcePaths) > 0
 }
 
 func cloneRenderAcknowledgement(value *SuccessfulRenderAcknowledgement) *SuccessfulRenderAcknowledgement {

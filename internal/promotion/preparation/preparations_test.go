@@ -255,7 +255,7 @@ func TestPreparationDispatchReservesRevisionAndCreatesIdempotentRun(t *testing.T
 		request.Actor == nil || request.Actor.ID != record.RequestedByPrincipalID {
 		t.Errorf("preparation Run request = %#v", request)
 	}
-	if request.Parameters[promotion.PreparationParameterCandidateRevision] != record.CandidateRevision ||
+	if request.Parameters[promotion.PreparationParameterCandidateRevision] != record.ReviewContext.Git.CandidateRevision ||
 		request.Parameters[promotion.PreparationParameterSourcePaths] != `["k8s/external-dns"]` {
 		t.Errorf("preparation parameters = %#v", request.Parameters)
 	}
@@ -537,29 +537,37 @@ func testPreparationCoordinator(
 func preparingPromotion() promotion.Promotion {
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1923")
 	stageSnapshot := promotion.PromotionStageSnapshot{
-		ID:             uuid.New(),
-		Integration:    "prod",
-		ClusterName:    "colo",
-		Project:        "kargo-core",
-		Name:           "external-dns-prod",
-		Application:    "external-dns",
-		Environment:    "prod",
-		RepositoryName: "ops",
-		RepositoryURL:  "https://example.com/ops.git",
-		TargetBranch:   "main",
-		SourcePaths:    []string{"k8s/external-dns"},
+		ID:          uuid.New(),
+		Integration: "prod",
+		ClusterName: "colo",
+		Project:     "kargo-core",
+		Name:        "external-dns-prod",
+		Enrichment: &promotion.PromotionStageEnrichment{
+			Application:    "external-dns",
+			Environment:    "prod",
+			RepositoryName: "ops",
+			RepositoryURL:  "https://example.com/ops.git",
+			TargetBranch:   "main",
+			SourcePaths:    []string{"k8s/external-dns"},
+		},
 	}
 
 	return promotion.Promotion{
-		Source:                 promotion.SourceKargo,
-		ID:                     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1924"),
-		Integration:            "prod",
-		ExternalPromotionID:    "external-dns-01jbe4q8",
-		StageSnapshot:          stageSnapshot,
-		BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
-		CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
-		CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
-		TargetBranch:           "main",
+		Source:              promotion.SourceKargo,
+		ID:                  uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1924"),
+		Integration:         "prod",
+		ExternalPromotionID: "external-dns-01jbe4q8",
+		StageSnapshot:       stageSnapshot,
+		ReviewContext: &promotion.PromotionReviewContext{
+			RepositoryID:       uuid.New(),
+			RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main"},
+			TargetBranch:       "main",
+			Git: &promotion.PromotionGitContext{
+				BaseRevision:      "8b7f1d217a6b0000000000000000000000000000",
+				CandidateRevision: "f4cb21a88e1d0000000000000000000000000000",
+				CandidateBranch:   "kargo/promotion/external-dns-01jbe4q8",
+			},
+		},
 		ReviewRequired:         true,
 		Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
 		RequestedByPrincipalID: principalID,

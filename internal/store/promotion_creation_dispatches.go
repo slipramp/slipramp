@@ -66,13 +66,14 @@ func (d *Database) ClaimPromotionCreation(
 			return promotion.Promotion{}, transitionErr
 		}
 		if transition.Exhausted {
-			message := claim.ExhaustedMessage
+			diagnostic := transition.State.Diagnostic
 			if _, exhaustErr := queries.ExhaustPromotionCreationDispatch(
 				ctx,
 				storedb.ExhaustPromotionCreationDispatchParams{
-					Message:  &message,
-					FailedAt: databaseTime(claim.ClaimedAt),
-					ID:       databaseUUID(current.ID),
+					Status:     string(transition.Lifecycle.State),
+					FailedAt:   databaseTime(claim.ClaimedAt),
+					Diagnostic: diagnostic,
+					ID:         databaseUUID(current.ID),
 				},
 			); exhaustErr != nil {
 				return promotion.Promotion{}, fmt.Errorf("exhaust Promotion creation dispatch: %w", exhaustErr)
@@ -156,6 +157,8 @@ func (d *Database) ReportPromotionCreation(
 			Message:                   transitioned.Message,
 			NextDispatchAt:            optionalDatabaseTime(transitioned.CreationDispatch.NextAttemptAt),
 			DispatchedAt:              optionalDatabaseTime(transitioned.CreationDispatch.DispatchedAt),
+			DispatchFailedAt:          optionalDatabaseTime(transitioned.CreationDispatch.FailedAt),
+			DispatchDiagnostic:        transitioned.CreationDispatch.Diagnostic,
 			KargoPromotionUid:         transitioned.KargoExecution.PromotionUID,
 			NextReconciliationAt:      optionalDatabaseTime(transitioned.KargoExecution.NextReconciliationAt),
 			UpdatedAt:                 databaseTime(transitioned.UpdatedAt),

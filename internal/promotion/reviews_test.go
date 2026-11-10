@@ -209,7 +209,7 @@ func TestReviewServiceForwardsStagePageAndEvaluatesPoliciesAtOneTime(t *testing.
 			Lifecycle: PromotionLifecycle{State: LifecyclePending, ExpiresAt: &now},
 		}},
 	}
-	service := NewReviewService(store)
+	service := NewReviewService(nil, store)
 	clockCalls := 0
 	service.now = func() time.Time {
 		clockCalls++
@@ -260,7 +260,7 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policies:  map[uuid.UUID]StagePolicy{},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(store)
+	service := NewReviewService(reviewIntegrationSet(), store)
 	service.now = func() time.Time { return now }
 
 	if _, err := service.UpdateStagePolicy(
@@ -287,6 +287,35 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policy.UpdatedBy.PrincipalID != principal.ID || policy.Reason == nil || *policy.Reason != reason {
 		t.Errorf("updated policy = %#v", policy)
 	}
+	withoutPreparation := NewReviewService(IntegrationSet{"prod": {ClusterName: "colo"}}, store)
+	withoutPreparation.now = func() time.Time { return now }
+	if _, err := withoutPreparation.UpdateStagePolicy(
+		t.Context(),
+		active.ID,
+		PolicyUpdate{Mode: PolicyModeReviewRequired},
+		principal,
+	); !errors.Is(err, ErrReviewContextUnavailable) {
+		t.Fatalf("unconfigured review-required UpdateStagePolicy() error = %v", err)
+	}
+
+	active.Application = ""
+	store.stages[0] = active
+	if _, err := service.UpdateStagePolicy(
+		t.Context(),
+		active.ID,
+		PolicyUpdate{Mode: PolicyModeReviewRequired},
+		principal,
+	); !errors.Is(err, ErrReviewContextUnavailable) {
+		t.Fatalf("unenriched review-required UpdateStagePolicy() error = %v", err)
+	}
+	if _, err := service.UpdateStagePolicy(
+		t.Context(),
+		active.ID,
+		PolicyUpdate{Mode: PolicyModeAutomatic},
+		principal,
+	); err != nil {
+		t.Fatalf("unenriched automatic UpdateStagePolicy() error = %v", err)
+	}
 }
 
 func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
@@ -303,7 +332,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 		promotions:    []Promotion{record},
 		promotionPage: PromotionReviewPage{Items: []Promotion{expired}, Total: 5},
 	}
-	service := NewReviewService(store)
+	service := NewReviewService(nil, store)
 	service.now = func() time.Time { return now }
 	filter := PromotionListFilter{
 		RepositoryID: new(uuid.New()),
@@ -337,7 +366,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 	t.Parallel()
 
-	service := NewReviewService(&reviewStore{})
+	service := NewReviewService(nil, &reviewStore{})
 	_, err := service.ListPromotions(t.Context(), PromotionListFilter{
 		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
 		Limit:     DefaultListLimit,
@@ -363,7 +392,7 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 		}},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(store)
+	service := NewReviewService(nil, store)
 	service.now = func() time.Time { return now }
 	comment := "Validated the RBAC changes"
 
@@ -404,6 +433,20 @@ func reviewStage(integration, cluster, project, name string, now time.Time) Stag
 		Freight:         Freight{Items: []FreightItem{}},
 		FirstObservedAt: now.Add(-time.Hour),
 		LastObservedAt:  now,
+	}
+}
+
+func reviewIntegrationSet() IntegrationSet {
+	return IntegrationSet{
+		"prod": {
+			ClusterName:  "colo",
+			Repositories: []string{"ops"},
+			Preparation: PreparationConfig{
+				Repository: "ops",
+				Target:     "kargo-promotions",
+				Action:     "prepare-review",
+			},
+		},
 	}
 }
 

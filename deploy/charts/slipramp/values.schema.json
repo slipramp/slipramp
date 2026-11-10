@@ -545,10 +545,7 @@
       "additionalProperties": false,
       "required": [
         "cluster",
-        "repositories",
-        "preparation",
-        "maximumStageObservationAge",
-        "pendingReviewRetention"
+        "maximumStageObservationAge"
       ],
       "properties": {
         "cluster": { "$ref": "#/$defs/dnsLabel" },

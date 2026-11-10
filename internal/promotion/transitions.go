@@ -19,17 +19,22 @@ func TransitionCreationDispatchClaim(
 	state CreationDispatchState,
 	claim CreationDispatchClaim,
 ) (CreationDispatchClaimTransition, error) {
-	if source != SourceSlipramp || lifecycle.State != LifecycleCreating || state.NextAttemptAt == nil ||
-		state.DispatchedAt != nil || state.NextAttemptAt.After(claim.ClaimedAt) {
+	if source != SourceSlipramp || state.NextAttemptAt == nil || state.DispatchedAt != nil || state.FailedAt != nil ||
+		state.NextAttemptAt.After(claim.ClaimedAt) {
 		return CreationDispatchClaimTransition{}, ErrCreationDispatchConflict
 	}
 	if state.AttemptCount >= len(claim.RetryDelays) {
-		failed, err := TransitionLifecycle(lifecycle, LifecycleError, false, claim.ClaimedAt)
-		if err != nil {
-			return CreationDispatchClaimTransition{}, err
-		}
 		state.NextAttemptAt = nil
-		return CreationDispatchClaimTransition{State: state, Lifecycle: failed, Exhausted: true}, nil
+		state.FailedAt = new(claim.ClaimedAt)
+		state.Diagnostic = new(claim.ExhaustedMessage)
+		if lifecycle.State == LifecycleCreating {
+			failed, err := TransitionLifecycle(lifecycle, LifecycleError, true, claim.ClaimedAt)
+			if err != nil {
+				return CreationDispatchClaimTransition{}, err
+			}
+			lifecycle = failed
+		}
+		return CreationDispatchClaimTransition{State: state, Lifecycle: lifecycle, Exhausted: true}, nil
 	}
 
 	delay := claim.RetryDelays[state.AttemptCount]
@@ -51,6 +56,9 @@ func TransitionCreationDispatchReport(
 	transitioned := current
 	switch report.Result {
 	case CreationDispatchCreated:
+		if current.CreationDispatch.FailedAt != nil {
+			return current, false, nil
+		}
 		if current.KargoExecution.PromotionUID != nil {
 			if *current.KargoExecution.PromotionUID != *report.KargoUID ||
 				current.ExternalPromotionID != *report.KargoName {
@@ -61,39 +69,42 @@ func TransitionCreationDispatchReport(
 		transitioned.ExternalPromotionID = *report.KargoName
 		transitioned.CreationDispatch.NextAttemptAt = nil
 		transitioned.CreationDispatch.DispatchedAt = new(report.ReportedAt)
+		transitioned.CreationDispatch.Diagnostic = nil
 		transitioned.KargoExecution.PromotionUID = new(*report.KargoUID)
 		if transitioned.KargoExecution.Outcome == nil &&
 			(transitioned.Lifecycle.State == LifecycleCreating ||
 				transitioned.Lifecycle.State == LifecycleApproved) {
 			transitioned.KargoExecution.NextReconciliationAt = new(report.ReportedAt)
 		}
-		if transitioned.Lifecycle.State == LifecycleCreating {
-			transitioned.Message = nil
-		}
 	case CreationDispatchRetryable:
 		if report.Attempt != current.CreationDispatch.AttemptCount ||
-			current.Lifecycle.State != LifecycleCreating || current.KargoExecution.PromotionUID != nil {
+			current.CreationDispatch.DispatchedAt != nil || current.CreationDispatch.FailedAt != nil ||
+			current.KargoExecution.PromotionUID != nil {
 			return current, false, nil
 		}
-		transitioned.Message = cloneString(report.Diagnostic)
+		transitioned.CreationDispatch.Diagnostic = cloneString(report.Diagnostic)
 	case CreationDispatchFailed:
 		if report.Attempt != current.CreationDispatch.AttemptCount ||
-			current.Lifecycle.State != LifecycleCreating || current.KargoExecution.PromotionUID != nil {
+			current.CreationDispatch.DispatchedAt != nil || current.CreationDispatch.FailedAt != nil ||
+			current.KargoExecution.PromotionUID != nil {
 			return current, false, nil
 		}
-		lifecycle, err := TransitionLifecycle(
-			current.Lifecycle,
-			LifecycleError,
-			current.ReviewRequired,
-			report.ReportedAt,
-		)
-		if err != nil {
-			return Promotion{}, false, err
+		if current.Lifecycle.State == LifecycleCreating {
+			lifecycle, err := TransitionLifecycle(
+				current.Lifecycle,
+				LifecycleError,
+				current.ReviewRequired,
+				report.ReportedAt,
+			)
+			if err != nil {
+				return Promotion{}, false, err
+			}
+			transitioned.Lifecycle = lifecycle
 		}
-		transitioned.Lifecycle = lifecycle
 		transitioned.CreationDispatch.NextAttemptAt = nil
+		transitioned.CreationDispatch.FailedAt = new(report.ReportedAt)
+		transitioned.CreationDispatch.Diagnostic = cloneString(report.Diagnostic)
 		transitioned.KargoExecution.NextReconciliationAt = nil
-		transitioned.Message = cloneString(report.Diagnostic)
 	default:
 		return Promotion{}, false, fmt.Errorf("%w: dispatch result is invalid", ErrInvalid)
 	}
@@ -326,7 +337,7 @@ func TransitionReconciliationReport(
 		}
 		transition.Promotion.KargoExecution.NextReconciliationAt = nil
 		transition.OutcomeRecorded = true
-		if transition.Promotion.Lifecycle.State == LifecycleCreating &&
+		if transition.Promotion.ReviewRequired && transition.Promotion.Lifecycle.State == LifecycleCreating &&
 			transition.Promotion.RequestDigest == (RequestDigest{}) {
 			lifecycle, err := TransitionLifecycle(
 				transition.Promotion.Lifecycle,

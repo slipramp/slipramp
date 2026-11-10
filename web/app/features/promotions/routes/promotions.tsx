@@ -186,7 +186,7 @@ function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
 function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stageName = promotion.stageSnapshot.name;
   const project = promotion.stageSnapshot.project;
-  const application = promotion.stageSnapshot.application;
+  const application = promotion.stageSnapshot.enrichment?.application ?? "Kargo native";
 
   return (
     <Table.Tr>

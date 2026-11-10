@@ -60,9 +60,7 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	record.SourceStageID = &sourceStageID
 	record.SelectedFreightSnapshot = &FreightItem{Origin: "Warehouse/app", Name: "freight-42", Artifacts: []FreightArtifact{}}
 	record.RequestDigest = RequestDigest{}
-	record.BaseRevision = ""
-	record.CandidateRevision = ""
-	record.CandidateBranch = ""
+	record.ReviewContext.Git = nil
 	record.Lifecycle.State = LifecycleCreating
 	record.Preparation.RepositoryID = nil
 	record.Preparation.CatalogRevisionID = nil
@@ -143,14 +141,20 @@ func validPromotion() Promotion {
 		RequestDigest:       RequestDigest{1},
 		StageID:             stage.ID,
 		StageSnapshot:       stage.PromotionSnapshot(),
-		RepositoryID:        uuid.New(),
-		RepositorySnapshot:  PromotionRepositorySnapshot{Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main"},
-		BaseRevision:        "8b7f1d217a6b0000000000000000000000000000",
-		CandidateRevision:   "f4cb21a88e1d0000000000000000000000000000",
-		CandidateBranch:     "kargo/promotion/external-dns-01jbe4q8",
-		TargetBranch:        "main",
-		PolicySnapshot:      PromotionPolicySnapshot{ConfiguredMode: PolicyModeReviewRequired, EffectiveMode: PolicyModeReviewRequired},
-		ReviewRequired:      true,
+		ReviewContext: &PromotionReviewContext{
+			RepositoryID: uuid.New(),
+			RepositorySnapshot: PromotionRepositorySnapshot{
+				Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main",
+			},
+			TargetBranch: stage.TargetBranch,
+			Git: &PromotionGitContext{
+				BaseRevision:      "8b7f1d217a6b0000000000000000000000000000",
+				CandidateRevision: "f4cb21a88e1d0000000000000000000000000000",
+				CandidateBranch:   "kargo/promotion/external-dns-01jbe4q8",
+			},
+		},
+		PolicySnapshot: PromotionPolicySnapshot{ConfiguredMode: PolicyModeReviewRequired, EffectiveMode: PolicyModeReviewRequired},
+		ReviewRequired: true,
 		Lifecycle: PromotionLifecycle{
 			State:     LifecyclePending,
 			ExpiresAt: new(now.Add(8 * 24 * time.Hour)),

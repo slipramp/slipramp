@@ -374,15 +374,23 @@ function StageCard({
               <PromotionCreateButton
                 choices={choices}
                 onClick={() => onPromote(choices)}
-                unavailableLabel={stage.capabilities.issues.join(" ") || undefined}
+                unavailableLabel={stage.capabilities.promotion.reason}
               />
             ) : null}
           </Group>
         </Group>
 
-        {stage.capabilities.issues.length > 0 ? (
+        {stage.capabilities.review.status === "unavailable" ||
+        stage.capabilities.branchDrift.status === "unavailable" ? (
           <Alert color="orange" title="Limited Slipramp capabilities">
-            {stage.capabilities.issues.join(" ")}
+            <Stack gap={4}>
+              {stage.capabilities.review.reason ? (
+                <Text size="sm">{stage.capabilities.review.reason}</Text>
+              ) : null}
+              {stage.capabilities.branchDrift.reason ? (
+                <Text size="sm">{stage.capabilities.branchDrift.reason}</Text>
+              ) : null}
+            </Stack>
           </Alert>
         ) : null}
       </Stack>
@@ -502,9 +510,19 @@ function PolicyForm({
           name="policyMode"
           data={[
             { label: "Automatic", value: "automatic" },
-            { label: "Review required", value: "review-required" },
+            {
+              disabled: stage.capabilities.review.status !== "ready",
+              label: "Review required",
+              value: "review-required",
+            },
           ]}
         />
+        {stage.capabilities.review.status !== "ready" ? (
+          <Text c="dimmed" size="sm">
+            {stage.capabilities.review.reason} The existing policy is preserved until you save an
+            explicit change.
+          </Text>
+        ) : null}
         <TextInput defaultValue={stage.policy.expiresAt} label="Expires at" name="expiresAt" />
         <TextInput
           defaultValue={stage.policy.reason}

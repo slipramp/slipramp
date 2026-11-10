@@ -3,6 +3,7 @@ import type {
   PromotionBranchDriftStage,
   PromotionFreightItem,
   PromotionProjectStage,
+  PromotionStageCapability,
   PromotionStagePolicy,
   PromotionStagePolicyUpdate,
 } from "~/api/generated";
@@ -12,6 +13,7 @@ export type PromotionChoice = {
   targetStageName: string;
   targetEnvironment: string;
   targetPolicy: PromotionStagePolicy;
+  reviewCapability: PromotionStageCapability;
   sourceStageId?: string;
   sourceStageName: string;
   sourceEnvironment: string;
@@ -23,10 +25,17 @@ export type PromotionCreationActionResult = {
   promotionId?: string;
 };
 
-export type PromotionReviewPolicySelection = "unchanged" | "permanent" | "30m" | "1h" | "24h";
+export type PromotionReviewPolicySelection =
+  | "unchanged"
+  | "automatic"
+  | "permanent"
+  | "30m"
+  | "1h"
+  | "24h";
 
 const promotionReviewPolicySelections = new Set<PromotionReviewPolicySelection>([
   "unchanged",
+  "automatic",
   "permanent",
   "30m",
   "1h",
@@ -46,6 +55,7 @@ export function promotionReviewPolicyUpdate(
   now = new Date(),
 ): PromotionStagePolicyUpdate | undefined {
   if (selection === "unchanged") return undefined;
+  if (selection === "automatic") return { mode: "automatic" };
   if (selection === "permanent") return { mode: "review-required" };
 
   const durationMilliseconds = {
@@ -61,7 +71,7 @@ export function promotionReviewPolicyUpdate(
 }
 
 export function projectPromotionChoices(stage: PromotionProjectStage): PromotionChoice[] {
-  if (stage.capabilities.promotion !== "ready") return [];
+  if (stage.capabilities.promotion.status !== "ready") return [];
 
   return stage.requestedFreight.flatMap((request) =>
     request.candidates
@@ -74,6 +84,7 @@ export function projectPromotionChoices(stage: PromotionProjectStage): Promotion
         targetStageId: stage.id,
         targetStageName: stage.name,
         targetPolicy: stage.policy,
+        reviewCapability: stage.capabilities.review,
       })),
   );
 }
@@ -81,13 +92,14 @@ export function projectPromotionChoices(stage: PromotionProjectStage): Promotion
 export function inPlacePromotionChoices(stage: PromotionBranchDriftStage): PromotionChoice[] {
   return stage.freight.items.map((freight) => ({
     freight,
-    sourceEnvironment: stage.environment,
+    sourceEnvironment: stage.environment ?? stage.name,
     sourceStageId: stage.id,
     sourceStageName: stage.name,
-    targetEnvironment: stage.environment,
+    targetEnvironment: stage.environment ?? stage.name,
     targetStageId: stage.id,
     targetStageName: stage.name,
     targetPolicy: stage.policy,
+    reviewCapability: stage.reviewCapability,
   }));
 }
 

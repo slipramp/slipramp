@@ -838,6 +838,30 @@ func (e PromotionBranchDriftStatus) Valid() bool {
 	}
 }
 
+// Defines values for PromotionCreationDispatchPhase.
+const (
+	PromotionCreationDispatchPhaseAwaitingDelivery PromotionCreationDispatchPhase = "awaiting-delivery"
+	PromotionCreationDispatchPhaseDelivered        PromotionCreationDispatchPhase = "delivered"
+	PromotionCreationDispatchPhaseFailed           PromotionCreationDispatchPhase = "failed"
+	PromotionCreationDispatchPhaseNotApplicable    PromotionCreationDispatchPhase = "not-applicable"
+)
+
+// Valid indicates whether the value is a known member of the PromotionCreationDispatchPhase enum.
+func (e PromotionCreationDispatchPhase) Valid() bool {
+	switch e {
+	case PromotionCreationDispatchPhaseAwaitingDelivery:
+		return true
+	case PromotionCreationDispatchPhaseDelivered:
+		return true
+	case PromotionCreationDispatchPhaseFailed:
+		return true
+	case PromotionCreationDispatchPhaseNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionDecisionDecision.
 const (
 	PromotionDecisionDecisionApproved PromotionDecisionDecision = "approved"
@@ -988,51 +1012,18 @@ func (e PromotionSource) Valid() bool {
 	}
 }
 
-// Defines values for PromotionStageCapabilitiesBranchDrift.
+// Defines values for PromotionStageCapabilityStatus.
 const (
-	PromotionStageCapabilitiesBranchDriftReady       PromotionStageCapabilitiesBranchDrift = "ready"
-	PromotionStageCapabilitiesBranchDriftUnavailable PromotionStageCapabilitiesBranchDrift = "unavailable"
+	PromotionStageCapabilityStatusReady       PromotionStageCapabilityStatus = "ready"
+	PromotionStageCapabilityStatusUnavailable PromotionStageCapabilityStatus = "unavailable"
 )
 
-// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesBranchDrift enum.
-func (e PromotionStageCapabilitiesBranchDrift) Valid() bool {
+// Valid indicates whether the value is a known member of the PromotionStageCapabilityStatus enum.
+func (e PromotionStageCapabilityStatus) Valid() bool {
 	switch e {
-	case PromotionStageCapabilitiesBranchDriftReady:
+	case PromotionStageCapabilityStatusReady:
 		return true
-	case PromotionStageCapabilitiesBranchDriftUnavailable:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PromotionStageCapabilitiesPolicy.
-const (
-	PromotionStageCapabilitiesPolicyReady PromotionStageCapabilitiesPolicy = "ready"
-)
-
-// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesPolicy enum.
-func (e PromotionStageCapabilitiesPolicy) Valid() bool {
-	switch e {
-	case PromotionStageCapabilitiesPolicyReady:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PromotionStageCapabilitiesPromotion.
-const (
-	PromotionStageCapabilitiesPromotionReady       PromotionStageCapabilitiesPromotion = "ready"
-	PromotionStageCapabilitiesPromotionUnavailable PromotionStageCapabilitiesPromotion = "unavailable"
-)
-
-// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesPromotion enum.
-func (e PromotionStageCapabilitiesPromotion) Valid() bool {
-	switch e {
-	case PromotionStageCapabilitiesPromotionReady:
-		return true
-	case PromotionStageCapabilitiesPromotionUnavailable:
+	case PromotionStageCapabilityStatusUnavailable:
 		return true
 	default:
 		return false
@@ -2697,14 +2688,19 @@ type KargoPromotionReconciliationReport struct {
 // KargoPromotionReconciliationReportPhase Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
 type KargoPromotionReconciliationReportPhase string
 
-// KargoPromotionRequest defines model for KargoPromotionRequest.
+// KargoPromotionRequest Native Kargo Promotion identity with optional Git audit context. Supply baseRevision, candidateRevision, and candidateBranch together or omit all three. Git audit context is required when the effective policy requires Slipramp review.
 type KargoPromotionRequest struct {
-	BaseRevision        GitRevision `json:"baseRevision"`
-	CandidateBranch     string      `json:"candidateBranch"`
-	CandidateRevision   GitRevision `json:"candidateRevision"`
-	ExternalPromotionID string      `json:"externalPromotionId"`
-	Project             CatalogName `json:"project"`
-	Stage               string      `json:"stage"`
+	// BaseRevision Base Git revision for Slipramp review and audit context.
+	BaseRevision *GitRevision `json:"baseRevision,omitempty"`
+
+	// CandidateBranch Candidate branch for Slipramp review and audit context.
+	CandidateBranch *string `json:"candidateBranch,omitempty"`
+
+	// CandidateRevision Candidate Git revision for Slipramp review and audit context.
+	CandidateRevision   *GitRevision `json:"candidateRevision,omitempty"`
+	ExternalPromotionID string       `json:"externalPromotionId"`
+	Project             CatalogName  `json:"project"`
+	Stage               string       `json:"stage"`
 }
 
 // KargoPromotionResponse defines model for KargoPromotionResponse.
@@ -3159,53 +3155,45 @@ type ProductPrincipal struct {
 // Promotion defines model for Promotion.
 type Promotion struct {
 	// ArgoCdURL Direct link to the snapshotted Stage Application in the configured Argo CD UI.
-	ArgoCdURL            *string                `json:"argoCdUrl,omitempty"`
-	ArgoDiffArtifact     *Artifact              `json:"argoDiffArtifact,omitempty"`
-	ArgoDiffArtifactID   *openapi_types.UUID    `json:"argoDiffArtifactId,omitempty"`
-	BaseCommit           *GitCommit             `json:"baseCommit,omitempty"`
-	CandidateBranch      *string                `json:"candidateBranch,omitempty"`
-	CandidateCommit      *GitCommit             `json:"candidateCommit,omitempty"`
-	CreatedAt            time.Time              `json:"createdAt"`
-	DecidedAt            *time.Time             `json:"decidedAt,omitempty"`
-	Decision             *PromotionDecision     `json:"decision,omitempty"`
-	DispatchAttemptCount int                    `json:"dispatchAttemptCount"`
-	DispatchedAt         *time.Time             `json:"dispatchedAt,omitempty"`
-	ExpiresAt            *time.Time             `json:"expiresAt,omitempty"`
-	ExternalPromotionID  string                 `json:"externalPromotionId"`
-	GitDiffArtifact      *Artifact              `json:"gitDiffArtifact,omitempty"`
-	GitDiffArtifactID    *openapi_types.UUID    `json:"gitDiffArtifactId,omitempty"`
-	ID                   openapi_types.UUID     `json:"id"`
-	Integration          CatalogName            `json:"integration"`
-	KargoOutcome         *KargoPromotionOutcome `json:"kargoOutcome,omitempty"`
-	KargoPromotionUID    *string                `json:"kargoPromotionUid,omitempty"`
+	ArgoCdURL           *string                   `json:"argoCdUrl,omitempty"`
+	ArgoDiffArtifact    *Artifact                 `json:"argoDiffArtifact,omitempty"`
+	ArgoDiffArtifactID  *openapi_types.UUID       `json:"argoDiffArtifactId,omitempty"`
+	CreatedAt           time.Time                 `json:"createdAt"`
+	CreationDispatch    PromotionCreationDispatch `json:"creationDispatch"`
+	DecidedAt           *time.Time                `json:"decidedAt,omitempty"`
+	Decision            *PromotionDecision        `json:"decision,omitempty"`
+	ExpiresAt           *time.Time                `json:"expiresAt,omitempty"`
+	ExternalPromotionID string                    `json:"externalPromotionId"`
+	GitDiffArtifact     *Artifact                 `json:"gitDiffArtifact,omitempty"`
+	GitDiffArtifactID   *openapi_types.UUID       `json:"gitDiffArtifactId,omitempty"`
+	ID                  openapi_types.UUID        `json:"id"`
+	Integration         CatalogName               `json:"integration"`
+	KargoOutcome        *KargoPromotionOutcome    `json:"kargoOutcome,omitempty"`
+	KargoPromotionUID   *string                   `json:"kargoPromotionUid,omitempty"`
 
 	// KargoURL Direct link to this Promotion in the configured Kargo UI.
-	KargoURL       *string    `json:"kargoUrl,omitempty"`
-	LastDispatchAt *time.Time `json:"lastDispatchAt,omitempty"`
+	KargoURL *string `json:"kargoUrl,omitempty"`
 
 	// LastReconciliationAt Most recent time reconciliation work was claimed by the responsible Controller.
 	LastReconciliationAt *time.Time `json:"lastReconciliationAt,omitempty"`
 	Message              *string    `json:"message,omitempty"`
-	NextDispatchAt       *time.Time `json:"nextDispatchAt,omitempty"`
 
-	// NextReconciliationAt Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
-	NextReconciliationAt   *time.Time                  `json:"nextReconciliationAt,omitempty"`
-	PolicySnapshot         PromotionStagePolicy        `json:"policySnapshot"`
-	PreparationCompletedAt *time.Time                  `json:"preparationCompletedAt,omitempty"`
-	PreparationRun         *Run                        `json:"preparationRun,omitempty"`
-	PreparationRunID       *openapi_types.UUID         `json:"preparationRunId,omitempty"`
-	RepositoryID           openapi_types.UUID          `json:"repositoryId"`
-	RepositorySnapshot     PromotionRepositorySnapshot `json:"repositorySnapshot"`
-	RequestedBy            RunActor                    `json:"requestedBy"`
-	ReviewRequired         bool                        `json:"reviewRequired"`
-	SelectedFreight        *PromotionFreightItem       `json:"selectedFreight,omitempty"`
-	Source                 PromotionSource             `json:"source"`
-	SourceStageID          *openapi_types.UUID         `json:"sourceStageId,omitempty"`
-	StageID                openapi_types.UUID          `json:"stageId"`
-	StageSnapshot          PromotionStageSnapshot      `json:"stageSnapshot"`
-	Status                 PromotionStatus             `json:"status"`
-	TargetBranch           string                      `json:"targetBranch"`
-	UpdatedAt              time.Time                   `json:"updatedAt"`
+	// NextReconciliationAt Next durable inspection time while the responsible Controller awaits a terminal Kargo outcome.
+	NextReconciliationAt   *time.Time              `json:"nextReconciliationAt,omitempty"`
+	PolicySnapshot         PromotionStagePolicy    `json:"policySnapshot"`
+	PreparationCompletedAt *time.Time              `json:"preparationCompletedAt,omitempty"`
+	PreparationRun         *Run                    `json:"preparationRun,omitempty"`
+	PreparationRunID       *openapi_types.UUID     `json:"preparationRunId,omitempty"`
+	RequestedBy            RunActor                `json:"requestedBy"`
+	ReviewContext          *PromotionReviewContext `json:"reviewContext,omitempty"`
+	ReviewRequired         bool                    `json:"reviewRequired"`
+	SelectedFreight        *PromotionFreightItem   `json:"selectedFreight,omitempty"`
+	Source                 PromotionSource         `json:"source"`
+	SourceStageID          *openapi_types.UUID     `json:"sourceStageId,omitempty"`
+	StageID                openapi_types.UUID      `json:"stageId"`
+	StageSnapshot          PromotionStageSnapshot  `json:"stageSnapshot"`
+	Status                 PromotionStatus         `json:"status"`
+	UpdatedAt              time.Time               `json:"updatedAt"`
 }
 
 // PromotionBranchDriftList defines model for PromotionBranchDriftList.
@@ -3237,9 +3225,9 @@ type PromotionBranchDriftStage struct {
 	AcknowledgedRenderBaseCommit *GitCommit         `json:"acknowledgedRenderBaseCommit,omitempty"`
 	AcknowledgedRenderCommit     *GitCommit         `json:"acknowledgedRenderCommit,omitempty"`
 	AcknowledgedSourceCommit     *GitCommit         `json:"acknowledgedSourceCommit,omitempty"`
-	Application                  string             `json:"application"`
+	Application                  *string            `json:"application,omitempty"`
 	Cluster                      CatalogName        `json:"cluster"`
-	Environment                  string             `json:"environment"`
+	Environment                  *string            `json:"environment,omitempty"`
 	Freight                      PromotionFreight   `json:"freight"`
 	ID                           openapi_types.UUID `json:"id"`
 	Integration                  CatalogName        `json:"integration"`
@@ -3252,6 +3240,7 @@ type PromotionBranchDriftStage struct {
 	NoOpRender         *bool                      `json:"noOpRender,omitempty"`
 	Policy             PromotionStagePolicy       `json:"policy"`
 	Project            CatalogName                `json:"project"`
+	ReviewCapability   PromotionStageCapability   `json:"reviewCapability"`
 	SourceBranchCommit *GitCommit                 `json:"sourceBranchCommit,omitempty"`
 	SourceDrift        *bool                      `json:"sourceDrift,omitempty"`
 	SourcePaths        []string                   `json:"sourcePaths"`
@@ -3274,6 +3263,20 @@ type PromotionCreate struct {
 	// SourceStageID Source Stage supplying the Freight. Omit for directly requested Warehouse Freight.
 	SourceStageID *openapi_types.UUID `json:"sourceStageId,omitempty"`
 }
+
+// PromotionCreationDispatch defines model for PromotionCreationDispatch.
+type PromotionCreationDispatch struct {
+	AttemptCount  int                            `json:"attemptCount"`
+	DeliveredAt   *time.Time                     `json:"deliveredAt,omitempty"`
+	Diagnostic    *string                        `json:"diagnostic,omitempty"`
+	FailedAt      *time.Time                     `json:"failedAt,omitempty"`
+	LastAttemptAt *time.Time                     `json:"lastAttemptAt,omitempty"`
+	NextAttemptAt *time.Time                     `json:"nextAttemptAt,omitempty"`
+	Phase         PromotionCreationDispatchPhase `json:"phase"`
+}
+
+// PromotionCreationDispatchPhase defines model for PromotionCreationDispatch.Phase.
+type PromotionCreationDispatchPhase string
 
 // PromotionDecision defines model for PromotionDecision.
 type PromotionDecision struct {
@@ -3356,6 +3359,13 @@ type PromotionFreightVerification struct {
 	// LongestCompletedSoak Go duration representing the longest completed continuous occupancy.
 	LongestCompletedSoak string `json:"longestCompletedSoak"`
 	Stage                string `json:"stage"`
+}
+
+// PromotionGitContext defines model for PromotionGitContext.
+type PromotionGitContext struct {
+	BaseCommit      GitCommit `json:"baseCommit"`
+	CandidateBranch string    `json:"candidateBranch"`
+	CandidateCommit GitCommit `json:"candidateCommit"`
 }
 
 // PromotionList defines model for PromotionList.
@@ -3453,6 +3463,14 @@ type PromotionRepositorySnapshot struct {
 	Name                   CatalogName `json:"name"`
 }
 
+// PromotionReviewContext defines model for PromotionReviewContext.
+type PromotionReviewContext struct {
+	Git                *PromotionGitContext        `json:"git,omitempty"`
+	RepositoryID       openapi_types.UUID          `json:"repositoryId"`
+	RepositorySnapshot PromotionRepositorySnapshot `json:"repositorySnapshot"`
+	TargetBranch       string                      `json:"targetBranch"`
+}
+
 // PromotionRunSource defines model for PromotionRunSource.
 type PromotionRunSource struct {
 	PromotionID openapi_types.UUID `json:"promotionId"`
@@ -3494,20 +3512,24 @@ type PromotionStage struct {
 
 // PromotionStageCapabilities defines model for PromotionStageCapabilities.
 type PromotionStageCapabilities struct {
-	BranchDrift PromotionStageCapabilitiesBranchDrift `json:"branchDrift"`
-	Issues      []string                              `json:"issues"`
-	Policy      PromotionStageCapabilitiesPolicy      `json:"policy"`
-	Promotion   PromotionStageCapabilitiesPromotion   `json:"promotion"`
+	// BranchDrift Cached Git branch-drift capability.
+	BranchDrift PromotionStageCapability `json:"branchDrift"`
+
+	// Promotion Native Kargo Promotion capability using exact observed Freight.
+	Promotion PromotionStageCapability `json:"promotion"`
+
+	// Review Slipramp preparation, preview, and operator review capability.
+	Review PromotionStageCapability `json:"review"`
 }
 
-// PromotionStageCapabilitiesBranchDrift defines model for PromotionStageCapabilities.BranchDrift.
-type PromotionStageCapabilitiesBranchDrift string
+// PromotionStageCapability defines model for PromotionStageCapability.
+type PromotionStageCapability struct {
+	Reason *string                        `json:"reason,omitempty"`
+	Status PromotionStageCapabilityStatus `json:"status"`
+}
 
-// PromotionStageCapabilitiesPolicy defines model for PromotionStageCapabilities.Policy.
-type PromotionStageCapabilitiesPolicy string
-
-// PromotionStageCapabilitiesPromotion defines model for PromotionStageCapabilities.Promotion.
-type PromotionStageCapabilitiesPromotion string
+// PromotionStageCapabilityStatus defines model for PromotionStageCapability.Status.
+type PromotionStageCapabilityStatus string
 
 // PromotionStageCondition defines model for PromotionStageCondition.
 type PromotionStageCondition struct {
@@ -3596,9 +3618,8 @@ type PromotionStagePromotionReference struct {
 
 // PromotionStageSnapshot defines model for PromotionStageSnapshot.
 type PromotionStageSnapshot struct {
-	Application                     string                           `json:"application"`
 	Cluster                         CatalogName                      `json:"cluster"`
-	Environment                     string                           `json:"environment"`
+	Enrichment                      *PromotionStageEnrichment        `json:"enrichment,omitempty"`
 	Freight                         PromotionFreight                 `json:"freight"`
 	ID                              openapi_types.UUID               `json:"id"`
 	Integration                     CatalogName                      `json:"integration"`
@@ -3606,13 +3627,9 @@ type PromotionStageSnapshot struct {
 	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
 	Name                            string                           `json:"name"`
 	Project                         CatalogName                      `json:"project"`
-	Repository                      CatalogName                      `json:"repository"`
-	RepositoryURL                   string                           `json:"repositoryUrl"`
 	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
 	ResourceVersion                 string                           `json:"resourceVersion"`
-	SourcePaths                     []string                         `json:"sourcePaths"`
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                           `json:"targetBranch"`
 }
 
 // PromotionStatus defines model for PromotionStatus.

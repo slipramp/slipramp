@@ -132,6 +132,9 @@ func upsertPromotionStagePolicy(
 		},
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if record.Mode == promotion.PolicyModeReviewRequired {
+			return promotion.StagePolicy{}, promotion.ErrReviewContextUnavailable
+		}
 		return promotion.StagePolicy{}, promotion.ErrTransitionConflict
 	}
 	if err != nil {
@@ -625,11 +628,6 @@ func promotionDatabaseParams(
 		RequestDigest:                nullablePromotionRequestDigest(record.RequestDigest),
 		StageID:                      databaseUUID(record.StageID),
 		SourceStageID:                optionalDatabaseUUID(record.SourceStageID),
-		RepositoryID:                 databaseUUID(record.RepositoryID),
-		BaseRevision:                 nullableText(record.BaseRevision),
-		CandidateRevision:            nullableText(record.CandidateRevision),
-		CandidateBranch:              nullableText(record.CandidateBranch),
-		TargetBranch:                 record.TargetBranch,
 		ReviewRequired:               record.ReviewRequired,
 		Status:                       string(record.Lifecycle.State),
 		Message:                      record.Message,
@@ -637,6 +635,8 @@ func promotionDatabaseParams(
 		NextDispatchAt:               optionalDatabaseTime(record.CreationDispatch.NextAttemptAt),
 		LastDispatchAt:               optionalDatabaseTime(record.CreationDispatch.LastAttemptAt),
 		DispatchedAt:                 optionalDatabaseTime(record.CreationDispatch.DispatchedAt),
+		DispatchFailedAt:             optionalDatabaseTime(record.CreationDispatch.FailedAt),
+		DispatchDiagnostic:           record.CreationDispatch.Diagnostic,
 		KargoPromotionUid:            record.KargoExecution.PromotionUID,
 		NextReconciliationAt:         optionalDatabaseTime(record.KargoExecution.NextReconciliationAt),
 		PreparationRepositoryID:      optionalDatabaseUUID(record.Preparation.RepositoryID),
@@ -651,6 +651,15 @@ func promotionDatabaseParams(
 		DecidedAt:                    optionalDatabaseTime(record.Lifecycle.DecidedAt),
 		ExpiresAt:                    optionalDatabaseTime(record.Lifecycle.ExpiresAt),
 		UpdatedAt:                    databaseTime(record.UpdatedAt),
+	}
+	if record.ReviewContext != nil {
+		params.RepositoryID = databaseUUID(record.ReviewContext.RepositoryID)
+		params.TargetBranch = new(record.ReviewContext.TargetBranch)
+		if record.ReviewContext.Git != nil {
+			params.BaseRevision = new(record.ReviewContext.Git.BaseRevision)
+			params.CandidateRevision = new(record.ReviewContext.Git.CandidateRevision)
+			params.CandidateBranch = new(record.ReviewContext.Git.CandidateBranch)
+		}
 	}
 	if err := encodePromotionSnapshots(record, &params); err != nil {
 		return storedb.CreatePromotionParams{}, err
@@ -733,11 +742,6 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		RequestDigest:       digest,
 		StageID:             uuid.UUID(row.StageID.Bytes),
 		SourceStageID:       applicationUUID(row.SourceStageID),
-		RepositoryID:        uuid.UUID(row.RepositoryID.Bytes),
-		BaseRevision:        textValue(row.BaseRevision),
-		CandidateRevision:   textValue(row.CandidateRevision),
-		CandidateBranch:     textValue(row.CandidateBranch),
-		TargetBranch:        row.TargetBranch,
 		ReviewRequired:      row.ReviewRequired,
 		Lifecycle: promotion.PromotionLifecycle{
 			State:     promotion.LifecycleState(row.Status),
@@ -750,6 +754,8 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 			NextAttemptAt: applicationTime(row.NextDispatchAt),
 			LastAttemptAt: applicationTime(row.LastDispatchAt),
 			DispatchedAt:  applicationTime(row.DispatchedAt),
+			FailedAt:      applicationTime(row.DispatchFailedAt),
+			Diagnostic:    row.DispatchDiagnostic,
 		},
 		Preparation: promotion.PreparationState{
 			RepositoryID:       applicationUUID(row.PreparationRepositoryID),
@@ -770,6 +776,24 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		RequestedBySnapshot:    requestedBy,
 		CreatedAt:              row.CreatedAt.Time.UTC(),
 		UpdatedAt:              row.UpdatedAt.Time.UTC(),
+	}
+	if row.RepositoryID.Valid {
+		if row.TargetBranch == nil {
+			return promotion.Promotion{}, errors.New("decode Promotion review context: target branch is missing")
+		}
+		record.ReviewContext = &promotion.PromotionReviewContext{
+			RepositoryID: uuid.UUID(row.RepositoryID.Bytes),
+			TargetBranch: *row.TargetBranch,
+		}
+		if row.BaseRevision != nil || row.CandidateRevision != nil || row.CandidateBranch != nil {
+			if row.BaseRevision == nil || row.CandidateRevision == nil || row.CandidateBranch == nil {
+				return promotion.Promotion{}, errors.New("decode Promotion Git context: fields are incomplete")
+			}
+			record.ReviewContext.Git = &promotion.PromotionGitContext{
+				BaseRevision: *row.BaseRevision, CandidateRevision: *row.CandidateRevision,
+				CandidateBranch: *row.CandidateBranch,
+			}
+		}
 	}
 	if row.KargoOutcomePhase != nil {
 		if !row.KargoOutcomeObservedAt.Valid {

@@ -139,15 +139,6 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 		})
 	}
 
-	promotionCapability := api.PromotionStageCapabilitiesPromotionUnavailable
-	if value.Capabilities.PromotionReady {
-		promotionCapability = api.PromotionStageCapabilitiesPromotionReady
-	}
-	branchDriftCapability := api.PromotionStageCapabilitiesBranchDriftUnavailable
-	if value.Capabilities.BranchDriftReady {
-		branchDriftCapability = api.PromotionStageCapabilitiesBranchDriftReady
-	}
-
 	return api.PromotionProjectStage{
 		ID: stage.ID, Name: stage.Name, KubernetesUID: stage.KubernetesUID, ResourceVersion: stage.ResourceVersion,
 		ObservationStale: value.ObservationStale, ControlFlow: stage.ControlFlow, Conditions: conditions,
@@ -158,8 +149,9 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 		Policy: promotionPolicyResponse(value.Policy), PendingPromotionCount: value.PendingPromotionCount,
 		Enrichment: promotionStageEnrichmentResponse(stage),
 		Capabilities: api.PromotionStageCapabilities{
-			Promotion: promotionCapability, Policy: api.PromotionStageCapabilitiesPolicyReady,
-			BranchDrift: branchDriftCapability, Issues: value.Capabilities.Issues,
+			Promotion:   promotionStageCapabilityResponse(value.Capabilities.Promotion),
+			Review:      promotionStageCapabilityResponse(value.Capabilities.Review),
+			BranchDrift: promotionStageCapabilityResponse(value.Capabilities.BranchDrift),
 		},
 		FirstObservedAt: stage.FirstObservedAt, LastObservedAt: stage.LastObservedAt,
 		KargoURL: h.kargoIntegrations.KargoStageURL(stage.Integration, stage.Project, stage.Name),
@@ -167,6 +159,15 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 			stage.Integration, stage.Environment, optionalStringValue(stage.ArgoApplicationNamespace), stage.Application,
 		),
 	}
+}
+
+func promotionStageCapabilityResponse(value projection.StageCapability) api.PromotionStageCapability {
+	status := api.PromotionStageCapabilityStatusUnavailable
+	if value.Ready {
+		status = api.PromotionStageCapabilityStatusReady
+	}
+
+	return api.PromotionStageCapability{Status: status, Reason: optionalString(value.Reason)}
 }
 
 func promotionStagePromotionResponse(value *promotion.StagePromotionReference) *api.PromotionStagePromotionReference {

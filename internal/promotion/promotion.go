@@ -47,10 +47,11 @@ var (
 	ErrPolicyNotFound             = errors.New("promotion policy not found")
 	ErrIntegrationNotFound        = errors.New("kargo integration not found")
 	ErrIntegrationCluster         = errors.New("kargo integration belongs to another cluster")
-	ErrRepositoryNotAllowed       = errors.New("kargo Stage repository is not allowed by the integration")
 	ErrStageArchived              = errors.New("promotion Stage is archived")
 	ErrStageStale                 = errors.New("promotion Stage observation is stale")
 	ErrRepositoryUnavailable      = errors.New("promotion repository is unavailable")
+	ErrReviewContextUnavailable   = errors.New("review context is unavailable for this Stage")
+	ErrStageControlFlow           = errors.New("control-flow Stages cannot materialize Promotions")
 	ErrSnapshotConflict           = errors.New("kargo Stage snapshot identity conflicts with durable state")
 	ErrStaleSnapshot              = errors.New("kargo Stage snapshot is stale")
 	ErrPromotionNotFound          = errors.New("promotion not found")
@@ -153,12 +154,7 @@ type Promotion struct {
 	StageID                 uuid.UUID
 	SourceStageID           *uuid.UUID
 	StageSnapshot           PromotionStageSnapshot
-	RepositoryID            uuid.UUID
-	RepositorySnapshot      PromotionRepositorySnapshot
-	BaseRevision            string
-	CandidateRevision       string
-	CandidateBranch         string
-	TargetBranch            string
+	ReviewContext           *PromotionReviewContext
 	PolicySnapshot          PromotionPolicySnapshot
 	SelectedFreightSnapshot *FreightItem
 	ReviewRequired          bool
@@ -381,9 +377,8 @@ func (s StageSnapshot) Validate() error {
 }
 
 func (p Promotion) Validate() error {
-	if p.ID == uuid.Nil || p.StageID == uuid.Nil || p.RepositoryID == uuid.Nil ||
-		p.RequestedByPrincipalID == uuid.Nil {
-		return fmt.Errorf("%w: Promotion, Stage, Repository, and principal IDs are required", ErrInvalid)
+	if p.ID == uuid.Nil || p.StageID == uuid.Nil || p.RequestedByPrincipalID == uuid.Nil {
+		return fmt.Errorf("%w: Promotion, Stage, and principal IDs are required", ErrInvalid)
 	}
 	if err := kubevalidate.DNSLabel("Kargo integration name", p.Integration); err != nil {
 		return invalid(err)
@@ -400,30 +395,20 @@ func (p Promotion) Validate() error {
 	if !p.PolicySnapshot.ConfiguredMode.Valid() || !p.PolicySnapshot.EffectiveMode.Valid() {
 		return fmt.Errorf("%w: Promotion policy snapshot modes are invalid", ErrInvalid)
 	}
-	hydrated := p.RequestDigest != (RequestDigest{}) || p.BaseRevision != "" ||
-		p.CandidateRevision != "" || p.CandidateBranch != ""
-	if hydrated {
-		if p.RequestDigest == (RequestDigest{}) {
-			return fmt.Errorf("%w: hydrated Promotion request digest is required", ErrInvalid)
-		}
-		if err := validateRevision("base revision", p.BaseRevision); err != nil {
-			return err
-		}
-		if err := validateRevision("candidate revision", p.CandidateRevision); err != nil {
-			return err
-		}
-		if err := validateText("candidate branch", p.CandidateBranch, maximumBranchLength); err != nil {
-			return err
-		}
-		if !strings.HasPrefix(p.CandidateBranch, "kargo/promotion/") {
-			return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
-		}
-	} else if p.Source != SourceSlipramp ||
-		(p.Lifecycle.State != LifecycleCreating && p.Lifecycle.State != LifecycleError) {
+	hydrated := p.RequestDigest != (RequestDigest{})
+	if !hydrated && p.Source != SourceSlipramp {
 		return fmt.Errorf("%w: Promotion callback data is required", ErrInvalid)
 	}
-	if err := validateText("target branch", p.TargetBranch, maximumBranchLength); err != nil {
-		return err
+	if p.ReviewContext != nil {
+		if err := p.ReviewContext.Validate(p.StageSnapshot); err != nil {
+			return err
+		}
+	} else if p.ReviewRequired {
+		return fmt.Errorf("%w: review-required Promotion requires review context", ErrInvalid)
+	}
+	if p.ReviewRequired && p.Lifecycle.State != LifecycleCreating && p.Lifecycle.State != LifecycleError &&
+		(p.ReviewContext == nil || p.ReviewContext.Git == nil) {
+		return fmt.Errorf("%w: Promotion review preparation requires Git context", ErrInvalid)
 	}
 	if p.Source == SourceKargo {
 		if p.SourceStageID != nil || p.SelectedFreightSnapshot != nil {
@@ -461,6 +446,62 @@ func (p Promotion) Validate() error {
 		return err
 	}
 	if err := p.KargoExecution.Validate(p.Source, p.Lifecycle.State, p.CreationDispatch, p.CreatedAt); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c PromotionReviewContext) Validate(stage PromotionStageSnapshot) error {
+	if c.RepositoryID == uuid.Nil {
+		return fmt.Errorf("%w: review Repository ID is required", ErrInvalid)
+	}
+	if err := c.RepositorySnapshot.Validate(); err != nil {
+		return err
+	}
+	if err := validateText("target branch", c.TargetBranch, maximumBranchLength); err != nil {
+		return err
+	}
+	if stage.Enrichment == nil || !stage.Enrichment.ReviewReady() {
+		return fmt.Errorf("%w: Promotion Stage snapshot lacks complete review enrichment", ErrInvalid)
+	}
+	if stage.Enrichment.RepositoryName != c.RepositorySnapshot.Name ||
+		stage.Enrichment.RepositoryURL != c.RepositorySnapshot.CloneURL ||
+		stage.Enrichment.TargetBranch != c.TargetBranch {
+		return fmt.Errorf("%w: Promotion review context does not match its Stage snapshot", ErrInvalid)
+	}
+	if c.Git != nil {
+		return c.Git.Validate()
+	}
+
+	return nil
+}
+
+func (c PromotionGitContext) Validate() error {
+	if err := validateRevision("base revision", c.BaseRevision); err != nil {
+		return err
+	}
+	if err := validateRevision("candidate revision", c.CandidateRevision); err != nil {
+		return err
+	}
+	if err := validateText("candidate branch", c.CandidateBranch, maximumBranchLength); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(c.CandidateBranch, "kargo/promotion/") {
+		return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
+	}
+
+	return nil
+}
+
+func (s PromotionRepositorySnapshot) Validate() error {
+	if err := kubevalidate.DNSLabel("repository name", s.Name); err != nil {
+		return invalid(err)
+	}
+	if err := validateText("repository clone URL", s.CloneURL, maximumURLLength); err != nil {
+		return err
+	}
+	if err := validateText("repository branch", s.Branch, maximumBranchLength); err != nil {
 		return err
 	}
 

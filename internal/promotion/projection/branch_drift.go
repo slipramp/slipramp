@@ -41,6 +41,7 @@ type BranchDriftListFilter struct {
 type BranchDriftStage struct {
 	Stage                          promotion.Stage
 	Policy                         promotion.PolicyView
+	ReviewCapability               StageCapability
 	Status                         BranchDriftStatus
 	AcknowledgedSourceRevision     string
 	AcknowledgedRenderBaseRevision string
@@ -202,10 +203,11 @@ func (s *BranchDriftService) List(
 		if stage.ArchivedAt != nil {
 			continue
 		}
-		if _, configured := s.integrations.Lookup(stage.Integration); !configured {
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if !configured {
 			continue
 		}
-		if !stageCapabilities(stage).BranchDriftReady {
+		if !stageCapabilities(stage, integration).BranchDrift.Ready {
 			continue
 		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
@@ -274,6 +276,8 @@ func (s *BranchDriftService) List(
 		for stageIndex := range items[itemIndex].Stages {
 			stage := &items[itemIndex].Stages[stageIndex]
 			stage.Policy = policies[stage.Stage.ID]
+			integration, _ := s.integrations.Lookup(stage.Stage.Integration)
+			stage.ReviewCapability = stageCapabilities(stage.Stage, integration).Review
 		}
 	}
 
@@ -393,10 +397,8 @@ func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
 		if stage.ArchivedAt != nil {
 			continue
 		}
-		if _, configured := s.integrations.Lookup(stage.Integration); !configured {
-			continue
-		}
-		if !stageCapabilities(stage).BranchDriftReady {
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if !configured || !stageCapabilities(stage, integration).BranchDrift.Ready {
 			continue
 		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)

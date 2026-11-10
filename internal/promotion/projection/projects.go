@@ -2,7 +2,6 @@ package projection
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -77,9 +76,14 @@ type FreightCandidate struct {
 }
 
 type StageCapabilities struct {
-	PromotionReady   bool
-	BranchDriftReady bool
-	Issues           []string
+	Promotion   StageCapability
+	Review      StageCapability
+	BranchDrift StageCapability
+}
+
+type StageCapability struct {
+	Ready  bool
+	Reason string
 }
 
 type ProjectStore interface {
@@ -224,7 +228,7 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 			PendingPromotionCount: pending[stage.ID],
 			ObservationStale:      stageObservationStale(stage, integration, evaluatedAt),
 			RequestedFreight:      requests,
-			Capabilities:          stageCapabilities(stage),
+			Capabilities:          stageCapabilities(stage, integration),
 		})
 	}
 	slices.SortFunc(items, func(left, right ProjectStage) int {
@@ -236,30 +240,25 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 	}, nil
 }
 
-func stageCapabilities(stage promotion.Stage) StageCapabilities {
-	issues := make([]string, 0)
-	for label, value := range map[string]string{
-		"application": stage.Application, "environment": stage.Environment, "repository mapping": stage.RepositoryName,
-		"repository URL": stage.RepositoryURL, "target branch": stage.TargetBranch,
-	} {
-		if value == "" {
-			issues = append(issues, fmt.Sprintf("Slipramp %s enrichment is missing.", label))
-		}
-	}
-	if len(stage.SourcePaths) == 0 {
-		issues = append(issues, "Slipramp source path enrichment is missing.")
-	}
-	branchDriftReady := stage.RepositoryName != "" && stage.TargetBranch != "" && len(stage.SourcePaths) > 0
-	promotionReady := branchDriftReady && stage.Application != "" && stage.Environment != "" &&
-		stage.RepositoryURL != "" && !stage.ControlFlow
+func stageCapabilities(stage promotion.Stage, integration promotion.IntegrationConfig) StageCapabilities {
+	native := StageCapability{Ready: !stage.ControlFlow}
 	if stage.ControlFlow {
-		issues = append(issues, "Control-flow Stages do not materialize Promotions.")
+		native.Reason = "Control-flow Stages do not materialize Promotions."
 	}
-	slices.Sort(issues)
 
-	return StageCapabilities{
-		PromotionReady: promotionReady, BranchDriftReady: branchDriftReady, Issues: issues,
+	review := StageCapability{Ready: stage.ReviewReady() && integration.ReviewConfigured()}
+	if !review.Ready {
+		review.Reason = "Slipramp change preview and review require complete application, environment, Repository, branch, source-path, and preparation configuration."
 	}
+
+	branchDrift := StageCapability{
+		Ready: stage.RepositoryName != "" && stage.TargetBranch != "" && len(stage.SourcePaths) > 0,
+	}
+	if !branchDrift.Ready {
+		branchDrift.Reason = "Branch drift requires a resolved Repository, target branch, and source paths."
+	}
+
+	return StageCapabilities{Promotion: native, Review: review, BranchDrift: branchDrift}
 }
 
 func stageNonReady(stage promotion.Stage) bool {

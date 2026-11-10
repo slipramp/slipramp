@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
@@ -197,15 +199,17 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	policyExpiresAt := now.Add(time.Hour)
 	promotions := &recordingPromotionCreationService{
 		record: promotion.Promotion{
-			ID:                      promotionID,
-			Source:                  promotion.SourceSlipramp,
-			Integration:             "prod",
-			ExternalPromotionID:     "external-dns-prod-slipramp-" + promotionID.String(),
-			StageID:                 targetStageID,
-			StageSnapshot:           promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "external-dns-prod"},
-			RepositoryID:            uuid.New(),
-			RepositorySnapshot:      promotion.PromotionRepositorySnapshot{Name: "ops"},
-			TargetBranch:            "stage/external-dns/prod",
+			ID:                  promotionID,
+			Source:              promotion.SourceSlipramp,
+			Integration:         "prod",
+			ExternalPromotionID: "external-dns-prod-slipramp-" + promotionID.String(),
+			StageID:             targetStageID,
+			StageSnapshot:       promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "external-dns-prod"},
+			ReviewContext: &promotion.PromotionReviewContext{
+				RepositoryID:       uuid.New(),
+				RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
+				TargetBranch:       "stage/external-dns/prod",
+			},
 			PolicySnapshot:          promotion.PromotionPolicySnapshot{EffectiveMode: "automatic"},
 			SelectedFreightSnapshot: &promotion.FreightItem{Origin: "Warehouse/external-dns", Name: "freight-42", Artifacts: []promotion.FreightArtifact{}},
 			Lifecycle:               promotion.PromotionLifecycle{State: promotion.LifecycleCreating},
@@ -267,14 +271,20 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		Integration:         "prod",
 		ExternalPromotionID: "external-dns-prod-slipramp-018f90ff-9fd8-7b5f-b7e1-f32ff54c1930",
 		StageSnapshot: promotion.PromotionStageSnapshot{
-			Project:     "kargo-core",
-			Name:        "external-dns-prod",
-			Application: "external-dns",
-			Environment: "prod",
+			Project: "kargo-core",
+			Name:    "external-dns-prod",
+			Enrichment: &promotion.PromotionStageEnrichment{
+				Application: "external-dns",
+				Environment: "prod",
+			},
 		},
-		RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
-		PolicySnapshot:     promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
-		Lifecycle:          promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
+		ReviewContext: &promotion.PromotionReviewContext{
+			RepositoryID:       uuid.New(),
+			RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
+			TargetBranch:       "main",
+		},
+		PolicySnapshot: promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
+		Lifecycle:      promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: uuid.New(),
 			Kind:        productidentity.KindUser,
@@ -308,6 +318,49 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 	if body.KargoURL == nil || *body.KargoURL !=
 		"https://kargo.example.com/project/kargo-core/promotion/"+record.ExternalPromotionID {
 		t.Errorf("dispatched operator Promotion KargoURL = %v", body.KargoURL)
+	}
+}
+
+func TestPromotionResponseOmitsUnavailableReviewContext(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 10, 18, 0, 0, 0, time.UTC)
+	nextAttemptAt := now.Add(time.Minute)
+	record := promotion.Promotion{
+		ID:                      uuid.New(),
+		Source:                  promotion.SourceSlipramp,
+		Integration:             "prod",
+		ExternalPromotionID:     "native-promotion",
+		StageID:                 uuid.New(),
+		StageSnapshot:           promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "native-prod"},
+		PolicySnapshot:          promotion.PromotionPolicySnapshot{EffectiveMode: promotion.PolicyModeAutomatic},
+		SelectedFreightSnapshot: &promotion.FreightItem{Origin: "Warehouse/native", Name: "freight-42"},
+		Lifecycle:               promotion.PromotionLifecycle{State: promotion.LifecycleApproved},
+		CreationDispatch:        promotion.CreationDispatchState{NextAttemptAt: &nextAttemptAt},
+		RequestedBySnapshot: productidentity.ActorSnapshot{
+			PrincipalID: uuid.New(), Kind: productidentity.KindUser, DisplayName: "Operator",
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
+
+	body, err := promotionResponse(promotion.PromotionReview{Promotion: record}, nil, nil)
+	if err != nil {
+		t.Fatalf("promotionResponse() error = %v", err)
+	}
+	if body.ReviewContext != nil || body.StageSnapshot.Enrichment != nil || body.ArgoCdURL != nil ||
+		body.CreationDispatch.Phase != api.PromotionCreationDispatchPhaseAwaitingDelivery {
+		t.Fatalf("native Promotion response = %#v", body)
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	for _, unavailable := range []string{`"reviewContext"`, `"enrichment"`, `"argoCdUrl"`, `"targetBranch"`} {
+		if strings.Contains(string(encoded), unavailable) {
+			t.Errorf("native Promotion response includes %s: %s", unavailable, encoded)
+		}
 	}
 }
 
@@ -496,18 +549,25 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	reviews := &recordingPromotionReviewService{
 		promotions: promotion.PromotionReviewList{
 			Items: []promotion.PromotionReview{{Promotion: promotion.Promotion{
-				ID:                     promotionID,
-				Source:                 promotion.SourceKargo,
-				Integration:            "prod",
-				ExternalPromotionID:    "external-dns-01jbe4q8",
-				StageID:                stageID,
-				StageSnapshot:          promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "external-dns-prod", Application: "external-dns"},
-				RepositoryID:           repositoryID,
-				RepositorySnapshot:     promotion.PromotionRepositorySnapshot{Name: "ops"},
-				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
-				CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
-				CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
-				TargetBranch:           "stage/external-dns/prod",
+				ID:                  promotionID,
+				Source:              promotion.SourceKargo,
+				Integration:         "prod",
+				ExternalPromotionID: "external-dns-01jbe4q8",
+				StageID:             stageID,
+				StageSnapshot: promotion.PromotionStageSnapshot{
+					Project: "kargo-core", Name: "external-dns-prod",
+					Enrichment: &promotion.PromotionStageEnrichment{Application: "external-dns"},
+				},
+				ReviewContext: &promotion.PromotionReviewContext{
+					RepositoryID:       repositoryID,
+					RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
+					TargetBranch:       "stage/external-dns/prod",
+					Git: &promotion.PromotionGitContext{
+						BaseRevision:      "8b7f1d217a6b0000000000000000000000000000",
+						CandidateRevision: "f4cb21a88e1d0000000000000000000000000000",
+						CandidateBranch:   "kargo/promotion/external-dns-01jbe4q8",
+					},
+				},
 				PolicySnapshot:         promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
 				ReviewRequired:         true,
 				Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecyclePending},
@@ -594,17 +654,21 @@ func TestDecidePromotionUsesAuthenticatedActor(t *testing.T) {
 	reviews := &recordingPromotionReviewService{
 		review: promotion.PromotionReview{
 			Promotion: promotion.Promotion{
-				ID:                     promotionID,
-				Integration:            "prod",
-				ExternalPromotionID:    "external-dns-01jbe4q8",
-				StageID:                uuid.New(),
-				StageSnapshot:          promotion.PromotionStageSnapshot{Name: "external-dns-prod"},
-				RepositoryID:           uuid.New(),
-				RepositorySnapshot:     promotion.PromotionRepositorySnapshot{Name: "ops"},
-				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
-				CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
-				CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
-				TargetBranch:           "stage/external-dns/prod",
+				ID:                  promotionID,
+				Integration:         "prod",
+				ExternalPromotionID: "external-dns-01jbe4q8",
+				StageID:             uuid.New(),
+				StageSnapshot:       promotion.PromotionStageSnapshot{Name: "external-dns-prod"},
+				ReviewContext: &promotion.PromotionReviewContext{
+					RepositoryID:       uuid.New(),
+					RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
+					TargetBranch:       "stage/external-dns/prod",
+					Git: &promotion.PromotionGitContext{
+						BaseRevision:      "8b7f1d217a6b0000000000000000000000000000",
+						CandidateRevision: "f4cb21a88e1d0000000000000000000000000000",
+						CandidateBranch:   "kargo/promotion/external-dns-01jbe4q8",
+					},
+				},
 				PolicySnapshot:         promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
 				ReviewRequired:         true,
 				Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecycleApproved},

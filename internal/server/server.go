@@ -200,7 +200,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		promotionDispatches,
 		promotionReconciliations,
 	)
-	promotionReviews := promotion.NewReviewService(persistence.database)
+	promotionReviews := promotion.NewReviewService(cfg.KargoIntegrations, persistence.database)
 	promotionProjects := projection.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionBranchDrift := projection.NewBranchDriftService(
 		cfg.KargoIntegrations,

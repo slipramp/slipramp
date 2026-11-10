@@ -7163,13 +7163,10 @@ components:
         - externalPromotionId
         - stageId
         - stageSnapshot
-        - repositoryId
-        - repositorySnapshot
-        - targetBranch
         - policySnapshot
         - reviewRequired
         - status
-        - dispatchAttemptCount
+        - creationDispatch
         - requestedBy
         - createdAt
         - updatedAt
@@ -7193,23 +7190,8 @@ components:
           format: uuid
         stageSnapshot:
           $ref: '#/components/schemas/PromotionStageSnapshot'
-        repositoryId:
-          type: string
-          format: uuid
-        repositorySnapshot:
-          $ref: '#/components/schemas/PromotionRepositorySnapshot'
-        baseCommit:
-          $ref: '#/components/schemas/GitCommit'
-        candidateCommit:
-          $ref: '#/components/schemas/GitCommit'
-        candidateBranch:
-          type: string
-          minLength: 17
-          maxLength: 255
-        targetBranch:
-          type: string
-          minLength: 1
-          maxLength: 255
+        reviewContext:
+          $ref: '#/components/schemas/PromotionReviewContext'
         policySnapshot:
           $ref: '#/components/schemas/PromotionStagePolicy'
         selectedFreight:
@@ -7222,18 +7204,8 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
-        dispatchAttemptCount:
-          type: integer
-          minimum: 0
-        nextDispatchAt:
-          type: string
-          format: date-time
-        lastDispatchAt:
-          type: string
-          format: date-time
-        dispatchedAt:
-          type: string
-          format: date-time
+        creationDispatch:
+          $ref: '#/components/schemas/PromotionCreationDispatch'
         kargoPromotionUid:
           type: string
           minLength: 1
@@ -7241,7 +7213,7 @@ components:
         nextReconciliationAt:
           type: string
           format: date-time
-          description: Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
+          description: Next durable inspection time while the responsible Controller awaits a terminal Kargo outcome.
         lastReconciliationAt:
           type: string
           format: date-time
@@ -9391,13 +9363,11 @@ components:
     KargoPromotionRequest:
       type: object
       additionalProperties: false
+      description: Native Kargo Promotion identity with optional Git audit context. Supply baseRevision, candidateRevision, and candidateBranch together or omit all three. Git audit context is required when the effective policy requires Slipramp review.
       required:
         - externalPromotionId
         - project
         - stage
-        - baseRevision
-        - candidateRevision
-        - candidateBranch
       properties:
         externalPromotionId:
           type: string
@@ -9411,10 +9381,13 @@ components:
           maxLength: 253
           pattern: ^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$
         baseRevision:
+          description: Base Git revision for Slipramp review and audit context.
           $ref: '#/components/schemas/GitRevision'
         candidateRevision:
+          description: Candidate Git revision for Slipramp review and audit context.
           $ref: '#/components/schemas/GitRevision'
         candidateBranch:
+          description: Candidate branch for Slipramp review and audit context.
           type: string
           minLength: 17
           maxLength: 255
@@ -9457,6 +9430,35 @@ components:
         updatedAt:
           type: string
           format: date-time
+    PromotionStageEnrichment:
+      type: object
+      additionalProperties: false
+      properties:
+        application:
+          type: string
+          minLength: 1
+          maxLength: 200
+        environment:
+          type: string
+          minLength: 1
+          maxLength: 200
+        repository:
+          $ref: '#/components/schemas/CatalogName'
+        repositoryUrl:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        targetBranch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        sourcePaths:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1024
     PromotionFreightRequest:
       type: object
       additionalProperties: false
@@ -9593,12 +9595,6 @@ components:
         - name
         - kubernetesUid
         - resourceVersion
-        - application
-        - environment
-        - repository
-        - repositoryUrl
-        - targetBranch
-        - sourcePaths
         - requestedFreight
         - freight
         - lastObservedAt
@@ -9624,30 +9620,8 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-        application:
-          type: string
-          minLength: 1
-          maxLength: 200
-        environment:
-          type: string
-          minLength: 1
-          maxLength: 200
-        repository:
-          $ref: '#/components/schemas/CatalogName'
-        repositoryUrl:
-          type: string
-          minLength: 1
-          maxLength: 2048
-        targetBranch:
-          type: string
-          minLength: 1
-          maxLength: 255
-        sourcePaths:
-          type: array
-          items:
-            type: string
-            minLength: 1
-            maxLength: 1024
+        enrichment:
+          $ref: '#/components/schemas/PromotionStageEnrichment'
         requestedFreight:
           type: array
           items:
@@ -9675,11 +9649,79 @@ components:
           type: string
         checkoutCredentialName:
           type: string
+    PromotionGitContext:
+      type: object
+      additionalProperties: false
+      required:
+        - baseCommit
+        - candidateCommit
+        - candidateBranch
+      properties:
+        baseCommit:
+          $ref: '#/components/schemas/GitCommit'
+        candidateCommit:
+          $ref: '#/components/schemas/GitCommit'
+        candidateBranch:
+          type: string
+          minLength: 17
+          maxLength: 255
+    PromotionReviewContext:
+      type: object
+      additionalProperties: false
+      required:
+        - repositoryId
+        - repositorySnapshot
+        - targetBranch
+      properties:
+        repositoryId:
+          type: string
+          format: uuid
+        repositorySnapshot:
+          $ref: '#/components/schemas/PromotionRepositorySnapshot'
+        targetBranch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        git:
+          $ref: '#/components/schemas/PromotionGitContext'
     PromotionPolicyMode:
       type: string
       enum:
         - automatic
         - review-required
+    PromotionCreationDispatch:
+      type: object
+      additionalProperties: false
+      required:
+        - phase
+        - attemptCount
+      properties:
+        phase:
+          type: string
+          enum:
+            - not-applicable
+            - awaiting-delivery
+            - delivered
+            - failed
+        attemptCount:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastAttemptAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+        failedAt:
+          type: string
+          format: date-time
+        diagnostic:
+          type: string
+          minLength: 1
+          maxLength: 4096
     KargoPromotionOutcome:
       type: object
       additionalProperties: false
@@ -9854,64 +9896,38 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionFreightCandidate'
-    PromotionStageEnrichment:
+    PromotionStageCapability:
       type: object
       additionalProperties: false
+      required:
+        - status
       properties:
-        application:
+        status:
+          type: string
+          enum:
+            - ready
+            - unavailable
+        reason:
           type: string
           minLength: 1
-          maxLength: 200
-        environment:
-          type: string
-          minLength: 1
-          maxLength: 200
-        repository:
-          $ref: '#/components/schemas/CatalogName'
-        repositoryUrl:
-          type: string
-          minLength: 1
-          maxLength: 2048
-        targetBranch:
-          type: string
-          minLength: 1
-          maxLength: 255
-        sourcePaths:
-          type: array
-          uniqueItems: true
-          items:
-            type: string
-            minLength: 1
-            maxLength: 1024
+          maxLength: 512
     PromotionStageCapabilities:
       type: object
       additionalProperties: false
       required:
         - promotion
-        - policy
+        - review
         - branchDrift
-        - issues
       properties:
         promotion:
-          type: string
-          enum:
-            - ready
-            - unavailable
-        policy:
-          type: string
-          enum:
-            - ready
+          $ref: '#/components/schemas/PromotionStageCapability'
+          description: Native Kargo Promotion capability using exact observed Freight.
+        review:
+          $ref: '#/components/schemas/PromotionStageCapability'
+          description: Slipramp preparation, preview, and operator review capability.
         branchDrift:
-          type: string
-          enum:
-            - ready
-            - unavailable
-        issues:
-          type: array
-          items:
-            type: string
-            minLength: 1
-            maxLength: 512
+          $ref: '#/components/schemas/PromotionStageCapability'
+          description: Cached Git branch-drift capability.
     PromotionProjectStage:
       type: object
       additionalProperties: false
@@ -10022,12 +10038,11 @@ components:
         - cluster
         - project
         - name
-        - application
-        - environment
         - targetBranch
         - sourcePaths
         - freight
         - policy
+        - reviewCapability
         - status
         - lastObservedAt
       properties:
@@ -10068,6 +10083,8 @@ components:
           $ref: '#/components/schemas/PromotionFreight'
         policy:
           $ref: '#/components/schemas/PromotionStagePolicy'
+        reviewCapability:
+          $ref: '#/components/schemas/PromotionStageCapability'
         status:
           $ref: '#/components/schemas/PromotionBranchDriftStatus'
         acknowledgedSourceCommit:

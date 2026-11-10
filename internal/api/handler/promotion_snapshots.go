@@ -8,6 +8,21 @@ import (
 )
 
 func promotionStageSnapshotResponse(value promotion.PromotionStageSnapshot) api.PromotionStageSnapshot {
+	var enrichment *api.PromotionStageEnrichment
+	if value.Enrichment != nil {
+		var repository *api.CatalogName
+		if value.Enrichment.RepositoryName != "" {
+			name := api.CatalogName(value.Enrichment.RepositoryName)
+			repository = &name
+		}
+		paths := append([]string(nil), value.Enrichment.SourcePaths...)
+		enrichment = &api.PromotionStageEnrichment{
+			Application: optionalString(value.Enrichment.Application),
+			Environment: optionalString(value.Enrichment.Environment),
+			Repository:  repository, RepositoryURL: optionalString(value.Enrichment.RepositoryURL),
+			TargetBranch: optionalString(value.Enrichment.TargetBranch), SourcePaths: &paths,
+		}
+	}
 	return api.PromotionStageSnapshot{
 		ID:                              value.ID,
 		Integration:                     api.CatalogName(value.Integration),
@@ -16,12 +31,7 @@ func promotionStageSnapshotResponse(value promotion.PromotionStageSnapshot) api.
 		Name:                            value.Name,
 		KubernetesUID:                   value.KubernetesUID,
 		ResourceVersion:                 value.ResourceVersion,
-		Application:                     value.Application,
-		Environment:                     value.Environment,
-		Repository:                      api.CatalogName(value.RepositoryName),
-		RepositoryURL:                   value.RepositoryURL,
-		TargetBranch:                    value.TargetBranch,
-		SourcePaths:                     value.SourcePaths,
+		Enrichment:                      enrichment,
 		RequestedFreight:                promotionFreightRequestResponse(value.RequestedFreight),
 		Freight:                         promotionFreightResponse(value.Freight),
 		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(value.SuccessfulRenderAcknowledgement),

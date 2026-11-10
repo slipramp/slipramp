@@ -101,6 +101,22 @@ enum MascotActivityResolver {
             )
         case .approved:
             guard let outcome = promotion.kargoOutcome else {
+                if promotion.creationDispatch.phase == .awaitingDelivery {
+                    return MascotActivity(
+                        animation: .working,
+                        title: "Delivering to Kargo",
+                        description: "The Promotion is approved while a Controller creates its Kargo object."
+                    )
+                }
+                if promotion.creationDispatch.phase == .failed {
+                    return MascotActivity(
+                        animation: .frustrated,
+                        title: "Kargo delivery failed",
+                        description: promotion.creationDispatch.diagnostic
+                            ?? "Slipramp could not create the Kargo Promotion.",
+                        tone: .error
+                    )
+                }
                 return MascotActivity(
                     animation: .working,
                     title: "Kargo is carrying it forward",

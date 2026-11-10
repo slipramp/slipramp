@@ -67,6 +67,28 @@ func TestKargoRequestRejectsPartialRevisionAndCandidateBranch(t *testing.T) {
 	if _, err := request.Digest(); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("candidate branch error = %v, want ErrInvalid", err)
 	}
+
+	request = validKargoRequest()
+	request.CandidateBranch = ""
+	if _, err := request.Digest(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("partial Git context error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestKargoRequestAllowsOmittedGitContext(t *testing.T) {
+	t.Parallel()
+
+	request := validKargoRequest()
+	request.BaseRevision = ""
+	request.CandidateRevision = ""
+	request.CandidateBranch = ""
+	if _, err := request.Digest(); err != nil {
+		t.Fatalf("Digest() error = %v", err)
+	}
+	context, err := request.GitContext()
+	if err != nil || context != nil {
+		t.Fatalf("GitContext() = %#v, %v, want nil", context, err)
+	}
 }
 
 func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {

@@ -87,9 +87,13 @@ func (s *StageService) ReplaceStageSnapshot(
 		return fmt.Errorf("%w: snapshot ID and observation time are required", ErrInvalid)
 	}
 
-	repositories, err := s.repositories.ListRepositories(ctx)
-	if err != nil {
-		return fmt.Errorf("list repositories for Kargo Stage snapshot: %w", err)
+	var repositories []repository.Repository
+	if len(integration.Repositories) > 0 {
+		var err error
+		repositories, err = s.repositories.ListRepositories(ctx)
+		if err != nil {
+			return fmt.Errorf("list repositories for Kargo Stage snapshot: %w", err)
+		}
 	}
 	allowedRepositories := make(map[string][]repository.Repository)
 	for _, configured := range repositories {

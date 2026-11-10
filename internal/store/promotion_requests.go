@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,19 +90,13 @@ func (d *Database) acceptPromotionRequest(
 	if stage.LastObservedAt.Before(acceptance.AcceptedAt.Add(-acceptance.MaximumStageObservationAge)) {
 		return promotion.Promotion{}, promotion.ErrStageStale
 	}
-	if !slices.Contains(acceptance.AllowedRepositories, stage.RepositoryName) {
-		return promotion.Promotion{}, promotion.ErrRepositoryNotAllowed
-	}
-
-	repositoryRow, err := queries.GetActivePromotionRepositoryByName(ctx, stage.RepositoryName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return promotion.Promotion{}, promotion.ErrRepositoryUnavailable
-	}
+	reviewContext, err := resolvePromotionReviewContext(ctx, queries, stage, acceptance.AllowedRepositories)
 	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("get Kargo Promotion repository: %w", err)
+		return promotion.Promotion{}, err
 	}
-	if repositoryRow.CloneUrl != stage.RepositoryURL {
-		return promotion.Promotion{}, promotion.ErrRepositoryNotAllowed
+	gitContext, err := acceptance.Request.GitContext()
+	if err != nil {
+		return promotion.Promotion{}, err
 	}
 
 	policySnapshot := promotion.PromotionPolicySnapshot{
@@ -131,26 +124,29 @@ func (d *Database) acceptPromotionRequest(
 	}
 
 	stageSnapshot := stage.PromotionSnapshot()
-	repositorySnapshot := promotion.PromotionRepositorySnapshot{
-		Name:                   repositoryRow.Name,
-		CloneURL:               repositoryRow.CloneUrl,
-		Branch:                 repositoryRow.Branch,
-		CheckoutCredentialName: repositoryRow.CheckoutCredentialName,
-	}
 	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("encode Kargo Promotion requesting actor: %w", err)
 	}
 
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
+	if reviewRequired && (reviewContext == nil || gitContext == nil) {
+		return promotion.Promotion{}, promotion.ErrReviewContextUnavailable
+	}
 	status := promotion.LifecycleApproved
 	var expiresAt *time.Time
 	var nextReconciliationAt *time.Time
 	if reviewRequired {
+		if acceptance.PendingReviewRetention <= 0 {
+			return promotion.Promotion{}, promotion.ErrReviewContextUnavailable
+		}
 		status = promotion.LifecyclePreparing
 		expiresAt = new(acceptance.AcceptedAt.Add(acceptance.PendingReviewRetention))
 	} else {
 		nextReconciliationAt = new(acceptance.AcceptedAt)
+	}
+	if reviewContext != nil {
+		reviewContext.Git = gitContext
 	}
 	record := promotion.Promotion{
 		ID:                  acceptance.ID,
@@ -160,12 +156,7 @@ func (d *Database) acceptPromotionRequest(
 		RequestDigest:       acceptance.RequestDigest,
 		StageID:             stage.ID,
 		StageSnapshot:       stageSnapshot,
-		RepositoryID:        uuid.UUID(repositoryRow.ID.Bytes),
-		RepositorySnapshot:  repositorySnapshot,
-		BaseRevision:        acceptance.Request.BaseRevision,
-		CandidateRevision:   acceptance.Request.CandidateRevision,
-		CandidateBranch:     acceptance.Request.CandidateBranch,
-		TargetBranch:        stage.TargetBranch,
+		ReviewContext:       reviewContext,
 		PolicySnapshot:      policySnapshot,
 		ReviewRequired:      reviewRequired,
 		Lifecycle: promotion.PromotionLifecycle{
@@ -181,14 +172,16 @@ func (d *Database) acceptPromotionRequest(
 	if err := record.Validate(); err != nil {
 		return promotion.Promotion{}, err
 	}
-	if err := recordPromotionCommits(
-		ctx,
-		queries,
-		record.RepositoryID,
-		record.BaseRevision,
-		record.CandidateRevision,
-	); err != nil {
-		return promotion.Promotion{}, err
+	if record.ReviewContext != nil && record.ReviewContext.Git != nil {
+		if err := recordPromotionCommits(
+			ctx,
+			queries,
+			record.ReviewContext.RepositoryID,
+			record.ReviewContext.Git.BaseRevision,
+			record.ReviewContext.Git.CandidateRevision,
+		); err != nil {
+			return promotion.Promotion{}, err
+		}
 	}
 
 	params, err := promotionDatabaseParams(record, requestedBy)
@@ -220,6 +213,10 @@ func finishExistingPromotionRequest(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
+	gitContext, err := acceptance.Request.GitContext()
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
 	if existing.RequestDigest != (promotion.RequestDigest{}) {
 		if existing.RequestDigest != acceptance.RequestDigest {
 			return promotion.Promotion{}, promotion.ErrIdentityConflict
@@ -242,43 +239,49 @@ func finishExistingPromotionRequest(
 
 		return existing, nil
 	}
-	if existing.Source != promotion.SourceSlipramp || existing.Lifecycle.State != promotion.LifecycleCreating {
+	if existing.Source != promotion.SourceSlipramp ||
+		(existing.ReviewRequired && existing.Lifecycle.State != promotion.LifecycleCreating) ||
+		(!existing.ReviewRequired && existing.Lifecycle.State != promotion.LifecycleApproved) {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
-	nextState := promotion.LifecycleApproved
 	if existing.ReviewRequired {
-		nextState = promotion.LifecyclePreparing
-	}
-	if _, err := promotion.TransitionLifecycle(
-		existing.Lifecycle,
-		nextState,
-		existing.ReviewRequired,
-		acceptance.AcceptedAt,
-	); err != nil {
-		return promotion.Promotion{}, promotion.ErrIdentityConflict
+		if existing.ReviewContext == nil || gitContext == nil {
+			return promotion.Promotion{}, promotion.ErrReviewContextUnavailable
+		}
+		if _, err := promotion.TransitionLifecycle(
+			existing.Lifecycle,
+			promotion.LifecyclePreparing,
+			existing.ReviewRequired,
+			acceptance.AcceptedAt,
+		); err != nil {
+			return promotion.Promotion{}, promotion.ErrIdentityConflict
+		}
 	}
 
 	stage := existing.StageSnapshot
 	if stage.Project != acceptance.Request.Project || stage.Name != acceptance.Request.Stage {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
-	if err := recordPromotionCommits(
-		ctx,
-		queries,
-		existing.RepositoryID,
-		acceptance.Request.BaseRevision,
-		acceptance.Request.CandidateRevision,
-	); err != nil {
-		return promotion.Promotion{}, err
+	if existing.ReviewContext != nil && gitContext != nil {
+		if err := recordPromotionCommits(
+			ctx,
+			queries,
+			existing.ReviewContext.RepositoryID,
+			gitContext.BaseRevision,
+			gitContext.CandidateRevision,
+		); err != nil {
+			return promotion.Promotion{}, err
+		}
 	}
 
 	row, err = queries.HydrateOperatorPromotion(
 		ctx,
 		storedb.HydrateOperatorPromotionParams{
 			RequestDigest:     acceptance.RequestDigest[:],
-			BaseRevision:      nullableText(acceptance.Request.BaseRevision),
-			CandidateRevision: nullableText(acceptance.Request.CandidateRevision),
-			CandidateBranch:   nullableText(acceptance.Request.CandidateBranch),
+			HasGitContext:     gitContext != nil,
+			BaseRevision:      acceptance.Request.BaseRevision,
+			CandidateRevision: acceptance.Request.CandidateRevision,
+			CandidateBranch:   acceptance.Request.CandidateBranch,
 			HydratedAt:        databaseTime(acceptance.AcceptedAt),
 			ID:                databaseUUID(existing.ID),
 		},

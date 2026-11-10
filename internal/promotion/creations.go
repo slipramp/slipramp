@@ -29,6 +29,7 @@ type OperatorPromotionAcceptance struct {
 	TargetStageID              uuid.UUID
 	SourceStageID              uuid.UUID
 	FreightName                string
+	AllowedRepositories        []string
 	RequestedByPrincipalID     uuid.UUID
 	RequestedBySnapshot        productidentity.ActorSnapshot
 	AcceptedAt                 time.Time
@@ -97,6 +98,10 @@ func (s *CreationService) Create(
 	if !ok {
 		return Promotion{}, ErrIntegrationNotFound
 	}
+	if request.Policy != nil && request.Policy.Mode == PolicyModeReviewRequired &&
+		(!integration.ReviewConfigured() || !target.ReviewReady()) {
+		return Promotion{}, ErrReviewContextUnavailable
+	}
 	acceptedAt := s.now().UTC().Truncate(time.Microsecond)
 	var policy *StagePolicy
 	if request.Policy != nil {
@@ -119,6 +124,7 @@ func (s *CreationService) Create(
 		TargetStageID:              request.TargetStageID,
 		SourceStageID:              request.SourceStageID,
 		FreightName:                request.FreightName,
+		AllowedRepositories:        slices.Clone(integration.Repositories),
 		RequestedByPrincipalID:     request.Principal.ID,
 		RequestedBySnapshot:        actor,
 		AcceptedAt:                 acceptedAt,
@@ -143,8 +149,13 @@ func (a OperatorPromotionAcceptance) Validate() error {
 	if err := kubevalidate.DNSSubdomain("Kargo Freight name", a.FreightName); err != nil {
 		return invalid(err)
 	}
-	if a.AcceptedAt.IsZero() || a.MaximumStageObservationAge <= 0 || a.PendingReviewRetention <= 0 {
-		return fmt.Errorf("%w: creation time and retention periods are required", ErrInvalid)
+	for _, name := range a.AllowedRepositories {
+		if err := kubevalidate.DNSLabel("Kargo repository name", name); err != nil {
+			return invalid(err)
+		}
+	}
+	if a.AcceptedAt.IsZero() || a.MaximumStageObservationAge <= 0 || a.PendingReviewRetention < 0 {
+		return fmt.Errorf("%w: creation time and valid retention periods are required", ErrInvalid)
 	}
 	if a.RequestedBySnapshot.PrincipalID != a.RequestedByPrincipalID {
 		return fmt.Errorf("%w: requesting actor snapshot does not match its principal", ErrInvalid)

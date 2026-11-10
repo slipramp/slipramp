@@ -24,12 +24,13 @@ through the existing outbound command protocol.
 ## Integration configuration and inventory
 
 Named integrations are strict versioned Server startup configuration. Each
-selects a Cluster, Repository allowlist,
-preparation Target and Action, freshness and review retention, optional Kargo
-and Argo CD links, and optional candidate-branch cleanup policy. Controller
-configuration assigns Stage namespaces to integrations. Every Stage in an
-assigned namespace belongs to that integration, and a namespace may be assigned
-to exactly one integration in a Controller configuration.
+selects a Cluster and Stage freshness limit. A cohesive optional review
+configuration adds a Repository allowlist, preparation Target and Action, and
+review retention. Optional Kargo and Argo CD links and candidate-branch cleanup
+policy add only their corresponding product features. Controller configuration
+assigns Stage namespaces to integrations. Every Stage in an assigned namespace
+belongs to that integration, and a namespace may be assigned to exactly one
+integration in a Controller configuration.
 
 An optional Controller observer reads every Stage page from each assigned
 namespace. Stage labels do not affect enrollment or integration ownership.
@@ -55,22 +56,38 @@ aggregate health, optional Slipramp enrichment, and successful-render
 acknowledgement. Missing enrichment disables only the Slipramp capability that
 needs it; the Stage remains visible in its Kargo Project.
 
-Stage policy defaults to `automatic`. `review-required` may have an expiry.
-Promotion acceptance snapshots the effective policy; later policy changes do
-not alter existing Promotions.
+Each Stage exposes independent `promotion`, `review`, and `branchDrift`
+capabilities. Native promotion is ready for a non-control-flow Stage with
+addressable native identity; exact eligible Freight is selected under Kargo's observed
+availability, verification, and soak rules. Review additionally requires the
+complete Stage enrichment, an active Repository whose URL matches the observed
+URL, and the integration's review configuration. Branch drift retains its own
+Git mapping and acknowledgement requirements. Review or branch-drift
+limitations never disable native promotion.
+
+Stage policy defaults to `automatic`. `review-required` may have an expiry and
+may be configured only while review is ready. Promotion acceptance snapshots
+the effective policy; later policy changes do not alter existing Promotions. A
+configured `review-required` policy is preserved if enrichment later
+disappears. New Promotions then fail with review context unavailable until an
+operator restores the context or explicitly changes the policy to `automatic`;
+Slipramp never silently changes the policy.
 
 ## Request sources and idempotency
 
 Kargo may submit an external Promotion callback through a service-account API
-key. The request supplies external identity, project, Stage, base and candidate
-Git object IDs, and a candidate branch under `kargo/promotion/`. Slipramp
-resolves the remaining context from fresh durable Stage inventory.
+key. The request supplies external identity, project, and Stage. Base and
+candidate Git object IDs plus a candidate branch under `kargo/promotion/` are
+an all-or-none optional audit context and are required when review preparation
+is required. Slipramp resolves the remaining context from fresh durable Stage
+inventory without inventing Repository or Git facts.
 
 An operator may instead start a Promotion from exact observed Freight on an
 upstream Stage or a directly requested Warehouse. The Server resolves trusted
-integration, Cluster, namespace, target Stage, Repository, source topology, and
-policy facts from one durable transaction. The browser never supplies those
-coordinates as authority.
+integration, Cluster, namespace, target Stage identity, source topology, and
+policy facts from one durable transaction. It snapshots Repository and review
+facts only when complete review context exists. The browser never supplies
+those coordinates as authority.
 
 `Promotion` is the only public lifecycle for both sources. Kargo-originated
 requests retain service-account attribution. Slipramp-originated requests are
@@ -84,11 +101,11 @@ before asynchronous creation or preparation begins.
 ## Orchestration state machines
 
 ```text
-creating --callback--> preparing --> pending --> approved/rejected/expired
-    |                       `---------------------------> error
-    `--terminal creation or pre-callback result--------> error
+automatic: approved + awaiting delivery --> delivered --> Kargo terminal outcome
+                                  `-------> delivery failed
 
-approved --Controller observation--> Kargo Succeeded/Failed/Errored/Aborted
+review-required: creating --callback--> preparing --> pending --> approved/rejected/expired
+                       `-------------------------> error
 ```
 
 The durable Promotion aggregate exposes four related state machines. They share
@@ -97,7 +114,7 @@ one row so guarded updates remain atomic, but they are not one linear workflow:
 | Machine | Authoritative fields | Meaning |
 | --- | --- | --- |
 | Public lifecycle | `status`, `decided_at`, `expires_at` | Creation, review preparation, pending review, decision, expiry, or orchestration error |
-| Creation dispatch | `dispatch_attempt_count`, `next_dispatch_at`, `last_dispatch_at`, `dispatched_at` | Slipramp-originated Kargo object delivery and its bounded retry budget |
+| Creation dispatch | attempt, next/last attempt, delivered, failed, and diagnostic fields | Slipramp-originated Kargo object delivery and its bounded retry budget |
 | Review preparation | preparation Repository, catalog revision, Run, retry, completion, and Artifact columns | Revision reservation, the single idempotent Run, validated review Artifacts, and coordination failure |
 | Kargo execution | `kargo_promotion_uid`, reconciliation timestamps, and Kargo outcome columns | Kubernetes identity binding, repeated observation, and the first terminal Kargo phase |
 
@@ -106,12 +123,14 @@ Slipramp does not persist parallel phase columns. Domain transition functions
 define legal changes and cross-field invariants, while SQL applies the matching
 row locks and guarded updates atomically.
 
-An automatic-policy callback advances directly to `approved`. The public
-`creating` state allows queued Controller delivery, bounded materialization
-retries, and the wait for callback hydration. `preparing` owns one ordinary
-revision-pinned Run. `pending` accepts one operator decision or durable expiry.
-Terminal orchestration failures use `error` with a bounded non-sensitive
-diagnostic.
+An operator-created automatic Promotion is `approved` as soon as its exact
+Freight and policy are durably snapshotted. Its independent creation dispatch
+may still be awaiting delivery, delivered, or terminally failed. A callback is
+not part of that path. Review-required operator creation uses `creating` while
+queued Controller delivery and callback hydration proceed. `preparing` owns one
+ordinary revision-pinned Run. `pending` accepts one operator decision or
+durable expiry. Guarded orchestration failures use `error` with a bounded
+non-sensitive diagnostic.
 
 The public lifecycle and Kargo execution are separate facts. An approved
 Promotion without a terminal outcome remains `approved` while its Kargo
@@ -140,24 +159,36 @@ partially reimplement that Kargo-owned behavior.
 
 Creation uses durable bounded backoff. Transient Kubernetes and transport
 failures do not block later work; invalid or forbidden admission and exhausted
-retry budget move the Promotion to `error`. No separate Kargo client channel,
-impersonation layer, broker, or Job is introduced.
+retry budget terminally fail creation dispatch. Automatic approval remains an
+approved review decision and the delivery failure is presented separately. No
+separate Kargo client channel, impersonation layer, broker, or Job is
+introduced.
 
 The same Controller command scheduler performs fixed-interval reconciliation.
-For a Slipramp-originated request it inspects the exact annotated object before
-callback hydration and, after approval, continues until a terminal Kargo phase
-is recorded. For a Kargo-originated request it resolves the exact snapshotted
-namespace, name, and Stage, binds the first observed Kubernetes UID durably,
-and requires that UID on later observations. Conflicting namespace, name,
-Stage, annotation, or UID evidence is rejected rather than guessed.
+For a Slipramp-originated request it inspects the exact annotated object after
+delivery and continues until a terminal Kargo phase is recorded, regardless of
+whether an automatic callback occurs. For a Kargo-originated request it resolves
+the exact snapshotted namespace, name, and Stage, binds the first observed
+Kubernetes UID durably, and requires that UID on later observations. Conflicting
+namespace, name, Stage, annotation, or UID evidence is rejected rather than
+guessed.
 
-Missing and nonterminal state remains scheduled. A terminal Kargo phase before
-callback hydration still moves the unhydrated creation lifecycle to `error`,
-while retaining the Kargo outcome separately. Callback hydration, approval,
-identity binding, and terminal reports lock the same durable Promotion.
-Identical observations are idempotent; a later conflicting phase or identity
-cannot replace the first accepted fact. Only observation and reporting retry:
-the Controller never repeats Kargo Promotion steps.
+Missing and nonterminal state remains scheduled. A terminal Kargo phase is
+recorded independently from review state; automatic Promotions are never
+reclassified as callback failures. Callback hydration, approval, identity
+binding, and terminal reports lock the same durable Promotion. Identical
+observations are idempotent; a later conflicting phase or identity cannot
+replace the first accepted fact. Only observation and reporting retry: the
+Controller never repeats Kargo Promotion steps.
+
+Callbacks remain required for review-required preparation. They are optional
+for automatic Promotions: an identical callback returns the automatic approval
+result, preserves conflict detection, and records Git audit associations only
+when a resolved Repository and a complete Git context are both present.
+Metadata-free callbacks skip Repository lookup, preparation, commit
+association, candidate-branch cleanup, and Git or Argo CD preview work.
+Repository allowlists authorize those Repository operations; they do not enroll
+Stages or gate native Kargo execution.
 
 ## Guarded preparation and decisions
 
@@ -226,9 +257,10 @@ Freight eligibility is conservative. Directly requested Warehouse Freight is
 eligible. Upstream Freight requires observed verification and required soak-time
 evidence unless Kargo records explicit approval for the target Stage. `OneOf`
 requires one eligible source and `All` requires every requested source. Missing
-evidence is `unknown`, never assumed ready. Control-flow Stages remain in the
-topology, but Slipramp does not offer a Freight-based Promotion when no concrete
-requested Freight is available.
+evidence is `unknown`, never assumed ready. Every configured Stage remains in
+the topology. Every non-control-flow Stage can use native automatic promotion
+when exact eligible Freight exists, including a Stage with no Slipramp
+annotations. Control-flow Stages remain visible but non-promotable.
 
 Project and Promotion reads do not query Kargo or Argo CD. Branch drift uses
 cached read-only Git evidence and remains a separate workflow. It compares

@@ -37,7 +37,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		t.Fatal("operator Promotion creation returned no Promotion")
 	}
 	operator := *creationResponse.JSON201
-	if operator.Source != api.Slipramp || operator.Status != api.PromotionStatusCreating ||
+	if operator.Source != api.Slipramp || operator.Status != api.PromotionStatusApproved ||
 		operator.StageID != kargoStage.ID || operator.SourceStageID == nil || *operator.SourceStageID != kargoStage.ID ||
 		operator.SelectedFreight == nil || operator.SelectedFreight.Name != "acceptance-freight" ||
 		operator.SelectedFreight.Origin != "Warehouse/acceptance" {
@@ -70,9 +70,9 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		ExternalPromotionID: operator.ExternalPromotionID,
 		Project:             "kargo-acceptance",
 		Stage:               "acceptance",
-		BaseRevision:        s.fixtureCommit,
-		CandidateRevision:   s.candidateCommit,
-		CandidateBranch:     "kargo/promotion/acceptance-operator",
+		BaseRevision:        new(api.GitRevision(s.fixtureCommit)),
+		CandidateRevision:   new(api.GitRevision(s.candidateCommit)),
+		CandidateBranch:     new("kargo/promotion/acceptance-operator"),
 	}
 	hydrated := submitKargoPromotion(t, kargoClient, operatorCallback)
 	if hydrated.ID != operator.ID || hydrated.Status != api.PromotionStatusApproved || hydrated.ReviewRequired {
@@ -80,8 +80,9 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 	}
 	operatorRead := s.getPromotion(t, operator.ID)
 	if operatorRead.Source != api.Slipramp || operatorRead.Status != api.PromotionStatusApproved ||
-		operatorRead.RequestedBy.PrincipalID != operator.RequestedBy.PrincipalID || operatorRead.CandidateCommit == nil ||
-		operatorRead.DispatchedAt == nil || operatorRead.KargoPromotionUID == nil {
+		operatorRead.RequestedBy.PrincipalID != operator.RequestedBy.PrincipalID ||
+		operatorRead.ReviewContext == nil || operatorRead.ReviewContext.Git == nil ||
+		operatorRead.CreationDispatch.DeliveredAt == nil || operatorRead.KargoPromotionUID == nil {
 		t.Fatalf("hydrated operator Promotion read = %#v", operatorRead)
 	}
 	operatorRetry := submitKargoPromotion(t, kargoClient, operatorCallback)
@@ -94,9 +95,9 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		ExternalPromotionID: "acceptance-automatic",
 		Project:             "kargo-acceptance",
 		Stage:               "acceptance",
-		BaseRevision:        s.fixtureCommit,
-		CandidateRevision:   s.candidateCommit,
-		CandidateBranch:     "kargo/promotion/acceptance-automatic",
+		BaseRevision:        new(api.GitRevision(s.fixtureCommit)),
+		CandidateRevision:   new(api.GitRevision(s.candidateCommit)),
+		CandidateBranch:     new("kargo/promotion/acceptance-automatic"),
 	}
 	automatic := submitKargoPromotion(t, kargoClient, automaticRequest)
 	if automatic.Status != api.PromotionStatusApproved || automatic.ReviewRequired {
@@ -208,12 +209,15 @@ func (s *suite) waitForOperatorPromotionDispatch(t *testing.T, promotionID uuid.
 		response, err := s.productClient.GetPromotionWithResponse(t.Context(), promotionID)
 		if err == nil && response.JSON200 != nil {
 			last = *response.JSON200
-			if last.Source == api.Slipramp && last.Status == api.PromotionStatusCreating &&
-				last.DispatchAttemptCount >= 1 && last.DispatchedAt != nil && last.KargoPromotionUID != nil {
+			if last.Source == api.Slipramp &&
+				(last.Status == api.PromotionStatusCreating || last.Status == api.PromotionStatusApproved) &&
+				last.CreationDispatch.AttemptCount >= 1 &&
+				last.CreationDispatch.Phase == api.PromotionCreationDispatchPhaseDelivered &&
+				last.CreationDispatch.DeliveredAt != nil && last.KargoPromotionUID != nil {
 				return last
 			}
-			if last.Status != api.PromotionStatusCreating {
-				t.Fatalf("operator Promotion %s left creating before its callback: %#v", promotionID, last)
+			if last.Status != api.PromotionStatusCreating && last.Status != api.PromotionStatusApproved {
+				t.Fatalf("operator Promotion %s left its accepted state before delivery: %#v", promotionID, last)
 			}
 		}
 		wait(t, time.Second)
@@ -288,9 +292,9 @@ func (s *suite) checkGuardedPromotion(
 		ExternalPromotionID: externalID,
 		Project:             "kargo-acceptance",
 		Stage:               "acceptance",
-		BaseRevision:        s.fixtureCommit,
-		CandidateRevision:   candidateRevision,
-		CandidateBranch:     candidateBranch,
+		BaseRevision:        new(api.GitRevision(s.fixtureCommit)),
+		CandidateRevision:   new(api.GitRevision(candidateRevision)),
+		CandidateBranch:     new(candidateBranch),
 	}
 	created := submitKargoPromotion(t, kargoClient, request)
 	if !created.ReviewRequired ||
@@ -300,12 +304,13 @@ func (s *suite) checkGuardedPromotion(
 	promotion := s.waitForPendingPromotion(t, created.ID)
 	if promotion.PreparationRunID == nil || promotion.GitDiffArtifactID == nil || promotion.ArgoDiffArtifactID == nil ||
 		promotion.PreparationRun == nil || promotion.GitDiffArtifact == nil || promotion.ArgoDiffArtifact == nil ||
-		promotion.CandidateCommit == nil {
+		promotion.ReviewContext == nil || promotion.ReviewContext.Git == nil {
 		t.Fatalf("guarded Promotion omitted preparation records: %#v", promotion)
 	}
 	run := *promotion.PreparationRun
 	if !promotion.ReviewRequired || promotion.Status != api.PromotionStatusPending ||
-		promotion.RequestedBy.PrincipalID != kargoPrincipalID || promotion.CandidateCommit.Sha != candidateRevision ||
+		promotion.RequestedBy.PrincipalID != kargoPrincipalID ||
+		promotion.ReviewContext.Git.CandidateCommit.Sha != candidateRevision ||
 		run.Phase != api.RunPhaseFinished || run.Outcome == nil || *run.Outcome != api.RunOutcomeSucceeded ||
 		run.Commit.Sha != s.fixtureCommit || run.CatalogRevisionID != s.catalogRevision.ID ||
 		run.Source.Type != api.RunSourceTypePromotion || run.Source.Promotion == nil ||

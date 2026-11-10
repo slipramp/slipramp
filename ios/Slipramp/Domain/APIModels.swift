@@ -99,7 +99,18 @@ extension Components.Schemas.Promotion: Identifiable {
         case .pending:
             "Pending review"
         case .approved:
-            kargoOutcome?.phase.rawValue ?? "Kargo running"
+            if let outcome = kargoOutcome {
+                outcome.phase.rawValue
+            } else {
+                switch creationDispatch.phase {
+                case .awaitingDelivery:
+                    "Awaiting Kargo delivery"
+                case .failed:
+                    "Kargo delivery failed"
+                case .notApplicable, .delivered:
+                    "Kargo running"
+                }
+            }
         case .rejected:
             "Rejected"
         case .expired:

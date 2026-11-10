@@ -484,7 +484,7 @@ final class APIClientTests: XCTestCase {
 
         let promotion = try await client.getPromotion(id: promotionID)
         XCTAssertEqual(promotion.externalPromotionId, "promote-production-42")
-        XCTAssertEqual(promotion.stageSnapshot.environment, "production")
+        XCTAssertEqual(promotion.stageSnapshot.enrichment?.environment, "production")
         XCTAssertEqual(promotion.selectedFreight?.name, "freight-42")
         XCTAssertEqual(promotion.statusLabel, "Pending review")
         XCTAssertEqual(
@@ -557,7 +557,7 @@ final class APIClientTests: XCTestCase {
         let list = try await client.listPromotions()
         XCTAssertEqual(list.total, 1)
         XCTAssertEqual(list.items.first?.id, promotionID)
-        XCTAssertEqual(list.items.first?.stageSnapshot.application, "slipramp")
+        XCTAssertEqual(list.items.first?.stageSnapshot.enrichment?.application, "slipramp")
         XCTAssertEqual(list.items.first?.statusLabel, "Pending review")
     }
 
@@ -1051,32 +1051,38 @@ final class APIClientTests: XCTestCase {
                 "name": "production",
                 "kubernetesUid": "stage-uid",
                 "resourceVersion": "123",
-                "application": "slipramp",
-                "environment": "production",
-                "repository": "homelab",
-                "repositoryUrl": "https://git.example/homelab.git",
-                "targetBranch": "main",
-                "sourcePaths": ["deploy/slipramp"],
+                "enrichment": {
+                  "application": "slipramp",
+                  "environment": "production",
+                  "repository": "homelab",
+                  "repositoryUrl": "https://git.example/homelab.git",
+                  "targetBranch": "main",
+                  "sourcePaths": ["deploy/slipramp"]
+                },
                 "requestedFreight": [],
                 "freight": { "items": [] },
                 "lastObservedAt": "2026-10-30T12:30:00Z"
               },
-              "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
-              "repositorySnapshot": {
-                "name": "homelab",
-                "cloneUrl": "https://git.example/homelab.git",
-                "branch": "main"
+              "reviewContext": {
+                "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
+                "repositorySnapshot": {
+                  "name": "homelab",
+                  "cloneUrl": "https://git.example/homelab.git",
+                  "branch": "main"
+                },
+                "targetBranch": "main",
+                "git": {
+                  "baseCommit": {
+                    "sha": "0123456789abcdef0123456789abcdef01234567",
+                    "title": "Current production"
+                  },
+                  "candidateCommit": {
+                    "sha": "89abcdef0123456789abcdef0123456789abcdef",
+                    "title": "Upgrade Slipramp"
+                  },
+                  "candidateBranch": "kargo/promotion/candidate-42"
+                }
               },
-              "baseCommit": {
-                "sha": "0123456789abcdef0123456789abcdef01234567",
-                "title": "Current production"
-              },
-              "candidateCommit": {
-                "sha": "89abcdef0123456789abcdef0123456789abcdef",
-                "title": "Upgrade Slipramp"
-              },
-              "candidateBranch": "slipramp/promotions/candidate-42",
-              "targetBranch": "main",
               "policySnapshot": {
                 "configuredMode": "review-required",
                 "effectiveMode": "review-required"
@@ -1094,7 +1100,10 @@ final class APIClientTests: XCTestCase {
               },
               "reviewRequired": true,
               "status": "\(status)",
-              "dispatchAttemptCount": 0,
+              "creationDispatch": {
+                "phase": "not-applicable",
+                "attemptCount": 0
+              },
               "gitDiffArtifactId": "2a76876f-bf1b-4851-b401-16c68608962c",
               "argoDiffArtifactId": "28a6a716-6912-49b0-aabc-e41599de592b",
               "kargoUrl": "https://kargo.example.com/project/platform/promotion/promote-production-42",

@@ -30,7 +30,8 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 		t.Fatalf("AcceptPromotionRequest() automatic error = %v", err)
 	}
 	if automatic.ID != acceptance.ID || automatic.Lifecycle.State != promotion.LifecycleApproved ||
-		automatic.ReviewRequired || automatic.RepositoryID != fixture.repositoryID ||
+		automatic.ReviewRequired || automatic.ReviewContext == nil ||
+		automatic.ReviewContext.RepositoryID != fixture.repositoryID ||
 		automatic.Preparation.RunID != nil {
 		t.Errorf("automatic Promotion = %#v", automatic)
 	}
@@ -43,7 +44,10 @@ SELECT stage_snapshot->'freight' = '{"items":[]}'::jsonb
 FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err != nil || !storedSnapshotShape {
 		t.Errorf("stored snapshot shape = %v, %v", storedSnapshotShape, err)
 	}
-	for _, sha := range []string{automatic.BaseRevision, automatic.CandidateRevision} {
+	for _, sha := range []string{
+		automatic.ReviewContext.Git.BaseRevision,
+		automatic.ReviewContext.Git.CandidateRevision,
+	} {
 		known, commitErr := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
 			RepositoryID: fixture.repositoryID,
 			SHA:          sha,
@@ -103,7 +107,7 @@ FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err !=
 	}
 	stageSnapshot := guarded.StageSnapshot
 	if stageSnapshot.ResourceVersion != fixture.stage.ResourceVersion ||
-		stageSnapshot.RepositoryName != fixture.stage.RepositoryName {
+		stageSnapshot.Enrichment == nil || stageSnapshot.Enrichment.RepositoryName != fixture.stage.RepositoryName {
 		t.Errorf("Stage snapshot = %#v", stageSnapshot)
 	}
 	policySnapshot := guarded.PolicySnapshot
@@ -178,6 +182,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		RequestedByPrincipalID:     fixture.principal.ID,
 		RequestedBySnapshot:        fixture.actor,
 		AcceptedAt:                 acceptedAt,
+		AllowedRepositories:        []string{fixture.stage.RepositoryName},
 		MaximumStageObservationAge: 5 * time.Minute,
 		PendingReviewRetention:     8 * 24 * time.Hour,
 		Policy: &promotion.StagePolicy{
@@ -196,7 +201,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	if record.Source != promotion.SourceSlipramp || record.Lifecycle.State != promotion.LifecycleCreating ||
 		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
 		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
-		record.BaseRevision != "" || record.CandidateRevision != "" || record.CandidateBranch != "" ||
+		record.ReviewContext == nil || record.ReviewContext.Git != nil ||
 		record.CreationDispatch.NextAttemptAt == nil || !record.CreationDispatch.NextAttemptAt.Equal(acceptedAt) || !record.ReviewRequired ||
 		record.PolicySnapshot.EffectiveMode != promotion.PolicyModeReviewRequired ||
 		record.PolicySnapshot.ExpiresAt == nil || !record.PolicySnapshot.ExpiresAt.Equal(policyExpiresAt) {
@@ -261,6 +266,146 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	}
 }
 
+func TestMetadataFreePromotionPolicyIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.November, 9, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	reviewPolicy := promotion.StagePolicy{
+		StageID:              fixture.stage.ID,
+		Mode:                 promotion.PolicyModeReviewRequired,
+		UpdatedByPrincipalID: fixture.principal.ID,
+		UpdatedBySnapshot:    fixture.actor,
+		UpdatedAt:            createdAt.Add(2 * time.Minute),
+	}
+	if _, err := fixture.database.UpsertPromotionStagePolicy(fixture.ctx, reviewPolicy); err != nil {
+		t.Fatalf("configure review-required policy: %v", err)
+	}
+
+	stage := fixture.stage
+	stage.Application = ""
+	stage.Environment = ""
+	stage.RepositoryName = ""
+	stage.RepositoryURL = ""
+	stage.TargetBranch = ""
+	stage.SourcePaths = nil
+	stage.ResourceVersion = "metadata-free"
+	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin: "Warehouse/external-dns", Name: "freight-42", Artifacts: []promotion.FreightArtifact{},
+	}}}
+	stage.FirstObservedAt = createdAt.Add(3 * time.Minute)
+	stage.LastObservedAt = createdAt.Add(3 * time.Minute)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), stage.Integration, stage.ClusterName, stage.LastObservedAt),
+		[]promotion.Stage{stage},
+	); err != nil {
+		t.Fatalf("replace metadata-free Stage: %v", err)
+	}
+
+	acceptance := promotion.OperatorPromotionAcceptance{
+		ID:                         uuid.New(),
+		Integration:                stage.Integration,
+		TargetStageID:              stage.ID,
+		SourceStageID:              stage.ID,
+		FreightName:                "freight-42",
+		RequestedByPrincipalID:     fixture.principal.ID,
+		RequestedBySnapshot:        fixture.actor,
+		AcceptedAt:                 createdAt.Add(4 * time.Minute),
+		MaximumStageObservationAge: 5 * time.Minute,
+	}
+	if _, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		acceptance,
+	); !errors.Is(err, promotion.ErrReviewContextUnavailable) {
+		t.Fatalf("review-required metadata-free creation error = %v", err)
+	}
+	preserved, err := fixture.database.GetPromotionStagePolicy(fixture.ctx, stage.ID)
+	if err != nil || preserved.Mode != promotion.PolicyModeReviewRequired {
+		t.Fatalf("preserved review-required policy = %#v, %v", preserved, err)
+	}
+	if _, err := fixture.database.UpsertPromotionStagePolicy(fixture.ctx, promotion.StagePolicy{
+		StageID:              stage.ID,
+		Mode:                 promotion.PolicyModeReviewRequired,
+		UpdatedByPrincipalID: fixture.principal.ID,
+		UpdatedBySnapshot:    fixture.actor,
+		UpdatedAt:            createdAt.Add(5 * time.Minute),
+	}); !errors.Is(err, promotion.ErrReviewContextUnavailable) {
+		t.Fatalf("reconfigure unavailable review policy error = %v", err)
+	}
+	automaticPolicy, err := fixture.database.UpsertPromotionStagePolicy(fixture.ctx, promotion.StagePolicy{
+		StageID:              stage.ID,
+		Mode:                 promotion.PolicyModeAutomatic,
+		UpdatedByPrincipalID: fixture.principal.ID,
+		UpdatedBySnapshot:    fixture.actor,
+		UpdatedAt:            createdAt.Add(6 * time.Minute),
+	})
+	if err != nil || automaticPolicy.Mode != promotion.PolicyModeAutomatic {
+		t.Fatalf("restore automatic policy = %#v, %v", automaticPolicy, err)
+	}
+
+	acceptance.ID = uuid.New()
+	acceptance.AcceptedAt = createdAt.Add(7 * time.Minute)
+	native, err := fixture.database.CreateOperatorPromotion(fixture.ctx, acceptance)
+	if err != nil {
+		t.Fatalf("create metadata-free automatic Promotion: %v", err)
+	}
+	if native.Lifecycle.State != promotion.LifecycleApproved || native.ReviewRequired ||
+		native.ReviewContext != nil || native.SelectedFreightSnapshot == nil ||
+		native.SelectedFreightSnapshot.Name != "freight-42" || native.CreationDispatch.NextAttemptAt == nil {
+		t.Fatalf("metadata-free automatic Promotion = %#v", native)
+	}
+	if _, err := fixture.database.pool.Exec(
+		fixture.ctx,
+		"UPDATE promotions SET repository_id = $1 WHERE id = $2",
+		databaseUUID(fixture.repositoryID),
+		databaseUUID(native.ID),
+	); !constraintMatches(err, "promotions_review_context_valid") {
+		t.Fatalf("partial review context constraint error = %v", err)
+	}
+	if _, err := fixture.database.pool.Exec(
+		fixture.ctx,
+		"UPDATE promotions SET selected_freight_snapshot = NULL WHERE id = $1",
+		databaseUUID(native.ID),
+	); !constraintMatches(err, "promotions_source_state_valid") {
+		t.Fatalf("missing native Freight constraint error = %v", err)
+	}
+
+	request := fixture.request("metadata-free-callback")
+	request.BaseRevision = ""
+	request.CandidateRevision = ""
+	request.CandidateBranch = ""
+	callback := fixture.acceptance(t, request, createdAt.Add(8*time.Minute))
+	callback.AllowedRepositories = nil
+	kargoOriginated, err := fixture.database.AcceptPromotionRequest(fixture.ctx, callback)
+	if err != nil {
+		t.Fatalf("accept metadata-free Kargo callback: %v", err)
+	}
+	if kargoOriginated.Source != promotion.SourceKargo ||
+		kargoOriginated.Lifecycle.State != promotion.LifecycleApproved ||
+		kargoOriginated.ReviewContext != nil || kargoOriginated.Preparation.RunID != nil {
+		t.Fatalf("metadata-free Kargo-originated Promotion = %#v", kargoOriginated)
+	}
+
+	stage.ControlFlow = true
+	stage.ResourceVersion = "control-flow"
+	stage.FirstObservedAt = createdAt.Add(9 * time.Minute)
+	stage.LastObservedAt = createdAt.Add(9 * time.Minute)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), stage.Integration, stage.ClusterName, stage.LastObservedAt),
+		[]promotion.Stage{stage},
+	); err != nil {
+		t.Fatalf("replace control-flow Stage: %v", err)
+	}
+	acceptance.ID = uuid.New()
+	acceptance.AcceptedAt = createdAt.Add(10 * time.Minute)
+	if _, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		acceptance,
+	); !errors.Is(err, promotion.ErrStageControlFlow) {
+		t.Fatalf("control-flow Promotion creation error = %v", err)
+	}
+}
+
 func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 14, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
@@ -311,6 +456,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 				RequestedByPrincipalID:     operator.ID,
 				RequestedBySnapshot:        operatorActor,
 				AcceptedAt:                 acceptedAt,
+				AllowedRepositories:        []string{fixture.stage.RepositoryName},
 				MaximumStageObservationAge: 5 * time.Minute,
 				PendingReviewRetention:     8 * 24 * time.Hour,
 			},
@@ -343,7 +489,9 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	}
 	if hydrated.ID != automatic.ID || hydrated.Source != promotion.SourceSlipramp ||
 		hydrated.Lifecycle.State != promotion.LifecycleApproved || hydrated.RequestDigest != callback.RequestDigest ||
-		hydrated.BaseRevision != callback.Request.BaseRevision || hydrated.CreationDispatch.NextAttemptAt != nil ||
+		hydrated.ReviewContext == nil || hydrated.ReviewContext.Git == nil ||
+		hydrated.ReviewContext.Git.BaseRevision != callback.Request.BaseRevision ||
+		hydrated.CreationDispatch.NextAttemptAt == nil ||
 		hydrated.RequestedByPrincipalID != operator.ID || hydrated.RequestedBySnapshot != operatorActor {
 		t.Errorf("hydrated automatic Promotion = %#v", hydrated)
 	}
@@ -359,9 +507,9 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	}
 	knownCandidate, err := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
 		RepositoryID: fixture.repositoryID,
-		SHA:          hydrated.CandidateRevision,
+		SHA:          hydrated.ReviewContext.Git.CandidateRevision,
 	})
-	if err != nil || knownCandidate.Commit.SHA != hydrated.CandidateRevision {
+	if err != nil || knownCandidate.Commit.SHA != hydrated.ReviewContext.Git.CandidateRevision {
 		t.Errorf("hydrated Promotion candidate = %#v, %v", knownCandidate, err)
 	}
 
@@ -423,7 +571,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		t.Errorf("mismatched Stage callback error = %v", err)
 	}
 	unchanged, err := fixture.database.GetPromotion(fixture.ctx, mismatched.ID)
-	if err != nil || unchanged.Lifecycle.State != promotion.LifecycleCreating ||
+	if err != nil || unchanged.Lifecycle.State != promotion.LifecycleApproved ||
 		unchanged.RequestDigest != (promotion.RequestDigest{}) {
 		t.Errorf("mismatched callback changed Promotion = %#v, %v", unchanged, err)
 	}
@@ -478,7 +626,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	}
 	if guarded.Lifecycle.State != promotion.LifecyclePreparing || !guarded.ReviewRequired || guarded.Lifecycle.ExpiresAt == nil ||
 		!guarded.Lifecycle.ExpiresAt.Equal(guardedCreatedAt.Add(8*24*time.Hour)) ||
-		guarded.RequestedByPrincipalID != operator.ID || guarded.CreationDispatch.NextAttemptAt != nil {
+		guarded.RequestedByPrincipalID != operator.ID || guarded.CreationDispatch.NextAttemptAt == nil {
 		t.Errorf("hydrated guarded Promotion = %#v", guarded)
 	}
 }
@@ -1186,7 +1334,7 @@ func TestPromotionReviewStateSurvivesStoreRestartIntegration(t *testing.T) {
 		t.Fatalf("Open() after restart error = %v", err)
 	}
 	t.Cleanup(reopened.Close)
-	reviewService := promotion.NewReviewService(reopened)
+	reviewService := promotion.NewReviewService(nil, reopened)
 	review, err := reviewService.GetPromotion(fixture.ctx, pending.ID)
 	if err != nil {
 		t.Fatalf("GetPromotion() after restart error = %v", err)

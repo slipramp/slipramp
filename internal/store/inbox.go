@@ -108,18 +108,24 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 	records := make([]inbox.PromotionState, 0, len(rows))
 	for _, row := range rows {
 		var stage struct {
-			Name        string `json:"name"`
-			Application string `json:"application"`
+			Name       string `json:"name"`
+			Enrichment *struct {
+				Application string `json:"application"`
+			} `json:"enrichment,omitempty"`
 		}
 		if err := json.Unmarshal(row.StageSnapshot, &stage); err != nil {
 			return nil, fmt.Errorf("decode Inbox Promotion Stage facts: %w", err)
 		}
+		application := ""
+		if stage.Enrichment != nil {
+			application = stage.Enrichment.Application
+		}
 		records = append(records, inbox.PromotionState{
 			ID:              uuid.UUID(row.ID.Bytes),
 			StageName:       stage.Name,
-			Application:     stage.Application,
+			Application:     application,
 			CandidateBranch: textValue(row.CandidateBranch),
-			TargetBranch:    row.TargetBranch,
+			TargetBranch:    textValue(row.TargetBranch),
 			Status:          promotion.LifecycleState(row.Status),
 			Message:         row.Message,
 			CreatedAt:       row.CreatedAt.Time.UTC(),

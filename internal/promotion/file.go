@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -94,12 +95,15 @@ func DecodeIntegrationFile(input io.Reader) (IntegrationSet, error) {
 		if err != nil {
 			return nil, err
 		}
-		pendingRetention, err := durationvalidate.Positive(
-			fmt.Sprintf("Kargo integration %q pending review retention", name),
-			input.PendingReviewRetention,
-		)
-		if err != nil {
-			return nil, err
+		pendingRetention := time.Duration(0)
+		if input.PendingReviewRetention != "" {
+			pendingRetention, err = durationvalidate.Positive(
+				fmt.Sprintf("Kargo integration %q pending review retention", name),
+				input.PendingReviewRetention,
+			)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		var branchCleanup *CandidateBranchCleanupConfig

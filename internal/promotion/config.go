@@ -82,9 +82,6 @@ func (c IntegrationConfig) Validate() error {
 	if err := kubevalidate.DNSLabel("Kargo integration cluster", c.ClusterName); err != nil {
 		return err
 	}
-	if len(c.Repositories) == 0 {
-		return fmt.Errorf("at least one Kargo repository is required")
-	}
 	if err := validateUIURL("kargo", c.UIURL); err != nil {
 		return err
 	}
@@ -111,20 +108,24 @@ func (c IntegrationConfig) Validate() error {
 		}
 	}
 
-	if err := kubevalidate.DNSLabel("Kargo preparation repository", c.Preparation.Repository); err != nil {
-		return err
-	}
-	if _, ok := seenRepositories[c.Preparation.Repository]; !ok {
-		return fmt.Errorf(
-			"kargo preparation repository %q is not in the repository allowlist",
-			c.Preparation.Repository,
-		)
-	}
-	if err := kubevalidate.DNSLabel("Kargo preparation target", c.Preparation.Target); err != nil {
-		return err
-	}
-	if err := kubevalidate.DNSLabel("Kargo preparation action", c.Preparation.Action); err != nil {
-		return err
+	if c.ReviewConfigured() {
+		if err := kubevalidate.DNSLabel("Kargo preparation repository", c.Preparation.Repository); err != nil {
+			return err
+		}
+		if _, ok := seenRepositories[c.Preparation.Repository]; !ok {
+			return fmt.Errorf(
+				"kargo preparation repository %q is not in the repository allowlist",
+				c.Preparation.Repository,
+			)
+		}
+		if err := kubevalidate.DNSLabel("Kargo preparation target", c.Preparation.Target); err != nil {
+			return err
+		}
+		if err := kubevalidate.DNSLabel("Kargo preparation action", c.Preparation.Action); err != nil {
+			return err
+		}
+	} else if len(c.Repositories) != 0 || c.Preparation != (PreparationConfig{}) {
+		return fmt.Errorf("kargo review configuration requires repositories and complete preparation settings")
 	}
 	if c.CandidateBranchCleanup != nil {
 		if c.CandidateBranchCleanup.Retention <= 0 {
@@ -148,11 +149,19 @@ func (c IntegrationConfig) Validate() error {
 	if c.MaximumStageObservationAge <= 0 {
 		return fmt.Errorf("maximum Kargo Stage observation age must be positive")
 	}
-	if c.PendingReviewRetention <= 0 {
+	if c.ReviewConfigured() && c.PendingReviewRetention <= 0 {
 		return fmt.Errorf("pending Kargo review retention must be positive")
+	}
+	if !c.ReviewConfigured() && c.PendingReviewRetention != 0 {
+		return fmt.Errorf("pending Kargo review retention requires review configuration")
 	}
 
 	return nil
+}
+
+func (c IntegrationConfig) ReviewConfigured() bool {
+	return len(c.Repositories) > 0 && c.Preparation.Repository != "" && c.Preparation.Target != "" &&
+		c.Preparation.Action != ""
 }
 
 func validateUIURL(subject, value string) error {

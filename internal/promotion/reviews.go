@@ -103,12 +103,13 @@ type ReviewStore interface {
 }
 
 type ReviewService struct {
-	store ReviewStore
-	now   func() time.Time
+	integrations IntegrationSet
+	store        ReviewStore
+	now          func() time.Time
 }
 
-func NewReviewService(store ReviewStore) *ReviewService {
-	return &ReviewService{store: store, now: time.Now}
+func NewReviewService(integrations IntegrationSet, store ReviewStore) *ReviewService {
+	return &ReviewService{integrations: integrations, store: store, now: time.Now}
 }
 
 func (s *ReviewService) ExpirePending(ctx context.Context) error {
@@ -133,6 +134,12 @@ func (s *ReviewService) UpdateStagePolicy(
 	}
 	if stage.ArchivedAt != nil {
 		return PolicyView{}, ErrStageArchived
+	}
+	if update.Mode == PolicyModeReviewRequired {
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if !configured || !integration.ReviewConfigured() || !stage.ReviewReady() {
+			return PolicyView{}, ErrReviewContextUnavailable
+		}
 	}
 	actor, err := principal.ActorSnapshot()
 	if err != nil {

@@ -16,8 +16,9 @@ strict priority order.
       health without coupling ordinary product reads to either dependency.
 - [ ] Enable candidate-branch cleanup per Repository after confirming retention
       and write credentials.
-- [ ] Document Stage freshness, preparation and diff failures, review expiry,
-      stale target pushes, and operational recovery.
+- [ ] Add an operator recovery runbook for Stage freshness, native creation
+      delivery failures, preparation and diff failures, review expiry, and
+      stale target pushes.
 
 Same-identity preparation retry, policy audit history beyond current
 attribution, and provider-neutral review abstractions remain deferred until an

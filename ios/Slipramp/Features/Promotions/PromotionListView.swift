@@ -139,10 +139,7 @@ private struct PromotionRow: View {
                             .fixedSize()
                     }
 
-                    Text(
-                        "\(promotion.stageSnapshot.application) · "
-                            + "\(promotion.stageSnapshot.project)/\(promotion.stageSnapshot.name)"
-                    )
+                    Text(promotionListContext(promotion))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -165,6 +162,15 @@ private struct PromotionRow: View {
                     .padding(.top, 13)
             }
         }
+    }
+
+    private func promotionListContext(_ promotion: Promotion) -> String {
+        let stage = promotion.stageSnapshot
+        let identity = "\(stage.project)/\(stage.name)"
+        guard let application = stage.enrichment?.application else {
+            return identity
+        }
+        return "\(application) · \(identity)"
     }
 }
 

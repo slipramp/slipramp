@@ -1205,24 +1205,16 @@ export type Promotion = {
   stageId: string;
   sourceStageId?: string;
   stageSnapshot: PromotionStageSnapshot;
-  repositoryId: string;
-  repositorySnapshot: PromotionRepositorySnapshot;
-  baseCommit?: GitCommit;
-  candidateCommit?: GitCommit;
-  candidateBranch?: string;
-  targetBranch: string;
+  reviewContext?: PromotionReviewContext;
   policySnapshot: PromotionStagePolicy;
   selectedFreight?: PromotionFreightItem;
   reviewRequired: boolean;
   status: PromotionStatus;
   message?: string;
-  dispatchAttemptCount: number;
-  nextDispatchAt?: string;
-  lastDispatchAt?: string;
-  dispatchedAt?: string;
+  creationDispatch: PromotionCreationDispatch;
   kargoPromotionUid?: string;
   /**
-   * Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
+   * Next durable inspection time while the responsible Controller awaits a terminal Kargo outcome.
    */
   nextReconciliationAt?: string;
   /**
@@ -2253,13 +2245,25 @@ export type ApiKeyScope =
 
 export type GitRevision = string;
 
+/**
+ * Native Kargo Promotion identity with optional Git audit context. Supply baseRevision, candidateRevision, and candidateBranch together or omit all three. Git audit context is required when the effective policy requires Slipramp review.
+ */
 export type KargoPromotionRequest = {
   externalPromotionId: string;
   project: CatalogName;
   stage: string;
-  baseRevision: GitRevision;
-  candidateRevision: GitRevision;
-  candidateBranch: string;
+  /**
+   * Base Git revision for Slipramp review and audit context.
+   */
+  baseRevision?: GitRevision;
+  /**
+   * Candidate Git revision for Slipramp review and audit context.
+   */
+  candidateRevision?: GitRevision;
+  /**
+   * Candidate branch for Slipramp review and audit context.
+   */
+  candidateBranch?: string;
 };
 
 export type PromotionStatus =
@@ -2278,6 +2282,15 @@ export type KargoPromotionResponse = {
   reviewRequired: boolean;
   message?: string;
   updatedAt: string;
+};
+
+export type PromotionStageEnrichment = {
+  application?: string;
+  environment?: string;
+  repository?: CatalogName;
+  repositoryUrl?: string;
+  targetBranch?: string;
+  sourcePaths?: Array<string>;
 };
 
 export type PromotionFreightRequest = {
@@ -2333,12 +2346,7 @@ export type PromotionStageSnapshot = {
   name: string;
   kubernetesUid: string;
   resourceVersion: string;
-  application: string;
-  environment: string;
-  repository: CatalogName;
-  repositoryUrl: string;
-  targetBranch: string;
-  sourcePaths: Array<string>;
+  enrichment?: PromotionStageEnrichment;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
   successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
@@ -2352,7 +2360,30 @@ export type PromotionRepositorySnapshot = {
   checkoutCredentialName?: string;
 };
 
+export type PromotionGitContext = {
+  baseCommit: GitCommit;
+  candidateCommit: GitCommit;
+  candidateBranch: string;
+};
+
+export type PromotionReviewContext = {
+  repositoryId: string;
+  repositorySnapshot: PromotionRepositorySnapshot;
+  targetBranch: string;
+  git?: PromotionGitContext;
+};
+
 export type PromotionPolicyMode = "automatic" | "review-required";
+
+export type PromotionCreationDispatch = {
+  phase: "not-applicable" | "awaiting-delivery" | "delivered" | "failed";
+  attemptCount: number;
+  nextAttemptAt?: string;
+  lastAttemptAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+  diagnostic?: string;
+};
 
 export type KargoPromotionOutcome = {
   /**
@@ -2416,20 +2447,24 @@ export type PromotionProjectFreightRequest = {
   candidates: Array<PromotionFreightCandidate>;
 };
 
-export type PromotionStageEnrichment = {
-  application?: string;
-  environment?: string;
-  repository?: CatalogName;
-  repositoryUrl?: string;
-  targetBranch?: string;
-  sourcePaths?: Array<string>;
+export type PromotionStageCapability = {
+  status: "ready" | "unavailable";
+  reason?: string;
 };
 
 export type PromotionStageCapabilities = {
-  promotion: "ready" | "unavailable";
-  policy: "ready";
-  branchDrift: "ready" | "unavailable";
-  issues: Array<string>;
+  /**
+   * Native Kargo Promotion capability using exact observed Freight.
+   */
+  promotion: PromotionStageCapability;
+  /**
+   * Slipramp preparation, preview, and operator review capability.
+   */
+  review: PromotionStageCapability;
+  /**
+   * Cached Git branch-drift capability.
+   */
+  branchDrift: PromotionStageCapability;
 };
 
 export type PromotionProjectStage = {
@@ -2470,12 +2505,13 @@ export type PromotionBranchDriftStage = {
   cluster: CatalogName;
   project: CatalogName;
   name: string;
-  application: string;
-  environment: string;
+  application?: string;
+  environment?: string;
   targetBranch: string;
   sourcePaths: Array<string>;
   freight: PromotionFreight;
   policy: PromotionStagePolicy;
+  reviewCapability: PromotionStageCapability;
   status: PromotionBranchDriftStatus;
   acknowledgedSourceCommit?: GitCommit;
   acknowledgedRenderBaseCommit?: GitCommit;

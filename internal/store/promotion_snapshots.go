@@ -16,9 +16,11 @@ func encodePromotionSnapshots(record promotion.Promotion, params *storedb.Create
 	if err != nil {
 		return fmt.Errorf("encode Promotion Stage snapshot: %w", err)
 	}
-	params.RepositorySnapshot, err = json.Marshal(record.RepositorySnapshot)
-	if err != nil {
-		return fmt.Errorf("encode Promotion repository snapshot: %w", err)
+	if record.ReviewContext != nil {
+		params.RepositorySnapshot, err = json.Marshal(record.ReviewContext.RepositorySnapshot)
+		if err != nil {
+			return fmt.Errorf("encode Promotion repository snapshot: %w", err)
+		}
 	}
 	params.PolicySnapshot, err = json.Marshal(record.PolicySnapshot)
 	if err != nil {
@@ -40,8 +42,13 @@ func decodePromotionSnapshots(row storedb.Promotion, record *promotion.Promotion
 		return err
 	}
 	record.StageSnapshot = stage
-	if err := json.Unmarshal(row.RepositorySnapshot, &record.RepositorySnapshot); err != nil {
-		return fmt.Errorf("decode Promotion repository snapshot: %w", err)
+	if len(row.RepositorySnapshot) > 0 {
+		if record.ReviewContext == nil {
+			return fmt.Errorf("decode Promotion repository snapshot: review context is missing")
+		}
+		if err := json.Unmarshal(row.RepositorySnapshot, &record.ReviewContext.RepositorySnapshot); err != nil {
+			return fmt.Errorf("decode Promotion repository snapshot: %w", err)
+		}
 	}
 	if err := json.Unmarshal(row.PolicySnapshot, &record.PolicySnapshot); err != nil {
 		return fmt.Errorf("decode Promotion policy snapshot: %w", err)

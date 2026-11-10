@@ -31,9 +31,10 @@ commits across one or more Kubernetes Clusters.
 - **Identity and credential boundaries.** OIDC sessions, role-aware users and
   service accounts, and scoped API keys protect product operations. Slipramp
   stores credential references rather than injected secret values.
-- **Optional Kargo operations.** Slipramp can inventory Kargo Stages, start
-  Promotions, prepare Git and Argo CD diffs, apply review policy, and surface
-  operational health without making Kargo a requirement for ordinary Runs.
+- **Optional Kargo operations.** Slipramp can inventory every configured Kargo
+  Stage and natively promote exact eligible Freight without Repository metadata.
+  Optional enrichment adds Git and Argo CD previews, review policy, links, and
+  branch drift without making Kargo a requirement for ordinary Runs.
 - **Operator-focused interfaces.** The Web UI, remote CLI, generated API
   clients, MCP tools for Codex, and native iOS preview cover Run discovery,
   execution, review, logs, Artifacts, and promotion operations.

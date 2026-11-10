@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,6 +39,9 @@ func (d *Database) CreateOperatorPromotion(
 	if target.Integration != acceptance.Integration {
 		return promotion.Promotion{}, promotion.ErrIntegrationNotFound
 	}
+	if target.ControlFlow {
+		return promotion.Promotion{}, promotion.ErrStageControlFlow
+	}
 	stages := []promotion.Stage{target}
 	var source *promotion.Stage
 	if acceptance.SourceStageID != uuid.Nil {
@@ -70,15 +74,9 @@ func (d *Database) CreateOperatorPromotion(
 		return promotion.Promotion{}, err
 	}
 
-	repositoryRow, err := queries.GetActivePromotionRepositoryByName(ctx, target.RepositoryName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return promotion.Promotion{}, promotion.ErrRepositoryUnavailable
-	}
+	reviewContext, err := resolvePromotionReviewContext(ctx, queries, target, acceptance.AllowedRepositories)
 	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("get operator Promotion repository: %w", err)
-	}
-	if repositoryRow.CloneUrl != target.RepositoryURL {
-		return promotion.Promotion{}, promotion.ErrRepositoryNotAllowed
+		return promotion.Promotion{}, err
 	}
 	if acceptance.Policy != nil {
 		if _, err := upsertPromotionStagePolicy(ctx, queries, *acceptance.Policy); err != nil {
@@ -91,12 +89,6 @@ func (d *Database) CreateOperatorPromotion(
 		return promotion.Promotion{}, err
 	}
 	stageSnapshot := target.PromotionSnapshot()
-	repositorySnapshot := promotion.PromotionRepositorySnapshot{
-		Name:                   repositoryRow.Name,
-		CloneURL:               repositoryRow.CloneUrl,
-		Branch:                 repositoryRow.Branch,
-		CheckoutCredentialName: repositoryRow.CheckoutCredentialName,
-	}
 	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("encode operator Promotion requesting actor: %w", err)
@@ -104,8 +96,16 @@ func (d *Database) CreateOperatorPromotion(
 
 	nextDispatchAt := acceptance.AcceptedAt
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
+	if reviewRequired && reviewContext == nil {
+		return promotion.Promotion{}, promotion.ErrReviewContextUnavailable
+	}
+	status := promotion.LifecycleApproved
 	var expiresAt *time.Time
 	if reviewRequired {
+		if acceptance.PendingReviewRetention <= 0 {
+			return promotion.Promotion{}, promotion.ErrReviewContextUnavailable
+		}
+		status = promotion.LifecycleCreating
 		expiresAt = new(acceptance.AcceptedAt.Add(acceptance.PendingReviewRetention))
 	}
 	var sourceStageID *uuid.UUID
@@ -120,14 +120,12 @@ func (d *Database) CreateOperatorPromotion(
 		StageID:                 target.ID,
 		SourceStageID:           sourceStageID,
 		StageSnapshot:           stageSnapshot,
-		RepositoryID:            uuid.UUID(repositoryRow.ID.Bytes),
-		RepositorySnapshot:      repositorySnapshot,
-		TargetBranch:            target.TargetBranch,
+		ReviewContext:           reviewContext,
 		PolicySnapshot:          policySnapshot,
 		SelectedFreightSnapshot: selectedFreight,
 		ReviewRequired:          reviewRequired,
 		Lifecycle: promotion.PromotionLifecycle{
-			State:     promotion.LifecycleCreating,
+			State:     status,
 			ExpiresAt: expiresAt,
 		},
 		CreationDispatch:       promotion.CreationDispatchState{NextAttemptAt: &nextDispatchAt},
@@ -202,5 +200,37 @@ func operatorPromotionPolicySnapshot(
 		Reason:         policy.Reason,
 		UpdatedBy:      &updatedBy,
 		UpdatedAt:      &updatedAt,
+	}, nil
+}
+
+func resolvePromotionReviewContext(
+	ctx context.Context,
+	queries *storedb.Queries,
+	stage promotion.Stage,
+	allowedRepositories []string,
+) (*promotion.PromotionReviewContext, error) {
+	if !stage.ReviewReady() || !slices.Contains(allowedRepositories, stage.RepositoryName) {
+		return nil, nil
+	}
+	repositoryRow, err := queries.GetActivePromotionRepositoryByName(ctx, stage.RepositoryName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get Promotion review repository: %w", err)
+	}
+	if repositoryRow.CloneUrl != stage.RepositoryURL {
+		return nil, nil
+	}
+
+	return &promotion.PromotionReviewContext{
+		RepositoryID: uuid.UUID(repositoryRow.ID.Bytes),
+		RepositorySnapshot: promotion.PromotionRepositorySnapshot{
+			Name:                   repositoryRow.Name,
+			CloneURL:               repositoryRow.CloneUrl,
+			Branch:                 repositoryRow.Branch,
+			CheckoutCredentialName: repositoryRow.CheckoutCredentialName,
+		},
+		TargetBranch: stage.TargetBranch,
 	}, nil
 }

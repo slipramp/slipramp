@@ -34,9 +34,9 @@ type KargoRequest struct {
 	ExternalPromotionID string `json:"externalPromotionId"`
 	Project             string `json:"project"`
 	Stage               string `json:"stage"`
-	BaseRevision        string `json:"baseRevision"`
-	CandidateRevision   string `json:"candidateRevision"`
-	CandidateBranch     string `json:"candidateBranch"`
+	BaseRevision        string `json:"baseRevision,omitempty"`
+	CandidateRevision   string `json:"candidateRevision,omitempty"`
+	CandidateBranch     string `json:"candidateBranch,omitempty"`
 }
 
 type PromotionAcceptance struct {
@@ -82,21 +82,46 @@ func (r KargoRequest) Validate() error {
 	if err := kubevalidate.DNSSubdomain("Kargo Stage name", r.Stage); err != nil {
 		return invalid(err)
 	}
+	_, err := r.GitContext()
+
+	return err
+}
+
+func (r KargoRequest) GitContext() (*PromotionGitContext, error) {
+	provided := 0
+	for _, value := range []string{r.BaseRevision, r.CandidateRevision, r.CandidateBranch} {
+		if value != "" {
+			provided++
+		}
+	}
+	if provided == 0 {
+		return nil, nil
+	}
+	if provided != 3 {
+		return nil, fmt.Errorf(
+			"%w: base revision, candidate revision, and candidate branch must be supplied together",
+			ErrInvalid,
+		)
+	}
 	if err := validateRevision("base revision", r.BaseRevision); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateRevision("candidate revision", r.CandidateRevision); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateText("candidate branch", r.CandidateBranch, maximumBranchLength); err != nil {
-		return err
+		return nil, err
 	}
 	if len(r.CandidateBranch) <= len("kargo/promotion/") ||
 		r.CandidateBranch[:len("kargo/promotion/")] != "kargo/promotion/" {
-		return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
+		return nil, fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
 	}
 
-	return nil
+	return &PromotionGitContext{
+		BaseRevision:      r.BaseRevision,
+		CandidateRevision: r.CandidateRevision,
+		CandidateBranch:   r.CandidateBranch,
+	}, nil
 }
 
 func (r KargoRequest) Digest() (RequestDigest, error) {
@@ -129,9 +154,6 @@ func (a PromotionAcceptance) Validate() error {
 	if digest != a.RequestDigest {
 		return fmt.Errorf("%w: canonical request digest does not match the request", ErrInvalid)
 	}
-	if len(a.AllowedRepositories) == 0 {
-		return fmt.Errorf("%w: at least one allowed repository is required", ErrInvalid)
-	}
 	for _, name := range a.AllowedRepositories {
 		if err := kubevalidate.DNSLabel("Kargo repository name", name); err != nil {
 			return invalid(err)
@@ -146,8 +168,8 @@ func (a PromotionAcceptance) Validate() error {
 	if a.RequestedBySnapshot.Kind != productidentity.KindServiceAccount {
 		return fmt.Errorf("%w: requesting principal must be a service account", ErrInvalid)
 	}
-	if a.AcceptedAt.IsZero() || a.MaximumStageObservationAge <= 0 || a.PendingReviewRetention <= 0 {
-		return fmt.Errorf("%w: request time and positive integration durations are required", ErrInvalid)
+	if a.AcceptedAt.IsZero() || a.MaximumStageObservationAge <= 0 || a.PendingReviewRetention < 0 {
+		return fmt.Errorf("%w: request time and valid integration durations are required", ErrInvalid)
 	}
 
 	return nil
@@ -155,13 +177,15 @@ func (a PromotionAcceptance) Validate() error {
 
 func (p Promotion) PreparationParameters() (map[string]any, error) {
 	stage := p.StageSnapshot
-	if stage.ID == uuid.Nil || stage.Name == "" || stage.Project == "" || stage.Application == "" ||
-		stage.Environment == "" || stage.RepositoryName == "" || stage.RepositoryURL == "" ||
-		len(stage.SourcePaths) == 0 {
+	if stage.ID == uuid.Nil || stage.Name == "" || stage.Project == "" || stage.Enrichment == nil ||
+		!stage.Enrichment.ReviewReady() || p.ReviewContext == nil || p.ReviewContext.Git == nil {
 		return nil, fmt.Errorf("%w: Promotion Stage snapshot is incomplete", ErrInvalid)
 	}
+	enrichment := stage.Enrichment
+	review := p.ReviewContext
+	git := review.Git
 
-	paths, err := json.Marshal(stage.SourcePaths)
+	paths, err := json.Marshal(enrichment.SourcePaths)
 	if err != nil {
 		return nil, fmt.Errorf("encode Promotion source paths: %w", err)
 	}
@@ -171,14 +195,14 @@ func (p Promotion) PreparationParameters() (map[string]any, error) {
 		PreparationParameterExternalPromotionID: p.ExternalPromotionID,
 		PreparationParameterProject:             stage.Project,
 		PreparationParameterStage:               stage.Name,
-		PreparationParameterApplication:         stage.Application,
-		PreparationParameterEnvironment:         stage.Environment,
-		PreparationParameterRepositoryName:      stage.RepositoryName,
-		PreparationParameterRepositoryURL:       stage.RepositoryURL,
-		PreparationParameterBaseRevision:        p.BaseRevision,
-		PreparationParameterCandidateRevision:   p.CandidateRevision,
-		PreparationParameterCandidateBranch:     p.CandidateBranch,
-		PreparationParameterTargetBranch:        p.TargetBranch,
+		PreparationParameterApplication:         enrichment.Application,
+		PreparationParameterEnvironment:         enrichment.Environment,
+		PreparationParameterRepositoryName:      enrichment.RepositoryName,
+		PreparationParameterRepositoryURL:       enrichment.RepositoryURL,
+		PreparationParameterBaseRevision:        git.BaseRevision,
+		PreparationParameterCandidateRevision:   git.CandidateRevision,
+		PreparationParameterCandidateBranch:     git.CandidateBranch,
+		PreparationParameterTargetBranch:        review.TargetBranch,
 		PreparationParameterSourcePaths:         string(paths),
 	}, nil
 }

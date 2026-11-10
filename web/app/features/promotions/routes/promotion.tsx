@@ -225,10 +225,11 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         </Alert>
       ) : null}
       {promotion.status === "creating" ? (
-        <Alert className={styles.creationNotice} color="cyan" title="Creating Promotion in Kargo">
-          Slipramp is delivering this request or waiting for Kargo to submit its promotion data.
+        <Alert className={styles.creationNotice} color="cyan" title="Waiting for review context">
+          Kargo has not submitted the Git context required to prepare this review yet.
         </Alert>
       ) : null}
+      <CreationDispatchNotice promotion={promotion} />
       <KargoOutcomeNotice promotion={promotion} />
 
       <PromotionContext promotion={promotion} />
@@ -244,8 +245,32 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
   );
 }
 
+function CreationDispatchNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
+  const dispatch = promotion.creationDispatch;
+  if (dispatch.phase === "not-applicable" || dispatch.phase === "delivered") return null;
+  if (dispatch.phase === "failed") {
+    return (
+      <Alert color="red" title="Kargo object delivery failed">
+        {dispatch.diagnostic ?? "Slipramp could not materialize the Kargo Promotion."}
+      </Alert>
+    );
+  }
+
+  return (
+    <Alert color="cyan" title="Awaiting Kargo object delivery">
+      Slipramp approved and persisted this Promotion. The responsible Controller is delivering the
+      exact Stage and Freight identity to Kargo.
+    </Alert>
+  );
+}
+
 function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
-  if (promotion.status === "approved" && !promotion.kargoOutcome) {
+  if (
+    promotion.status === "approved" &&
+    promotion.creationDispatch.phase !== "awaiting-delivery" &&
+    promotion.creationDispatch.phase !== "failed" &&
+    !promotion.kargoOutcome
+  ) {
     return (
       <Alert className={styles.outcomeNotice} color="cyan" title="Approved — Kargo still running">
         Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal
@@ -284,7 +309,8 @@ function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stage = promotion.stageSnapshot;
-  const repository = promotion.repositorySnapshot;
+  const enrichment = stage.enrichment;
+  const review = promotion.reviewContext;
   const policy = promotion.policySnapshot;
 
   return (
@@ -314,45 +340,69 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
               </Anchor>
             }
           />
-          <Fact
-            label="Application"
-            value={
-              <Anchor
-                component={Link}
-                to={`/promotions?application=${encodeURIComponent(stage.application)}`}
-              >
-                {stage.application}
-              </Anchor>
-            }
-          />
-          <Fact label="Environment" value={stage.environment} />
-          <Fact
-            label="Repository"
-            value={
-              <Anchor component={Link} to={`/repositories/${promotion.repositoryId}`}>
-                {repository.name}
-              </Anchor>
-            }
-          />
           <Fact label="Policy snapshot" value={policy.effectiveMode} />
-          <Fact label="Target branch" value={promotion.targetBranch} />
-          <Fact label="Candidate branch" value={promotion.candidateBranch ?? "Waiting for Kargo"} />
           {promotion.expiresAt ? (
             <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
           ) : null}
         </SimpleGrid>
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-          <Revision
-            commit={promotion.baseCommit}
-            label="Base revision"
-            repositoryId={promotion.repositoryId}
-          />
-          <Revision
-            commit={promotion.candidateCommit}
-            label="Candidate revision"
-            repositoryId={promotion.repositoryId}
-          />
-        </SimpleGrid>
+        {enrichment ? (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+            {enrichment.application ? (
+              <Fact
+                label="Application"
+                value={
+                  <Anchor
+                    component={Link}
+                    to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
+                  >
+                    {enrichment.application}
+                  </Anchor>
+                }
+              />
+            ) : null}
+            {enrichment.environment ? (
+              <Fact label="Environment" value={enrichment.environment} />
+            ) : null}
+          </SimpleGrid>
+        ) : null}
+        {review ? (
+          <>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+              <Fact
+                label="Repository"
+                value={
+                  <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
+                    {review.repositorySnapshot.name}
+                  </Anchor>
+                }
+              />
+              <Fact label="Target branch" value={review.targetBranch} />
+              <Fact
+                label="Candidate branch"
+                value={review.git?.candidateBranch ?? "Waiting for Kargo"}
+              />
+            </SimpleGrid>
+            {review.git ? (
+              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+                <Revision
+                  commit={review.git.baseCommit}
+                  label="Base revision"
+                  repositoryId={review.repositoryId}
+                />
+                <Revision
+                  commit={review.git.candidateCommit}
+                  label="Candidate revision"
+                  repositoryId={review.repositoryId}
+                />
+              </SimpleGrid>
+            ) : null}
+          </>
+        ) : (
+          <Alert color="blue" title="Kargo-native Promotion">
+            This Promotion has no Slipramp Repository review context. Kargo received only the exact
+            Stage and Freight identity.
+          </Alert>
+        )}
       </Stack>
     </Paper>
   );

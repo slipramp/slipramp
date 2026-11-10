@@ -227,7 +227,7 @@ type ListInboxPromotionsRow struct {
 	ID              pgtype.UUID
 	StageSnapshot   []byte
 	CandidateBranch *string
-	TargetBranch    string
+	TargetBranch    *string
 	Status          string
 	Message         *string
 	CreatedAt       pgtype.Timestamptz

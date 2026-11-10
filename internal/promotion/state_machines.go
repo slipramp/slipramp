@@ -113,22 +113,24 @@ const (
 )
 
 // CreationDispatchState contains only durable Kargo object-creation delivery
-// facts. A phase is derived from these fields, the source, and the lifecycle.
+// facts. It is independent from the review lifecycle.
 type CreationDispatchState struct {
 	AttemptCount  int
 	NextAttemptAt *time.Time
 	LastAttemptAt *time.Time
 	DispatchedAt  *time.Time
+	FailedAt      *time.Time
+	Diagnostic    *string
 }
 
-func (s CreationDispatchState) Phase(source PromotionSource, lifecycle LifecycleState) CreationDispatchPhase {
+func (s CreationDispatchState) Phase(source PromotionSource) CreationDispatchPhase {
 	if source == SourceKargo {
 		return CreationDispatchNotApplicable
 	}
 	if s.DispatchedAt != nil {
 		return CreationDispatchDelivered
 	}
-	if lifecycle == LifecycleError {
+	if s.FailedAt != nil {
 		return CreationDispatchPhaseFailed
 	}
 	return CreationDispatchAwaitingDelivery
@@ -144,19 +146,28 @@ func (s CreationDispatchState) Validate(source PromotionSource, lifecycle Lifecy
 	if s.AttemptCount < 0 {
 		return fmt.Errorf("%w: Promotion dispatch attempt count cannot be negative", ErrInvalid)
 	}
-	if s.NextAttemptAt != nil && s.DispatchedAt != nil {
-		return fmt.Errorf("%w: Promotion cannot be due for dispatch after successful delivery", ErrInvalid)
+	if s.NextAttemptAt != nil && (s.DispatchedAt != nil || s.FailedAt != nil) {
+		return fmt.Errorf("%w: completed Promotion delivery cannot remain due for dispatch", ErrInvalid)
 	}
-	if lifecycle == LifecycleCreating && s.NextAttemptAt == nil && s.DispatchedAt == nil {
-		return fmt.Errorf("%w: creating Promotion must be due for dispatch or waiting for callback", ErrInvalid)
+	if s.DispatchedAt != nil && s.FailedAt != nil {
+		return fmt.Errorf("%w: Promotion delivery cannot be both delivered and failed", ErrInvalid)
 	}
-	if lifecycle != LifecycleCreating && s.NextAttemptAt != nil {
-		return fmt.Errorf("%w: only a creating Promotion may be due for dispatch", ErrInvalid)
+	if s.NextAttemptAt == nil && s.DispatchedAt == nil && s.FailedAt == nil {
+		return fmt.Errorf("%w: Slipramp-originated Promotion requires delivery state", ErrInvalid)
+	}
+	if s.Diagnostic != nil {
+		if err := validateText("creation dispatch diagnostic", *s.Diagnostic, maximumMessageLength); err != nil {
+			return err
+		}
+	}
+	if s.FailedAt != nil && s.Diagnostic == nil {
+		return fmt.Errorf("%w: failed Promotion delivery requires a diagnostic", ErrInvalid)
 	}
 	for label, value := range map[string]*time.Time{
 		"next dispatch": s.NextAttemptAt,
 		"last dispatch": s.LastAttemptAt,
 		"dispatched":    s.DispatchedAt,
+		"failed":        s.FailedAt,
 	} {
 		if value != nil && value.Before(createdAt) {
 			return fmt.Errorf("%w: Promotion %s time precedes creation", ErrInvalid, label)
@@ -303,8 +314,9 @@ func (s KargoExecutionState) Validate(
 			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
 		}
 	}
-	reconciliationEligible := s.Outcome == nil && (lifecycle == LifecycleApproved ||
-		(source == SourceSlipramp && lifecycle == LifecycleCreating && s.PromotionUID != nil))
+	reconciliationEligible := s.Outcome == nil && ((source == SourceKargo && lifecycle == LifecycleApproved) ||
+		(source == SourceSlipramp && creation.DispatchedAt != nil && s.PromotionUID != nil &&
+			(lifecycle == LifecycleCreating || lifecycle == LifecycleApproved)))
 	if s.NextReconciliationAt != nil && !reconciliationEligible {
 		return fmt.Errorf("%w: Promotion is not eligible for Kargo reconciliation", ErrInvalid)
 	}

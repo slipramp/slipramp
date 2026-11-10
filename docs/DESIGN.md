@@ -93,7 +93,7 @@ process. Kubernetes is an execution backend, not the product database.
 | Run | An immutable Action execution snapshot plus independently recorded observations |
 | Artifact | Durable Run output, including logs, plans, reports, and diff files |
 | Principal | A durable user or service-account actor authenticated by a session or API key |
-| Promotion | A durable Kargo request, policy snapshot, preparation, optional decision, and separately observed Kargo outcome |
+| Promotion | A durable Kargo request with Stage, Freight, actor, policy, creation delivery, Kargo execution, and optional review context |
 | Notification event | An immutable channel-neutral snapshot of a selected durable transition |
 | Notification delivery | Per-destination operational state for one notification event |
 
@@ -160,11 +160,17 @@ exist. See [Runs and scheduling](./design/runs.md),
 
 Kargo remains authoritative for Freight eligibility, rendering, target-branch
 updates, and downstream reconciliation. Slipramp inventories Stages, snapshots
-policy and request context, optionally prepares review Artifacts through an
-ordinary Run, records decisions, and uses the responsible Controller for the
-small set of Kubernetes operations it cannot perform directly. Approval is
-permission to proceed; an independently recorded terminal Kargo phase describes
-what happened afterward without implying additional Argo CD health. See
+policy and native request context, and can promote every eligible
+non-control-flow Stage without Repository metadata. Complete optional Stage and
+integration enrichment enables review preparation, previews, links, and branch
+drift. Slipramp optionally prepares review Artifacts through an ordinary Run,
+records decisions, and uses the responsible Controller for the small set of
+Kubernetes operations it cannot perform directly. Review state, creation
+delivery, and Kargo execution are separate facts. Approval is permission to
+proceed; an independently recorded terminal Kargo phase describes what happened
+afterward without implying additional Argo CD health. A configured
+`review-required` policy never falls back to automatic when enrichment is
+unavailable. See
 [Kargo Promotions](./design/kargo.md).
 
 ### Notification delivery

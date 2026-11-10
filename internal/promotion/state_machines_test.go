@@ -135,7 +135,8 @@ func TestCreationDispatchTransitions(t *testing.T) {
 	diagnostic := "temporary Kubernetes failure"
 	current := Promotion{
 		ID: promotionID, Source: SourceSlipramp, ExternalPromotionID: "stage-slipramp-" + promotionID.String(),
-		Lifecycle: PromotionLifecycle{State: LifecycleCreating},
+		ReviewRequired: true,
+		Lifecycle:      PromotionLifecycle{State: LifecycleCreating},
 		CreationDispatch: CreationDispatchState{
 			AttemptCount: 2, NextAttemptAt: new(at.Add(time.Minute)), LastAttemptAt: new(at),
 		},
@@ -147,7 +148,8 @@ func TestCreationDispatchTransitions(t *testing.T) {
 		Diagnostic: &diagnostic, ReportedAt: at.Add(time.Second),
 	}
 	retrying, changed, err := TransitionCreationDispatchReport(current, retryReport)
-	if err != nil || !changed || retrying.Message == nil || *retrying.Message != diagnostic {
+	if err != nil || !changed || retrying.CreationDispatch.Diagnostic == nil ||
+		*retrying.CreationDispatch.Diagnostic != diagnostic || retrying.Message != nil {
 		t.Fatalf("retry report = %#v, changed %t, %v", retrying, changed, err)
 	}
 	lateRetry := retryReport
@@ -173,12 +175,12 @@ func TestCreationDispatchTransitions(t *testing.T) {
 	failedReport.Result = CreationDispatchFailed
 	failed, changed, err := TransitionCreationDispatchReport(current, failedReport)
 	if err != nil || !changed || failed.Lifecycle.State != LifecycleError ||
-		failed.CreationDispatch.NextAttemptAt != nil {
+		failed.CreationDispatch.NextAttemptAt != nil || failed.CreationDispatch.FailedAt == nil {
 		t.Fatalf("failed report = %#v, changed %t, %v", failed, changed, err)
 	}
 	lateCreated, changed, err := TransitionCreationDispatchReport(failed, createdReport)
-	if err != nil || !changed || lateCreated.Lifecycle.State != LifecycleError ||
-		lateCreated.KargoExecution.PromotionUID == nil || lateCreated.KargoExecution.NextReconciliationAt != nil {
+	if err != nil || changed || lateCreated.Lifecycle.State != LifecycleError ||
+		lateCreated.KargoExecution.PromotionUID != nil || lateCreated.KargoExecution.NextReconciliationAt != nil {
 		t.Fatalf("late created report = %#v, changed %t, %v", lateCreated, changed, err)
 	}
 }

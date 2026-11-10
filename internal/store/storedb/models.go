@@ -219,7 +219,7 @@ type Promotion struct {
 	BaseRevision                 *string
 	CandidateRevision            *string
 	CandidateBranch              *string
-	TargetBranch                 string
+	TargetBranch                 *string
 	PolicySnapshot               []byte
 	ReviewRequired               bool
 	Status                       string
@@ -251,6 +251,8 @@ type Promotion struct {
 	KargoOutcomePhase            *string
 	KargoOutcomeObservedAt       pgtype.Timestamptz
 	KargoOutcomeDiagnostic       *string
+	DispatchFailedAt             pgtype.Timestamptz
+	DispatchDiagnostic           *string
 }
 
 type PromotionCandidateBranchCleanup struct {

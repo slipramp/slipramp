@@ -3,6 +3,7 @@ package promotion
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -48,11 +49,17 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 		UpdatedAt:   now.Add(-time.Hour),
 	}
 	store := &creationTestStore{
-		stage:  Stage{ID: stageID, Integration: "prod"},
+		stage: Stage{
+			ID: stageID, Integration: "prod", Application: "external-dns", Environment: "prod",
+			RepositoryName: "ops", RepositoryURL: "https://example.com/ops.git",
+			TargetBranch: "stage/external-dns/prod", SourcePaths: []string{"k8s/external-dns"},
+		},
 		record: Promotion{ID: promotionID},
 	}
 	service := NewCreationService(IntegrationSet{
 		"prod": {
+			Repositories:               []string{"ops"},
+			Preparation:                PreparationConfig{Repository: "ops", Target: "kargo-promotions", Action: "prepare-review"},
 			MaximumStageObservationAge: 5 * time.Minute,
 			PendingReviewRetention:     8 * 24 * time.Hour,
 		},
@@ -83,6 +90,22 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 		store.acceptance.Policy.UpdatedByPrincipalID != principal.ID ||
 		!store.acceptance.Policy.UpdatedAt.Equal(store.acceptance.AcceptedAt) {
 		t.Errorf("acceptance = %#v, record = %#v", store.acceptance, record)
+	}
+	if !slices.Equal(store.acceptance.AllowedRepositories, []string{"ops"}) {
+		t.Errorf("allowed repositories = %v", store.acceptance.AllowedRepositories)
+	}
+
+	withoutReview := NewCreationService(IntegrationSet{
+		"prod": {MaximumStageObservationAge: 5 * time.Minute},
+	}, store)
+	withoutReview.now = func() time.Time { return now }
+	if _, err := withoutReview.Create(t.Context(), OperatorPromotionRequest{
+		TargetStageID: stageID,
+		FreightName:   "freight-42",
+		Policy:        &PolicyUpdate{Mode: PolicyModeReviewRequired},
+		Principal:     principal,
+	}); !errors.Is(err, ErrReviewContextUnavailable) {
+		t.Fatalf("Create() without review configuration error = %v", err)
 	}
 }
 

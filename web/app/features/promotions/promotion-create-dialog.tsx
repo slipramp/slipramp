@@ -23,7 +23,7 @@ import {
   type PromotionChoice,
   type PromotionCreationActionResult,
 } from "~/features/promotions/promotion-creation";
-import type { PromotionStagePolicy } from "~/api/generated";
+import type { PromotionStageCapability, PromotionStagePolicy } from "~/api/generated";
 import { formatTimestamp } from "~/shared/display";
 import { useTimeZone } from "~/shared/time-zone-preference";
 
@@ -103,13 +103,25 @@ export function PromotionCreateDialog({
 
           {selected ? <PromotionChoiceDetails choice={selected} /> : null}
 
+          {choices[0]?.reviewCapability.status === "unavailable" ? (
+            <Alert color="blue" title="Kargo-native Promotion">
+              Slipramp will promote the exact eligible Freight through Kargo. Change preview and
+              Slipramp review are unavailable for this Stage.
+            </Alert>
+          ) : null}
+
           {selected?.sourceStageId && selected.sourceStageId === selected.targetStageId ? (
             <Alert color="yellow" title="In-place Promotion">
               This reruns the Stage&apos;s Kargo promotion template with the same Freight.
             </Alert>
           ) : null}
 
-          {choices[0] ? <StagePolicyControl policy={choices[0].targetPolicy} /> : null}
+          {choices[0] ? (
+            <StagePolicyControl
+              policy={choices[0].targetPolicy}
+              reviewCapability={choices[0].reviewCapability}
+            />
+          ) : null}
 
           <input name="targetStageId" type="hidden" value={selected?.targetStageId ?? ""} />
           <input name="sourceStageId" type="hidden" value={selected?.sourceStageId ?? ""} />
@@ -148,8 +160,15 @@ export function PromotionCreateDialog({
   );
 }
 
-function StagePolicyControl({ policy }: Readonly<{ policy: PromotionStagePolicy }>) {
+function StagePolicyControl({
+  policy,
+  reviewCapability,
+}: Readonly<{
+  policy: PromotionStagePolicy;
+  reviewCapability: PromotionStageCapability;
+}>) {
   const reviewRequired = policy.effectiveMode === "review-required";
+  const reviewReady = reviewCapability.status === "ready";
   const { timeZone } = useTimeZone();
 
   return (
@@ -175,16 +194,23 @@ function StagePolicyControl({ policy }: Readonly<{ policy: PromotionStagePolicy 
         <NativeSelect
           data={[
             { label: "Keep current policy", value: "unchanged" },
-            { label: "Require review permanently", value: "permanent" },
-            { label: "Require review for 30 minutes", value: "30m" },
-            { label: "Require review for 1 hour", value: "1h" },
-            { label: "Require review for 24 hours", value: "24h" },
+            { label: "Use automatic policy", value: "automatic" },
+            { disabled: !reviewReady, label: "Require review permanently", value: "permanent" },
+            { disabled: !reviewReady, label: "Require review for 30 minutes", value: "30m" },
+            { disabled: !reviewReady, label: "Require review for 1 hour", value: "1h" },
+            { disabled: !reviewReady, label: "Require review for 24 hours", value: "24h" },
           ]}
           defaultValue="unchanged"
           description="A change is applied to the Stage before this Promotion is created."
           label="Review policy"
           name="reviewPolicy"
         />
+        {!reviewReady ? (
+          <Text c="dimmed" size="sm">
+            {reviewCapability.reason} Review-required cannot be selected until this capability is
+            ready. If it is already configured, select automatic deliberately before promoting.
+          </Text>
+        ) : null}
       </Stack>
     </Paper>
   );

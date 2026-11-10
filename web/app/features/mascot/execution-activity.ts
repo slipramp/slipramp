@@ -398,7 +398,9 @@ export function runResultActivity(
 }
 
 export function promotionActivity(
-  promotion: Pick<Promotion, "status" | "kargoOutcome">,
+  promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
+    creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
+  },
 ): ExecutionActivity | undefined {
   switch (promotion.status) {
     case "creating":
@@ -415,6 +417,14 @@ export function promotionActivity(
       };
     case "approved":
       if (!promotion.kargoOutcome) {
+        if (promotion.creationDispatch?.phase === "failed") return undefined;
+        if (promotion.creationDispatch?.phase === "awaiting-delivery") {
+          return {
+            animation: "working",
+            title: "Delivering to Kargo",
+            description: "The Promotion is approved while a Controller creates its Kargo object.",
+          };
+        }
         return {
           animation: "working",
           title: "Kargo is carrying it forward",
@@ -428,7 +438,9 @@ export function promotionActivity(
 }
 
 export function promotionDetailNeedsRefresh(
-  promotion: Pick<Promotion, "status" | "kargoOutcome">,
+  promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
+    creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
+  },
   preparedDiffsLoaded: boolean,
 ): boolean {
   return (
@@ -438,7 +450,9 @@ export function promotionDetailNeedsRefresh(
 }
 
 export function promotionDetailActivity(
-  promotion: Pick<Promotion, "status" | "message" | "kargoOutcome">,
+  promotion: Pick<Promotion, "status" | "message" | "kargoOutcome"> & {
+    creationDispatch?: Pick<Promotion["creationDispatch"], "diagnostic" | "phase">;
+  },
 ): ExecutionActivity | undefined {
   const activity = promotionActivity(promotion);
   if (activity) return activity;
@@ -451,6 +465,16 @@ export function promotionDetailActivity(
         description: "Review the prepared changes, then approve or reject this Promotion.",
       };
     case "approved":
+      if (promotion.creationDispatch?.phase === "failed") {
+        return {
+          animation: "frustrated",
+          tone: "error",
+          title: "Kargo delivery failed",
+          description:
+            promotion.creationDispatch.diagnostic ??
+            "Slipramp could not create the Kargo Promotion.",
+        };
+      }
       if (promotion.kargoOutcome?.phase !== "Succeeded") {
         return {
           animation: "frustrated",

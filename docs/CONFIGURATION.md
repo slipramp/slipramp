@@ -168,7 +168,20 @@ configured Cluster maximum.
 
 Kargo integrations are loaded from the file named by
 `SLIPRAMP_KARGO_INTEGRATIONS_FILE` when the Server starts. The file is optional;
-when it is unset, no Kargo integrations are configured. For example:
+when it is unset, no Kargo integrations are configured. A native-only
+integration needs only its Cluster and Stage freshness limit:
+
+```yaml
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: prod
+    maximumStageObservationAge: 5m
+```
+
+Repository review, previews, and candidate-branch cleanup use optional
+additional configuration:
 
 ```yaml
 apiVersion: slipramp.com/v1alpha1
@@ -198,6 +211,11 @@ keys, unsupported versions, invalid durations, and invalid integration values.
 The selected Cluster must be registered in
 `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`. Candidate branch cleanup credential
 names must select entries in `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`.
+`repositories`, `preparation`, and `pendingReviewRetention` form one review
+configuration: configure the allowlist and complete preparation coordinates
+together, with positive retention, or omit all three. Repository allowlists
+authorize review, Git audit, branch cleanup, and other Repository access; they
+do not enroll Stages or authorize native Kargo execution.
 Current contracts are documented in [Kargo Promotions](design/kargo.md),
 [Controller execution](design/execution.md), and
 [Logs and Artifacts](design/artifacts.md). Kargo integration and Placement
@@ -209,6 +227,10 @@ Freight identity; Kargo populates the Stage promotion template and expands
 `PromotionTask` references during admission.
 
 Approval records permission for Kargo to continue; it is not a success result.
+An operator-created automatic Promotion is approved immediately and does not
+require a Kargo callback. Creation delivery remains separately awaiting,
+delivered, or failed. Automatic callbacks are optional and idempotent; their Git
+audit fields may be omitted together when no Repository context applies.
 After approval, the responsible Controller keeps observing the exact Kargo
 Promotion until `Succeeded`, `Failed`, `Errored`, or `Aborted`, then reports the
 phase, observation time, and an optional bounded sanitized diagnostic to the
@@ -239,18 +261,26 @@ metadata:
 ```
 
 These annotations enrich the native Kargo Stage inventory; none are required to
-retain and display an enrolled Stage. The Repository URL must exactly match
-one Repository in the integration's allowlist before Slipramp enables Promotion
-creation, review preparation, or branch-drift analysis for that Stage. The
-application identifies the Argo CD Application used for review. The environment
-selects a configured Argo CD endpoint. The target branch is the branch Kargo
-updates. Source paths are a JSON array of distinct, clean repository-relative
-paths used for branch-drift checks; `.` selects the whole repository. Absolute
-paths and parent traversal are invalid. An omitted annotation disables the
-dependent Slipramp capability without removing the Stage from Project topology.
-Malformed annotations reject the observation rather than being guessed.
-Template variables, directory layout, and branch naming conventions are not
-inferred.
+retain, display, or natively promote a non-control-flow Stage. Native promotion
+uses only the integration and Cluster, Project namespace, Stage name and UID,
+and exact eligible Freight observed from Kargo. The Repository URL must exactly
+match one active Repository in the integration's allowlist before Slipramp
+enables review preparation. The application identifies the Argo CD Application
+used for review and links. The environment selects a configured Argo CD
+endpoint. The target branch is the branch Kargo updates. Source paths are a
+JSON array of distinct, clean repository-relative paths used for preparation
+and branch-drift checks; `.` selects the whole repository. Absolute paths and
+parent traversal are invalid.
+
+The product reports native promotion, Slipramp review, and branch drift as
+separate capabilities. Missing enrichment disables only review, previews,
+links, or branch drift that actually need it; it does not disable **Promote**.
+A `review-required` policy can be selected only while review is ready. If an
+already configured policy loses enrichment, Slipramp preserves it and blocks
+new Promotions until the context returns or an operator deliberately selects
+`automatic`. Malformed annotations reject the observation rather than being
+guessed. Template variables, directory layout, and branch naming conventions
+are not inferred.
 
 The optional successful-render acknowledgement currently recognizes a succeeded
 last Promotion with `clone` and `commit` output-state aliases (including nested

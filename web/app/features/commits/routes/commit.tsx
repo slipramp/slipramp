@@ -320,8 +320,8 @@ function PromotionAssociations({
 }
 
 function promotionCommitRole(promotion: Promotion, commitSha: string) {
-  const base = promotion.baseCommit?.sha === commitSha;
-  const candidate = promotion.candidateCommit?.sha === commitSha;
+  const base = promotion.reviewContext?.git?.baseCommit.sha === commitSha;
+  const candidate = promotion.reviewContext?.git?.candidateCommit.sha === commitSha;
   if (base && candidate) return "Base and candidate";
   return candidate ? "Candidate" : "Base";
 }

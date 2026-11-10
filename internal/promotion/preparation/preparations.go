@@ -427,14 +427,14 @@ func (c *PreparationCoordinator) reviewRequestedEvent(
 	occurredAt time.Time,
 ) (notification.Event, error) {
 	stage := record.StageSnapshot
-	if stage.Project == "" || stage.Name == "" || stage.RepositoryName == "" {
+	if stage.Project == "" || stage.Name == "" || record.ReviewContext == nil {
 		return notification.Event{}, fmt.Errorf(
 			"%w: Promotion Stage notification snapshot is incomplete",
 			promotion.ErrInvalid,
 		)
 	}
 
-	facts := []notification.Fact{{Label: "Repository", Value: stage.RepositoryName}}
+	facts := []notification.Fact{{Label: "Repository", Value: record.ReviewContext.RepositorySnapshot.Name}}
 	if record.Lifecycle.ExpiresAt != nil {
 		facts = append(facts, notification.Fact{
 			Label: "Expires",
