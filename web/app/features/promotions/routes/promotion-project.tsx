@@ -16,7 +16,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconSettings } from "@tabler/icons-react";
+import { IconArrowsDiff, IconSettings } from "@tabler/icons-react";
 import { useState } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
@@ -25,6 +25,7 @@ import {
   getPromotionProject,
   updatePromotionStagePolicy,
   type PromotionPolicyMode,
+  type PromotionFreightAlignment,
   type PromotionProjectDetail,
   type PromotionProjectStage,
 } from "~/api/generated";
@@ -35,6 +36,9 @@ import { submitPromotionCreation } from "~/features/promotions/promotion-creatio
 import {
   buildFreightColumns,
   buildFreightRows,
+  freightAlignmentForSource,
+  freightAlignmentPresentation,
+  freightComparisonStageIds,
   freightRowStatus,
 } from "~/features/promotions/promotion-freight";
 import { topologyLanes } from "~/features/promotions/promotion-topology";
@@ -157,6 +161,10 @@ function ProjectDetail({
                       next.set("policy", stage.id);
                       setSearchParams(next, { preventScrollReset: true });
                     }}
+                    onCompareFreight={(alignment) => {
+                      const ids = freightComparisonStageIds(alignment);
+                      if (ids) setSelectedStageIds(ids);
+                    }}
                     stage={stage}
                   />
                 ))}
@@ -190,10 +198,12 @@ function ProjectDetail({
 
 function StageCard({
   canWrite,
+  onCompareFreight,
   onEditPolicy,
   stage,
 }: Readonly<{
   canWrite: boolean;
+  onCompareFreight: (alignment: PromotionFreightAlignment) => void;
   onEditPolicy: () => void;
   stage: PromotionProjectStage;
 }>) {
@@ -283,19 +293,17 @@ function StageCard({
                   ) : null}
                 </Group>
                 {request.sources.length > 0 ? (
-                  <Group gap={5} wrap="wrap">
+                  <Stack gap={5}>
                     {request.sources.map((source) => (
-                      <Badge
-                        color={source.stageId ? "blue" : "orange"}
+                      <FreightAlignmentSource
+                        alignment={freightAlignmentForSource(stage, request.origin, source.name)}
                         key={source.name}
-                        size="xs"
-                        variant="light"
-                      >
-                        {source.name}
-                        {source.stageId ? "" : " · unresolved"}
-                      </Badge>
+                        onCompareFreight={onCompareFreight}
+                        sourceStageName={source.name}
+                        targetStageName={stage.name}
+                      />
                     ))}
-                  </Group>
+                  </Stack>
                 ) : null}
                 {request.candidates.map((candidate) => (
                   <Group gap="xs" key={candidate.freight.name} wrap="wrap">
@@ -379,6 +387,60 @@ function StageCard({
   );
 }
 
+function FreightAlignmentSource({
+  alignment,
+  onCompareFreight,
+  sourceStageName,
+  targetStageName,
+}: Readonly<{
+  alignment?: PromotionFreightAlignment;
+  onCompareFreight: (alignment: PromotionFreightAlignment) => void;
+  sourceStageName: string;
+  targetStageName: string;
+}>) {
+  const presentation = freightAlignmentPresentation(alignment?.status ?? "unknown");
+  const sourceFreight = alignment?.sourceCurrentFreight?.name ?? "none observed";
+  const targetFreight = alignment?.targetCurrentFreight?.name ?? "none observed";
+
+  return (
+    <Paper p="xs" withBorder>
+      <Stack gap={4}>
+        <Group justify="space-between" wrap="wrap">
+          <Group gap="xs" wrap="wrap">
+            <Badge color={alignment?.sourceStageId ? "blue" : "gray"} size="xs" variant="light">
+              {sourceStageName}
+            </Badge>
+            <Badge color={presentation.color} size="xs" variant="light">
+              {presentation.label}
+            </Badge>
+          </Group>
+          {alignment?.sourceStageId ? (
+            <Button
+              leftSection={<IconArrowsDiff aria-hidden size={13} />}
+              onClick={() => onCompareFreight(alignment)}
+              size="compact-xs"
+              variant="subtle"
+            >
+              Compare Freight
+            </Button>
+          ) : null}
+        </Group>
+        {alignment ? (
+          <Text c="dimmed" size="xs">
+            {sourceStageName}: <Code>{sourceFreight}</Code> · {targetStageName}:{" "}
+            <Code>{targetFreight}</Code>
+          </Text>
+        ) : null}
+        {alignment?.reason ? (
+          <Text c="dimmed" size="xs">
+            {alignment.reason}
+          </Text>
+        ) : null}
+      </Stack>
+    </Paper>
+  );
+}
+
 function FreightComparison({
   selectedStageIds,
   selectedStages,
@@ -394,15 +456,16 @@ function FreightComparison({
   const rows = buildFreightRows(columns);
 
   return (
-    <Paper p="md" withBorder>
+    <Paper id="freight-comparison" p="md" withBorder>
       <Stack gap="md">
         <Stack gap={3}>
           <Title order={2} size="h3">
             Compare Freight
           </Title>
           <Text c="dimmed" size="sm">
-            Select two or more Stages. Different versions are shown neutrally and do not imply drift
-            or unhealthy state.
+            Select any two or more Stages for an exploratory artifact comparison. Requested-source
+            alignment above compares observed Kargo Freight identity; neither view describes Stage
+            health or Git branch drift.
           </Text>
         </Stack>
         <Checkbox.Group onChange={setSelectedStageIds} value={selectedStageIds}>

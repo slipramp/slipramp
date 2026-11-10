@@ -197,6 +197,11 @@ promotionProjects:
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: freightAlignment
+        in: query
+        description: Select Projects containing at least one comparison in this Freight alignment state.
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionFreightAlignmentStatus
       - $ref: "#/components/parameters/Limit"
       - $ref: "#/components/parameters/Offset"
     responses:

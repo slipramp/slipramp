@@ -31,6 +31,9 @@ func (h *Handler) ListPromotionProjects(
 	if request.Params.Offset != nil {
 		filter.Offset = int(*request.Params.Offset)
 	}
+	if request.Params.FreightAlignment != nil {
+		filter.FreightAlignment = projection.FreightAlignmentStatus(*request.Params.FreightAlignment)
+	}
 
 	result, err := h.promotionProjects.List(ctx, filter)
 	if errors.Is(err, promotion.ErrInvalid) {
@@ -47,14 +50,16 @@ func (h *Handler) ListPromotionProjects(
 	items := make([]api.PromotionProject, 0, len(result.Items))
 	for _, project := range result.Items {
 		items = append(items, api.PromotionProject{
-			Integration:         api.CatalogName(project.Integration),
-			Cluster:             api.CatalogName(project.ClusterName),
-			Project:             api.CatalogName(project.Project),
-			StageCount:          project.StageCount,
-			UnhealthyStageCount: project.UnhealthyStageCount,
-			StaleStageCount:     project.StaleStageCount,
-			PendingReviewCount:  project.PendingReviewCount,
-			LatestObservedAt:    project.LatestObservedAt,
+			Integration:                   api.CatalogName(project.Integration),
+			Cluster:                       api.CatalogName(project.ClusterName),
+			Project:                       api.CatalogName(project.Project),
+			StageCount:                    project.StageCount,
+			UnhealthyStageCount:           project.UnhealthyStageCount,
+			StaleStageCount:               project.StaleStageCount,
+			PendingReviewCount:            project.PendingReviewCount,
+			FreightDifferenceCount:        project.FreightDifferenceCount,
+			UnknownFreightComparisonCount: project.UnknownFreightComparisonCount,
+			LatestObservedAt:              project.LatestObservedAt,
 			KargoURL: h.kargoIntegrations.KargoProjectURL(
 				project.Integration,
 				project.Project,
@@ -63,7 +68,11 @@ func (h *Handler) ListPromotionProjects(
 	}
 
 	return api.ListPromotionProjects200JSONResponse{
-		Items:  items,
+		Items: items,
+		Summary: api.PromotionProjectListSummary{
+			FreightDifferenceCount:        result.Summary.FreightDifferenceCount,
+			UnknownFreightComparisonCount: result.Summary.UnknownFreightComparisonCount,
+		},
 		Total:  result.Total,
 		Limit:  result.Limit,
 		Offset: result.Offset,
@@ -138,13 +147,24 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 			RequiredSoakTime: requiredSoakTime, Candidates: candidates,
 		})
 	}
+	alignments := make([]api.PromotionFreightAlignment, 0, len(value.FreightAlignments))
+	for _, alignment := range value.FreightAlignments {
+		alignments = append(alignments, api.PromotionFreightAlignment{
+			Origin: alignment.Origin, SourceStageName: alignment.SourceStageName,
+			SourceStageID: alignment.SourceStageID, TargetStageID: alignment.TargetStageID,
+			Status:               api.PromotionFreightAlignmentStatus(alignment.Status),
+			SourceCurrentFreight: promotionFreightItemPointerResponse(alignment.SourceCurrentFreight),
+			TargetCurrentFreight: promotionFreightItemPointerResponse(alignment.TargetCurrentFreight),
+			Reason:               optionalString(alignment.Reason),
+		})
+	}
 
 	return api.PromotionProjectStage{
 		ID: stage.ID, Name: stage.Name, KubernetesUID: stage.KubernetesUID, ResourceVersion: stage.ResourceVersion,
 		ObservationStale: value.ObservationStale, ControlFlow: stage.ControlFlow, Conditions: conditions,
 		CurrentPromotion: promotionStagePromotionResponse(stage.CurrentPromotion),
 		LastPromotion:    promotionStagePromotionResponse(stage.LastPromotion),
-		RequestedFreight: requests, Freight: promotionFreightResponse(stage.Freight),
+		RequestedFreight: requests, FreightAlignments: alignments, Freight: promotionFreightResponse(stage.Freight),
 		AutoPromotionEnabled: stage.AutoPromotionEnabled, HealthStatus: stage.HealthStatus,
 		Policy: promotionPolicyResponse(value.Policy), PendingPromotionCount: value.PendingPromotionCount,
 		Enrichment:      promotionStageEnrichmentResponse(stage.Enrichment()),
@@ -155,6 +175,14 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 			stage.Integration, stage.Environment, valueOrEmptyString(stage.ArgoApplicationNamespace), stage.Application,
 		),
 	}
+}
+
+func promotionFreightItemPointerResponse(value *promotion.FreightItem) *api.PromotionFreightItem {
+	if value == nil {
+		return nil
+	}
+
+	return new(promotionFreightItemResponse(*value))
 }
 
 func promotionStageCapabilitiesResponse(value projection.StageCapabilities) api.PromotionStageCapabilities {

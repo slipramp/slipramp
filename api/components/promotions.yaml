@@ -381,6 +381,8 @@ PromotionProject:
     - unhealthyStageCount
     - staleStageCount
     - pendingReviewCount
+    - freightDifferenceCount
+    - unknownFreightComparisonCount
     - latestObservedAt
   properties:
     integration:
@@ -401,6 +403,14 @@ PromotionProject:
     pendingReviewCount:
       type: integer
       minimum: 0
+    freightDifferenceCount:
+      type: integer
+      minimum: 0
+      description: Number of requested source Stage relationships with different current Freight.
+    unknownFreightComparisonCount:
+      type: integer
+      minimum: 0
+      description: Number of requested source Stage relationships without usable comparison evidence.
     latestObservedAt:
       type: string
       format: date-time
@@ -414,6 +424,7 @@ PromotionProjectList:
   additionalProperties: false
   required:
     - items
+    - summary
     - total
     - limit
     - offset
@@ -422,6 +433,8 @@ PromotionProjectList:
       type: array
       items:
         $ref: "#/PromotionProject"
+    summary:
+      $ref: "#/PromotionProjectListSummary"
     total:
       type: integer
       minimum: 0
@@ -431,6 +444,22 @@ PromotionProjectList:
     offset:
       type: integer
       minimum: 0
+
+PromotionProjectListSummary:
+  type: object
+  additionalProperties: false
+  required:
+    - freightDifferenceCount
+    - unknownFreightComparisonCount
+  properties:
+    freightDifferenceCount:
+      type: integer
+      minimum: 0
+      description: Freight differences across all Projects matching the filters before pagination.
+    unknownFreightComparisonCount:
+      type: integer
+      minimum: 0
+      description: Unknown Freight comparisons across all Projects matching the filters before pagination.
 
 PromotionProjectDetail:
   type: object
@@ -467,6 +496,7 @@ PromotionProjectStage:
     - controlFlow
     - conditions
     - requestedFreight
+    - freightAlignments
     - freight
     - autoPromotionEnabled
     - policy
@@ -506,6 +536,12 @@ PromotionProjectStage:
       type: array
       items:
         $ref: "#/PromotionProjectFreightRequest"
+    freightAlignments:
+      type: array
+      description: >-
+        Exact requested source Stage relationships evaluated from durable current Freight observations.
+      items:
+        $ref: "#/PromotionFreightAlignment"
     freight:
       $ref: "#/PromotionFreight"
     autoPromotionEnabled:
@@ -579,6 +615,46 @@ PromotionProjectStageSource:
     stageId:
       type: string
       format: uuid
+
+PromotionFreightAlignmentStatus:
+  type: string
+  enum: [aligned, different, unknown]
+
+PromotionFreightAlignment:
+  type: object
+  additionalProperties: false
+  required:
+    - origin
+    - sourceStageName
+    - targetStageId
+    - status
+  properties:
+    origin:
+      type: string
+      minLength: 1
+      maxLength: 512
+    sourceStageName:
+      type: string
+      minLength: 1
+      maxLength: 253
+    sourceStageId:
+      type: string
+      format: uuid
+      description: Resolved active source Stage identity when it exists in the same Project boundary.
+    targetStageId:
+      type: string
+      format: uuid
+    status:
+      $ref: "#/PromotionFreightAlignmentStatus"
+    sourceCurrentFreight:
+      $ref: "#/PromotionFreightItem"
+    targetCurrentFreight:
+      $ref: "#/PromotionFreightItem"
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Concise explanation for a different or unknown comparison.
 
 PromotionFreightCandidate:
   type: object

@@ -4112,6 +4112,11 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/CatalogName'
+        - name: freightAlignment
+          in: query
+          description: Select Projects containing at least one comparison in this Freight alignment state.
+          schema:
+            $ref: '#/components/schemas/PromotionFreightAlignmentStatus'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -7312,6 +7317,8 @@ components:
         - unhealthyStageCount
         - staleStageCount
         - pendingReviewCount
+        - freightDifferenceCount
+        - unknownFreightComparisonCount
         - latestObservedAt
       properties:
         integration:
@@ -7332,6 +7339,14 @@ components:
         pendingReviewCount:
           type: integer
           minimum: 0
+        freightDifferenceCount:
+          type: integer
+          minimum: 0
+          description: Number of requested source Stage relationships with different current Freight.
+        unknownFreightComparisonCount:
+          type: integer
+          minimum: 0
+          description: Number of requested source Stage relationships without usable comparison evidence.
         latestObservedAt:
           type: string
           format: date-time
@@ -7344,6 +7359,7 @@ components:
       additionalProperties: false
       required:
         - items
+        - summary
         - total
         - limit
         - offset
@@ -7352,6 +7368,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionProject'
+        summary:
+          $ref: '#/components/schemas/PromotionProjectListSummary'
         total:
           type: integer
           minimum: 0
@@ -9783,6 +9801,27 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+    PromotionFreightAlignmentStatus:
+      type: string
+      enum:
+        - aligned
+        - different
+        - unknown
+    PromotionProjectListSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - freightDifferenceCount
+        - unknownFreightComparisonCount
+      properties:
+        freightDifferenceCount:
+          type: integer
+          minimum: 0
+          description: Freight differences across all Projects matching the filters before pagination.
+        unknownFreightComparisonCount:
+          type: integer
+          minimum: 0
+          description: Unknown Freight comparisons across all Projects matching the filters before pagination.
     PromotionStageCondition:
       type: object
       additionalProperties: false
@@ -9896,6 +9935,41 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionFreightCandidate'
+    PromotionFreightAlignment:
+      type: object
+      additionalProperties: false
+      required:
+        - origin
+        - sourceStageName
+        - targetStageId
+        - status
+      properties:
+        origin:
+          type: string
+          minLength: 1
+          maxLength: 512
+        sourceStageName:
+          type: string
+          minLength: 1
+          maxLength: 253
+        sourceStageId:
+          type: string
+          format: uuid
+          description: Resolved active source Stage identity when it exists in the same Project boundary.
+        targetStageId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PromotionFreightAlignmentStatus'
+        sourceCurrentFreight:
+          $ref: '#/components/schemas/PromotionFreightItem'
+        targetCurrentFreight:
+          $ref: '#/components/schemas/PromotionFreightItem'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Concise explanation for a different or unknown comparison.
     PromotionStageCapability:
       type: object
       additionalProperties: false
@@ -9940,6 +10014,7 @@ components:
         - controlFlow
         - conditions
         - requestedFreight
+        - freightAlignments
         - freight
         - autoPromotionEnabled
         - policy
@@ -9979,6 +10054,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionProjectFreightRequest'
+        freightAlignments:
+          type: array
+          description: Exact requested source Stage relationships evaluated from durable current Freight observations.
+          items:
+            $ref: '#/components/schemas/PromotionFreightAlignment'
         freight:
           $ref: '#/components/schemas/PromotionFreight'
         autoPromotionEnabled:

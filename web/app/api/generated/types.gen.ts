@@ -1272,6 +1272,14 @@ export type PromotionProject = {
   unhealthyStageCount: number;
   staleStageCount: number;
   pendingReviewCount: number;
+  /**
+   * Number of requested source Stage relationships with different current Freight.
+   */
+  freightDifferenceCount: number;
+  /**
+   * Number of requested source Stage relationships without usable comparison evidence.
+   */
+  unknownFreightComparisonCount: number;
   latestObservedAt: string;
   /**
    * Direct link to this Project in the configured Kargo UI.
@@ -1281,6 +1289,7 @@ export type PromotionProject = {
 
 export type PromotionProjectList = {
   items: Array<PromotionProject>;
+  summary: PromotionProjectListSummary;
   total: number;
   limit: number;
   offset: number;
@@ -2412,6 +2421,19 @@ export type PromotionDecisionUpdate = {
   comment?: string;
 };
 
+export type PromotionFreightAlignmentStatus = "aligned" | "different" | "unknown";
+
+export type PromotionProjectListSummary = {
+  /**
+   * Freight differences across all Projects matching the filters before pagination.
+   */
+  freightDifferenceCount: number;
+  /**
+   * Unknown Freight comparisons across all Projects matching the filters before pagination.
+   */
+  unknownFreightComparisonCount: number;
+};
+
 export type PromotionStageCondition = {
   type: string;
   status: string;
@@ -2447,6 +2469,23 @@ export type PromotionProjectFreightRequest = {
   candidates: Array<PromotionFreightCandidate>;
 };
 
+export type PromotionFreightAlignment = {
+  origin: string;
+  sourceStageName: string;
+  /**
+   * Resolved active source Stage identity when it exists in the same Project boundary.
+   */
+  sourceStageId?: string;
+  targetStageId: string;
+  status: PromotionFreightAlignmentStatus;
+  sourceCurrentFreight?: PromotionFreightItem;
+  targetCurrentFreight?: PromotionFreightItem;
+  /**
+   * Concise explanation for a different or unknown comparison.
+   */
+  reason?: string;
+};
+
 export type PromotionStageCapability = {
   status: "ready" | "unavailable";
   reason?: string;
@@ -2478,6 +2517,10 @@ export type PromotionProjectStage = {
   currentPromotion?: PromotionStagePromotionReference;
   lastPromotion?: PromotionStagePromotionReference;
   requestedFreight: Array<PromotionProjectFreightRequest>;
+  /**
+   * Exact requested source Stage relationships evaluated from durable current Freight observations.
+   */
+  freightAlignments: Array<PromotionFreightAlignment>;
   freight: PromotionFreight;
   autoPromotionEnabled: boolean;
   healthStatus?: string;
@@ -5864,6 +5907,10 @@ export type ListPromotionProjectsData = {
     integration?: CatalogName;
     cluster?: CatalogName;
     project?: CatalogName;
+    /**
+     * Select Projects containing at least one comparison in this Freight alignment state.
+     */
+    freightAlignment?: PromotionFreightAlignmentStatus;
     limit?: number;
     offset?: number;
   };

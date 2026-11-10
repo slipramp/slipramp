@@ -168,6 +168,155 @@ func TestProjectServiceFiltersAndPaginatesProjects(t *testing.T) {
 	}
 }
 
+func TestProjectServiceSummarizesAndFiltersFreightAlignmentBeforePagination(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 10, 12, 0, 0, 0, time.UTC)
+	alignedSource := projectTestStage("prod", "colo", "a-aligned", "source", now)
+	alignedSource.Freight.Items = []promotion.FreightItem{*freightAlignmentTestItem("freight-1")}
+	alignedTarget := projectTestStage("prod", "colo", "a-aligned", "target", now)
+	alignedTarget.Freight.Items = []promotion.FreightItem{*freightAlignmentTestItem("freight-1")}
+	alignedTarget.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{"source"},
+	}}
+
+	differentSource := projectTestStage("prod", "colo", "b-different", "source", now)
+	differentSource.Freight.Items = []promotion.FreightItem{*freightAlignmentTestItem("freight-2")}
+	differentTarget := projectTestStage("prod", "colo", "b-different", "target", now)
+	differentTarget.Freight.Items = []promotion.FreightItem{*freightAlignmentTestItem("freight-1")}
+	differentTarget.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{"source"},
+	}}
+
+	unknownTarget := projectTestStage("prod", "colo", "c-unknown", "target", now)
+	unknownTarget.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{"missing"},
+	}}
+
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		&projectionTestStore{stages: []promotion.Stage{
+			unknownTarget, differentTarget, differentSource, alignedTarget, alignedSource,
+		}},
+	)
+	service.now = func() time.Time { return now }
+
+	all, err := service.List(t.Context(), ProjectListFilter{Limit: 1})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if all.Total != 3 || len(all.Items) != 1 || all.Items[0].Project != "a-aligned" {
+		t.Fatalf("paginated Projects = %#v", all)
+	}
+	if all.Summary.FreightDifferenceCount != 1 || all.Summary.UnknownFreightComparisonCount != 1 {
+		t.Errorf("unpaginated Freight alignment summary = %#v", all.Summary)
+	}
+
+	filters := []struct {
+		status  FreightAlignmentStatus
+		project string
+	}{
+		{status: FreightAlignmentAligned, project: "a-aligned"},
+		{status: FreightAlignmentDifferent, project: "b-different"},
+		{status: FreightAlignmentUnknown, project: "c-unknown"},
+	}
+	for _, filter := range filters {
+		result, filterErr := service.List(t.Context(), ProjectListFilter{
+			FreightAlignment: filter.status, Limit: 1,
+		})
+		if filterErr != nil {
+			t.Fatalf("List(%s) error = %v", filter.status, filterErr)
+		}
+		if result.Total != 1 || len(result.Items) != 1 || result.Items[0].Project != filter.project {
+			t.Errorf("Projects filtered by %s = %#v", filter.status, result)
+		}
+	}
+}
+
+func TestProjectServiceDoesNotResolveFreightSourcesAcrossProjectBoundaries(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 10, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name   string
+		source promotion.Stage
+	}{
+		{
+			name:   "different Project",
+			source: projectTestStage("prod", "colo", "other-project", "source", now),
+		},
+		{
+			name:   "different Cluster",
+			source: projectTestStage("prod", "edge", "kargo-core", "source", now),
+		},
+		{
+			name:   "different integration",
+			source: projectTestStage("dev", "colo", "kargo-core", "source", now),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			target := projectTestStage("prod", "colo", "kargo-core", "target", now)
+			target.RequestedFreight = []promotion.FreightRequest{{
+				Origin: "Warehouse/app", SourceStages: []string{"source"},
+			}}
+			service := NewProjectService(
+				promotion.IntegrationSet{
+					"prod": {ClusterName: "colo"},
+					"dev":  {ClusterName: "colo"},
+				},
+				&projectionTestStore{stages: []promotion.Stage{target, test.source}},
+			)
+			service.now = func() time.Time { return now }
+
+			result, err := service.Get(t.Context(), ProjectKey{
+				Integration: "prod", Cluster: "colo", Project: "kargo-core",
+			})
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			got := result.Stages[0].FreightAlignments
+			if len(got) != 1 || got[0].Status != FreightAlignmentUnknown || got[0].SourceStageID != nil {
+				t.Errorf("cross-boundary alignment = %#v", got)
+			}
+		})
+	}
+}
+
+func TestProjectServiceTreatsArchivedFreightSourceAsUnresolved(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 10, 12, 0, 0, 0, time.UTC)
+	source := projectTestStage("prod", "colo", "kargo-core", "source", now)
+	source.ArchivedAt = new(now)
+	target := projectTestStage("prod", "colo", "kargo-core", "target", now)
+	target.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{"source"},
+	}}
+	archivedTarget := projectTestStage("prod", "colo", "kargo-core", "archived-target", now)
+	archivedTarget.ArchivedAt = new(now)
+	archivedTarget.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{"target"},
+	}}
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		&projectionTestStore{stages: []promotion.Stage{source, target, archivedTarget}},
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.List(t.Context(), ProjectListFilter{Limit: promotion.DefaultListLimit})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Items) != 1 || result.Items[0].StageCount != 1 ||
+		result.Items[0].UnknownFreightComparisonCount != 1 {
+		t.Errorf("active Project summary = %#v", result)
+	}
+}
+
 func TestProjectServiceSummarizesExactOperationalEvidence(t *testing.T) {
 	t.Parallel()
 

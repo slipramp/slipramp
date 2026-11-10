@@ -251,7 +251,28 @@ native requested-Freight source references. Slipramp does not reconstruct
 pipelines, infer environment adjacency, or merge Projects across integrations or
 Clusters.
 Project list summaries derive Stage count, unhealthy and stale Stage counts,
-pending reviews, and latest observation time from the same Stage observations.
+pending reviews, Freight comparison counts, and latest observation time from
+the same Stage observations.
+
+Freight alignment is a read-time projection over active durable Stage
+observations. Slipramp creates one comparison for each exact
+`source Stage -> requested Freight origin -> target Stage` relationship in
+Kargo's `requestedFreight.sourceStages`. Multiple source Stages remain
+independent even when Kargo applies `OneOf` or `All`; a direct Warehouse request
+without a source Stage creates no comparison. Source resolution never crosses
+the Project's integration, Cluster, or Kargo Project boundary.
+
+A comparison is `aligned` when both Stages report the same current Kargo Freight
+identity `(origin, name)`. It is `different` when fresh observations report
+different names or current Freight on exactly one side. It is `unknown` when
+the source Stage cannot be resolved, either observation is stale, or neither
+Stage reports usable current Freight for the requested origin. Freight and
+Artifact details explain the observed identity without ordering image tags,
+chart versions, or Git revisions. Project reads derive this projection without
+querying Kargo or Argo CD and do not persist separate alignment state. A Freight
+difference is an ordinary possible intermediate promotion state, independent
+of candidate readiness, promotion eligibility, Stage health, and Git branch
+drift.
 
 Freight eligibility is conservative. Directly requested Warehouse Freight is
 eligible. Upstream Freight requires observed verification and required soak-time

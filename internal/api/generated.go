@@ -898,6 +898,27 @@ func (e PromotionDecisionUpdateDecision) Valid() bool {
 	}
 }
 
+// Defines values for PromotionFreightAlignmentStatus.
+const (
+	PromotionFreightAlignmentStatusAligned   PromotionFreightAlignmentStatus = "aligned"
+	PromotionFreightAlignmentStatusDifferent PromotionFreightAlignmentStatus = "different"
+	PromotionFreightAlignmentStatusUnknown   PromotionFreightAlignmentStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the PromotionFreightAlignmentStatus enum.
+func (e PromotionFreightAlignmentStatus) Valid() bool {
+	switch e {
+	case PromotionFreightAlignmentStatusAligned:
+		return true
+	case PromotionFreightAlignmentStatusDifferent:
+		return true
+	case PromotionFreightAlignmentStatusUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionFreightArtifactKind.
 const (
 	PromotionFreightArtifactKindChart PromotionFreightArtifactKind = "chart"
@@ -3303,6 +3324,25 @@ type PromotionFreight struct {
 	Items []PromotionFreightItem `json:"items"`
 }
 
+// PromotionFreightAlignment defines model for PromotionFreightAlignment.
+type PromotionFreightAlignment struct {
+	Origin string `json:"origin"`
+
+	// Reason Concise explanation for a different or unknown comparison.
+	Reason               *string               `json:"reason,omitempty"`
+	SourceCurrentFreight *PromotionFreightItem `json:"sourceCurrentFreight,omitempty"`
+
+	// SourceStageID Resolved active source Stage identity when it exists in the same Project boundary.
+	SourceStageID        *openapi_types.UUID             `json:"sourceStageId,omitempty"`
+	SourceStageName      string                          `json:"sourceStageName"`
+	Status               PromotionFreightAlignmentStatus `json:"status"`
+	TargetCurrentFreight *PromotionFreightItem           `json:"targetCurrentFreight,omitempty"`
+	TargetStageID        openapi_types.UUID              `json:"targetStageId"`
+}
+
+// PromotionFreightAlignmentStatus defines model for PromotionFreightAlignmentStatus.
+type PromotionFreightAlignmentStatus string
+
 // PromotionFreightArtifact defines model for PromotionFreightArtifact.
 type PromotionFreightArtifact struct {
 	Kind       PromotionFreightArtifactKind `json:"kind"`
@@ -3381,8 +3421,11 @@ type PromotionPolicyMode string
 
 // PromotionProject defines model for PromotionProject.
 type PromotionProject struct {
-	Cluster     CatalogName `json:"cluster"`
-	Integration CatalogName `json:"integration"`
+	Cluster CatalogName `json:"cluster"`
+
+	// FreightDifferenceCount Number of requested source Stage relationships with different current Freight.
+	FreightDifferenceCount int         `json:"freightDifferenceCount"`
+	Integration            CatalogName `json:"integration"`
 
 	// KargoURL Direct link to this Project in the configured Kargo UI.
 	KargoURL            *string     `json:"kargoUrl,omitempty"`
@@ -3392,6 +3435,9 @@ type PromotionProject struct {
 	StageCount          int         `json:"stageCount"`
 	StaleStageCount     int         `json:"staleStageCount"`
 	UnhealthyStageCount int         `json:"unhealthyStageCount"`
+
+	// UnknownFreightComparisonCount Number of requested source Stage relationships without usable comparison evidence.
+	UnknownFreightComparisonCount int `json:"unknownFreightComparisonCount"`
 }
 
 // PromotionProjectDetail defines model for PromotionProjectDetail.
@@ -3418,23 +3464,36 @@ type PromotionProjectFreightRequestAvailabilityStrategy string
 
 // PromotionProjectList defines model for PromotionProjectList.
 type PromotionProjectList struct {
-	Items  []PromotionProject `json:"items"`
-	Limit  int                `json:"limit"`
-	Offset int                `json:"offset"`
-	Total  int                `json:"total"`
+	Items   []PromotionProject          `json:"items"`
+	Limit   int                         `json:"limit"`
+	Offset  int                         `json:"offset"`
+	Summary PromotionProjectListSummary `json:"summary"`
+	Total   int                         `json:"total"`
+}
+
+// PromotionProjectListSummary defines model for PromotionProjectListSummary.
+type PromotionProjectListSummary struct {
+	// FreightDifferenceCount Freight differences across all Projects matching the filters before pagination.
+	FreightDifferenceCount int `json:"freightDifferenceCount"`
+
+	// UnknownFreightComparisonCount Unknown Freight comparisons across all Projects matching the filters before pagination.
+	UnknownFreightComparisonCount int `json:"unknownFreightComparisonCount"`
 }
 
 // PromotionProjectStage defines model for PromotionProjectStage.
 type PromotionProjectStage struct {
-	ArgoCdURL             *string                           `json:"argoCdUrl,omitempty"`
-	AutoPromotionEnabled  bool                              `json:"autoPromotionEnabled"`
-	Capabilities          PromotionStageCapabilities        `json:"capabilities"`
-	Conditions            []PromotionStageCondition         `json:"conditions"`
-	ControlFlow           bool                              `json:"controlFlow"`
-	CurrentPromotion      *PromotionStagePromotionReference `json:"currentPromotion,omitempty"`
-	Enrichment            *PromotionStageEnrichment         `json:"enrichment,omitempty"`
-	FirstObservedAt       time.Time                         `json:"firstObservedAt"`
-	Freight               PromotionFreight                  `json:"freight"`
+	ArgoCdURL            *string                           `json:"argoCdUrl,omitempty"`
+	AutoPromotionEnabled bool                              `json:"autoPromotionEnabled"`
+	Capabilities         PromotionStageCapabilities        `json:"capabilities"`
+	Conditions           []PromotionStageCondition         `json:"conditions"`
+	ControlFlow          bool                              `json:"controlFlow"`
+	CurrentPromotion     *PromotionStagePromotionReference `json:"currentPromotion,omitempty"`
+	Enrichment           *PromotionStageEnrichment         `json:"enrichment,omitempty"`
+	FirstObservedAt      time.Time                         `json:"firstObservedAt"`
+	Freight              PromotionFreight                  `json:"freight"`
+
+	// FreightAlignments Exact requested source Stage relationships evaluated from durable current Freight observations.
+	FreightAlignments     []PromotionFreightAlignment       `json:"freightAlignments"`
 	HealthStatus          *string                           `json:"healthStatus,omitempty"`
 	ID                    openapi_types.UUID                `json:"id"`
 	KargoURL              *string                           `json:"kargoUrl,omitempty"`
@@ -4686,8 +4745,11 @@ type ListPromotionProjectsParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
 	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
-	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// FreightAlignment Select Projects containing at least one comparison in this Freight alignment state.
+	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
+	Limit            *Limit                           `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset           *Offset                          `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionStagesParams defines parameters for ListPromotionStages.
@@ -9573,6 +9635,18 @@ func NewListPromotionProjectsRequest(server string, params *ListPromotionProject
 		if params.Project != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FreightAlignment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "freightAlignment", *params.FreightAlignment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -26703,6 +26777,19 @@ func (siw *ServerInterfaceWrapper) ListPromotionProjects(w http.ResponseWriter, 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "freightAlignment" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "freightAlignment", r.URL.Query(), &params.FreightAlignment, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "freightAlignment"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "freightAlignment", Err: err})
 		}
 		return
 	}

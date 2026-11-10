@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   buildFreightColumns,
   buildFreightRows,
+  freightAlignmentForSource,
+  freightAlignmentPresentation,
+  freightComparisonStageIds,
   freightNames,
   freightRowStatus,
 } from "./promotion-freight.ts";
@@ -61,4 +64,36 @@ test("Freight is not comparable until two Stages are selected", () => {
   const rows = buildFreightRows(columns);
 
   assert.equal(freightRowStatus(rows[0], columns), undefined);
+});
+
+test("Freight alignment presentation and comparison selection use the exact relationship", () => {
+  const target = stage("target", "app-prod", "prod", "1.1.0");
+  target.freightAlignments = [
+    {
+      origin: "Warehouse/app",
+      sourceCurrentFreight: { name: "freight-2", origin: "Warehouse/app", artifacts: [] },
+      sourceStageId: "source",
+      sourceStageName: "app-qa",
+      status: "different",
+      targetCurrentFreight: { name: "freight-1", origin: "Warehouse/app", artifacts: [] },
+      targetStageId: "target",
+    },
+  ];
+
+  const alignment = freightAlignmentForSource(target, "Warehouse/app", "app-qa");
+  assert.ok(alignment);
+  assert.deepEqual(freightAlignmentPresentation(alignment.status), {
+    color: "yellow",
+    label: "Different",
+  });
+  assert.deepEqual(freightAlignmentPresentation("aligned"), {
+    color: "green",
+    label: "Aligned",
+  });
+  assert.deepEqual(freightAlignmentPresentation("unknown"), {
+    color: "gray",
+    label: "Unknown",
+  });
+  assert.deepEqual(freightComparisonStageIds(alignment), ["source", "target"]);
+  assert.equal(freightComparisonStageIds({ ...alignment, sourceStageId: undefined }), undefined);
 });

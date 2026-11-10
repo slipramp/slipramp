@@ -19,6 +19,7 @@ import {
   IconChecklist,
   IconCircleCheck,
   IconClock,
+  IconArrowsDiff,
   IconGitBranch,
   IconGitPullRequest,
   IconServerOff,
@@ -75,11 +76,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       ? projectResult.data.items.reduce(
           (summary, project) => ({
             pendingReviews: summary.pendingReviews + project.pendingReviewCount,
+            freightDifferences: projectResult.data.summary.freightDifferenceCount,
             stages: summary.stages + project.stageCount,
             stale: summary.stale + project.staleStageCount,
             unhealthy: summary.unhealthy + project.unhealthyStageCount,
           }),
-          { pendingReviews: 0, stages: 0, stale: 0, unhealthy: 0 },
+          { freightDifferences: 0, pendingReviews: 0, stages: 0, stale: 0, unhealthy: 0 },
         )
       : undefined,
     projectTotal: projectResult.data?.total,
@@ -407,7 +409,13 @@ function KargoStatus({
   branchDriftError?: string;
   branchDriftTotal?: number;
   error?: string;
-  summary?: { pendingReviews: number; stages: number; stale: number; unhealthy: number };
+  summary?: {
+    freightDifferences: number;
+    pendingReviews: number;
+    stages: number;
+    stale: number;
+    unhealthy: number;
+  };
   total?: number;
 }>) {
   return (
@@ -424,7 +432,7 @@ function KargoStatus({
             {total ?? "—"}
           </Badge>
         </Group>
-        <SimpleGrid cols={3} spacing="xs">
+        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
           <KargoStatusCount
             color="orange"
             href="/promotion-projects"
@@ -445,6 +453,13 @@ function KargoStatus({
             icon={IconChecklist}
             label="Reviews"
             value={summary?.pendingReviews}
+          />
+          <KargoStatusCount
+            color="yellow"
+            href="/promotion-projects?freightAlignment=different"
+            icon={IconArrowsDiff}
+            label="Freight differences"
+            value={summary?.freightDifferences}
           />
         </SimpleGrid>
         <Button

@@ -2,7 +2,11 @@ import { Alert, Anchor, Badge, Group, Paper, Stack, Table } from "@mantine/core"
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { listPromotionProjects, type PromotionProject } from "~/api/generated";
+import {
+  listPromotionProjects,
+  type PromotionFreightAlignmentStatus,
+  type PromotionProject,
+} from "~/api/generated";
 import { RelativeTime } from "~/shared/display-values";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
@@ -23,11 +27,13 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const integration = optionalValue(url.searchParams.get("integration"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const project = optionalValue(url.searchParams.get("project"));
+  const freightAlignment = optionalFreightAlignment(url.searchParams.get("freightAlignment"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionProjects({
     client: createServerAPIClient(request, context),
     query: {
       cluster,
+      freightAlignment,
       integration,
       limit: pageSize,
       offset: (requestedPage - 1) * pageSize,
@@ -49,6 +55,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     cluster,
     error: result.error?.detail ?? result.error?.title,
     integration,
+    freightAlignment,
     page: requestedPage,
     project,
     projects: result.data?.items ?? [],
@@ -57,12 +64,17 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function PromotionProjects({ loaderData }: Route.ComponentProps) {
-  const filtered = Boolean(loaderData.cluster || loaderData.integration || loaderData.project);
+  const filtered = Boolean(
+    loaderData.cluster ||
+    loaderData.freightAlignment ||
+    loaderData.integration ||
+    loaderData.project,
+  );
 
   return (
     <Stack gap="lg">
       <PageHeader
-        description="Observed Kargo Projects with Stage health, freshness, topology, and review activity."
+        description="Observed Kargo Projects with Stage health, freshness, Freight alignment, topology, and review activity."
         title="Kargo projects"
       />
 
@@ -89,6 +101,19 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
             label: "Cluster",
             name: "cluster",
             value: loaderData.cluster,
+          },
+          {
+            active: Boolean(loaderData.freightAlignment),
+            data: [
+              { label: "All alignment states", value: "" },
+              { label: "Different", value: "different" },
+              { label: "Unknown", value: "unknown" },
+              { label: "Aligned", value: "aligned" },
+            ],
+            kind: "select",
+            label: "Freight alignment",
+            name: "freightAlignment",
+            value: loaderData.freightAlignment,
           },
         ]}
       />
@@ -188,6 +213,19 @@ function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
           {project.pendingReviewCount > 0 ? (
             <Badge color="yellow">{project.pendingReviewCount} pending</Badge>
           ) : null}
+          {project.freightDifferenceCount > 0 ? (
+            <Anchor component={Link} to="/promotion-projects?freightAlignment=different">
+              <Badge color="yellow">{project.freightDifferenceCount} Freight differences</Badge>
+            </Anchor>
+          ) : null}
+          {project.unknownFreightComparisonCount > 0 ? (
+            <Anchor component={Link} to="/promotion-projects?freightAlignment=unknown">
+              <Badge color="gray">
+                {project.unknownFreightComparisonCount} unknown comparison
+                {project.unknownFreightComparisonCount === 1 ? "" : "s"}
+              </Badge>
+            </Anchor>
+          ) : null}
         </Group>
       </Table.Td>
       <Table.Td>
@@ -204,4 +242,10 @@ function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
 
 function optionalValue(value: string | null) {
   return value?.trim() || undefined;
+}
+
+function optionalFreightAlignment(
+  value: string | null,
+): PromotionFreightAlignmentStatus | undefined {
+  return value === "aligned" || value === "different" || value === "unknown" ? value : undefined;
 }

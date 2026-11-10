@@ -113,8 +113,9 @@ Revisit these only when an operator need justifies focused design:
   leader election, or multiple active replicas per Cluster name. The supported
   topology remains one of each; do not add partial distributed coordination.
 - Pull-request and ephemeral environments; Actions outside Targets.
-- Tool-specific parsing or provider integrations and richer drift detection
-  beyond user Actions and existing Kargo branch drift.
+- Tool-specific parsing, provider integrations, or additional state comparison
+  beyond user Actions, existing Kargo branch drift, and requested-source Freight
+  alignment.
 - Additional outbound notification events and adapters, typed routing filters,
   explicit delivery retries, user subscriptions, or interactive provider
   decisions. Preserve the transition, deduplication, recovery, noise, and

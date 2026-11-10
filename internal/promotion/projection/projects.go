@@ -3,6 +3,7 @@ package projection
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -14,11 +15,12 @@ import (
 )
 
 type ProjectListFilter struct {
-	Integration string
-	Cluster     string
-	Project     string
-	Limit       int
-	Offset      int
+	Integration      string
+	Cluster          string
+	Project          string
+	FreightAlignment FreightAlignmentStatus
+	Limit            int
+	Offset           int
 }
 
 type ProjectKey struct {
@@ -28,21 +30,29 @@ type ProjectKey struct {
 }
 
 type ProjectSummary struct {
-	Integration         string
-	ClusterName         string
-	Project             string
-	StageCount          int
-	UnhealthyStageCount int
-	StaleStageCount     int
-	PendingReviewCount  int
-	LatestObservedAt    time.Time
+	Integration                   string
+	ClusterName                   string
+	Project                       string
+	StageCount                    int
+	UnhealthyStageCount           int
+	StaleStageCount               int
+	PendingReviewCount            int
+	FreightDifferenceCount        int
+	UnknownFreightComparisonCount int
+	LatestObservedAt              time.Time
+}
+
+type ProjectListSummary struct {
+	FreightDifferenceCount        int
+	UnknownFreightComparisonCount int
 }
 
 type ProjectList struct {
-	Items  []ProjectSummary
-	Total  int
-	Limit  int
-	Offset int
+	Items   []ProjectSummary
+	Summary ProjectListSummary
+	Total   int
+	Limit   int
+	Offset  int
 }
 
 type ProjectDetail struct {
@@ -58,6 +68,7 @@ type ProjectStage struct {
 	PendingPromotionCount int
 	ObservationStale      bool
 	RequestedFreight      []ProjectFreightRequest
+	FreightAlignments     []FreightAlignment
 	Capabilities          StageCapabilities
 }
 
@@ -98,24 +109,17 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
 		return ProjectList{}, err
 	}
+	if !filter.FreightAlignment.Valid() {
+		return ProjectList{}, fmt.Errorf("%w: Freight alignment filter is invalid", promotion.ErrInvalid)
+	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
 	if err != nil {
 		return ProjectList{}, err
 	}
+	grouped := make(map[ProjectKey][]promotion.Stage)
+	configs := make(map[ProjectKey]promotion.IntegrationConfig)
 	stageIDs := make([]uuid.UUID, 0, len(stages))
-	for _, stage := range stages {
-		if stage.ArchivedAt == nil && stageMatchesProjectFilter(stage, filter) {
-			stageIDs = append(stageIDs, stage.ID)
-		}
-	}
-	pending, err := s.store.CountPendingPromotionsByStage(ctx, stageIDs)
-	if err != nil {
-		return ProjectList{}, err
-	}
-
-	builders := make(map[ProjectKey]*ProjectSummary)
-	evaluatedAt := s.now().UTC()
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil || !stageMatchesProjectFilter(stage, filter) {
 			continue
@@ -125,34 +129,68 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 			continue
 		}
 		key := ProjectKey{Integration: stage.Integration, Cluster: stage.ClusterName, Project: stage.Project}
-		summary := builders[key]
-		if summary == nil {
-			summary = &ProjectSummary{
-				Integration: stage.Integration, ClusterName: stage.ClusterName, Project: stage.Project,
-			}
-			builders[key] = summary
-		}
-		summary.StageCount++
-		summary.PendingReviewCount += pending[stage.ID]
-		if stageObservationStale(stage, integration, evaluatedAt) {
-			summary.StaleStageCount++
-		}
-		if stageNonReady(stage) {
-			summary.UnhealthyStageCount++
-		}
-		if stage.LastObservedAt.After(summary.LatestObservedAt) {
-			summary.LatestObservedAt = stage.LastObservedAt
-		}
+		grouped[key] = append(grouped[key], stage)
+		configs[key] = integration
+		stageIDs = append(stageIDs, stage.ID)
 	}
 
-	items := make([]ProjectSummary, 0, len(builders))
-	for _, summary := range builders {
-		items = append(items, *summary)
+	pending, err := s.store.CountPendingPromotionsByStage(ctx, stageIDs)
+	if err != nil {
+		return ProjectList{}, err
+	}
+
+	evaluatedAt := s.now().UTC()
+	items := make([]ProjectSummary, 0, len(grouped))
+	listSummary := ProjectListSummary{}
+	for key, projectStages := range grouped {
+		summary := ProjectSummary{
+			Integration: key.Integration, ClusterName: key.Cluster, Project: key.Project,
+		}
+		stale := make(map[uuid.UUID]bool, len(projectStages))
+		for _, stage := range projectStages {
+			summary.StageCount++
+			summary.PendingReviewCount += pending[stage.ID]
+			stale[stage.ID] = stageObservationStale(stage, configs[key], evaluatedAt)
+			if stale[stage.ID] {
+				summary.StaleStageCount++
+			}
+			if stageNonReady(stage) {
+				summary.UnhealthyStageCount++
+			}
+			if stage.LastObservedAt.After(summary.LatestObservedAt) {
+				summary.LatestObservedAt = stage.LastObservedAt
+			}
+		}
+
+		matchesAlignment := filter.FreightAlignment == ""
+		for _, alignments := range freightAlignments(projectStages, stale) {
+			for _, alignment := range alignments {
+				switch alignment.Status {
+				case FreightAlignmentDifferent:
+					summary.FreightDifferenceCount++
+				case FreightAlignmentUnknown:
+					summary.UnknownFreightComparisonCount++
+				}
+				if alignment.Status == filter.FreightAlignment {
+					matchesAlignment = true
+				}
+			}
+		}
+		if !matchesAlignment {
+			continue
+		}
+
+		listSummary.FreightDifferenceCount += summary.FreightDifferenceCount
+		listSummary.UnknownFreightComparisonCount += summary.UnknownFreightComparisonCount
+		items = append(items, summary)
 	}
 	slices.SortFunc(items, compareProjects)
 	total := len(items)
 
-	return ProjectList{Items: page(items, filter.Offset, filter.Limit), Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+	return ProjectList{
+		Items: page(items, filter.Offset, filter.Limit), Summary: listSummary,
+		Total: total, Limit: filter.Limit, Offset: filter.Offset,
+	}, nil
 }
 
 func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail, error) {
@@ -188,6 +226,11 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 	if err != nil {
 		return ProjectDetail{}, err
 	}
+	stale := make(map[uuid.UUID]bool, len(active))
+	for _, stage := range active {
+		stale[stage.ID] = stageObservationStale(stage, integration, evaluatedAt)
+	}
+	alignments := freightAlignments(active, stale)
 
 	var repositories map[string]repository.Repository
 	if len(integration.Repositories) > 0 {
@@ -225,8 +268,9 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 			Stage:                 stage,
 			Policy:                policies[stage.ID],
 			PendingPromotionCount: pending[stage.ID],
-			ObservationStale:      stageObservationStale(stage, integration, evaluatedAt),
+			ObservationStale:      stale[stage.ID],
 			RequestedFreight:      requests,
+			FreightAlignments:     alignments[stage.ID],
 			Capabilities:          stageCapabilities(stage, integration, repositories[stage.RepositoryName].CloneURL),
 		})
 	}

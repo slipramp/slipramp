@@ -1,4 +1,9 @@
-import type { PromotionFreightArtifact, PromotionProjectStage } from "~/api/generated";
+import type {
+  PromotionFreightAlignment,
+  PromotionFreightAlignmentStatus,
+  PromotionFreightArtifact,
+  PromotionProjectStage,
+} from "~/api/generated";
 
 export type FreightComparisonStatus = "equal" | "different";
 
@@ -15,6 +20,38 @@ export type FreightComparisonRow = {
   repository?: string;
   values: Record<string, string[]>;
 };
+
+export type FreightAlignmentPresentation = {
+  color: "gray" | "green" | "yellow";
+  label: "Aligned" | "Different" | "Unknown";
+};
+
+export function freightAlignmentForSource(
+  stage: PromotionProjectStage,
+  origin: string,
+  sourceStageName: string,
+) {
+  return stage.freightAlignments.find(
+    (alignment) => alignment.origin === origin && alignment.sourceStageName === sourceStageName,
+  );
+}
+
+export function freightAlignmentPresentation(
+  status: PromotionFreightAlignmentStatus,
+): FreightAlignmentPresentation {
+  switch (status) {
+    case "aligned":
+      return { color: "green", label: "Aligned" };
+    case "different":
+      return { color: "yellow", label: "Different" };
+    case "unknown":
+      return { color: "gray", label: "Unknown" };
+  }
+}
+
+export function freightComparisonStageIds(alignment: PromotionFreightAlignment) {
+  return alignment.sourceStageId ? [alignment.sourceStageId, alignment.targetStageId] : undefined;
+}
 
 export function buildFreightColumns(stages: PromotionProjectStage[]): FreightColumn[] {
   return stages
