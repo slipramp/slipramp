@@ -317,7 +317,6 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 		*supersededC.OutcomeReason != run.ReasonSupersededByGitChange {
 		t.Errorf("superseded revision C Run = %#v", supersededC)
 	}
-	assertSupersededRunTransition(t, database, runC.ID)
 
 	pendingD, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
@@ -419,7 +418,6 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 		*stored.OutcomeReason != run.ReasonSupersededByGitChange {
 		t.Errorf("Git Run after target removal = %#v", stored)
 	}
-	assertSupersededRunTransition(t, database, stored.ID)
 	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), baseTime.Add(4*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Fatalf("claim after target removal error = %v, want no assignment", err)
 	}
@@ -664,7 +662,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 		t.Fatalf("stale Git Run creation error = %v, want Git Run superseded", err)
 	}
 	assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateSuperseded)
-	assertRunCounts(t, database, 0, 0)
+	assertRunCount(t, database, 0)
 }
 
 func TestGitTriggerDeliveryWithoutParametersIntegration(t *testing.T) {
@@ -902,26 +900,6 @@ func queuedGitTestRun(
 		RequestDigest:  strings.Repeat("c", 64),
 		Snapshot:       run.Snapshot{},
 		CreatedAt:      createdAt,
-	}
-}
-
-func assertSupersededRunTransition(t *testing.T, database *Database, runID uuid.UUID) {
-	t.Helper()
-
-	var count int
-	if err := database.pool.QueryRow(
-		t.Context(),
-		`SELECT count(*) FROM run_phase_transitions
-         WHERE run_id = $1
-           AND phase = 'finished'
-           AND outcome = 'canceled'
-           AND reason = 'SupersededByGitChange'`,
-		runID,
-	).Scan(&count); err != nil {
-		t.Fatalf("count superseded Run transitions: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("superseded Run transitions = %d, want 1", count)
 	}
 }
 

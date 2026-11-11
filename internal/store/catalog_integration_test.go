@@ -248,8 +248,6 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, repeatedRejection); err != nil {
 		t.Fatalf("repeat rejected catalog: %v", err)
 	}
-	assertValidationFailureCount(t, database, repositoryID, 1)
-
 	revisionBID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	recoveredAt := rejectedAt.Add(time.Minute)
 	recovered := successfulCatalogRefresh(commitB, recoveredAt, revisionBID)
@@ -826,24 +824,5 @@ func assertCatalogSnapshotIdentity(t *testing.T, database *Database, revisionID 
 	}
 	if snapshotID != persistedContentsID {
 		t.Errorf("catalog snapshot ID = %q, persisted contents digest = %q", snapshotID, persistedContentsID)
-	}
-}
-
-func assertValidationFailureCount(t *testing.T, database *Database, repositoryID uuid.UUID, want int) {
-	t.Helper()
-
-	var count int
-	err := database.pool.QueryRow(
-		t.Context(),
-		`SELECT count(*)
-         FROM catalog_validation_failures
-         WHERE repository_id = $1`,
-		repositoryID,
-	).Scan(&count)
-	if err != nil {
-		t.Fatalf("count catalog validation failures: %v", err)
-	}
-	if count != want {
-		t.Errorf("catalog validation failure count = %d, want %d", count, want)
 	}
 }

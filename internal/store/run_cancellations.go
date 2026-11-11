@@ -84,23 +84,6 @@ func (d *Database) CancelRun(
 		return run.Run{}, fmt.Errorf("cancel Run: %w", err)
 	}
 
-	if transition.Operation == run.CancellationOperationFinishQueued {
-		outcome := string(run.OutcomeCanceled)
-		reason := run.ReasonCancelRequested
-		if err := queries.CreateRunPhaseTransition(
-			ctx,
-			storedb.CreateRunPhaseTransitionParams{
-				RunID:      databaseUUID(runID),
-				Phase:      string(run.PhaseFinished),
-				Outcome:    &outcome,
-				Reason:     &reason,
-				RecordedAt: databaseTime(requestedAt),
-			},
-		); err != nil {
-			return run.Run{}, fmt.Errorf("record canceled Run phase: %w", err)
-		}
-	}
-
 	return commitCancelResult(ctx, transaction, updated)
 }
 

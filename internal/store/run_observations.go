@@ -74,23 +74,6 @@ func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Obse
 	}
 
 	phaseChanged := state.Phase != observation.Phase
-	if phaseChanged {
-		err = queries.CreateRunPhaseTransition(
-			ctx,
-			storedb.CreateRunPhaseTransitionParams{
-				RunID:      databaseUUID(observation.ID),
-				Phase:      string(observation.Phase),
-				Outcome:    outcomeString(observation.Outcome),
-				Reason:     observation.Reason,
-				Message:    observation.Message,
-				ExitCode:   observation.ExitCode,
-				RecordedAt: databaseTime(observation.ObservedAt),
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("record Run phase transition: %w", err)
-		}
-	}
 	if current.ActionName == "sync" && phaseChanged && observation.Phase == run.PhaseFinished &&
 		observation.Outcome != nil && *observation.Outcome == run.OutcomeSucceeded {
 		updated, err := queries.RecordTargetSyncSuccess(

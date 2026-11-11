@@ -60,20 +60,6 @@ func (d *Database) DecideRunReview(ctx context.Context, transition run.ReviewTra
 		return run.Run{}, fmt.Errorf("decide Run review: %w", err)
 	}
 
-	if transition.Decision == run.ReviewDecisionRejected {
-		outcome := string(run.OutcomeCanceled)
-		reason := run.ReasonReviewRejected
-		if err := queries.CreateRunPhaseTransition(ctx, storedb.CreateRunPhaseTransitionParams{
-			RunID:      databaseUUID(transition.RunID),
-			Phase:      string(run.PhaseFinished),
-			Outcome:    &outcome,
-			Reason:     &reason,
-			RecordedAt: databaseTime(transition.DecidedAt),
-		}); err != nil {
-			return run.Run{}, fmt.Errorf("record rejected Run phase: %w", err)
-		}
-	}
-
 	return commitRunReview(ctx, transaction, updated)
 }
 

@@ -727,7 +727,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, preparationRun, nil); err == nil {
 		t.Fatal("expected preparation link failure")
 	}
-	assertRunCounts(t, database, 1, 1)
+	assertRunCount(t, database, 1)
 	if _, err := database.pool.Exec(
 		ctx, "DROP TRIGGER reject_preparation_link ON promotions; DROP FUNCTION reject_preparation_link()",
 	); err != nil {

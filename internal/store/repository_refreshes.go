@@ -477,20 +477,6 @@ func recordRefreshFailure(
 		Time:  result.AttemptedAt,
 		Valid: true,
 	}
-	if result.Commit != nil {
-		err := queries.RecordCatalogValidationFailure(
-			ctx,
-			storedb.RecordCatalogValidationFailureParams{
-				RepositoryID:  repositoryID,
-				CommitSha:     result.Commit.SHA,
-				RecordedAt:    attemptedAt,
-				FailureReason: *result.FailureReason,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("record catalog validation failure: %w", err)
-		}
-	}
 
 	err := queries.RecordRepositoryRefreshFailure(
 		ctx,

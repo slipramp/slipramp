@@ -112,7 +112,7 @@ FROM targets
 WHERE id = sqlc.arg(target_id)
 FOR UPDATE;
 
--- name: FinishSupersededQueuedGitRuns :many
+-- name: FinishSupersededQueuedGitRuns :exec
 UPDATE runs
 SET phase = 'finished',
     outcome = 'canceled',
@@ -124,5 +124,4 @@ WHERE target_id = sqlc.arg(target_id)
   AND (
       sqlc.arg(cancel_all)::boolean
       OR commit_sha <> sqlc.arg(desired_commit_sha)
-  )
-RETURNING id;
+  );

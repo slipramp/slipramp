@@ -91,13 +91,6 @@ type CatalogTarget struct {
 	Definition        []byte
 }
 
-type CatalogValidationFailure struct {
-	RepositoryID  pgtype.UUID
-	CommitSha     string
-	RecordedAt    pgtype.Timestamptz
-	FailureReason string
-}
-
 type Cluster struct {
 	Name        string
 	FirstSeenAt pgtype.Timestamptz
@@ -423,17 +416,6 @@ type RunArtifactInput struct {
 	RunID      pgtype.UUID
 	InputName  string
 	ArtifactID pgtype.UUID
-}
-
-type RunPhaseTransition struct {
-	ID         int64
-	RunID      pgtype.UUID
-	Phase      string
-	Outcome    *string
-	Reason     *string
-	Message    *string
-	ExitCode   *int32
-	RecordedAt pgtype.Timestamptz
 }
 
 type Target struct {

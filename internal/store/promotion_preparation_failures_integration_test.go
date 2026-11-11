@@ -114,7 +114,7 @@ func TestPromotionPreparationDispatchFailureIsolationAndRecoveryIntegration(t *t
 	if _, err := database.CreateRun(fixture.ctx, preparationRun, nil); !errors.Is(err, run.ErrInvalidRequest) {
 		t.Fatalf("creation after terminal preparation = %v", err)
 	}
-	assertRunCounts(t, database, 1, 1)
+	assertRunCount(t, database, 1)
 }
 
 func TestPromotionFinishedPreparationFailureIsolationIntegration(t *testing.T) {

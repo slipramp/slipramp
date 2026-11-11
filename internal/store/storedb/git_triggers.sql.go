@@ -80,7 +80,7 @@ func (q *Queries) CreateGitTriggerDelivery(ctx context.Context, arg CreateGitTri
 	return err
 }
 
-const finishSupersededQueuedGitRuns = `-- name: FinishSupersededQueuedGitRuns :many
+const finishSupersededQueuedGitRuns = `-- name: FinishSupersededQueuedGitRuns :exec
 UPDATE runs
 SET phase = 'finished',
     outcome = 'canceled',
@@ -93,7 +93,6 @@ WHERE target_id = $2
       $3::boolean
       OR commit_sha <> $4
   )
-RETURNING id
 `
 
 type FinishSupersededQueuedGitRunsParams struct {
@@ -103,29 +102,14 @@ type FinishSupersededQueuedGitRunsParams struct {
 	DesiredCommitSha string
 }
 
-func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishSupersededQueuedGitRunsParams) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, finishSupersededQueuedGitRuns,
+func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishSupersededQueuedGitRunsParams) error {
+	_, err := q.db.Exec(ctx, finishSupersededQueuedGitRuns,
 		arg.FinishedAt,
 		arg.TargetID,
 		arg.CancelAll,
 		arg.DesiredCommitSha,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []pgtype.UUID
-	for rows.Next() {
-		var id pgtype.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+	return err
 }
 
 const getEligibleGitTriggerDelivery = `-- name: GetEligibleGitTriggerDelivery :one

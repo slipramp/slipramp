@@ -22,7 +22,7 @@ const (
 )
 
 type RetentionStore interface {
-	ExpireArtifacts(ctx context.Context, sealedBefore time.Time, limit int32) ([]Artifact, error)
+	ExpireArtifacts(ctx context.Context, retainedBefore time.Time, limit int32) ([]Artifact, error)
 	ListExpiredArtifacts(ctx context.Context) ([]Artifact, error)
 	ListArtifactObjectKeys(ctx context.Context, artifactID uuid.UUID) ([]string, error)
 	MarkArtifactDeleted(ctx context.Context, artifactID uuid.UUID) error

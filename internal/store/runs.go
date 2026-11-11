@@ -313,20 +313,6 @@ func (d *Database) CreateRun(
 		}
 	}
 
-	if err := queries.CreateRunPhaseTransition(
-		ctx,
-		storedb.CreateRunPhaseTransitionParams{
-			RunID: databaseUUID(record.ID),
-			Phase: string(record.Phase),
-			RecordedAt: pgtype.Timestamptz{
-				Time:  record.CreatedAt,
-				Valid: true,
-			},
-		},
-	); err != nil {
-		return run.Run{}, fmt.Errorf("record initial Run phase: %w", err)
-	}
-
 	if err := linkGitTriggerRun(ctx, queries, record); err != nil {
 		return run.Run{}, err
 	}

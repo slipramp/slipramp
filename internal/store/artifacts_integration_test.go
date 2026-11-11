@@ -856,6 +856,83 @@ func TestArtifactFailurePersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestFailedLogRetentionDeletesChunkMetadataIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "log",
+		Kind:           artifact.KindLog,
+		State:          artifact.StateOpen,
+		MediaType:      "text/plain; charset=utf-8",
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt.Add(time.Minute),
+	}
+	if _, err := database.CreateArtifact(ctx, record); err != nil {
+		t.Fatalf("create log Artifact: %v", err)
+	}
+
+	chunkKey := "runs/retention/artifacts/log/chunks/0-a"
+	chunk := artifact.LogChunk{
+		ArtifactID: record.ID,
+		SizeBytes:  21,
+		SHA256:     strings.Repeat("a", 64),
+		ObjectKey:  chunkKey,
+		CreatedAt:  createdAt.Add(2 * time.Minute),
+	}
+	if _, err := database.CreateLogChunk(ctx, chunk); err != nil {
+		t.Fatalf("create log chunk: %v", err)
+	}
+	if _, err := database.FailArtifact(ctx, record.ID); err != nil {
+		t.Fatalf("fail log Artifact: %v", err)
+	}
+
+	expired, err := database.ExpireArtifacts(ctx, createdAt.Add(24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("expire failed log with active Run: %v", err)
+	}
+	if len(expired) != 0 {
+		t.Fatalf("expired failed log with active Run = %#v", expired)
+	}
+
+	finishedAt := createdAt.Add(3 * time.Minute)
+	if _, err := database.CancelRun(ctx, runID, finishedAt, nil); err != nil {
+		t.Fatalf("finish failed-log Run: %v", err)
+	}
+	expired, err = database.ExpireArtifacts(ctx, finishedAt.Add(time.Hour), 10)
+	if err != nil {
+		t.Fatalf("expire failed log: %v", err)
+	}
+	if len(expired) != 1 || expired[0].ID != record.ID ||
+		expired[0].RetentionState != artifact.RetentionExpired {
+		t.Fatalf("expired failed log = %#v", expired)
+	}
+
+	keys, err := database.ListArtifactObjectKeys(ctx, record.ID)
+	if err != nil || !slices.Equal(keys, []string{chunkKey}) {
+		t.Fatalf("failed log object keys = %v, error = %v", keys, err)
+	}
+	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
+		t.Fatalf("mark failed log deleted: %v", err)
+	}
+
+	var chunkCount int
+	if err := database.pool.QueryRow(
+		ctx,
+		`SELECT count(*) FROM artifact_log_chunks WHERE artifact_id = $1`,
+		record.ID,
+	).Scan(&chunkCount); err != nil {
+		t.Fatalf("count retained log chunks: %v", err)
+	}
+	if chunkCount != 0 {
+		t.Errorf("retained log chunks = %d, want 0", chunkCount)
+	}
+}
+
 func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
@@ -987,6 +1064,13 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 
 	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
 		t.Fatalf("MarkArtifactDeleted() error = %v", err)
+	}
+	deleted, err := database.GetArtifact(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifact() after delete error = %v", err)
+	}
+	if deleted.RetentionState != artifact.RetentionDeleted || deleted.ObjectKey != nil {
+		t.Errorf("deleted Artifact metadata = %#v", deleted)
 	}
 	exists, err = database.ArtifactObjectKeyExists(ctx, objectKey)
 	if err != nil || exists {

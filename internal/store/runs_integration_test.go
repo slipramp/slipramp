@@ -113,7 +113,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if retried.ID != runID {
 		t.Errorf("idempotent Run ID = %s, want %s", retried.ID, runID)
 	}
-	assertRunCounts(t, database, 1, 1)
+	assertRunCount(t, database, 1)
 
 	conflict := retry
 	conflict.RequestDigest = strings.Repeat("b", 64)
@@ -121,7 +121,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if !errors.Is(err, run.ErrIdempotencyConflict) {
 		t.Errorf("conflicting CreateRun() error = %v", err)
 	}
-	assertRunCounts(t, database, 1, 1)
+	assertRunCount(t, database, 1)
 
 	second := record
 	second.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1204")
@@ -387,7 +387,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("unblocked claimed Run = %#v", claimed)
 	}
 
-	assertRunCounts(t, database, 2, 7)
+	assertRunCount(t, database, 2)
 }
 
 func TestRunAttributionPersistenceIntegration(t *testing.T) {
@@ -535,26 +535,15 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	}
 }
 
-func assertRunCounts(t *testing.T, database *Database, wantRuns int, wantTransitions int) {
+func assertRunCount(t *testing.T, database *Database, want int) {
 	t.Helper()
 
-	var runCount, transitionCount int
-	err := database.pool.QueryRow(
-		t.Context(),
-		`SELECT
-            (SELECT count(*) FROM runs),
-			(SELECT count(*) FROM run_phase_transitions)`,
-	).Scan(&runCount, &transitionCount)
+	var count int
+	err := database.pool.QueryRow(t.Context(), `SELECT count(*) FROM runs`).Scan(&count)
 	if err != nil {
 		t.Fatalf("count Runs: %v", err)
 	}
-	if runCount != wantRuns || transitionCount != wantTransitions {
-		t.Errorf(
-			"counts = (%d Runs, %d transitions), want (%d, %d)",
-			runCount,
-			transitionCount,
-			wantRuns,
-			wantTransitions,
-		)
+	if count != want {
+		t.Errorf("Run count = %d, want %d", count, want)
 	}
 }

@@ -3,12 +3,9 @@ package store
 import (
 	"context"
 	"errors"
-	"slices"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -120,7 +117,6 @@ func TestConcurrentRunCancellationRequestsIntegration(t *testing.T) {
 		}
 	}
 
-	assertRunPhaseHistory(t, database, record.ID, []run.Phase{run.PhaseQueued, run.PhaseAssigned}, nil)
 }
 
 func TestRunCancellationRaceWithTerminalObservationIntegration(t *testing.T) {
@@ -206,13 +202,6 @@ func TestQueuedRunCancellationIsAtomicAndIdempotentIntegration(t *testing.T) {
 		first.FinishedAt == nil || !first.FinishedAt.Equal(at) {
 		t.Errorf("queued cancellation = %#v, state %q", first, state)
 	}
-	assertRunPhaseHistory(
-		t,
-		database,
-		record.ID,
-		[]run.Phase{run.PhaseQueued, run.PhaseFinished},
-		new(run.ReasonCancelRequested),
-	)
 	if _, err := database.GetRunToCancelForCluster(ctx, "colo"); !errors.Is(err, run.ErrNoRunToCancel) {
 		t.Errorf("queued cancellation command error = %v, want no command", err)
 	}
@@ -289,13 +278,6 @@ func TestActiveRunCancellationSurvivesDatabaseReopenIntegration(t *testing.T) {
 		!completed.FinishedAt.Equal(finishedAt) {
 		t.Errorf("completed cancellation = %#v, state %q", completed, state)
 	}
-	assertRunPhaseHistory(
-		t,
-		reopened,
-		record.ID,
-		[]run.Phase{run.PhaseQueued, run.PhaseAssigned, run.PhaseFinished},
-		new(run.ReasonCancelRequested),
-	)
 	if _, err := reopened.GetRunToCancelForCluster(ctx, "colo"); !errors.Is(err, run.ErrNoRunToCancel) {
 		t.Errorf("completed cancellation command error = %v, want no command", err)
 	}
@@ -305,56 +287,9 @@ func singleCancellationTestRun(t *testing.T, ctx context.Context, database *Data
 	t.Helper()
 
 	first, second := createCapacityTestRuns(t, ctx, database)
-	if _, err := database.pool.Exec(ctx, `DELETE FROM run_phase_transitions WHERE run_id = $1`, second.ID); err != nil {
-		t.Fatalf("delete unused Run phase history: %v", err)
-	}
 	if _, err := database.pool.Exec(ctx, `DELETE FROM runs WHERE id = $1`, second.ID); err != nil {
 		t.Fatalf("delete unused Run: %v", err)
 	}
 
 	return first
-}
-
-func assertRunPhaseHistory(
-	t *testing.T,
-	database *Database,
-	runID uuid.UUID,
-	wantPhases []run.Phase,
-	wantTerminalReason *string,
-) {
-	t.Helper()
-
-	rows, err := database.pool.Query(
-		t.Context(),
-		`SELECT phase, reason FROM run_phase_transitions WHERE run_id = $1 ORDER BY recorded_at, id`,
-		runID,
-	)
-	if err != nil {
-		t.Fatalf("query Run phase history: %v", err)
-	}
-	defer rows.Close()
-
-	phases := make([]run.Phase, 0, len(wantPhases))
-	var terminalReason *string
-	for rows.Next() {
-		var phase run.Phase
-		var reason *string
-		if err := rows.Scan(&phase, &reason); err != nil {
-			t.Fatalf("scan Run phase history: %v", err)
-		}
-		phases = append(phases, phase)
-		if phase == run.PhaseFinished {
-			terminalReason = reason
-		}
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("read Run phase history: %v", err)
-	}
-	if !slices.Equal(phases, wantPhases) {
-		t.Errorf("Run phase history = %v, want %v", phases, wantPhases)
-	}
-	if (terminalReason == nil) != (wantTerminalReason == nil) ||
-		terminalReason != nil && *terminalReason != *wantTerminalReason {
-		t.Errorf("terminal reason = %v, want %v", terminalReason, wantTerminalReason)
-	}
 }

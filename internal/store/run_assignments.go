@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -68,16 +67,6 @@ func (d *Database) ClaimQueuedRun(
 		return run.Run{}, fmt.Errorf("claim queued Run: %w", err)
 	}
 
-	if err := queries.CreateRunPhaseTransition(
-		ctx,
-		storedb.CreateRunPhaseTransitionParams{
-			RunID:      databaseUUID(uuid.UUID(row.ID.Bytes)),
-			Phase:      string(run.PhaseAssigned),
-			RecordedAt: databaseTime(claimedAt),
-		},
-	); err != nil {
-		return run.Run{}, fmt.Errorf("record assigned Run phase: %w", err)
-	}
 	if row.ActionName == "sync" {
 		updated, err := queries.RecordTargetSyncAttempt(
 			ctx,

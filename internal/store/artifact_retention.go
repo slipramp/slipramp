@@ -15,14 +15,14 @@ import (
 
 func (d *Database) ExpireArtifacts(
 	ctx context.Context,
-	sealedBefore time.Time,
+	retainedBefore time.Time,
 	limit int32,
 ) ([]artifact.Artifact, error) {
 	rows, err := d.queries.ExpireArtifacts(
 		ctx,
 		storedb.ExpireArtifactsParams{
-			SealedBefore: databaseTime(sealedBefore),
-			ResultLimit:  limit,
+			RetainedBefore: databaseTime(retainedBefore),
+			ResultLimit:    limit,
 		},
 	)
 	if err != nil {

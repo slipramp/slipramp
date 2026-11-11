@@ -194,14 +194,19 @@ const expireArtifacts = `-- name: ExpireArtifacts :many
 WITH candidates AS (
     SELECT artifacts.id
     FROM artifacts
-    WHERE artifacts.state = 'sealed'
-      AND artifacts.retention_state = 'retained'
-      AND artifacts.sealed_at <= $1
-      AND EXISTS (
-          SELECT 1
-          FROM runs AS producer_run
-          WHERE producer_run.id = artifacts.run_id
-            AND producer_run.phase = 'finished'
+    JOIN runs AS producer_run ON producer_run.id = artifacts.run_id
+    WHERE artifacts.retention_state = 'retained'
+      AND producer_run.phase = 'finished'
+      AND (
+          (
+              artifacts.state = 'sealed'
+              AND artifacts.sealed_at <= $1
+          )
+          OR (
+              artifacts.kind = 'log'
+              AND artifacts.state = 'failed'
+              AND producer_run.finished_at <= $1
+          )
       )
       AND NOT EXISTS (
           SELECT 1
@@ -241,12 +246,12 @@ RETURNING artifacts.id, artifacts.run_id, artifacts.name, artifacts.kind, artifa
 `
 
 type ExpireArtifactsParams struct {
-	SealedBefore pgtype.Timestamptz
-	ResultLimit  int32
+	RetainedBefore pgtype.Timestamptz
+	ResultLimit    int32
 }
 
 func (q *Queries) ExpireArtifacts(ctx context.Context, arg ExpireArtifactsParams) ([]Artifact, error) {
-	rows, err := q.db.Query(ctx, expireArtifacts, arg.SealedBefore, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, expireArtifacts, arg.RetainedBefore, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -701,16 +706,39 @@ func (q *Queries) LockArtifactForLogAppend(ctx context.Context, id pgtype.UUID) 
 }
 
 const markArtifactDeleted = `-- name: MarkArtifactDeleted :one
-UPDATE artifacts
-SET retention_state = 'deleted'
-WHERE id = $1
-  AND retention_state = 'expired'
-RETURNING id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+WITH deleted_artifact AS (
+    UPDATE artifacts
+    SET retention_state = 'deleted',
+        content_object_key = NULL
+    WHERE id = $1
+      AND retention_state = 'expired'
+    RETURNING id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+), deleted_log_chunks AS (
+    DELETE FROM artifact_log_chunks
+    WHERE artifact_id IN (SELECT id FROM deleted_artifact)
+)
+SELECT id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at FROM deleted_artifact
 `
 
-func (q *Queries) MarkArtifactDeleted(ctx context.Context, id pgtype.UUID) (Artifact, error) {
+type MarkArtifactDeletedRow struct {
+	ID               pgtype.UUID
+	RunID            pgtype.UUID
+	Name             string
+	Kind             string
+	State            string
+	MediaType        string
+	SizeBytes        int64
+	Sha256           *string
+	Sensitive        bool
+	ContentObjectKey *string
+	RetentionState   string
+	CreatedAt        pgtype.Timestamptz
+	SealedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) MarkArtifactDeleted(ctx context.Context, id pgtype.UUID) (MarkArtifactDeletedRow, error) {
 	row := q.db.QueryRow(ctx, markArtifactDeleted, id)
-	var i Artifact
+	var i MarkArtifactDeletedRow
 	err := row.Scan(
 		&i.ID,
 		&i.RunID,

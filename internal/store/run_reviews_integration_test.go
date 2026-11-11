@@ -158,7 +158,6 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("repeat identical rejection: %v", err)
 	}
-	assertRunReviewTransition(t, database, rejected.ID, run.ReasonReviewRejected)
 
 	// Latest-wins supersedes both pending and approved-but-still-queued Git Runs.
 	pendingSuperseded := dispatchRunReviewHead(
@@ -359,24 +358,6 @@ func finishAssignedRun(t *testing.T, database *Database, record run.Run, finishe
 	}
 }
 
-func assertRunReviewTransition(t *testing.T, database *Database, runID uuid.UUID, reason string) {
-	t.Helper()
-
-	var count int
-	if err := database.pool.QueryRow(
-		t.Context(),
-		`SELECT count(*) FROM run_phase_transitions
-         WHERE run_id = $1 AND phase = 'finished' AND outcome = 'canceled' AND reason = $2`,
-		runID,
-		reason,
-	).Scan(&count); err != nil {
-		t.Fatalf("count Run review transitions: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("Run review transitions = %d, want 1", count)
-	}
-}
-
 func assertSupersededReviewRun(
 	t *testing.T,
 	database *Database,
@@ -395,5 +376,4 @@ func assertSupersededReviewRun(
 		record.Review.State != wantReviewState {
 		t.Errorf("superseded review Run = %#v", record)
 	}
-	assertSupersededRunTransition(t, database, runID)
 }

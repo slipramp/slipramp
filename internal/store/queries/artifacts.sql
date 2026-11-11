@@ -148,14 +148,19 @@ ORDER BY offset_bytes;
 WITH candidates AS (
     SELECT artifacts.id
     FROM artifacts
-    WHERE artifacts.state = 'sealed'
-      AND artifacts.retention_state = 'retained'
-      AND artifacts.sealed_at <= sqlc.arg(sealed_before)
-      AND EXISTS (
-          SELECT 1
-          FROM runs AS producer_run
-          WHERE producer_run.id = artifacts.run_id
-            AND producer_run.phase = 'finished'
+    JOIN runs AS producer_run ON producer_run.id = artifacts.run_id
+    WHERE artifacts.retention_state = 'retained'
+      AND producer_run.phase = 'finished'
+      AND (
+          (
+              artifacts.state = 'sealed'
+              AND artifacts.sealed_at <= sqlc.arg(retained_before)
+          )
+          OR (
+              artifacts.kind = 'log'
+              AND artifacts.state = 'failed'
+              AND producer_run.finished_at <= sqlc.arg(retained_before)
+          )
       )
       AND NOT EXISTS (
           SELECT 1
@@ -215,11 +220,18 @@ WHERE artifact_id = sqlc.arg(artifact_id)
 ORDER BY object_key;
 
 -- name: MarkArtifactDeleted :one
-UPDATE artifacts
-SET retention_state = 'deleted'
-WHERE id = sqlc.arg(id)
-  AND retention_state = 'expired'
-RETURNING *;
+WITH deleted_artifact AS (
+    UPDATE artifacts
+    SET retention_state = 'deleted',
+        content_object_key = NULL
+    WHERE id = sqlc.arg(id)
+      AND retention_state = 'expired'
+    RETURNING *
+), deleted_log_chunks AS (
+    DELETE FROM artifact_log_chunks
+    WHERE artifact_id IN (SELECT id FROM deleted_artifact)
+)
+SELECT * FROM deleted_artifact;
 
 -- name: ArtifactObjectKeyExists :one
 SELECT EXISTS (

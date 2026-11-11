@@ -62,9 +62,9 @@ requires a source that carries a named automatic trigger, currently `git` or
 trigger without maintaining a separate latest-result projection.
 
 The Run domain owns allowed observation transitions. Persistence locks the Run,
-validates the new observation, and writes current facts plus phase history in one
-transaction. Duplicate terminal reports are idempotent and cannot move a Run or
-Target checkpoint backward.
+validates the new observation, and writes the current phase plus its stable
+lifecycle timestamps in one transaction. Duplicate terminal reports are
+idempotent and cannot move a Run or Target checkpoint backward.
 
 ## Operator cancellation
 

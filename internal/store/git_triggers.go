@@ -104,7 +104,7 @@ func coalesceSupersededGitWork(
 			return fmt.Errorf("supersede pending Git-trigger deliveries for target %q: %w", target.name, err)
 		}
 
-		finishedRunIDs, err := queries.FinishSupersededQueuedGitRuns(
+		err := queries.FinishSupersededQueuedGitRuns(
 			ctx,
 			storedb.FinishSupersededQueuedGitRunsParams{
 				FinishedAt:       databaseTime(finishedAt),
@@ -115,23 +115,6 @@ func coalesceSupersededGitWork(
 		)
 		if err != nil {
 			return fmt.Errorf("finish superseded queued Git Runs for target %q: %w", target.name, err)
-		}
-
-		outcome := string(run.OutcomeCanceled)
-		reason := run.ReasonSupersededByGitChange
-		for _, runID := range finishedRunIDs {
-			if err := queries.CreateRunPhaseTransition(
-				ctx,
-				storedb.CreateRunPhaseTransitionParams{
-					RunID:      runID,
-					Phase:      string(run.PhaseFinished),
-					Outcome:    &outcome,
-					Reason:     &reason,
-					RecordedAt: databaseTime(finishedAt),
-				},
-			); err != nil {
-				return fmt.Errorf("record superseded Run %s phase transition: %w", uuid.UUID(runID.Bytes), err)
-			}
 		}
 	}
 

@@ -213,7 +213,7 @@ func TestGitDeliveryIdempotencyIntegration(t *testing.T) {
 			}
 		}
 
-		assertRunCounts(t, database, 1, 1)
+		assertRunCount(t, database, 1)
 		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateRunLinked)
 		if _, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now()); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
 			t.Fatalf("linked delivery remains eligible: %v", err)
@@ -262,7 +262,7 @@ func TestGitRunDeliveryLinkageIntegration(t *testing.T) {
 		if _, err := database.CreateRun(ctx, record, nil); err == nil {
 			t.Fatal("expected link storage failure")
 		}
-		assertRunCounts(t, database, 0, 0)
+		assertRunCount(t, database, 0)
 		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StatePendingEligible)
 
 		if _, err := database.pool.Exec(
@@ -274,7 +274,7 @@ func TestGitRunDeliveryLinkageIntegration(t *testing.T) {
 		if _, err := database.CreateRun(ctx, record, nil); err != nil {
 			t.Fatal(err)
 		}
-		assertRunCounts(t, database, 1, 1)
+		assertRunCount(t, database, 1)
 		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StateRunLinked)
 	})
 
@@ -288,7 +288,7 @@ func TestGitRunDeliveryLinkageIntegration(t *testing.T) {
 		if _, err := database.CreateRun(ctx, record, nil); err == nil {
 			t.Fatal("mismatched delivery created a Run")
 		}
-		assertRunCounts(t, database, 0, 0)
+		assertRunCount(t, database, 0)
 		assertGitTriggerDeliveryState(t, database, delivery.ID, gittrigger.StatePendingEligible)
 	})
 }

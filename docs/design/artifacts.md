@@ -97,10 +97,12 @@ infrastructure state, or create an approval gate.
 
 ## Retention and usage
 
-One installation-wide retention period applies to sealed Artifacts. The Server
-first marks eligible metadata `expired`, deletes every owned object
-idempotently, then marks metadata `deleted`. Artifact history, report summaries,
-and provenance remain after byte deletion.
+One installation-wide retention period applies to sealed Artifacts and failed
+partial logs. Sealed Artifact age starts at sealing; failed-log age starts when
+the producing Run finishes. The Server first marks eligible metadata `expired`,
+deletes every owned object idempotently, then marks metadata `deleted` and
+clears object-location metadata, including log-chunk transfer records. Artifact
+history, report summaries, and provenance remain after byte deletion.
 
 Artifacts cannot expire while their producing or consuming Run is unfinished or
 while a nonterminal Promotion protects them. S3 lifecycle rules do not expire

@@ -873,38 +873,6 @@ func (q *Queries) LockActiveRepository(ctx context.Context, id pgtype.UUID) (Loc
 	return i, err
 }
 
-const recordCatalogValidationFailure = `-- name: RecordCatalogValidationFailure :exec
-INSERT INTO catalog_validation_failures (
-    repository_id,
-    commit_sha,
-    recorded_at,
-    failure_reason
-) VALUES (
-    $1,
-    $2,
-    $3,
-    $4
-)
-ON CONFLICT (repository_id, commit_sha) DO NOTHING
-`
-
-type RecordCatalogValidationFailureParams struct {
-	RepositoryID  pgtype.UUID
-	CommitSha     string
-	RecordedAt    pgtype.Timestamptz
-	FailureReason string
-}
-
-func (q *Queries) RecordCatalogValidationFailure(ctx context.Context, arg RecordCatalogValidationFailureParams) error {
-	_, err := q.db.Exec(ctx, recordCatalogValidationFailure,
-		arg.RepositoryID,
-		arg.CommitSha,
-		arg.RecordedAt,
-		arg.FailureReason,
-	)
-	return err
-}
-
 const upsertTargetState = `-- name: UpsertTargetState :exec
 INSERT INTO targets (
     id,

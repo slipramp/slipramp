@@ -304,25 +304,6 @@ WHERE cluster_name = sqlc.arg(cluster_name)
 ORDER BY cancellation_requested_at, id
 LIMIT 1;
 
--- name: CreateRunPhaseTransition :exec
-INSERT INTO run_phase_transitions (
-    run_id,
-    phase,
-    outcome,
-    reason,
-    message,
-    exit_code,
-    recorded_at
-) VALUES (
-    sqlc.arg(run_id),
-    sqlc.arg(phase),
-    sqlc.narg(outcome),
-    sqlc.narg(reason),
-    sqlc.narg(message),
-    sqlc.narg(exit_code),
-    sqlc.arg(recorded_at)
-);
-
 -- name: GetRunObservationStateForUpdate :one
 SELECT target_id,
        action_name,

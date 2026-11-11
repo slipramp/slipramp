@@ -385,49 +385,6 @@ func (q *Queries) CreateRunArtifactInput(ctx context.Context, arg CreateRunArtif
 	return result.RowsAffected(), nil
 }
 
-const createRunPhaseTransition = `-- name: CreateRunPhaseTransition :exec
-INSERT INTO run_phase_transitions (
-    run_id,
-    phase,
-    outcome,
-    reason,
-    message,
-    exit_code,
-    recorded_at
-) VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7
-)
-`
-
-type CreateRunPhaseTransitionParams struct {
-	RunID      pgtype.UUID
-	Phase      string
-	Outcome    *string
-	Reason     *string
-	Message    *string
-	ExitCode   *int32
-	RecordedAt pgtype.Timestamptz
-}
-
-func (q *Queries) CreateRunPhaseTransition(ctx context.Context, arg CreateRunPhaseTransitionParams) error {
-	_, err := q.db.Exec(ctx, createRunPhaseTransition,
-		arg.RunID,
-		arg.Phase,
-		arg.Outcome,
-		arg.Reason,
-		arg.Message,
-		arg.ExitCode,
-		arg.RecordedAt,
-	)
-	return err
-}
-
 const decideRunReview = `-- name: DecideRunReview :one
 UPDATE runs
 SET review_state = $1,

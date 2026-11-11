@@ -72,20 +72,6 @@ INSERT INTO catalog_targets (
     sqlc.arg(definition)
 );
 
--- name: RecordCatalogValidationFailure :exec
-INSERT INTO catalog_validation_failures (
-    repository_id,
-    commit_sha,
-    recorded_at,
-    failure_reason
-) VALUES (
-    sqlc.arg(repository_id),
-    sqlc.arg(commit_sha),
-    sqlc.arg(recorded_at),
-    sqlc.arg(failure_reason)
-)
-ON CONFLICT (repository_id, commit_sha) DO NOTHING;
-
 -- name: ActivateCatalogRevision :exec
 UPDATE repositories
 SET refresh_status = 'succeeded',
