@@ -1,4 +1,4 @@
-// Package kubevalidate adapts Kubernetes value validation for Slipramp.
+// Package kubevalidate adapts Kubernetes validation rules for Slipramp.
 package kubevalidate
 
 import (

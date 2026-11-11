@@ -14,7 +14,6 @@ import (
 
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
-	"github.com/slipramp/slipramp/internal/resourcevalidate"
 )
 
 type Config struct {
@@ -156,7 +155,7 @@ func validateActionVolumes(volumes []corev1.Volume, mounts []corev1.VolumeMount)
 }
 
 func validateResources(resources ResourceRequirements) error {
-	return resourcevalidate.Requirements("", resources.Requests, resources.Limits)
+	return kubevalidate.ResourceRequirements("", resources.Requests, resources.Limits)
 }
 
 func validateNodeSelector(selector map[string]string) error {

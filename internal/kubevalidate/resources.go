@@ -1,6 +1,4 @@
-// Package resourcevalidate owns static Kubernetes resource quantity and
-// request/limit validation shared by catalog and Placement configuration.
-package resourcevalidate
+package kubevalidate
 
 import (
 	"fmt"
@@ -8,14 +6,12 @@ import (
 	"slices"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
-func Values(subject string, values map[string]string) (map[string]resource.Quantity, error) {
+func ResourceValues(subject string, values map[string]string) (map[string]resource.Quantity, error) {
 	quantities := make(map[string]resource.Quantity, len(values))
 	for _, name := range slices.Sorted(maps.Keys(values)) {
-		if err := kubevalidate.LabelKey(subject+" name", name); err != nil {
+		if err := LabelKey(subject+" name", name); err != nil {
 			return nil, err
 		}
 
@@ -33,14 +29,14 @@ func Values(subject string, values map[string]string) (map[string]resource.Quant
 	return quantities, nil
 }
 
-func Requirements(subject string, requests, limits map[string]string) error {
+func ResourceRequirements(subject string, requests, limits map[string]string) error {
 	requestSubject := joinSubject(subject, "resource request")
-	parsedRequests, err := Values(requestSubject, requests)
+	parsedRequests, err := ResourceValues(requestSubject, requests)
 	if err != nil {
 		return err
 	}
 
-	parsedLimits, err := Values(joinSubject(subject, "resource limit"), limits)
+	parsedLimits, err := ResourceValues(joinSubject(subject, "resource limit"), limits)
 	if err != nil {
 		return err
 	}

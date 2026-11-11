@@ -11,7 +11,6 @@ import (
 
 	"github.com/slipramp/slipramp/internal/durationvalidate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
-	"github.com/slipramp/slipramp/internal/resourcevalidate"
 	"github.com/slipramp/slipramp/internal/runreport"
 )
 
@@ -277,10 +276,10 @@ func validateTimeout(subject, value string) error {
 }
 
 func validateResourceValues(subject string, resources ResourceRequirements) error {
-	if _, err := resourcevalidate.Values(subject+" resource request", resources.Requests); err != nil {
+	if _, err := kubevalidate.ResourceValues(subject+" resource request", resources.Requests); err != nil {
 		return err
 	}
-	if _, err := resourcevalidate.Values(subject+" resource limit", resources.Limits); err != nil {
+	if _, err := kubevalidate.ResourceValues(subject+" resource limit", resources.Limits); err != nil {
 		return err
 	}
 
@@ -288,7 +287,7 @@ func validateResourceValues(subject string, resources ResourceRequirements) erro
 }
 
 func validateResources(subject string, resources ResourceRequirements) error {
-	return resourcevalidate.Requirements(subject, resources.Requests, resources.Limits)
+	return kubevalidate.ResourceRequirements(subject, resources.Requests, resources.Limits)
 }
 
 func validateEnvironmentName(subject, value string) error {
