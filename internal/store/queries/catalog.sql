@@ -16,23 +16,41 @@ INSERT INTO catalog_revisions (
     id,
     repository_id,
     commit_sha,
+    catalog_snapshot_id,
     created_at
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(repository_id),
     sqlc.arg(commit_sha),
+    sqlc.arg(catalog_snapshot_id),
     sqlc.arg(created_at)
 );
 
+-- name: CatalogSnapshotID :one
+SELECT encode(
+    sha256(convert_to(sqlc.arg(contents)::jsonb::text, 'UTF8')),
+    'hex'
+)::text;
+
+-- name: CreateCatalogSnapshot :execrows
+INSERT INTO catalog_snapshots (
+    id,
+    created_at
+) VALUES (
+    sqlc.arg(id),
+    sqlc.arg(created_at)
+)
+ON CONFLICT (id) DO NOTHING;
+
 -- name: CreateCatalogRuntime :exec
 INSERT INTO catalog_runtimes (
-    catalog_revision_id,
+    catalog_snapshot_id,
     name,
     source_path,
     source_document,
     definition
 ) VALUES (
-    sqlc.arg(catalog_revision_id),
+    sqlc.arg(catalog_snapshot_id),
     sqlc.arg(name),
     sqlc.arg(source_path),
     sqlc.arg(source_document),
@@ -41,13 +59,13 @@ INSERT INTO catalog_runtimes (
 
 -- name: CreateCatalogTarget :exec
 INSERT INTO catalog_targets (
-    catalog_revision_id,
+    catalog_snapshot_id,
     name,
     source_path,
     source_document,
     definition
 ) VALUES (
-    sqlc.arg(catalog_revision_id),
+    sqlc.arg(catalog_snapshot_id),
     sqlc.arg(name),
     sqlc.arg(source_path),
     sqlc.arg(source_document),
@@ -98,15 +116,19 @@ WHERE id = sqlc.arg(id)
   AND repository_id = sqlc.arg(repository_id);
 
 -- name: ListCatalogRuntimes :many
-SELECT definition
-FROM catalog_runtimes
-WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
+SELECT catalog_runtimes.definition
+FROM catalog_revisions
+JOIN catalog_runtimes
+  ON catalog_runtimes.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = sqlc.arg(catalog_revision_id)
 ORDER BY name;
 
 -- name: ListCatalogTargets :many
-SELECT definition
-FROM catalog_targets
-WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
+SELECT catalog_targets.definition
+FROM catalog_revisions
+JOIN catalog_targets
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = sqlc.arg(catalog_revision_id)
 ORDER BY name;
 
 -- name: ListRepositoryTargetStates :many
@@ -171,7 +193,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.archived_at IS NULL
   AND repositories.removed_at IS NULL
@@ -238,7 +260,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.id = sqlc.arg(id);
 
@@ -258,7 +280,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.repository_id = sqlc.arg(repository_id)
   AND targets.name = sqlc.arg(name)
@@ -301,8 +323,10 @@ SELECT count(*)
 FROM targets
 JOIN repositories
   ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.archived_at IS NULL
   AND repositories.removed_at IS NULL
@@ -355,8 +379,10 @@ WITH active_target_actions AS (
     FROM targets
     JOIN repositories
       ON repositories.id = targets.repository_id
+    JOIN catalog_revisions
+      ON catalog_revisions.id = targets.catalog_revision_id
     JOIN catalog_targets
-      ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+      ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
      AND catalog_targets.name = targets.name
     CROSS JOIN LATERAL jsonb_each(
         catalog_targets.definition->'spec'->'actions'

@@ -43,6 +43,19 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
 		t.Fatalf("record catalog refresh: %v", err)
 	}
+	newerRevisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1299")
+	newerRefresh := successfulCatalogRefresh(
+		"89abcdef0123456789abcdef0123456789abcdef",
+		createdAt.Add(2*time.Minute),
+		newerRevisionID,
+	)
+	newerRefresh.Revision.Catalog = persistedCatalog("1.14.3")
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, newerRefresh); err != nil {
+		t.Fatalf("record newer catalog refresh: %v", err)
+	}
+	if catalogSnapshotID(t, database, revisionID) != catalogSnapshotID(t, database, newerRevisionID) {
+		t.Error("identical catalog revisions did not share a snapshot")
+	}
 
 	idempotencyKey := "manual-network-preview"
 	record := run.Run{
@@ -76,7 +89,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 				JobNamespace: "slipramp-jobs",
 			},
 		},
-		CreatedAt: createdAt.Add(2 * time.Minute),
+		CreatedAt: createdAt.Add(3 * time.Minute),
 	}
 
 	created, err := database.CreateRun(ctx, record, nil)
@@ -85,6 +98,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 	if created.ID != record.ID || created.Phase != run.PhaseQueued ||
 		created.CatalogRevisionID != revisionID ||
+		created.CommitSHA != refresh.Commit.SHA ||
 		created.Parameters["refresh"] != true ||
 		created.Snapshot.Repository.CloneURL != record.Snapshot.Repository.CloneURL {
 		t.Errorf("created Run = %#v", created)

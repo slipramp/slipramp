@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -304,12 +305,46 @@ func createCatalogRevision(
 	revisionID pgtype.UUID,
 	revision catalog.Revision,
 ) error {
-	err := queries.CreateCatalogRevision(
+	manifest, err := newCatalogSnapshotManifest(revision.Catalog)
+	if err != nil {
+		return err
+	}
+	contents, err := json.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal catalog snapshot contents: %w", err)
+	}
+	snapshotID, err := queries.CatalogSnapshotID(ctx, contents)
+	if err != nil {
+		return fmt.Errorf("compute catalog snapshot ID: %w", err)
+	}
+
+	created, err := queries.CreateCatalogSnapshot(
+		ctx,
+		storedb.CreateCatalogSnapshotParams{
+			ID: snapshotID,
+			CreatedAt: pgtype.Timestamptz{
+				Time:  revision.CreatedAt,
+				Valid: true,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("create catalog snapshot: %w", err)
+	}
+
+	if created == 1 {
+		if err := createCatalogSnapshotDefinitions(ctx, queries, snapshotID, manifest); err != nil {
+			return err
+		}
+	}
+
+	err = queries.CreateCatalogRevision(
 		ctx,
 		storedb.CreateCatalogRevisionParams{
-			ID:           revisionID,
-			RepositoryID: repositoryID,
-			CommitSha:    revision.CommitSHA,
+			ID:                revisionID,
+			RepositoryID:      repositoryID,
+			CommitSha:         revision.CommitSHA,
+			CatalogSnapshotID: snapshotID,
 			CreatedAt: pgtype.Timestamptz{
 				Time:  revision.CreatedAt,
 				Valid: true,
@@ -320,45 +355,112 @@ func createCatalogRevision(
 		return fmt.Errorf("create catalog revision: %w", err)
 	}
 
-	for _, runtime := range revision.Catalog.Runtimes {
+	return nil
+}
+
+const catalogSnapshotManifestVersion = 1
+
+// catalogSnapshotManifest is the durable content identity contract. Keep it in
+// sync with the migration backfill before changing persisted catalog fields.
+type catalogSnapshotDefinition struct {
+	Name           string          `json:"name"`
+	SourcePath     string          `json:"sourcePath"`
+	SourceDocument int32           `json:"sourceDocument"`
+	Definition     json.RawMessage `json:"definition"`
+}
+
+type catalogSnapshotManifest struct {
+	Version  int                         `json:"version"`
+	Runtimes []catalogSnapshotDefinition `json:"runtimes"`
+	Targets  []catalogSnapshotDefinition `json:"targets"`
+}
+
+func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManifest, error) {
+	manifest := catalogSnapshotManifest{
+		Version:  catalogSnapshotManifestVersion,
+		Runtimes: make([]catalogSnapshotDefinition, 0, len(contents.Runtimes)),
+		Targets:  make([]catalogSnapshotDefinition, 0, len(contents.Targets)),
+	}
+
+	for _, runtime := range contents.Runtimes {
 		definition, err := json.Marshal(runtime)
 		if err != nil {
-			return fmt.Errorf("marshal catalog runtime %q: %w", runtime.Metadata.Name, err)
+			return catalogSnapshotManifest{}, fmt.Errorf(
+				"marshal catalog runtime %q: %w",
+				runtime.Metadata.Name,
+				err,
+			)
 		}
+		manifest.Runtimes = append(manifest.Runtimes, catalogSnapshotDefinition{
+			Name:           runtime.Metadata.Name,
+			SourcePath:     runtime.Source.Path,
+			SourceDocument: int32(runtime.Source.Document),
+			Definition:     definition,
+		})
+	}
 
-		err = queries.CreateCatalogRuntime(
+	for _, target := range contents.Targets {
+		definition, err := json.Marshal(target)
+		if err != nil {
+			return catalogSnapshotManifest{}, fmt.Errorf(
+				"marshal catalog target %q: %w",
+				target.Metadata.Name,
+				err,
+			)
+		}
+		manifest.Targets = append(manifest.Targets, catalogSnapshotDefinition{
+			Name:           target.Metadata.Name,
+			SourcePath:     target.Source.Path,
+			SourceDocument: int32(target.Source.Document),
+			Definition:     definition,
+		})
+	}
+
+	sort.Slice(manifest.Runtimes, func(left, right int) bool {
+		return manifest.Runtimes[left].Name < manifest.Runtimes[right].Name
+	})
+	sort.Slice(manifest.Targets, func(left, right int) bool {
+		return manifest.Targets[left].Name < manifest.Targets[right].Name
+	})
+
+	return manifest, nil
+}
+
+func createCatalogSnapshotDefinitions(
+	ctx context.Context,
+	queries *storedb.Queries,
+	snapshotID string,
+	manifest catalogSnapshotManifest,
+) error {
+	for _, runtime := range manifest.Runtimes {
+		err := queries.CreateCatalogRuntime(
 			ctx,
 			storedb.CreateCatalogRuntimeParams{
-				CatalogRevisionID: revisionID,
-				Name:              runtime.Metadata.Name,
-				SourcePath:        runtime.Source.Path,
-				SourceDocument:    int32(runtime.Source.Document),
-				Definition:        definition,
+				CatalogSnapshotID: snapshotID,
+				Name:              runtime.Name,
+				SourcePath:        runtime.SourcePath,
+				SourceDocument:    runtime.SourceDocument,
+				Definition:        runtime.Definition,
 			},
 		)
 		if err != nil {
-			return fmt.Errorf("create catalog runtime %q: %w", runtime.Metadata.Name, err)
+			return fmt.Errorf("create catalog runtime %q: %w", runtime.Name, err)
 		}
 	}
 
-	for _, target := range revision.Catalog.Targets {
-		definition, err := json.Marshal(target)
-		if err != nil {
-			return fmt.Errorf("marshal catalog target %q: %w", target.Metadata.Name, err)
-		}
-
-		err = queries.CreateCatalogTarget(
+	for _, target := range manifest.Targets {
+		err := queries.CreateCatalogTarget(
 			ctx,
 			storedb.CreateCatalogTargetParams{
-				CatalogRevisionID: revisionID,
-				Name:              target.Metadata.Name,
-				SourcePath:        target.Source.Path,
-				SourceDocument:    int32(target.Source.Document),
-				Definition:        definition,
+				CatalogSnapshotID: snapshotID,
+				Name:              target.Name,
+				SourcePath:        target.SourcePath,
+				SourceDocument:    target.SourceDocument,
+				Definition:        target.Definition,
 			},
 		)
 		if err != nil {
-			return fmt.Errorf("create catalog target %q: %w", target.Metadata.Name, err)
+			return fmt.Errorf("create catalog target %q: %w", target.Name, err)
 		}
 	}
 

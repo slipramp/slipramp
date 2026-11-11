@@ -61,13 +61,29 @@ func (q *Queries) ArchiveMissingTargets(ctx context.Context, arg ArchiveMissingT
 	return err
 }
 
+const catalogSnapshotID = `-- name: CatalogSnapshotID :one
+SELECT encode(
+    sha256(convert_to($1::jsonb::text, 'UTF8')),
+    'hex'
+)::text
+`
+
+func (q *Queries) CatalogSnapshotID(ctx context.Context, contents []byte) (string, error) {
+	row := q.db.QueryRow(ctx, catalogSnapshotID, contents)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countActiveTargets = `-- name: CountActiveTargets :one
 SELECT count(*)
 FROM targets
 JOIN repositories
   ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.archived_at IS NULL
   AND repositories.removed_at IS NULL
@@ -134,20 +150,23 @@ INSERT INTO catalog_revisions (
     id,
     repository_id,
     commit_sha,
+    catalog_snapshot_id,
     created_at
 ) VALUES (
     $1,
     $2,
     $3,
-    $4
+    $4,
+    $5
 )
 `
 
 type CreateCatalogRevisionParams struct {
-	ID           pgtype.UUID
-	RepositoryID pgtype.UUID
-	CommitSha    string
-	CreatedAt    pgtype.Timestamptz
+	ID                pgtype.UUID
+	RepositoryID      pgtype.UUID
+	CommitSha         string
+	CatalogSnapshotID string
+	CreatedAt         pgtype.Timestamptz
 }
 
 func (q *Queries) CreateCatalogRevision(ctx context.Context, arg CreateCatalogRevisionParams) error {
@@ -155,6 +174,7 @@ func (q *Queries) CreateCatalogRevision(ctx context.Context, arg CreateCatalogRe
 		arg.ID,
 		arg.RepositoryID,
 		arg.CommitSha,
+		arg.CatalogSnapshotID,
 		arg.CreatedAt,
 	)
 	return err
@@ -162,7 +182,7 @@ func (q *Queries) CreateCatalogRevision(ctx context.Context, arg CreateCatalogRe
 
 const createCatalogRuntime = `-- name: CreateCatalogRuntime :exec
 INSERT INTO catalog_runtimes (
-    catalog_revision_id,
+    catalog_snapshot_id,
     name,
     source_path,
     source_document,
@@ -177,7 +197,7 @@ INSERT INTO catalog_runtimes (
 `
 
 type CreateCatalogRuntimeParams struct {
-	CatalogRevisionID pgtype.UUID
+	CatalogSnapshotID string
 	Name              string
 	SourcePath        string
 	SourceDocument    int32
@@ -186,7 +206,7 @@ type CreateCatalogRuntimeParams struct {
 
 func (q *Queries) CreateCatalogRuntime(ctx context.Context, arg CreateCatalogRuntimeParams) error {
 	_, err := q.db.Exec(ctx, createCatalogRuntime,
-		arg.CatalogRevisionID,
+		arg.CatalogSnapshotID,
 		arg.Name,
 		arg.SourcePath,
 		arg.SourceDocument,
@@ -195,9 +215,33 @@ func (q *Queries) CreateCatalogRuntime(ctx context.Context, arg CreateCatalogRun
 	return err
 }
 
+const createCatalogSnapshot = `-- name: CreateCatalogSnapshot :execrows
+INSERT INTO catalog_snapshots (
+    id,
+    created_at
+) VALUES (
+    $1,
+    $2
+)
+ON CONFLICT (id) DO NOTHING
+`
+
+type CreateCatalogSnapshotParams struct {
+	ID        string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateCatalogSnapshot(ctx context.Context, arg CreateCatalogSnapshotParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createCatalogSnapshot, arg.ID, arg.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createCatalogTarget = `-- name: CreateCatalogTarget :exec
 INSERT INTO catalog_targets (
-    catalog_revision_id,
+    catalog_snapshot_id,
     name,
     source_path,
     source_document,
@@ -212,7 +256,7 @@ INSERT INTO catalog_targets (
 `
 
 type CreateCatalogTargetParams struct {
-	CatalogRevisionID pgtype.UUID
+	CatalogSnapshotID string
 	Name              string
 	SourcePath        string
 	SourceDocument    int32
@@ -221,7 +265,7 @@ type CreateCatalogTargetParams struct {
 
 func (q *Queries) CreateCatalogTarget(ctx context.Context, arg CreateCatalogTargetParams) error {
 	_, err := q.db.Exec(ctx, createCatalogTarget,
-		arg.CatalogRevisionID,
+		arg.CatalogSnapshotID,
 		arg.Name,
 		arg.SourcePath,
 		arg.SourceDocument,
@@ -290,7 +334,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.repository_id = $1
   AND targets.name = $2
@@ -371,7 +415,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.id = $1
 `
@@ -414,8 +458,10 @@ WITH active_target_actions AS (
     FROM targets
     JOIN repositories
       ON repositories.id = targets.repository_id
+    JOIN catalog_revisions
+      ON catalog_revisions.id = targets.catalog_revision_id
     JOIN catalog_targets
-      ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+      ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
      AND catalog_targets.name = targets.name
     CROSS JOIN LATERAL jsonb_each(
         catalog_targets.definition->'spec'->'actions'
@@ -471,7 +517,7 @@ JOIN repositories
 JOIN catalog_revisions
   ON catalog_revisions.id = targets.catalog_revision_id
 JOIN catalog_targets
-  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
  AND catalog_targets.name = targets.name
 WHERE targets.archived_at IS NULL
   AND repositories.removed_at IS NULL
@@ -578,9 +624,11 @@ func (q *Queries) ListActiveTargets(ctx context.Context, arg ListActiveTargetsPa
 }
 
 const listCatalogRuntimes = `-- name: ListCatalogRuntimes :many
-SELECT definition
-FROM catalog_runtimes
-WHERE catalog_revision_id = $1
+SELECT catalog_runtimes.definition
+FROM catalog_revisions
+JOIN catalog_runtimes
+  ON catalog_runtimes.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = $1
 ORDER BY name
 `
 
@@ -639,9 +687,11 @@ func (q *Queries) ListCatalogTargetStates(ctx context.Context, catalogRevisionID
 }
 
 const listCatalogTargets = `-- name: ListCatalogTargets :many
-SELECT definition
-FROM catalog_targets
-WHERE catalog_revision_id = $1
+SELECT catalog_targets.definition
+FROM catalog_revisions
+JOIN catalog_targets
+  ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = $1
 ORDER BY name
 `
 

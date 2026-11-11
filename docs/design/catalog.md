@@ -31,10 +31,12 @@ per-Repository path:
 1. Fetch the tracked branch with the configured Server credential.
 2. Check out the exact head in temporary storage.
 3. Discover, decode, and validate the complete catalog.
-4. Create or reuse the immutable catalog revision for that commit.
-5. Atomically activate the revision, update Targets, and enqueue matching Git
+4. Normalize the persisted Runtime and Target definitions and create or reuse
+   their content-addressed catalog snapshot.
+5. Create or reuse the immutable catalog revision for that commit.
+6. Atomically activate the revision, update Targets, and enqueue matching Git
    trigger deliveries.
-6. Remove the temporary checkout.
+7. Remove the temporary checkout.
 
 Repository contents, archives, and source bundles are never persisted in
 PostgreSQL or object storage. Execution Jobs clone their exact commit directly.
@@ -44,6 +46,17 @@ known, outcome, and a bounded non-sensitive diagnostic on failure. Fetch failure
 and catalog rejection remain distinct. Revalidating an already accepted head
 records another attempt but does not change Target relevance or create trigger
 deliveries. Invalid heads never replace the last valid active revision.
+
+Every accepted Repository commit has its own catalog revision, even when its
+catalog is identical to another commit. The revision retains the exact commit
+SHA and references a reusable catalog snapshot. Snapshot identity is the
+lowercase SHA-256 digest of a versioned canonical JSON manifest whose Runtime
+and Target entries are sorted by name. Each entry includes its kind grouping,
+name, source path, source document number, and complete persisted JSON
+definition. Operational timestamps and revision or Repository identity are not
+snapshot content, so equal catalogs deduplicate across commits and
+Repositories. Snapshot creation, revision creation, mutable Target updates, and
+activation commit in the same PostgreSQL transaction.
 
 ## Catalog format and validation
 
@@ -89,9 +102,12 @@ desired relevance commit. An unaffected Target may therefore retain a desired
 commit older than the active catalog revision. Watch patterns update relevance;
 they do not execute an Action by themselves.
 
-Catalog revision reads contain immutable definitions and revision metadata. The
+Catalog revision reads resolve immutable definitions through the revision's
+catalog snapshot and combine them with revision-specific commit metadata. The
 active catalog view joins that revision with mutable Target state from one
-repeatable-read PostgreSQL snapshot so a refresh cannot produce a mixed view.
+repeatable-read PostgreSQL transaction snapshot so a refresh cannot produce a
+mixed view. Runs continue to pin the catalog revision, not the shared snapshot,
+and therefore retain exact Git provenance.
 
 ## Action resolution and parameters
 

@@ -85,6 +85,7 @@ process. Kubernetes is an execution backend, not the product database.
 | --- | --- |
 | Repository | A Git clone URL and tracked branch supplying versioned definitions |
 | Catalog revision | An immutable validated catalog from one exact Git commit |
+| Catalog snapshot | Content-addressed normalized Runtime and Target definitions shared by identical catalog revisions |
 | Target | A durable operational unit containing user-defined Actions |
 | Action | One command with parameters, execution policy, triggers, and Artifacts |
 | Runtime | A repository-defined container environment and process or credential conventions |
@@ -120,9 +121,10 @@ infrastructure convergence.
 ## State and consistency
 
 PostgreSQL transactions join state changes that must not diverge: catalog
-activation and Target updates, Run creation and any required source linkage, terminal Run
-observations and reconciliation checkpoints, Promotion transitions and
-preparation linkage, and notification events with intended deliveries.
+snapshot and revision persistence, activation and Target updates, Run creation
+and any required source linkage, terminal Run observations and reconciliation
+checkpoints, Promotion transitions and preparation linkage, and notification
+events with intended deliveries.
 
 External effects use durable intent plus idempotent reconciliation. A database
 commit never assumes that a Kubernetes request, Git operation, object-store
@@ -141,9 +143,12 @@ workflows.
 
 The Server fetches each active Repository, checks out one exact commit in
 temporary storage, validates the complete catalog, and atomically activates a
-new immutable revision. Invalid heads retain a safe diagnostic while the last
-valid revision stays active. Target relevance advances only for watched paths
-affected by an accepted head. See [Repositories and catalogs](./design/catalog.md).
+new immutable revision. Every accepted commit has a distinct revision for Git
+provenance, while revisions with identical normalized definitions share one
+content-addressed catalog snapshot. Invalid heads retain a safe diagnostic while
+the last valid revision stays active. Target relevance advances only for watched
+paths affected by an accepted head. See
+[Repositories and catalogs](./design/catalog.md).
 
 ### Run to execution
 

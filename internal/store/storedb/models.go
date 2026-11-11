@@ -63,22 +63,28 @@ type ArtifactReport struct {
 }
 
 type CatalogRevision struct {
-	ID           pgtype.UUID
-	RepositoryID pgtype.UUID
-	CommitSha    string
-	CreatedAt    pgtype.Timestamptz
+	ID                pgtype.UUID
+	RepositoryID      pgtype.UUID
+	CommitSha         string
+	CreatedAt         pgtype.Timestamptz
+	CatalogSnapshotID string
 }
 
 type CatalogRuntime struct {
-	CatalogRevisionID pgtype.UUID
+	CatalogSnapshotID string
 	Name              string
 	SourcePath        string
 	SourceDocument    int32
 	Definition        []byte
 }
 
+type CatalogSnapshot struct {
+	ID        string
+	CreatedAt pgtype.Timestamptz
+}
+
 type CatalogTarget struct {
-	CatalogRevisionID pgtype.UUID
+	CatalogSnapshotID string
 	Name              string
 	SourcePath        string
 	SourceDocument    int32
