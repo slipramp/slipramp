@@ -3,8 +3,6 @@ package notification
 import (
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"testing"
 	"time"
 )
@@ -17,8 +15,6 @@ func TestRetentionReconcilerDeletesTerminalHistoryBeforeCutoff(t *testing.T) {
 	reconciler := NewRetentionReconciler(
 		store,
 		30*24*time.Hour,
-		DefaultRetentionInterval,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
 	reconciler.now = func() time.Time { return now }
 
@@ -38,8 +34,6 @@ func TestRetentionReconcilerReturnsStoreFailure(t *testing.T) {
 	reconciler := NewRetentionReconciler(
 		store,
 		DefaultRetentionPeriod,
-		DefaultRetentionInterval,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
 	if _, err := reconciler.Reconcile(t.Context()); err == nil {
 		t.Fatal("Reconcile() error = nil")

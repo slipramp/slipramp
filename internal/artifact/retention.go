@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,9 +79,7 @@ type Reconciler struct {
 	metadata          RetentionStore
 	contents          RetentionObjectStore
 	retentionPeriod   time.Duration
-	period            time.Duration
 	orphanGracePeriod time.Duration
-	logger            *slog.Logger
 	now               func() time.Time
 	observer          ReconciliationObserver
 }
@@ -91,18 +88,14 @@ func NewReconciler(
 	metadata RetentionStore,
 	contents RetentionObjectStore,
 	retentionPeriod time.Duration,
-	period time.Duration,
 	orphanGracePeriod time.Duration,
-	logger *slog.Logger,
 	options ...ReconcilerOption,
 ) *Reconciler {
 	reconciler := &Reconciler{
 		metadata:          metadata,
 		contents:          contents,
 		retentionPeriod:   retentionPeriod,
-		period:            period,
 		orphanGracePeriod: orphanGracePeriod,
-		logger:            logger.With("component", "artifact_reconciler"),
 		now:               time.Now,
 		observer:          noopReconciliationObserver{},
 	}
@@ -111,22 +104,6 @@ func NewReconciler(
 	}
 
 	return reconciler
-}
-
-func (r *Reconciler) Run(ctx context.Context) {
-	r.reconcileAndLog(ctx)
-
-	ticker := time.NewTicker(r.period)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			r.reconcileAndLog(ctx)
-		}
-	}
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context) (ReconciliationResult, error) {
@@ -169,28 +146,6 @@ func (r *Reconciler) Reconcile(ctx context.Context) (ReconciliationResult, error
 	}
 
 	return result, reconciliationErr
-}
-
-func (r *Reconciler) reconcileAndLog(ctx context.Context) {
-	result, err := r.Reconcile(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			r.logger.Error("reconcile artifact contents", "error", err)
-		}
-
-		return
-	}
-
-	if result == (ReconciliationResult{}) {
-		return
-	}
-
-	r.logger.Info(
-		"reconciled artifact contents",
-		"expired_artifacts", result.ExpiredArtifacts,
-		"deleted_artifacts", result.DeletedArtifacts,
-		"deleted_orphans", result.DeletedOrphans,
-	)
 }
 
 func (r *Reconciler) deleteExpiredArtifacts(ctx context.Context) (int, error) {

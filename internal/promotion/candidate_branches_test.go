@@ -215,7 +215,6 @@ func newCandidateBranchTestService(
 		}}},
 		store,
 		remote,
-		time.Minute,
 		30*time.Second,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)

@@ -137,6 +137,12 @@ every owned object and its lifecycle. Bytes are written before authoritative
 metadata advances; retention and orphan reconciliation are explicit Server
 workflows.
 
+Periodic retention, expiration, and cleanup work registers bounded, idempotent
+jobs with one Server maintenance coordinator. Domain services expose one-shot
+operations and do not own their own timers or goroutines. Durable dispatchers
+and product workflow schedulers retain independent lifecycles where their
+queueing and latency semantics require them.
+
 ## Core flows
 
 ### Repository to catalog

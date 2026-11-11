@@ -104,7 +104,7 @@ func (s *Service) OpenReport(ctx context.Context, artifactID uuid.UUID) (ReportC
 	if projection.Size != metadata.ProjectionSizeBytes {
 		_ = projection.Body.Close()
 
-		return ReportContent{}, errors.New("Run report projection size does not match metadata")
+		return ReportContent{}, errors.New("Run report projection size does not match metadata") //nolint:staticcheck // Run is a domain name.
 	}
 
 	contents, readErr := io.ReadAll(io.LimitReader(projection.Body, metadata.ProjectionSizeBytes+1))
@@ -113,11 +113,11 @@ func (s *Service) OpenReport(ctx context.Context, artifactID uuid.UUID) (ReportC
 		return ReportContent{}, fmt.Errorf("read Run report projection: %w", err)
 	}
 	if int64(len(contents)) != metadata.ProjectionSizeBytes {
-		return ReportContent{}, errors.New("Run report projection size does not match metadata")
+		return ReportContent{}, errors.New("Run report projection size does not match metadata") //nolint:staticcheck // Run is a domain name.
 	}
 	digest := sha256.Sum256(contents)
 	if hex.EncodeToString(digest[:]) != metadata.ProjectionSHA256 {
-		return ReportContent{}, errors.New("Run report projection digest does not match metadata")
+		return ReportContent{}, errors.New("Run report projection digest does not match metadata") //nolint:staticcheck // Run is a domain name.
 	}
 
 	report, err := runreport.DecodeProjection(metadata.Kind, bytes.NewReader(contents))
@@ -125,7 +125,7 @@ func (s *Service) OpenReport(ctx context.Context, artifactID uuid.UUID) (ReportC
 		return ReportContent{}, fmt.Errorf("decode Run report projection: %w", err)
 	}
 	if report.Metadata() != metadata.Envelope {
-		return ReportContent{}, errors.New("Run report projection envelope does not match metadata")
+		return ReportContent{}, errors.New("Run report projection envelope does not match metadata") //nolint:staticcheck // Run is a domain name.
 	}
 	projectedSummary, err := model.EncodeSummary(report.ReportSummary())
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *Service) OpenReport(ctx context.Context, artifactID uuid.UUID) (ReportC
 		return ReportContent{}, fmt.Errorf("encode stored Run report summary: %w", err)
 	}
 	if !bytes.Equal(projectedSummary, storedSummary) {
-		return ReportContent{}, errors.New("Run report projection summary does not match metadata")
+		return ReportContent{}, errors.New("Run report projection summary does not match metadata") //nolint:staticcheck // Run is a domain name.
 	}
 
 	return ReportContent{Artifact: record, Metadata: metadata, Report: report}, nil

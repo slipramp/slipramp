@@ -68,7 +68,6 @@ type CandidateBranchService struct {
 	store        CandidateBranchStore
 	remote       repository.CandidateBranchRemote
 	policies     map[string]candidateBranchPolicy
-	interval     time.Duration
 	fetchTimeout time.Duration
 	logger       *slog.Logger
 	now          func() time.Time
@@ -78,7 +77,6 @@ func NewCandidateBranchService(
 	integrations IntegrationSet,
 	store CandidateBranchStore,
 	remote repository.CandidateBranchRemote,
-	interval time.Duration,
 	fetchTimeout time.Duration,
 	logger *slog.Logger,
 ) *CandidateBranchService {
@@ -106,25 +104,9 @@ func NewCandidateBranchService(
 		store:        store,
 		remote:       remote,
 		policies:     policies,
-		interval:     interval,
 		fetchTimeout: fetchTimeout,
 		logger:       logger.With("component", "promotion_candidate_branches"),
 		now:          time.Now,
-	}
-}
-
-func (s *CandidateBranchService) Run(ctx context.Context) {
-	s.refreshAndLog(ctx)
-
-	ticker := time.NewTicker(s.interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.refreshAndLog(ctx)
-		}
 	}
 }
 
@@ -326,16 +308,4 @@ func candidateBranchTerminalAt(reference CandidateBranchReference) time.Time {
 
 func (s *CandidateBranchService) currentTime() time.Time {
 	return s.now().UTC().Truncate(time.Microsecond)
-}
-
-func (s *CandidateBranchService) refreshAndLog(ctx context.Context) {
-	count, err := s.Refresh(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			s.logger.Error("refresh candidate branches", "error", err)
-		}
-
-		return
-	}
-	s.logger.Debug("refreshed candidate branches", "count", count)
 }

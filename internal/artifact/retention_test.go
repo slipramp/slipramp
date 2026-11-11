@@ -3,8 +3,6 @@ package artifact
 import (
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"slices"
 	"testing"
 	"time"
@@ -237,9 +235,7 @@ func TestReconcilerDoesNotRecordShutdownCancellation(t *testing.T) {
 		&retentionMetadataStore{},
 		&retentionContentStore{},
 		DefaultRetentionPeriod,
-		DefaultReconcileInterval,
 		DefaultOrphanGracePeriod,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		WithReconciliationObserver(observer),
 	)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -253,15 +249,11 @@ func TestReconcilerDoesNotRecordShutdownCancellation(t *testing.T) {
 }
 
 func newTestReconciler(metadata RetentionStore, contents RetentionObjectStore) *Reconciler {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
 	return NewReconciler(
 		metadata,
 		contents,
 		DefaultRetentionPeriod,
-		DefaultReconcileInterval,
 		DefaultOrphanGracePeriod,
-		logger,
 	)
 }
 

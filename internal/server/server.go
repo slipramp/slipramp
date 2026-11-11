@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
+	"github.com/slipramp/slipramp/internal/maintenance"
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -180,9 +181,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		persistence.database,
 		persistence.artifactContents,
 		cfg.ArtifactRetentionPeriod,
-		cfg.ArtifactReconcileInterval,
 		cfg.ArtifactOrphanGracePeriod,
-		logger,
 		artifact.WithReconciliationObserver(metrics),
 	)
 	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
@@ -216,7 +215,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		cfg.KargoIntegrations,
 		persistence.database,
 		repository.NewGitCandidateBranchRemote(cfg.RepositoryRefreshCredentials),
-		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
 	)
@@ -228,8 +226,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	notificationRetention := notification.NewRetentionReconciler(
 		persistence.database,
 		cfg.Notifications.RetentionPeriod,
-		notification.DefaultRetentionInterval,
-		logger,
 	)
 	notificationDispatcher := notification.NewDispatcher(
 		cfg.Notifications,
@@ -238,14 +234,34 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		logger,
 		notification.WithDeliveryObserver(metrics),
 	)
+	maintenanceJobs := []maintenance.Job{
+		{
+			Name:       "artifact_retention",
+			Interval:   cfg.ArtifactReconcileInterval,
+			Timeout:    maintenance.DefaultJobTimeout,
+			RunOnStart: true,
+			Run: func(ctx context.Context) error {
+				_, err := artifactReconciler.Reconcile(ctx)
+				return err
+			},
+		},
+		{
+			Name:       "notification_retention",
+			Interval:   notification.DefaultRetentionInterval,
+			Timeout:    maintenance.DefaultJobTimeout,
+			RunOnStart: true,
+			Run: func(ctx context.Context) error {
+				_, err := notificationRetention.Reconcile(ctx)
+				return err
+			},
+		},
+	}
 	workers := []func(context.Context){
 		repositoryRefresher.Run,
 		commitHistoryIndexer.Run,
 		gitTriggerDispatcher.Run,
 		scheduleTriggerScheduler.Run,
-		artifactReconciler.Run,
 		notificationDispatcher.Run,
-		notificationRetention.Run,
 		metrics.RunSnapshotWorker,
 	}
 	if len(cfg.KargoIntegrations) > 0 {
@@ -260,17 +276,38 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			preparation.DefaultPreparationInterval,
 			logger,
 		)
-		promotionExpirations := promotion.NewExpirationCoordinator(
-			persistence.database,
-			promotion.DefaultExpirationInterval,
-			logger,
-		)
-		workers = append(workers, promotionPreparations.Run, promotionExpirations.Run)
+		promotionExpirations := promotion.NewExpirationReconciler(persistence.database)
+		maintenanceJobs = append(maintenanceJobs, maintenance.Job{
+			Name:       "promotion_expiration",
+			Interval:   promotion.DefaultExpirationInterval,
+			Timeout:    maintenance.DefaultJobTimeout,
+			RunOnStart: true,
+			Run: func(ctx context.Context) error {
+				_, err := promotionExpirations.Expire(ctx)
+				return err
+			},
+		})
+		workers = append(workers, promotionPreparations.Run)
 	}
 	if cfg.KargoIntegrations.CandidateBranchCleanupEnabled() {
-		workers = append(workers, promotionCandidateBranches.Run)
+		maintenanceJobs = append(maintenanceJobs, maintenance.Job{
+			Name:       "promotion_candidate_branch_cleanup",
+			Interval:   cfg.RepositoryRefreshInterval,
+			Timeout:    maintenance.DefaultJobTimeout,
+			RunOnStart: true,
+			Run: func(ctx context.Context) error {
+				_, err := promotionCandidateBranches.Refresh(ctx)
+				return err
+			},
+		})
 	}
-	workers = append(workers, promotionBranchDrift.Run)
+	maintenanceCoordinator, err := maintenance.NewCoordinator(logger, maintenanceJobs...)
+	if err != nil {
+		closeInitialization()
+
+		return nil, fmt.Errorf("initialize maintenance: %w", err)
+	}
+	workers = append(workers, maintenanceCoordinator.Run, promotionBranchDrift.Run)
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			ServiceVersion:           serviceVersion,
