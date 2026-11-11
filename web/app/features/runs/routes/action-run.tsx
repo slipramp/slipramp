@@ -227,7 +227,6 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
 
       {loaderData.explanation ? (
         <>
-          <ActionContext explanation={loaderData.explanation} />
           <RunForm
             actionDefinition={actionDefinition}
             error={actionData?.error}
@@ -235,6 +234,7 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
             target={target}
             targetURL={targetURL}
           />
+          <ActionContext explanation={loaderData.explanation} />
           <ArtifactSection explanation={loaderData.explanation} />
         </>
       ) : (
@@ -259,18 +259,18 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
   return (
     <ProvenanceVisibilityContext.Provider value={showProvenance}>
       <Stack gap="lg">
-        <Group justify="flex-end">
-          <Switch
-            checked={showProvenance}
-            label="Show provenance"
-            onChange={(event) => setShowProvenance(event.currentTarget.checked)}
-            size="sm"
-          />
-        </Group>
         <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
           <Paper p="lg" withBorder>
             <Stack gap="lg">
-              <Title order={2}>What will run</Title>
+              <Group align="center" justify="space-between" wrap="wrap">
+                <Title order={2}>What will run</Title>
+                <Switch
+                  checked={showProvenance}
+                  label="Show provenance"
+                  onChange={(event) => setShowProvenance(event.currentTarget.checked)}
+                  size="sm"
+                />
+              </Group>
               <Stack gap={4}>
                 <CommandBlock command={explanation.process.command.value} />
                 <SourceLabel value={explanation.process.command} />
@@ -654,8 +654,8 @@ function RunForm({
             <Stack gap={2}>
               <Title order={2}>Parameters</Title>
               <Text c="dimmed" size="sm">
-                Review the effective context above, then provide values for this immutable
-                execution.
+                Provide values for this immutable execution. The resolved execution context is shown
+                below.
               </Text>
             </Stack>
             {parameters.length > 0 ? (
