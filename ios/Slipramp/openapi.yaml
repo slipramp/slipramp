@@ -4128,6 +4128,21 @@ paths:
           description: Select Projects containing at least one comparison in this Freight alignment state.
           schema:
             $ref: '#/components/schemas/PromotionFreightAlignmentStatus'
+        - name: unhealthy
+          in: query
+          description: Select Projects containing at least one current non-ready Stage.
+          schema:
+            type: boolean
+        - name: stale
+          in: query
+          description: Select Projects containing at least one stale Stage observation.
+          schema:
+            type: boolean
+        - name: pendingReview
+          in: query
+          description: Select Projects containing at least one Promotion awaiting review.
+          schema:
+            type: boolean
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -9862,9 +9877,29 @@ components:
       type: object
       additionalProperties: false
       required:
+        - stageCount
+        - unhealthyStageCount
+        - staleStageCount
+        - pendingReviewCount
         - freightDifferenceCount
         - unknownFreightComparisonCount
       properties:
+        stageCount:
+          type: integer
+          minimum: 0
+          description: Stages across all Projects matching the filters before pagination.
+        unhealthyStageCount:
+          type: integer
+          minimum: 0
+          description: Current non-ready Stages across all Projects matching the filters before pagination.
+        staleStageCount:
+          type: integer
+          minimum: 0
+          description: Stale Stages across all Projects matching the filters before pagination.
+        pendingReviewCount:
+          type: integer
+          minimum: 0
+          description: Promotions awaiting review across all Projects matching the filters before pagination.
         freightDifferenceCount:
           type: integer
           minimum: 0
@@ -10031,7 +10066,10 @@ components:
           type: string
           enum:
             - ready
+            - not-configured
+            - not-applicable
             - unavailable
+          description: Whether the capability is ready, intentionally not configured, not applicable to this Stage, or configured but currently unavailable.
         reason:
           type: string
           minLength: 1

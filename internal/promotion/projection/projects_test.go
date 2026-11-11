@@ -113,11 +113,14 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 		candidates[0].Evidence.Readiness != promotion.FreightReadinessReady {
 		t.Errorf("direct Freight candidates = %#v", candidates)
 	}
-	if caps := result.Stages[0].Capabilities; !caps.Review.Ready || !caps.BranchDrift.Ready {
+	if caps := result.Stages[0].Capabilities; caps.Review.Status != StageCapabilityReady ||
+		caps.BranchDrift.Status != StageCapabilityReady {
 		t.Errorf("enriched Stage capabilities = %#v", caps)
 	}
 	capabilities := result.Stages[1].Capabilities
-	if !capabilities.Promotion.Ready || capabilities.Review.Ready || capabilities.BranchDrift.Ready {
+	if capabilities.Promotion.Status != StageCapabilityReady ||
+		capabilities.Review.Status != StageCapabilityNotConfigured ||
+		capabilities.BranchDrift.Status != StageCapabilityNotConfigured {
 		t.Errorf("unannotated Stage capabilities = %#v", result.Stages[1].Capabilities)
 	}
 	if capabilities.Review.Reason == "" || capabilities.BranchDrift.Reason == "" {
@@ -129,22 +132,24 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 		ClusterName: "colo", Repositories: []string{"ops"},
 		Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
 	}, target.RepositoryURL, false)
-	if controlFlowCapabilities.Promotion.Ready ||
+	if controlFlowCapabilities.Promotion.Status != StageCapabilityNotApplicable ||
 		controlFlowCapabilities.Promotion.Reason != controlFlowPromotionReason {
 		t.Errorf("control-flow Stage capabilities = %#v", controlFlowCapabilities)
 	}
-	if controlFlowCapabilities.Review.Ready ||
+	if controlFlowCapabilities.Review.Status != StageCapabilityNotApplicable ||
 		controlFlowCapabilities.Review.Reason != controlFlowPromotionReason {
 		t.Errorf("control-flow Stage review capability = %#v", controlFlowCapabilities.Review)
 	}
-	if !controlFlowCapabilities.BranchDrift.Ready {
+	if controlFlowCapabilities.BranchDrift.Status != StageCapabilityReady {
 		t.Errorf("control-flow Stage branch-drift capability = %#v", controlFlowCapabilities.BranchDrift)
 	}
 	staleCapabilities := stageCapabilities(target, promotion.IntegrationConfig{
 		ClusterName: "colo", Repositories: []string{"ops"},
 		Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
 	}, target.RepositoryURL, true)
-	if staleCapabilities.Promotion.Ready || !staleCapabilities.Review.Ready || !staleCapabilities.BranchDrift.Ready ||
+	if staleCapabilities.Promotion.Status != StageCapabilityUnavailable ||
+		staleCapabilities.Review.Status != StageCapabilityReady ||
+		staleCapabilities.BranchDrift.Status != StageCapabilityReady ||
 		staleCapabilities.Promotion.Reason != staleObservationPromotionReason {
 		t.Errorf("stale Stage capabilities = %#v", staleCapabilities)
 	}
@@ -341,6 +346,7 @@ func TestProjectServiceSummarizesExactOperationalEvidence(t *testing.T) {
 
 	observedAt := time.Date(2026, time.November, 8, 12, 0, 0, 0, time.UTC)
 	stale := projectTestStage("prod", "colo", "kargo-core", "stale", observedAt)
+	stale.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
 	unhealthy := projectTestStage("prod", "colo", "kargo-core", "unhealthy", observedAt.Add(9*time.Minute))
 	unhealthy.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
 	store := &projectionTestStore{
@@ -366,6 +372,26 @@ func TestProjectServiceSummarizesExactOperationalEvidence(t *testing.T) {
 	if summary.StageCount != 2 || summary.StaleStageCount != 1 || summary.UnhealthyStageCount != 1 ||
 		summary.PendingReviewCount != 2 || !summary.LatestObservedAt.Equal(unhealthy.LastObservedAt) {
 		t.Errorf("operational summary = %#v", summary)
+	}
+	if result.Summary.StageCount != 2 || result.Summary.StaleStageCount != 1 ||
+		result.Summary.UnhealthyStageCount != 1 || result.Summary.PendingReviewCount != 2 {
+		t.Errorf("unpaginated operational summary = %#v", result.Summary)
+	}
+
+	for name, filter := range map[string]ProjectListFilter{
+		"unhealthy":      {Unhealthy: true, Limit: promotion.DefaultListLimit},
+		"stale":          {Stale: true, Limit: promotion.DefaultListLimit},
+		"pending review": {PendingReview: true, Limit: promotion.DefaultListLimit},
+	} {
+		t.Run(name, func(t *testing.T) {
+			filtered, filterErr := service.List(t.Context(), filter)
+			if filterErr != nil {
+				t.Fatalf("List() error = %v", filterErr)
+			}
+			if filtered.Total != 1 || len(filtered.Items) != 1 {
+				t.Errorf("filtered Projects = %#v", filtered)
+			}
+		})
 	}
 }
 

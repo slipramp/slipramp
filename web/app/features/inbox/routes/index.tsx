@@ -46,6 +46,7 @@ import { problemDetail } from "~/shared/form-data";
 import { acknowledgementProblemIDs, inboxDestinationHref } from "~/features/inbox/inbox";
 import { pageTitle } from "~/shared/page-title";
 import { asReadinessResponse } from "~/features/inbox/readiness";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 
 import type { Route } from "./+types/index";
 
@@ -59,7 +60,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
   const [inboxResult, projectResult, branchDriftResult, readinessResult] = await Promise.all([
     getInbox({ client }),
-    listPromotionProjects({ client, query: { limit: 200 } }),
+    listPromotionProjects({ client, query: { limit: 1 } }),
     listPromotionBranchDrift({ client, query: { limit: 1, status: "drifted" } }),
     getReadiness({ client }),
   ]);
@@ -73,16 +74,13 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       ? problemDetail(projectResult.error, "Kargo Project status could not be loaded.")
       : undefined,
     projectSummary: projectResult.data
-      ? projectResult.data.items.reduce(
-          (summary, project) => ({
-            pendingReviews: summary.pendingReviews + project.pendingReviewCount,
-            freightDifferences: projectResult.data.summary.freightDifferenceCount,
-            stages: summary.stages + project.stageCount,
-            stale: summary.stale + project.staleStageCount,
-            unhealthy: summary.unhealthy + project.unhealthyStageCount,
-          }),
-          { freightDifferences: 0, pendingReviews: 0, stages: 0, stale: 0, unhealthy: 0 },
-        )
+      ? {
+          freightDifferences: projectResult.data.summary.freightDifferenceCount,
+          pendingReviews: projectResult.data.summary.pendingReviewCount,
+          stages: projectResult.data.summary.stageCount,
+          stale: projectResult.data.summary.staleStageCount,
+          unhealthy: projectResult.data.summary.unhealthyStageCount,
+        }
       : undefined,
     projectTotal: projectResult.data?.total,
     branchDriftError: branchDriftResult.error
@@ -115,6 +113,8 @@ export async function action({
 }
 
 export default function Inbox({ loaderData }: Route.ComponentProps) {
+  useActivityRefresh(true, 30_000);
+
   const inbox = loaderData.inbox;
   const attentionCount = inbox ? inbox.decisions.length + inbox.problems.length : undefined;
 
@@ -435,21 +435,21 @@ function KargoStatus({
         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
           <KargoStatusCount
             color="orange"
-            href="/promotion-projects"
+            href="/promotion-projects?unhealthy=true"
             icon={IconAlertTriangle}
             label="Unhealthy"
             value={summary?.unhealthy}
           />
           <KargoStatusCount
             color="orange"
-            href="/promotion-projects"
+            href="/promotion-projects?stale=true"
             icon={IconClock}
             label="Stale"
             value={summary?.stale}
           />
           <KargoStatusCount
             color="yellow"
-            href="/promotion-projects"
+            href="/promotion-projects?pendingReview=true"
             icon={IconChecklist}
             label="Reviews"
             value={summary?.pendingReviews}

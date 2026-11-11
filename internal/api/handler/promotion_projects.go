@@ -34,6 +34,9 @@ func (h *Handler) ListPromotionProjects(
 	if request.Params.FreightAlignment != nil {
 		filter.FreightAlignment = projection.FreightAlignmentStatus(*request.Params.FreightAlignment)
 	}
+	filter.Unhealthy = request.Params.Unhealthy != nil && *request.Params.Unhealthy
+	filter.Stale = request.Params.Stale != nil && *request.Params.Stale
+	filter.PendingReview = request.Params.PendingReview != nil && *request.Params.PendingReview
 
 	result, err := h.promotionProjects.List(ctx, filter)
 	if errors.Is(err, promotion.ErrInvalid) {
@@ -70,6 +73,10 @@ func (h *Handler) ListPromotionProjects(
 	return api.ListPromotionProjects200JSONResponse{
 		Items: items,
 		Summary: api.PromotionProjectListSummary{
+			StageCount:                    result.Summary.StageCount,
+			UnhealthyStageCount:           result.Summary.UnhealthyStageCount,
+			StaleStageCount:               result.Summary.StaleStageCount,
+			PendingReviewCount:            result.Summary.PendingReviewCount,
 			FreightDifferenceCount:        result.Summary.FreightDifferenceCount,
 			UnknownFreightComparisonCount: result.Summary.UnknownFreightComparisonCount,
 		},
@@ -194,12 +201,10 @@ func promotionStageCapabilitiesResponse(value projection.StageCapabilities) api.
 }
 
 func promotionStageCapabilityResponse(value projection.StageCapability) api.PromotionStageCapability {
-	status := api.PromotionStageCapabilityStatusUnavailable
-	if value.Ready {
-		status = api.PromotionStageCapabilityStatusReady
+	return api.PromotionStageCapability{
+		Status: api.PromotionStageCapabilityStatus(value.Status),
+		Reason: optionalString(value.Reason),
 	}
-
-	return api.PromotionStageCapability{Status: status, Reason: optionalString(value.Reason)}
 }
 
 func promotionStagePromotionResponse(value *promotion.StagePromotionReference) *api.PromotionStagePromotionReference {

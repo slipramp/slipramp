@@ -234,7 +234,7 @@ export function PromotionCreateButton({
 }: PromotionCreateProps & { unavailableLabel?: string }) {
   const [opened, setOpened] = useState(false);
   const capability = props.stage.capabilities.promotion;
-  if (capability.status === "unavailable" || (props.freight.length === 0 && !opened)) {
+  if (capability.status !== "ready" || (props.freight.length === 0 && !opened)) {
     return (
       <Tooltip label={capability.reason ?? unavailableLabel}>
         <span>

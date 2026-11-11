@@ -66,6 +66,7 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 				LatestObservedAt:              now,
 			}},
 			Summary: projection.ProjectListSummary{
+				StageCount: 4, UnhealthyStageCount: 1, StaleStageCount: 2, PendingReviewCount: 3,
 				FreightDifferenceCount: 4, UnknownFreightComparisonCount: 5,
 			},
 			Total:  1,
@@ -93,7 +94,7 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotion-projects?integration=prod&cluster=colo&project=kargo-core&"+
-			"freightAlignment=different&limit=10&offset=2",
+			"freightAlignment=different&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -106,7 +107,8 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 	}
 	if projects.filter.Integration != "prod" || projects.filter.Cluster != "colo" ||
 		projects.filter.Project != "kargo-core" || projects.filter.Limit != 10 ||
-		projects.filter.Offset != 2 || projects.filter.FreightAlignment != projection.FreightAlignmentDifferent {
+		projects.filter.Offset != 2 || projects.filter.FreightAlignment != projection.FreightAlignmentDifferent ||
+		!projects.filter.Unhealthy || !projects.filter.Stale || !projects.filter.PendingReview {
 		t.Errorf("project filter = %#v", projects.filter)
 	}
 	for _, expected := range []string{
@@ -119,7 +121,7 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 		`"pendingReviewCount":3`,
 		`"freightDifferenceCount":4`,
 		`"unknownFreightComparisonCount":5`,
-		`"summary":{"freightDifferenceCount":4,"unknownFreightComparisonCount":5}`,
+		`"summary":{"freightDifferenceCount":4,"pendingReviewCount":3,"stageCount":4,"staleStageCount":2,"unhealthyStageCount":1,"unknownFreightComparisonCount":5}`,
 		`"latestObservedAt":"2026-10-22T12:00:00Z"`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core"`,
 	} {
@@ -182,10 +184,15 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 				}},
 				Capabilities: projection.StageCapabilities{
 					Promotion: projection.StageCapability{
+						Status: projection.StageCapabilityNotApplicable,
 						Reason: "Control-flow Stages do not materialize Promotions.",
 					},
-					Review: projection.StageCapability{Reason: "Slipramp review context is unavailable."},
+					Review: projection.StageCapability{
+						Status: projection.StageCapabilityUnavailable,
+						Reason: "Slipramp review context is unavailable.",
+					},
 					BranchDrift: projection.StageCapability{
+						Status: projection.StageCapabilityUnavailable,
 						Reason: "Branch drift mapping is unavailable.",
 					},
 				},
@@ -235,7 +242,7 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 		"\"status\":\"different\"",
 		"\"sourceCurrentFreight\":{\"artifacts\":[{\"kind\":\"image\",\"version\":\"2.0.0\"}],\"name\":\"freight-2\",\"origin\":\"Warehouse/app\"}",
 		"\"conditions\":[{\"status\":\"False\",\"type\":\"Ready\"}]",
-		"\"promotion\":{\"reason\":\"Control-flow Stages do not materialize Promotions.\",\"status\":\"unavailable\"}",
+		"\"promotion\":{\"reason\":\"Control-flow Stages do not materialize Promotions.\",\"status\":\"not-applicable\"}",
 		"\"kargoUrl\":\"https://kargo.example.com/project/kargo-core/stage/prod\"",
 	} {
 		if !strings.Contains(response.Body.String(), expected) {

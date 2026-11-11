@@ -166,7 +166,8 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	if result.Total != 2 || len(result.Items) != 1 || len(result.Items[0].Stages) != 2 {
 		t.Fatalf("List() = %#v", result)
 	}
-	if result.Items[0].Stages[0].Capabilities.Promotion.Ready || !result.Items[0].Stages[1].Capabilities.Promotion.Ready {
+	if result.Items[0].Stages[0].Capabilities.Promotion.Status != StageCapabilityNotApplicable ||
+		result.Items[0].Stages[1].Capabilities.Promotion.Status != StageCapabilityReady {
 		t.Errorf("Stage promotion capabilities = %#v", result.Items[0].Stages)
 	}
 	if result.Items[0].Stages[0].Policy.EffectiveMode != promotion.PolicyModeReviewRequired ||

@@ -1056,13 +1056,19 @@ func (e PromotionSource) Valid() bool {
 
 // Defines values for PromotionStageCapabilityStatus.
 const (
-	PromotionStageCapabilityStatusReady       PromotionStageCapabilityStatus = "ready"
-	PromotionStageCapabilityStatusUnavailable PromotionStageCapabilityStatus = "unavailable"
+	PromotionStageCapabilityStatusNotApplicable PromotionStageCapabilityStatus = "not-applicable"
+	PromotionStageCapabilityStatusNotConfigured PromotionStageCapabilityStatus = "not-configured"
+	PromotionStageCapabilityStatusReady         PromotionStageCapabilityStatus = "ready"
+	PromotionStageCapabilityStatusUnavailable   PromotionStageCapabilityStatus = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the PromotionStageCapabilityStatus enum.
 func (e PromotionStageCapabilityStatus) Valid() bool {
 	switch e {
+	case PromotionStageCapabilityStatusNotApplicable:
+		return true
+	case PromotionStageCapabilityStatusNotConfigured:
+		return true
 	case PromotionStageCapabilityStatusReady:
 		return true
 	case PromotionStageCapabilityStatusUnavailable:
@@ -3515,6 +3521,18 @@ type PromotionProjectListSummary struct {
 	// FreightDifferenceCount Freight differences across all Projects matching the filters before pagination.
 	FreightDifferenceCount int `json:"freightDifferenceCount"`
 
+	// PendingReviewCount Promotions awaiting review across all Projects matching the filters before pagination.
+	PendingReviewCount int `json:"pendingReviewCount"`
+
+	// StageCount Stages across all Projects matching the filters before pagination.
+	StageCount int `json:"stageCount"`
+
+	// StaleStageCount Stale Stages across all Projects matching the filters before pagination.
+	StaleStageCount int `json:"staleStageCount"`
+
+	// UnhealthyStageCount Current non-ready Stages across all Projects matching the filters before pagination.
+	UnhealthyStageCount int `json:"unhealthyStageCount"`
+
 	// UnknownFreightComparisonCount Unknown Freight comparisons across all Projects matching the filters before pagination.
 	UnknownFreightComparisonCount int `json:"unknownFreightComparisonCount"`
 }
@@ -3622,11 +3640,13 @@ type PromotionStageCapabilities struct {
 
 // PromotionStageCapability defines model for PromotionStageCapability.
 type PromotionStageCapability struct {
-	Reason *string                        `json:"reason,omitempty"`
+	Reason *string `json:"reason,omitempty"`
+
+	// Status Whether the capability is ready, intentionally not configured, not applicable to this Stage, or configured but currently unavailable.
 	Status PromotionStageCapabilityStatus `json:"status"`
 }
 
-// PromotionStageCapabilityStatus defines model for PromotionStageCapability.Status.
+// PromotionStageCapabilityStatus Whether the capability is ready, intentionally not configured, not applicable to this Stage, or configured but currently unavailable.
 type PromotionStageCapabilityStatus string
 
 // PromotionStageCondition defines model for PromotionStageCondition.
@@ -4787,8 +4807,17 @@ type ListPromotionProjectsParams struct {
 
 	// FreightAlignment Select Projects containing at least one comparison in this Freight alignment state.
 	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
-	Limit            *Limit                           `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset           *Offset                          `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Unhealthy Select Projects containing at least one current non-ready Stage.
+	Unhealthy *bool `form:"unhealthy,omitempty" json:"unhealthy,omitempty"`
+
+	// Stale Select Projects containing at least one stale Stage observation.
+	Stale *bool `form:"stale,omitempty" json:"stale,omitempty"`
+
+	// PendingReview Select Projects containing at least one Promotion awaiting review.
+	PendingReview *bool   `form:"pendingReview,omitempty" json:"pendingReview,omitempty"`
+	Limit         *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset        *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionStagesParams defines parameters for ListPromotionStages.
@@ -9694,6 +9723,42 @@ func NewListPromotionProjectsRequest(server string, params *ListPromotionProject
 		if params.FreightAlignment != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "freightAlignment", *params.FreightAlignment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Unhealthy != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "unhealthy", *params.Unhealthy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Stale != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "stale", *params.Stale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PendingReview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pendingReview", *params.PendingReview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -26861,6 +26926,45 @@ func (siw *ServerInterfaceWrapper) ListPromotionProjects(w http.ResponseWriter, 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "freightAlignment"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "freightAlignment", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "unhealthy" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "unhealthy", r.URL.Query(), &params.Unhealthy, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unhealthy"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unhealthy", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "stale" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stale", r.URL.Query(), &params.Stale, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stale"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stale", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pendingReview" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pendingReview", r.URL.Query(), &params.PendingReview, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pendingReview"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pendingReview", Err: err})
 		}
 		return
 	}

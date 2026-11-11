@@ -178,7 +178,9 @@ lists and the operational Inbox preserve those separate review, delivery, and
 execution states while deriving a consistent operator-facing overall state.
 Configured integrations expose complete-snapshot freshness on the owning
 Cluster; product navigation omits the Kargo-specific section when no integration
-is configured. A configured `review-required` policy never falls back to
+is configured. Capability state distinguishes ready, not configured, not
+applicable, and configured but unavailable so native-only operation remains
+neutral while regressions remain visible. A configured `review-required` policy never falls back to
 automatic when enrichment is unavailable. See
 [Kargo Promotions](./design/kargo.md).
 

@@ -21,6 +21,7 @@ import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { submitPromotionCreation } from "~/features/promotions/promotion-creation.server";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 
 import type { Route } from "./+types/promotion-branch-drift";
 
@@ -39,7 +40,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const status = optionalStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [result, principal, repositoriesResult] = await Promise.all([
+  const scopeQuery = { application, integration, limit: 1, project, repository };
+  const [result, scopeResult, principal, repositoriesResult] = await Promise.all([
     listPromotionBranchDrift({
       client,
       query: {
@@ -52,6 +54,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         status,
       },
     }),
+    listPromotionBranchDrift({ client, query: scopeQuery }),
     getProductPrincipal(context),
     listRepositories({ client, query: { limit: 200 } }),
   ]);
@@ -68,6 +71,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return {
     available: result.data !== undefined,
     application,
+    driftCapableTotal: scopeResult.data?.total,
     error: result.error?.detail ?? result.error?.title,
     integration,
     page: requestedPage,
@@ -88,6 +92,8 @@ export async function action({ context, request }: Route.ActionArgs) {
 }
 
 export default function PromotionBranchDrift({ loaderData }: Route.ComponentProps) {
+  useActivityRefresh(true, 30_000);
+
   const canWrite = canWritePromotions(loaderData.principal);
 
   return (
@@ -112,9 +118,11 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
       ) : loaderData.repositories.length === 0 ? (
         <Paper p="md" withBorder>
           <Text c="dimmed">
-            {loaderData.status === "drifted"
-              ? "All Kargo Stage branches are in sync."
-              : "No active Kargo Stages match these filters."}
+            {loaderData.driftCapableTotal === 0
+              ? "No branch-drift-capable Kargo Stages match these filters."
+              : loaderData.status === "drifted"
+                ? "No Stages are currently reported behind."
+                : "No branch-drift-capable Kargo Stages match the selected status."}
           </Text>
         </Paper>
       ) : (

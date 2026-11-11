@@ -65,13 +65,18 @@ acknowledgement. Missing enrichment disables only the Slipramp capability that
 needs it; the Stage remains visible in its Kargo Project.
 
 Each Stage exposes independent `promotion`, `review`, and `branchDrift`
-capabilities. Native promotion is ready for a freshly observed non-control-flow
-Stage with addressable native identity; exact eligible Freight is selected
-under Kargo's observed availability, verification, and soak rules. Review
-additionally requires the complete Stage enrichment, an active Repository whose
-URL matches the observed URL, and the integration's review configuration.
-Branch drift retains its own Git mapping and acknowledgement requirements.
-Review or branch-drift limitations never disable native promotion.
+capabilities. Each capability is `ready`, `not-configured`,
+`not-applicable`, or `unavailable`. Missing optional enrichment is
+`not-configured` and is a neutral native-only state. `unavailable` is
+reserved for a configured capability whose required context no longer matches;
+control-flow Stages use `not-applicable` for native promotion and review.
+Native promotion is ready for a freshly observed non-control-flow Stage with
+addressable native identity; exact eligible Freight is selected under Kargo's
+observed availability, verification, and soak rules. Review additionally
+requires the complete Stage enrichment, an active Repository whose URL matches
+the observed URL, and the integration's review configuration. Branch drift
+retains its own Git mapping and acknowledgement requirements. Review or
+branch-drift limitations never disable native promotion.
 
 Stage policy defaults to `automatic`. `review-required` may have an expiry and
 may be configured only while review is ready. Promotion acceptance snapshots
@@ -267,7 +272,10 @@ pipelines, infer environment adjacency, or merge Projects across integrations or
 Clusters.
 Project list summaries derive Stage count, unhealthy and stale Stage counts,
 pending reviews, Freight comparison counts, and latest observation time from
-the same Stage observations.
+the same Stage observations. Stale Stages are not also counted as unhealthy.
+Server-side Project filters select Projects with current non-ready Stages,
+stale observations, pending reviews, or a requested Freight alignment state
+before pagination. Unpaginated summary totals drive operational Inbox counts.
 
 Freight alignment is a read-time projection over active durable Stage
 observations. Slipramp creates one comparison for each exact
@@ -305,6 +313,12 @@ cached read-only Git evidence. Project and branch-drift responses report the
 same Stage capabilities. Both views evaluate review and branch drift against
 the current Repository allowlist and clone URL. A changed URL leaves drift
 unknown until the Stage mapping matches again.
+
+Visible Promotion lists, Project inventory, Project detail, branch-drift,
+integration-health, and Inbox views revalidate on a slower operational cadence.
+Promotion lists use a faster cadence while visible work is active. Project
+view, attention and Freight-alignment filters, and selected comparison Stages
+remain in the URL so refreshes and cross-page links preserve operator scope.
 
 Branch drift compares watched source paths and target movement independently.
 It preserves the last successful render acknowledgement and reports stale,

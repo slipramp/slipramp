@@ -2449,6 +2449,22 @@ export type PromotionFreightAlignmentStatus = "aligned" | "different" | "unknown
 
 export type PromotionProjectListSummary = {
   /**
+   * Stages across all Projects matching the filters before pagination.
+   */
+  stageCount: number;
+  /**
+   * Current non-ready Stages across all Projects matching the filters before pagination.
+   */
+  unhealthyStageCount: number;
+  /**
+   * Stale Stages across all Projects matching the filters before pagination.
+   */
+  staleStageCount: number;
+  /**
+   * Promotions awaiting review across all Projects matching the filters before pagination.
+   */
+  pendingReviewCount: number;
+  /**
    * Freight differences across all Projects matching the filters before pagination.
    */
   freightDifferenceCount: number;
@@ -2511,7 +2527,10 @@ export type PromotionFreightAlignment = {
 };
 
 export type PromotionStageCapability = {
-  status: "ready" | "unavailable";
+  /**
+   * Whether the capability is ready, intentionally not configured, not applicable to this Stage, or configured but currently unavailable.
+   */
+  status: "ready" | "not-configured" | "not-applicable" | "unavailable";
   reason?: string;
 };
 
@@ -5946,6 +5965,18 @@ export type ListPromotionProjectsData = {
      * Select Projects containing at least one comparison in this Freight alignment state.
      */
     freightAlignment?: PromotionFreightAlignmentStatus;
+    /**
+     * Select Projects containing at least one current non-ready Stage.
+     */
+    unhealthy?: boolean;
+    /**
+     * Select Projects containing at least one stale Stage observation.
+     */
+    stale?: boolean;
+    /**
+     * Select Projects containing at least one Promotion awaiting review.
+     */
+    pendingReview?: boolean;
     limit?: number;
     offset?: number;
   };

@@ -26,10 +26,11 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   getPromotionProject,
   updatePromotionStagePolicy,
-  type PromotionPolicyMode,
   type PromotionFreightAlignment,
+  type PromotionFreightAlignmentStatus,
   type PromotionFreightCandidate,
   type PromotionFreightItem,
+  type PromotionPolicyMode,
   type PromotionProjectDetail,
   type PromotionProjectStage,
 } from "~/api/generated";
@@ -51,6 +52,11 @@ import {
   otherFreightCandidates,
 } from "~/features/promotions/promotion-freight";
 import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
+import {
+  promotionProjectAttention,
+  type PromotionProjectAttention,
+} from "~/features/promotions/promotion-project-filters";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import {
   topologyPipelines,
   type PromotionTopologyPipeline,
@@ -135,15 +141,21 @@ function ProjectDetail({
   canWrite: boolean;
   project: PromotionProjectDetail;
 }>) {
+  useActivityRefresh(true, 30_000);
+
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeView, setActiveView] = useState<ProjectView>("pipelines");
-  const [attentionOnly, setAttentionOnly] = useState(false);
+  const activeView = projectView(searchParams.get("view"));
+  const attention = promotionProjectAttention(searchParams.get("attention"));
+  const alignment = projectAlignment(searchParams.get("alignment"));
   const [query, setQuery] = useState("");
   const policyStage = project.stages.find(
     (stage) =>
       stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
   );
-  const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
+  const validStageIds = new Set(project.stages.map((stage) => stage.id));
+  const selectedStageIds = [...new Set(searchParams.getAll("stage"))].filter((id) =>
+    validStageIds.has(id),
+  );
   const selectedStages = project.stages.filter((stage) => selectedStageIds.includes(stage.id));
   const pipelines = topologyPipelines(project.stages)
     .map((pipeline, index) => ({
@@ -155,10 +167,14 @@ function ProjectDetail({
   const visiblePipelines = pipelines.filter(
     (pipeline) =>
       pipeline.stages.some((stage) => stageMatchesQuery(stage, query)) &&
-      (!attentionOnly || pipeline.stages.some(stageNeedsAttention)),
+      (!attention || pipeline.stages.some((stage) => stageMatchesAttention(stage, attention))) &&
+      (!alignment || pipeline.stages.some((stage) => stageMatchesAlignment(stage, alignment))),
   );
   const visibleStages = project.stages.filter(
-    (stage) => stageMatchesQuery(stage, query) && (!attentionOnly || stageNeedsAttention(stage)),
+    (stage) =>
+      stageMatchesQuery(stage, query) &&
+      stageMatchesAttention(stage, attention) &&
+      stageMatchesAlignment(stage, alignment),
   );
 
   function closePolicy() {
@@ -173,11 +189,42 @@ function ProjectDetail({
     setSearchParams(next, { preventScrollReset: true });
   }
 
-  function compareFreight(alignment: PromotionFreightAlignment) {
-    const ids = freightComparisonStageIds(alignment);
+  function compareFreight(freightAlignment: PromotionFreightAlignment) {
+    const ids = freightComparisonStageIds(freightAlignment);
     if (!ids) return;
-    setSelectedStageIds(ids);
-    setActiveView("compare");
+    const next = new URLSearchParams(searchParams);
+    next.set("view", "compare");
+    next.delete("stage");
+    for (const id of ids) next.append("stage", id);
+    setSearchParams(next, { preventScrollReset: true });
+  }
+
+  function changeView(view: ProjectView) {
+    const next = new URLSearchParams(searchParams);
+    if (view === "pipelines") next.delete("view");
+    else next.set("view", view);
+    setSearchParams(next, { preventScrollReset: true });
+  }
+
+  function changeAttention(nextAttention?: PromotionProjectAttention) {
+    const next = new URLSearchParams(searchParams);
+    if (nextAttention) next.set("attention", nextAttention);
+    else next.delete("attention");
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
+  function changeAlignment(nextAlignment?: PromotionFreightAlignmentStatus) {
+    const next = new URLSearchParams(searchParams);
+    if (nextAlignment) next.set("alignment", nextAlignment);
+    else next.delete("alignment");
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
+  function changeSelectedStageIds(ids: string[]) {
+    const next = new URLSearchParams(searchParams);
+    next.delete("stage");
+    for (const id of ids) next.append("stage", id);
+    setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
   return (
@@ -210,7 +257,7 @@ function ProjectDetail({
 
       <Tabs
         onChange={(value) => {
-          if (value) setActiveView(value as ProjectView);
+          if (value) changeView(value as ProjectView);
         }}
         value={activeView}
         variant="outline"
@@ -245,10 +292,12 @@ function ProjectDetail({
         <Tabs.Panel pt="lg" value="pipelines">
           <Stack gap="md">
             <ProjectFilter
-              attentionOnly={attentionOnly}
+              alignment={alignment}
+              attention={attention}
               count={visiblePipelines.length}
               noun="pipeline"
-              onAttentionOnlyChange={setAttentionOnly}
+              onAlignmentChange={changeAlignment}
+              onAttentionChange={changeAttention}
               onChange={setQuery}
               query={query}
             />
@@ -265,10 +314,12 @@ function ProjectDetail({
         <Tabs.Panel pt="lg" value="stages">
           <Stack gap="md">
             <ProjectFilter
-              attentionOnly={attentionOnly}
+              alignment={alignment}
+              attention={attention}
               count={visibleStages.length}
               noun="Stage"
-              onAttentionOnlyChange={setAttentionOnly}
+              onAlignmentChange={changeAlignment}
+              onAttentionChange={changeAttention}
               onChange={setQuery}
               query={query}
             />
@@ -285,7 +336,7 @@ function ProjectDetail({
           <FreightComparison
             selectedStageIds={selectedStageIds}
             selectedStages={selectedStages}
-            setSelectedStageIds={setSelectedStageIds}
+            setSelectedStageIds={changeSelectedStageIds}
             stages={project.stages}
           />
         </Tabs.Panel>
@@ -307,6 +358,14 @@ function ProjectDetail({
 }
 
 type ProjectView = "pipelines" | "stages" | "compare";
+
+function projectView(value: string | null): ProjectView {
+  return value === "stages" || value === "compare" ? value : "pipelines";
+}
+
+function projectAlignment(value: string | null): PromotionFreightAlignmentStatus | undefined {
+  return value === "aligned" || value === "different" || value === "unknown" ? value : undefined;
+}
 
 type ProjectPipeline = PromotionTopologyPipeline & {
   key: string;
@@ -357,17 +416,21 @@ function ProjectSummary({
 }
 
 function ProjectFilter({
-  attentionOnly,
+  alignment,
+  attention,
   count,
   noun,
-  onAttentionOnlyChange,
+  onAlignmentChange,
+  onAttentionChange,
   onChange,
   query,
 }: Readonly<{
-  attentionOnly: boolean;
+  alignment?: PromotionFreightAlignmentStatus;
+  attention?: PromotionProjectAttention;
   count: number;
   noun: string;
-  onAttentionOnlyChange: (value: boolean) => void;
+  onAlignmentChange: (value?: PromotionFreightAlignmentStatus) => void;
+  onAttentionChange: (value?: PromotionProjectAttention) => void;
   onChange: (value: string) => void;
   query: string;
 }>) {
@@ -381,10 +444,30 @@ function ProjectFilter({
         style={{ flex: "1 1 24rem" }}
         value={query}
       />
-      <Checkbox
-        checked={attentionOnly}
-        label="Attention only"
-        onChange={(event) => onAttentionOnlyChange(event.currentTarget.checked)}
+      <NativeSelect
+        aria-label="Filter by attention state"
+        data={[
+          { label: "All Stages", value: "" },
+          { label: "Any attention", value: "all" },
+          { label: "Non-ready", value: "unhealthy" },
+          { label: "Stale", value: "stale" },
+          { label: "Pending review", value: "pending-review" },
+        ]}
+        onChange={(event) =>
+          onAttentionChange(promotionProjectAttention(event.currentTarget.value))
+        }
+        value={attention ?? ""}
+      />
+      <NativeSelect
+        aria-label="Filter by Freight alignment"
+        data={[
+          { label: "Any Freight alignment", value: "" },
+          { label: "Different Freight", value: "different" },
+          { label: "Unknown comparison", value: "unknown" },
+          { label: "Aligned Freight", value: "aligned" },
+        ]}
+        onChange={(event) => onAlignmentChange(projectAlignment(event.currentTarget.value))}
+        value={alignment ?? ""}
       />
       <Text c="dimmed" size="sm">
         {count} {noun}
@@ -709,12 +792,42 @@ function stageMatchesQuery(stage: PromotionProjectStage, query: string) {
   ].some((value) => value?.toLocaleLowerCase().includes(normalized));
 }
 
+function stageMatchesAlignment(
+  stage: PromotionProjectStage,
+  alignment?: PromotionFreightAlignmentStatus,
+) {
+  return (
+    alignment === undefined ||
+    stage.freightAlignments.some((candidate) => candidate.status === alignment)
+  );
+}
+
 function stageIsUnhealthy(stage: PromotionProjectStage) {
   if (stage.observationStale) return false;
-  if (stage.healthStatus) return stage.healthStatus !== "Healthy";
+  if (stage.healthStatus) {
+    return stage.healthStatus !== "Healthy" && stage.healthStatus !== "NotApplicable";
+  }
   return stage.conditions.some(
     (condition) => condition.type === "Ready" && condition.status !== "True",
   );
+}
+
+function stageMatchesAttention(
+  stage: PromotionProjectStage,
+  attention?: PromotionProjectAttention,
+) {
+  switch (attention) {
+    case undefined:
+      return true;
+    case "all":
+      return stageNeedsAttention(stage);
+    case "unhealthy":
+      return stageIsUnhealthy(stage);
+    case "stale":
+      return stage.observationStale;
+    case "pending-review":
+      return stage.pendingPromotionCount > 0;
+  }
 }
 
 function stageNeedsAttention(stage: PromotionProjectStage) {
@@ -722,8 +835,29 @@ function stageNeedsAttention(stage: PromotionProjectStage) {
     stage.observationStale ||
     stageIsUnhealthy(stage) ||
     stage.pendingPromotionCount > 0 ||
-    stage.freightAlignments.some((alignment) => alignment.status === "different")
+    stage.freightAlignments.some((alignment) => alignment.status === "different") ||
+    stageCapabilityWarnings(stage).length > 0
   );
+}
+
+function stageCapabilityWarnings(stage: PromotionProjectStage) {
+  const warnings: string[] = [];
+  const reviewBlocked =
+    stage.policy.effectiveMode === "review-required" &&
+    stage.capabilities.review.status !== "ready";
+  if (stage.capabilities.review.status === "unavailable" || reviewBlocked) {
+    warnings.push(
+      stage.capabilities.review.reason ??
+        "The configured review policy is blocked until Slipramp review is ready.",
+    );
+  }
+  if (stage.capabilities.branchDrift.status === "unavailable") {
+    warnings.push(
+      stage.capabilities.branchDrift.reason ??
+        "Configured branch-drift enrichment is currently unavailable.",
+    );
+  }
+  return [...new Set(warnings)];
 }
 
 function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
@@ -734,11 +868,13 @@ function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>)
     ? { color: "gray", label: "Observation stale" }
     : stage.healthStatus === "Healthy"
       ? { color: "green", label: "Healthy" }
-      : stage.healthStatus
-        ? { color: "red", label: stage.healthStatus }
-        : nonReady
-          ? { color: "red", label: "Not ready" }
-          : { color: "gray", label: "Health unknown" };
+      : stage.healthStatus === "NotApplicable"
+        ? { color: "gray", label: "Health not applicable" }
+        : stage.healthStatus
+          ? { color: "red", label: stage.healthStatus }
+          : nonReady
+            ? { color: "red", label: "Not ready" }
+            : { color: "gray", label: "Health unknown" };
 
   if (stage.argoCdUrl) {
     return (
@@ -815,6 +951,7 @@ function StageCard({
   stage: PromotionProjectStage;
 }>) {
   const policyPresentation = promotionStagePolicyPresentation(stage);
+  const capabilityWarnings = stageCapabilityWarnings(stage);
 
   return (
     <Paper p="md" withBorder>
@@ -869,16 +1006,14 @@ function StageCard({
           </Group>
         </Group>
 
-        {stage.capabilities.review.status === "unavailable" ||
-        stage.capabilities.branchDrift.status === "unavailable" ? (
-          <Alert color="orange" title="Limited Slipramp capabilities">
+        {capabilityWarnings.length > 0 ? (
+          <Alert color="orange" title="Slipramp enrichment needs attention">
             <Stack gap={4}>
-              {stage.capabilities.review.reason ? (
-                <Text size="sm">{stage.capabilities.review.reason}</Text>
-              ) : null}
-              {stage.capabilities.branchDrift.reason ? (
-                <Text size="sm">{stage.capabilities.branchDrift.reason}</Text>
-              ) : null}
+              {capabilityWarnings.map((warning) => (
+                <Text key={warning} size="sm">
+                  {warning}
+                </Text>
+              ))}
             </Stack>
           </Alert>
         ) : null}

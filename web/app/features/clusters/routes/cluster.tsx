@@ -30,6 +30,7 @@ import { PageHeader, SectionHeader } from "~/shared/page";
 import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { formatDuration } from "~/shared/display";
 import { pageTitle } from "~/shared/page-title";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 
 import type { Route } from "./+types/cluster";
 
@@ -74,6 +75,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 }
 
 export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
+  useActivityRefresh((loaderData.cluster?.kargoIntegrations.length ?? 0) > 0, 30_000);
+
   if (!loaderData.cluster) {
     return (
       <Stack gap="md">

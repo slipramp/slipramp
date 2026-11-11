@@ -88,9 +88,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function Promotions({ loaderData }: Route.ComponentProps) {
-  useActivityRefresh(
-    loaderData.promotions.some((promotion) => promotionActivity(promotion) !== undefined),
+  const hasActivePromotion = loaderData.promotions.some(
+    (promotion) => promotionActivity(promotion) !== undefined,
   );
+  useActivityRefresh(true, hasActivePromotion ? 3_000 : 30_000);
 
   return (
     <Stack gap="lg">

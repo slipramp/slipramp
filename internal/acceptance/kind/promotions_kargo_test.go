@@ -31,7 +31,7 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 func (s *suite) testNativeKargoPromotion(t *testing.T) {
 	stage, freight := s.waitForKargoFreight(t, "native")
 	if stage.Enrichment != nil || stage.Capabilities.Promotion.Status != api.PromotionStageCapabilityStatusReady ||
-		stage.Capabilities.Review.Status != api.PromotionStageCapabilityStatusUnavailable {
+		stage.Capabilities.Review.Status != api.PromotionStageCapabilityStatusNotConfigured {
 		t.Fatalf("native Stage = %#v", stage)
 	}
 	created := s.createKargoPromotion(t, stage.ID, freight)

@@ -62,7 +62,11 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 						EffectiveMode:  promotion.PolicyModeReviewRequired,
 						ExpiresAt:      &policyExpiresAt,
 					},
-					Capabilities:                   projection.StageCapabilities{Review: projection.StageCapability{Ready: true}},
+					Capabilities: projection.StageCapabilities{
+						Promotion:   projection.StageCapability{Status: projection.StageCapabilityReady},
+						Review:      projection.StageCapability{Status: projection.StageCapabilityReady},
+						BranchDrift: projection.StageCapability{Status: projection.StageCapabilityReady},
+					},
 					Status:                         projection.BranchDriftStatusCurrent,
 					AcknowledgedSourceRevision:     strings.Repeat("a", 40),
 					AcknowledgedRenderBaseRevision: strings.Repeat("b", 40),

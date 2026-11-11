@@ -9,6 +9,11 @@ import {
 } from "~/api/generated";
 import { RelativeTime } from "~/shared/display-values";
 import { KargoLink } from "~/features/promotions/kargo-link";
+import {
+  promotionProjectDetailPath,
+  type PromotionProjectListContext,
+} from "~/features/promotions/promotion-project-filters";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { EmptyState, PageHeader } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
@@ -28,6 +33,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const project = optionalValue(url.searchParams.get("project"));
   const freightAlignment = optionalFreightAlignment(url.searchParams.get("freightAlignment"));
+  const unhealthy = url.searchParams.get("unhealthy") === "true";
+  const stale = url.searchParams.get("stale") === "true";
+  const pendingReview = url.searchParams.get("pendingReview") === "true";
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionProjects({
     client: createServerAPIClient(request, context),
@@ -37,7 +45,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       integration,
       limit: pageSize,
       offset: (requestedPage - 1) * pageSize,
+      pendingReview: pendingReview || undefined,
       project,
+      stale: stale || undefined,
+      unhealthy: unhealthy || undefined,
     },
   });
 
@@ -57,18 +68,26 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     integration,
     freightAlignment,
     page: requestedPage,
+    pendingReview,
     project,
     projects: result.data?.items ?? [],
+    stale,
     total: result.data?.total ?? 0,
+    unhealthy,
   };
 }
 
 export default function PromotionProjects({ loaderData }: Route.ComponentProps) {
+  useActivityRefresh(true, 30_000);
+
   const filtered = Boolean(
     loaderData.cluster ||
     loaderData.freightAlignment ||
     loaderData.integration ||
-    loaderData.project,
+    loaderData.project ||
+    loaderData.pendingReview ||
+    loaderData.stale ||
+    loaderData.unhealthy,
   );
 
   return (
@@ -115,6 +134,39 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
             name: "freightAlignment",
             value: loaderData.freightAlignment,
           },
+          {
+            active: loaderData.unhealthy,
+            data: [
+              { label: "Any health", value: "" },
+              { label: "Has non-ready Stages", value: "true" },
+            ],
+            kind: "select",
+            label: "Stage health",
+            name: "unhealthy",
+            value: loaderData.unhealthy ? "true" : undefined,
+          },
+          {
+            active: loaderData.stale,
+            data: [
+              { label: "Any freshness", value: "" },
+              { label: "Has stale Stages", value: "true" },
+            ],
+            kind: "select",
+            label: "Observation freshness",
+            name: "stale",
+            value: loaderData.stale ? "true" : undefined,
+          },
+          {
+            active: loaderData.pendingReview,
+            data: [
+              { label: "Any review state", value: "" },
+              { label: "Has pending reviews", value: "true" },
+            ],
+            kind: "select",
+            label: "Review activity",
+            name: "pendingReview",
+            value: loaderData.pendingReview ? "true" : undefined,
+          },
         ]}
       />
 
@@ -131,7 +183,15 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
           }
         />
       ) : (
-        <ProjectTable projects={loaderData.projects} />
+        <ProjectTable
+          context={{
+            freightAlignment: loaderData.freightAlignment,
+            pendingReview: loaderData.pendingReview,
+            stale: loaderData.stale,
+            unhealthy: loaderData.unhealthy,
+          }}
+          projects={loaderData.projects}
+        />
       )}
 
       {loaderData.available && loaderData.total > 0 ? (
@@ -147,7 +207,10 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
   );
 }
 
-function ProjectTable({ projects }: Readonly<{ projects: PromotionProject[] }>) {
+function ProjectTable({
+  context,
+  projects,
+}: Readonly<{ context: PromotionProjectListContext; projects: PromotionProject[] }>) {
   return (
     <Paper withBorder>
       <Table.ScrollContainer minWidth={760} type="native">
@@ -164,6 +227,7 @@ function ProjectTable({ projects }: Readonly<{ projects: PromotionProject[] }>) 
           <Table.Tbody>
             {projects.map((project) => (
               <ProjectRow
+                context={context}
                 key={[project.integration, project.cluster, project.project].join("/")}
                 project={project}
               />
@@ -175,8 +239,12 @@ function ProjectTable({ projects }: Readonly<{ projects: PromotionProject[] }>) 
   );
 }
 
-function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
-  const detailPath = `/promotion-projects/${encodeURIComponent(project.integration)}/${encodeURIComponent(project.cluster)}/${encodeURIComponent(project.project)}`;
+function ProjectRow({
+  context,
+  project,
+}: Readonly<{ context: PromotionProjectListContext; project: PromotionProject }>) {
+  const detailBasePath = `/promotion-projects/${encodeURIComponent(project.integration)}/${encodeURIComponent(project.cluster)}/${encodeURIComponent(project.project)}`;
+  const detailPath = promotionProjectDetailPath(detailBasePath, context);
   const scope = `integration=${encodeURIComponent(project.integration)}&project=${encodeURIComponent(project.project)}`;
 
   return (
@@ -205,21 +273,48 @@ function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
             {project.stageCount} Stage{project.stageCount === 1 ? "" : "s"}
           </Anchor>
           {project.unhealthyStageCount > 0 ? (
-            <Badge color="red">{project.unhealthyStageCount} non-ready</Badge>
+            <Anchor
+              component={Link}
+              to={promotionProjectDetailPath(detailBasePath, { ...context, unhealthy: true })}
+            >
+              <Badge color="red">{project.unhealthyStageCount} non-ready</Badge>
+            </Anchor>
           ) : null}
           {project.staleStageCount > 0 ? (
-            <Badge color="gray">{project.staleStageCount} stale</Badge>
+            <Anchor
+              component={Link}
+              to={promotionProjectDetailPath(detailBasePath, { ...context, stale: true })}
+            >
+              <Badge color="gray">{project.staleStageCount} stale</Badge>
+            </Anchor>
           ) : null}
           {project.pendingReviewCount > 0 ? (
-            <Badge color="yellow">{project.pendingReviewCount} pending</Badge>
+            <Anchor
+              component={Link}
+              to={promotionProjectDetailPath(detailBasePath, { ...context, pendingReview: true })}
+            >
+              <Badge color="yellow">{project.pendingReviewCount} pending</Badge>
+            </Anchor>
           ) : null}
           {project.freightDifferenceCount > 0 ? (
-            <Anchor component={Link} to="/promotion-projects?freightAlignment=different">
+            <Anchor
+              component={Link}
+              to={promotionProjectDetailPath(detailBasePath, {
+                ...context,
+                freightAlignment: "different",
+              })}
+            >
               <Badge color="yellow">{project.freightDifferenceCount} Freight differences</Badge>
             </Anchor>
           ) : null}
           {project.unknownFreightComparisonCount > 0 ? (
-            <Anchor component={Link} to="/promotion-projects?freightAlignment=unknown">
+            <Anchor
+              component={Link}
+              to={promotionProjectDetailPath(detailBasePath, {
+                ...context,
+                freightAlignment: "unknown",
+              })}
+            >
               <Badge color="gray">
                 {project.unknownFreightComparisonCount} unknown comparison
                 {project.unknownFreightComparisonCount === 1 ? "" : "s"}

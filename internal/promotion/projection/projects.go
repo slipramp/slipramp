@@ -19,6 +19,9 @@ type ProjectListFilter struct {
 	Cluster          string
 	Project          string
 	FreightAlignment FreightAlignmentStatus
+	Unhealthy        bool
+	Stale            bool
+	PendingReview    bool
 	Limit            int
 	Offset           int
 }
@@ -43,6 +46,10 @@ type ProjectSummary struct {
 }
 
 type ProjectListSummary struct {
+	StageCount                    int
+	UnhealthyStageCount           int
+	StaleStageCount               int
+	PendingReviewCount            int
 	FreightDifferenceCount        int
 	UnknownFreightComparisonCount int
 }
@@ -154,7 +161,7 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 			if stale[stage.ID] {
 				summary.StaleStageCount++
 			}
-			if stageNonReady(stage) {
+			if !stale[stage.ID] && stageNonReady(stage) {
 				summary.UnhealthyStageCount++
 			}
 			if stage.LastObservedAt.After(summary.LatestObservedAt) {
@@ -179,7 +186,16 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 		if !matchesAlignment {
 			continue
 		}
+		if filter.Unhealthy && summary.UnhealthyStageCount == 0 ||
+			filter.Stale && summary.StaleStageCount == 0 ||
+			filter.PendingReview && summary.PendingReviewCount == 0 {
+			continue
+		}
 
+		listSummary.StageCount += summary.StageCount
+		listSummary.UnhealthyStageCount += summary.UnhealthyStageCount
+		listSummary.StaleStageCount += summary.StaleStageCount
+		listSummary.PendingReviewCount += summary.PendingReviewCount
 		listSummary.FreightDifferenceCount += summary.FreightDifferenceCount
 		listSummary.UnknownFreightComparisonCount += summary.UnknownFreightComparisonCount
 		items = append(items, summary)

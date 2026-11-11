@@ -449,9 +449,29 @@ PromotionProjectListSummary:
   type: object
   additionalProperties: false
   required:
+    - stageCount
+    - unhealthyStageCount
+    - staleStageCount
+    - pendingReviewCount
     - freightDifferenceCount
     - unknownFreightComparisonCount
   properties:
+    stageCount:
+      type: integer
+      minimum: 0
+      description: Stages across all Projects matching the filters before pagination.
+    unhealthyStageCount:
+      type: integer
+      minimum: 0
+      description: Current non-ready Stages across all Projects matching the filters before pagination.
+    staleStageCount:
+      type: integer
+      minimum: 0
+      description: Stale Stages across all Projects matching the filters before pagination.
+    pendingReviewCount:
+      type: integer
+      minimum: 0
+      description: Promotions awaiting review across all Projects matching the filters before pagination.
     freightDifferenceCount:
       type: integer
       minimum: 0
@@ -736,7 +756,10 @@ PromotionStageCapability:
   properties:
     status:
       type: string
-      enum: [ready, unavailable]
+      enum: [ready, not-configured, not-applicable, unavailable]
+      description: >-
+        Whether the capability is ready, intentionally not configured, not applicable to this
+        Stage, or configured but currently unavailable.
     reason:
       type: string
       minLength: 1
