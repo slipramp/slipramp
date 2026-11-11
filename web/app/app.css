@@ -233,10 +233,6 @@ a {
   text-decoration: none;
 }
 
-:root[data-slipramp-theme="kawaii"] .product-brand {
-  color: var(--mantine-color-sakura-9);
-}
-
 .product-mark {
   display: block;
   width: 28px;
