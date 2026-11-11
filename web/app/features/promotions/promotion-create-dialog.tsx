@@ -5,6 +5,7 @@ import {
   Button,
   Code,
   Group,
+  Menu,
   Modal,
   NativeSelect,
   Paper,
@@ -14,8 +15,8 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconArrowUp, IconExternalLink } from "@tabler/icons-react";
-import { useEffect, useRef } from "react";
+import { IconArrowUp, IconChevronDown, IconExternalLink, IconRefresh } from "@tabler/icons-react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, useFetcher, useSearchParams } from "react-router";
 
 import type { PromotionCreationActionResult } from "~/features/promotions/promotion-creation";
@@ -49,6 +50,13 @@ type PromotionCreateProps = Readonly<{
   sourceStageName?: string;
 }>;
 
+type PromotionCreateMenuProps = Readonly<{
+  stage: PromotionCreateProps["stage"];
+  eligibleFreight: PromotionFreightItem[];
+  currentFreight: PromotionFreightItem[];
+  environment?: string;
+}>;
+
 function PromotionCreateDialog({
   stage,
   freight,
@@ -68,6 +76,7 @@ function PromotionCreateDialog({
   const handledPromotionID = useRef<string | undefined>(undefined);
   const selected = freight.find((item) => item.name === selectedName);
   const submittingMode = fetcher.formData?.get("mode");
+  const actionLabel = inPlace ? "Re-promote" : "Promote";
 
   useEffect(() => {
     const promotionID = fetcher.data?.promotionId;
@@ -90,7 +99,7 @@ function PromotionCreateDialog({
   }, [fetcher.data, onClose]);
 
   return (
-    <Modal centered onClose={onClose} opened size="lg" title={`Promote to ${stage.name}`}>
+    <Modal centered onClose={onClose} opened size="lg" title={`${actionLabel} ${stage.name}`}>
       <fetcher.Form method="post">
         <Stack gap="md">
           {environment ? <PromotionFact label="Environment" value={environment} /> : null}
@@ -146,7 +155,7 @@ function PromotionCreateDialog({
                 value="background"
                 variant="light"
               >
-                Promote in background
+                {actionLabel} in background
               </Button>
               <Button
                 disabled={!selected}
@@ -156,7 +165,7 @@ function PromotionCreateDialog({
                 type="submit"
                 value="view"
               >
-                Promote and view
+                {actionLabel} and view
               </Button>
             </Group>
           </Group>
@@ -239,26 +248,150 @@ export function PromotionCreateButton({
   unavailableLabel = "No eligible Freight is currently observed.",
   ...props
 }: PromotionCreateProps & { unavailableLabel?: string }) {
-  const [searchParams, setSearchParams] = useSearchParams();
   const capability = props.stage.capabilities.promotion;
-  const context = promotionCreationContext(props);
-  const requested = promotionCreationURLSelection(searchParams);
-  const opened =
-    requested?.stageId === props.stage.id &&
-    requested.context === context &&
-    requested.sourceStageId === props.sourceStageId;
-  const selectedName = initialPromotionFreightName(
-    props.freight,
-    opened ? requested.freightName : props.initialFreightName,
-  );
+  const actionLabel = props.inPlace ? "Re-promote" : "Promote";
+  const dialog = usePromotionCreateDialogState([props]);
 
-  function open() {
+  if (capability.status !== "ready" || (props.freight.length === 0 && !dialog.props)) {
+    return (
+      <Tooltip label={capability.reason ?? unavailableLabel}>
+        <span>
+          <Button disabled leftSection={<IconArrowUp aria-hidden size={14} />} size="compact-xs">
+            {actionLabel}
+          </Button>
+        </span>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        leftSection={<IconArrowUp aria-hidden size={14} />}
+        onClick={() => dialog.open(props)}
+        size="compact-xs"
+        variant="light"
+      >
+        {actionLabel}
+      </Button>
+      {dialog.props ? (
+        <PromotionCreateDialog
+          {...dialog.props}
+          onClose={dialog.close}
+          onSelectedNameChange={dialog.changeSelectedName}
+          selectedName={dialog.selectedName}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function PromotionCreateMenu({
+  stage,
+  eligibleFreight,
+  currentFreight,
+  environment,
+}: PromotionCreateMenuProps) {
+  const capability = stage.capabilities.promotion;
+  const options = [
+    {
+      description: "Start a Promotion with Freight currently eligible for this Stage.",
+      icon: <IconArrowUp aria-hidden size={15} />,
+      label: "Promote eligible Freight",
+      props: { environment, freight: eligibleFreight, stage },
+      unavailableLabel: "No eligible Freight is currently observed.",
+    },
+    {
+      description: "Rerun the Stage's promotion template with its active Freight.",
+      icon: <IconRefresh aria-hidden size={15} />,
+      label: "Re-promote in place",
+      props: { environment, freight: currentFreight, inPlace: true, stage },
+      unavailableLabel: "This Stage has no current Freight to promote in place.",
+    },
+  ] satisfies Array<{
+    description: string;
+    icon: ReactNode;
+    label: string;
+    props: PromotionCreateProps;
+    unavailableLabel: string;
+  }>;
+  const dialog = usePromotionCreateDialogState(options.map((option) => option.props));
+
+  return (
+    <>
+      <Menu position="bottom-end" shadow="md" width={280}>
+        <Menu.Target>
+          <Button
+            leftSection={<IconArrowUp aria-hidden size={14} />}
+            rightSection={<IconChevronDown aria-hidden size={14} />}
+            size="compact-xs"
+            variant="light"
+          >
+            Promote
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Label>Promotion options</Menu.Label>
+          {options.map((option) => {
+            const unavailable =
+              capability.status !== "ready"
+                ? (capability.reason ?? "Promotion is unavailable for this Stage.")
+                : option.props.freight.length === 0
+                  ? option.unavailableLabel
+                  : undefined;
+
+            return (
+              <Menu.Item
+                disabled={unavailable !== undefined}
+                key={option.label}
+                leftSection={option.icon}
+                onClick={() => dialog.open(option.props)}
+                title={unavailable}
+              >
+                <Stack gap={0}>
+                  <Text size="sm">{option.label}</Text>
+                  <Text c="dimmed" size="xs">
+                    {unavailable ?? option.description}
+                  </Text>
+                </Stack>
+              </Menu.Item>
+            );
+          })}
+        </Menu.Dropdown>
+      </Menu>
+      {dialog.props ? (
+        <PromotionCreateDialog
+          {...dialog.props}
+          onClose={dialog.close}
+          onSelectedNameChange={dialog.changeSelectedName}
+          selectedName={dialog.selectedName}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function usePromotionCreateDialogState(options: PromotionCreateProps[]) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = promotionCreationURLSelection(searchParams);
+  const props = options.find(
+    (option) =>
+      requested?.stageId === option.stage.id &&
+      requested.context === promotionCreationContext(option) &&
+      requested.sourceStageId === option.sourceStageId,
+  );
+  const selectedName = props
+    ? initialPromotionFreightName(props.freight, requested?.freightName ?? props.initialFreightName)
+    : "";
+
+  function open(option: PromotionCreateProps) {
+    const initialName = initialPromotionFreightName(option.freight, option.initialFreightName);
     setSearchParams(
       updatePromotionCreationSearchParams(searchParams, {
-        context,
-        freightName: selectedName || undefined,
-        sourceStageId: props.sourceStageId,
-        stageId: props.stage.id,
+        context: promotionCreationContext(option),
+        freightName: initialName || undefined,
+        sourceStageId: option.sourceStageId,
+        stageId: option.stage.id,
       }),
       { preventScrollReset: true },
     );
@@ -282,38 +415,7 @@ export function PromotionCreateButton({
     );
   }
 
-  if (capability.status !== "ready" || (props.freight.length === 0 && !opened)) {
-    return (
-      <Tooltip label={capability.reason ?? unavailableLabel}>
-        <span>
-          <Button disabled leftSection={<IconArrowUp aria-hidden size={14} />} size="compact-xs">
-            Promote
-          </Button>
-        </span>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <>
-      <Button
-        leftSection={<IconArrowUp aria-hidden size={14} />}
-        onClick={open}
-        size="compact-xs"
-        variant="light"
-      >
-        Promote
-      </Button>
-      {opened ? (
-        <PromotionCreateDialog
-          {...props}
-          onClose={close}
-          onSelectedNameChange={changeSelectedName}
-          selectedName={selectedName}
-        />
-      ) : null}
-    </>
-  );
+  return { changeSelectedName, close, open, props, selectedName };
 }
 
 function FreightDetails({ freight }: Readonly<{ freight: PromotionFreightItem }>) {

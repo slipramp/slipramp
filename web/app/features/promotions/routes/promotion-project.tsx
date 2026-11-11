@@ -35,7 +35,10 @@ import {
   type PromotionProjectStage,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
-import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import {
+  PromotionCreateButton,
+  PromotionCreateMenu,
+} from "~/features/promotions/promotion-create-dialog";
 import { canWritePromotions, eligibleStageFreight } from "~/features/promotions/promotion-creation";
 import { submitPromotionCreation } from "~/features/promotions/promotion-creation.server";
 import {
@@ -758,13 +761,7 @@ function StageInventory({
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
-                        {canWrite ? (
-                          <PromotionCreateButton
-                            stage={stage}
-                            freight={eligibleStageFreight(stage)}
-                            environment={stage.enrichment?.environment}
-                          />
-                        ) : null}
+                        {canWrite ? <StagePromotionActions stage={stage} /> : null}
                       </Group>
                     </Table.Td>
                   </Table.Tr>
@@ -1022,15 +1019,7 @@ function StageCard({
               </Anchor>
             ) : null}
           </Group>
-          <Group gap="xs">
-            {canWrite ? (
-              <PromotionCreateButton
-                stage={stage}
-                freight={eligibleStageFreight(stage)}
-                environment={stage.enrichment?.environment}
-              />
-            ) : null}
-          </Group>
+          <Group gap="xs">{canWrite ? <StagePromotionActions stage={stage} /> : null}</Group>
         </Group>
 
         {capabilityWarnings.length > 0 ? (
@@ -1046,6 +1035,17 @@ function StageCard({
         ) : null}
       </Stack>
     </Paper>
+  );
+}
+
+function StagePromotionActions({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
+  return (
+    <PromotionCreateMenu
+      currentFreight={stage.freight.items}
+      eligibleFreight={eligibleStageFreight(stage)}
+      environment={stage.enrichment?.environment}
+      stage={stage}
+    />
   );
 }
 

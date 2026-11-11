@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   eligibleStageFreight,
   initialPromotionFreightName,
+  promotionCreationContext,
   parsePromotionReviewPolicySelection,
   promotionCreationURLSelection,
   promotionReviewPolicyUpdate,
@@ -66,6 +67,11 @@ test("promotion creation round-trips through URL state without disturbing page f
 
   const closed = updatePromotionCreationSearchParams(opened);
   assert.equal(closed.toString(), "view=stages&attention=unhealthy");
+});
+
+test("in-place promotion uses a distinct URL context", () => {
+  assert.equal(promotionCreationContext({ inPlace: true }), "in-place");
+  assert.equal(promotionCreationContext({}), "stage");
 });
 
 test("review policy choices produce permanent and time-boxed updates", () => {
