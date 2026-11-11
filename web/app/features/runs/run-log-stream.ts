@@ -11,25 +11,26 @@ export type RunLogStreamEnvironment = Readonly<{
   cancelAnimationFrame: (handle: number) => void;
   clearTimeout: (handle: number) => void;
   createEventSource: (url: string) => LogEventSource;
+  queueMicrotask: (callback: () => void) => void;
   requestAnimationFrame: (callback: FrameRequestCallback) => number;
   setTimeout: (callback: () => void, delay: number) => number;
 }>;
 
 type RunLogStreamSessionOptions = Readonly<{
-  artifactAvailable: boolean;
   buffer: BoundedLogBuffer;
   buildURL: (offsetBytes: number) => string;
   dispatch: (action: RunLogStreamAction) => void;
   environment: RunLogStreamEnvironment;
+  isArtifactAvailable: () => boolean;
   onBufferChanged: () => void;
 }>;
 
 export function startRunLogStreamSession({
-  artifactAvailable,
   buffer,
   buildURL,
   dispatch,
   environment,
+  isArtifactAvailable,
   onBufferChanged,
 }: RunLogStreamSessionOptions) {
   let activeConnection = 0;
@@ -125,7 +126,7 @@ export function startRunLogStreamSession({
 
       closeActiveSource();
       dispatch({
-        artifactAvailable,
+        artifactAvailable: isArtifactAvailable(),
         offsetBytes: buffer.cursorBytes,
         type: "connection-lost",
       });
@@ -136,7 +137,10 @@ export function startRunLogStreamSession({
     });
   };
 
-  connect();
+  // React Strict Mode immediately cleans up and restarts effects once during
+  // development. Let that probe finish before opening a network connection so
+  // it cannot abort an otherwise valid EventSource request.
+  environment.queueMicrotask(connect);
 
   return () => {
     if (stopped) return;

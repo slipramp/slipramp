@@ -64,6 +64,7 @@ const browserRunLogStreamEnvironment: RunLogStreamEnvironment = {
   cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
   clearTimeout: (handle) => window.clearTimeout(handle),
   createEventSource: (url) => new EventSource(url),
+  queueMicrotask: (callback) => window.queueMicrotask(callback),
   requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
   setTimeout: (callback, delay) => window.setTimeout(callback, delay),
 };
@@ -73,6 +74,7 @@ export function RunLogViewer({
   runId,
 }: Readonly<{ artifact?: Artifact; runId: string }>) {
   const logAvailable = artifact !== undefined;
+  const logAvailableRef = useRef(logAvailable);
   const initialOffsetBytes = Math.max(0, (artifact?.sizeBytes ?? 0) - LOG_TAIL_WINDOW_BYTES);
   const [buffer] = useState(() => new BoundedLogBuffer(initialOffsetBytes));
 
@@ -93,6 +95,10 @@ export function RunLogViewer({
   const diagnostic = runLogStreamDiagnostic(streamState);
 
   useEffect(() => {
+    logAvailableRef.current = logAvailable;
+  }, [logAvailable]);
+
+  useEffect(() => {
     dispatchStream({ artifactAvailable: logAvailable, type: "artifact-availability-changed" });
   }, [logAvailable]);
 
@@ -100,7 +106,6 @@ export function RunLogViewer({
     if (!streamActive) return;
 
     return startRunLogStreamSession({
-      artifactAvailable: logAvailable,
       buffer,
       buildURL: (offsetBytes) => {
         const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
@@ -109,9 +114,10 @@ export function RunLogViewer({
       },
       dispatch: dispatchStream,
       environment: browserRunLogStreamEnvironment,
+      isArtifactAvailable: () => logAvailableRef.current,
       onBufferChanged: () => setBufferVersion((current) => current + 1),
     });
-  }, [buffer, logAvailable, runId, streamActive]);
+  }, [buffer, runId, streamActive]);
 
   const matchingLines = buffer.findMatchingLines(searchQuery);
   const selectedMatchPosition = Math.min(matchPosition, Math.max(matchingLines.length - 1, 0));

@@ -131,14 +131,41 @@ test("cleanup cancels pending work and stale EventSources cannot dispatch", () =
   assert.equal(staleHarness.renderCount(), 0);
 });
 
+test("cleanup before the initial microtask does not open an EventSource", () => {
+  const buffer = new BoundedLogBuffer(0);
+  const environment = new FakeEnvironment();
+  const cleanup = startRunLogStreamSession({
+    buffer,
+    buildURL: (offsetBytes) => `log:${offsetBytes}`,
+    dispatch: () => {},
+    environment: environment.api,
+    isArtifactAvailable: () => false,
+    onBufferChanged: () => {},
+  });
+
+  cleanup();
+  environment.runMicrotasks();
+
+  assert.equal(environment.sources.length, 0);
+});
+
+test("connection loss reads current artifact availability", () => {
+  const harness = createStreamHarness(false);
+  harness.setArtifactAvailable(true);
+
+  harness.environment.sources[0].emit("error");
+
+  assert.deepEqual(harness.state(), { offsetBytes: 0, phase: "reconnecting" });
+});
+
 function createStreamHarness(artifactAvailable) {
   const buffer = new BoundedLogBuffer(0);
   const environment = new FakeEnvironment();
   const actions = [];
+  let currentArtifactAvailable = artifactAvailable;
   let renderCount = 0;
   let state = initialRunLogStreamState(artifactAvailable);
   const cleanup = startRunLogStreamSession({
-    artifactAvailable,
     buffer,
     buildURL: (offsetBytes) => `log:${offsetBytes}`,
     dispatch: (action) => {
@@ -146,10 +173,12 @@ function createStreamHarness(artifactAvailable) {
       state = reduceRunLogStream(state, action);
     },
     environment: environment.api,
+    isArtifactAvailable: () => currentArtifactAvailable,
     onBufferChanged: () => {
       renderCount += 1;
     },
   });
+  environment.runMicrotasks();
 
   return {
     actions,
@@ -157,6 +186,9 @@ function createStreamHarness(artifactAvailable) {
     cleanup,
     environment,
     renderCount: () => renderCount,
+    setArtifactAvailable: (available) => {
+      currentArtifactAvailable = available;
+    },
     state: () => state,
   };
 }
@@ -193,6 +225,7 @@ class FakeEventSource {
 
 class FakeEnvironment {
   #frames = new Map();
+  #microtasks = [];
   #nextHandle = 1;
   #timers = new Map();
 
@@ -208,6 +241,7 @@ class FakeEnvironment {
       this.urls.push(url);
       return source;
     },
+    queueMicrotask: (callback) => this.#microtasks.push(callback),
     requestAnimationFrame: (callback) => {
       const handle = this.#nextHandle;
       this.#nextHandle += 1;
@@ -224,6 +258,12 @@ class FakeEnvironment {
 
   frameCount() {
     return this.#frames.size;
+  }
+
+  runMicrotasks() {
+    while (this.#microtasks.length > 0) {
+      this.#microtasks.shift()();
+    }
   }
 
   runNextTimer() {
