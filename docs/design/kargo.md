@@ -41,19 +41,24 @@ See the [Stage metadata contract](../CONFIGURATION.md#kargo-stage-metadata).
 
 The observer submits complete authenticated snapshots of every Stage in the
 assigned namespaces. Listing, pagination, and structural normalization must all
-succeed before a snapshot is complete. Repeated snapshot identity is idempotent;
-successful snapshots archive Stages that were deleted, moved to another
-namespace owner, or belonged to a namespace removed from the integration while
-retaining policy and history. Inventory failure affects Stage freshness without
-archiving Stages or interrupting ordinary Run delivery.
+succeed before a snapshot is complete. The Controller retries its current
+pending snapshot identity until the Server accepts it, and retrying that current
+latest snapshot is idempotent. Successful snapshots archive Stages that were
+deleted, moved to another namespace owner, or belonged to a namespace removed
+from the integration while retaining policy and history. Inventory failure
+affects Stage freshness without archiving Stages or interrupting ordinary Run
+delivery.
 
-The latest accepted complete snapshot is also the durable integration-health
-signal. Each configured integration appears on its Cluster as never observed,
-current, or stale using that integration's Stage freshness limit. This signal
-does not claim to diagnose a Kubernetes-side listing failure the Server never
-observed. Installations with no configured integration omit Kargo-specific
-product navigation; an empty or stale configured integration remains visible
-for recovery.
+Slipramp retains the latest accepted complete Stage snapshot checkpoint for each
+integration and Cluster, not a history of observations. The checkpoint preserves
+the snapshot identity, observation time, and original acceptance time for
+freshness, ordering, and retry idempotency. It is also the durable
+integration-health signal. Each configured integration appears on its Cluster
+as never observed, current, or stale using that integration's Stage freshness
+limit. This signal does not claim to diagnose a Kubernetes-side listing failure
+the Server never observed. Installations with no configured integration omit
+Kargo-specific product navigation; an empty or stale configured integration
+remains visible for recovery.
 
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace and Cluster supplied by the authenticated Controller.

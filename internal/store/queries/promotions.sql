@@ -205,7 +205,7 @@ FROM repositories
 WHERE name = sqlc.arg(name)
   AND removed_at IS NULL;
 
--- name: CreateKargoStageSnapshot :one
+-- name: UpsertKargoStageSnapshot :one
 INSERT INTO kargo_stage_snapshots (
     snapshot_id,
     integration,
@@ -219,6 +219,11 @@ INSERT INTO kargo_stage_snapshots (
     sqlc.arg(observed_at),
     sqlc.arg(accepted_at)
 )
+ON CONFLICT (integration, cluster_name) DO UPDATE
+SET snapshot_id = EXCLUDED.snapshot_id,
+    observed_at = EXCLUDED.observed_at,
+    accepted_at = EXCLUDED.accepted_at
+WHERE kargo_stage_snapshots.observed_at < EXCLUDED.observed_at
 RETURNING *;
 
 -- name: GetKargoStageSnapshot :one
@@ -233,9 +238,7 @@ SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(integration), 0));
 SELECT *
 FROM kargo_stage_snapshots
 WHERE integration = sqlc.arg(integration)
-  AND cluster_name = sqlc.arg(cluster_name)
-ORDER BY observed_at DESC, accepted_at DESC, snapshot_id DESC
-LIMIT 1;
+  AND cluster_name = sqlc.arg(cluster_name);
 
 -- name: ArchiveMissingPromotionStages :exec
 UPDATE promotion_stages

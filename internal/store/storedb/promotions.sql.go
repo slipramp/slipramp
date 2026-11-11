@@ -398,50 +398,6 @@ func (q *Queries) CountPromotionStageReviews(ctx context.Context, arg CountPromo
 	return count, err
 }
 
-const createKargoStageSnapshot = `-- name: CreateKargoStageSnapshot :one
-INSERT INTO kargo_stage_snapshots (
-    snapshot_id,
-    integration,
-    cluster_name,
-    observed_at,
-    accepted_at
-) VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5
-)
-RETURNING snapshot_id, integration, cluster_name, observed_at, accepted_at
-`
-
-type CreateKargoStageSnapshotParams struct {
-	SnapshotID  pgtype.UUID
-	Integration string
-	ClusterName string
-	ObservedAt  pgtype.Timestamptz
-	AcceptedAt  pgtype.Timestamptz
-}
-
-func (q *Queries) CreateKargoStageSnapshot(ctx context.Context, arg CreateKargoStageSnapshotParams) (KargoStageSnapshot, error) {
-	row := q.db.QueryRow(ctx, createKargoStageSnapshot,
-		arg.SnapshotID,
-		arg.Integration,
-		arg.ClusterName,
-		arg.ObservedAt,
-		arg.AcceptedAt,
-	)
-	var i KargoStageSnapshot
-	err := row.Scan(
-		&i.SnapshotID,
-		&i.Integration,
-		&i.ClusterName,
-		&i.ObservedAt,
-		&i.AcceptedAt,
-	)
-	return i, err
-}
-
 const createPromotion = `-- name: CreatePromotion :one
 INSERT INTO promotions (
     id,
@@ -1025,8 +981,6 @@ SELECT snapshot_id, integration, cluster_name, observed_at, accepted_at
 FROM kargo_stage_snapshots
 WHERE integration = $1
   AND cluster_name = $2
-ORDER BY observed_at DESC, accepted_at DESC, snapshot_id DESC
-LIMIT 1
 `
 
 type GetLatestKargoStageSnapshotParams struct {
@@ -2659,6 +2613,55 @@ func (q *Queries) UpdatePromotionReconciliation(ctx context.Context, arg UpdateP
 		&i.KargoOutcomeDiagnostic,
 		&i.DispatchFailedAt,
 		&i.DispatchDiagnostic,
+	)
+	return i, err
+}
+
+const upsertKargoStageSnapshot = `-- name: UpsertKargoStageSnapshot :one
+INSERT INTO kargo_stage_snapshots (
+    snapshot_id,
+    integration,
+    cluster_name,
+    observed_at,
+    accepted_at
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5
+)
+ON CONFLICT (integration, cluster_name) DO UPDATE
+SET snapshot_id = EXCLUDED.snapshot_id,
+    observed_at = EXCLUDED.observed_at,
+    accepted_at = EXCLUDED.accepted_at
+WHERE kargo_stage_snapshots.observed_at < EXCLUDED.observed_at
+RETURNING snapshot_id, integration, cluster_name, observed_at, accepted_at
+`
+
+type UpsertKargoStageSnapshotParams struct {
+	SnapshotID  pgtype.UUID
+	Integration string
+	ClusterName string
+	ObservedAt  pgtype.Timestamptz
+	AcceptedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertKargoStageSnapshot(ctx context.Context, arg UpsertKargoStageSnapshotParams) (KargoStageSnapshot, error) {
+	row := q.db.QueryRow(ctx, upsertKargoStageSnapshot,
+		arg.SnapshotID,
+		arg.Integration,
+		arg.ClusterName,
+		arg.ObservedAt,
+		arg.AcceptedAt,
+	)
+	var i KargoStageSnapshot
+	err := row.Scan(
+		&i.SnapshotID,
+		&i.Integration,
+		&i.ClusterName,
+		&i.ObservedAt,
+		&i.AcceptedAt,
 	)
 	return i, err
 }

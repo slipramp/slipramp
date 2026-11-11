@@ -1445,6 +1445,113 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	}
 }
 
+func TestReplacePromotionStageSnapshotRetainsCurrentCheckpointsIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	observedAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	first := promotionTestSnapshot(uuid.New(), "prod", "colo", observedAt)
+	if err := database.ReplacePromotionStageSnapshot(ctx, first, nil); err != nil {
+		t.Fatalf("first ReplacePromotionStageSnapshot() error = %v", err)
+	}
+
+	retry := first
+	retry.AcceptedAt = retry.AcceptedAt.Add(time.Minute)
+	if err := database.ReplacePromotionStageSnapshot(ctx, retry, nil); err != nil {
+		t.Fatalf("repeated ReplacePromotionStageSnapshot() error = %v", err)
+	}
+	checkpoint, ok, err := database.GetLatestKargoStageSnapshot(ctx, "prod", "colo")
+	if err != nil || !ok {
+		t.Fatalf("GetLatestKargoStageSnapshot() = %#v, %v, %v", checkpoint, ok, err)
+	}
+	if checkpoint != first {
+		t.Errorf("checkpoint after retry = %#v, want %#v", checkpoint, first)
+	}
+
+	latest := first
+	for sequence := 1; sequence <= 32; sequence++ {
+		latest = promotionTestSnapshot(
+			uuid.New(),
+			"prod",
+			"colo",
+			observedAt.Add(time.Duration(sequence)*30*time.Second),
+		)
+		if err := database.ReplacePromotionStageSnapshot(ctx, latest, nil); err != nil {
+			t.Fatalf("sequential ReplacePromotionStageSnapshot(%d) error = %v", sequence, err)
+		}
+	}
+
+	edgeCluster := promotionTestSnapshot(uuid.New(), "prod", "edge", observedAt.Add(2*time.Minute))
+	if err := database.ReplacePromotionStageSnapshot(ctx, edgeCluster, nil); err != nil {
+		t.Fatalf("edge cluster ReplacePromotionStageSnapshot() error = %v", err)
+	}
+	edgeIntegration := promotionTestSnapshot(uuid.New(), "edge", "colo", observedAt.Add(3*time.Minute))
+	if err := database.ReplacePromotionStageSnapshot(ctx, edgeIntegration, nil); err != nil {
+		t.Fatalf("edge integration ReplacePromotionStageSnapshot() error = %v", err)
+	}
+
+	for _, want := range []promotion.StageSnapshot{latest, edgeCluster, edgeIntegration} {
+		got, exists, err := database.GetLatestKargoStageSnapshot(ctx, want.Integration, want.ClusterName)
+		if err != nil || !exists {
+			t.Fatalf(
+				"GetLatestKargoStageSnapshot(%q, %q) = %#v, %v, %v",
+				want.Integration,
+				want.ClusterName,
+				got,
+				exists,
+				err,
+			)
+		}
+		if got != want {
+			t.Errorf("checkpoint for %s/%s = %#v, want %#v", want.Integration, want.ClusterName, got, want)
+		}
+	}
+
+	var checkpointCount int
+	if err := database.pool.QueryRow(
+		ctx,
+		`SELECT count(*) FROM kargo_stage_snapshots`,
+	).Scan(&checkpointCount); err != nil {
+		t.Fatalf("count Kargo Stage snapshot checkpoints: %v", err)
+	}
+	if checkpointCount != 3 {
+		t.Errorf("Kargo Stage snapshot checkpoint count = %d, want 3", checkpointCount)
+	}
+
+	older := promotionTestSnapshot(uuid.New(), latest.Integration, latest.ClusterName, latest.ObservedAt.Add(-time.Second))
+	if err := database.ReplacePromotionStageSnapshot(ctx, older, nil); !errors.Is(err, promotion.ErrStaleSnapshot) {
+		t.Errorf("older snapshot error = %v, want stale snapshot", err)
+	}
+	equal := promotionTestSnapshot(uuid.New(), latest.Integration, latest.ClusterName, latest.ObservedAt)
+	if err := database.ReplacePromotionStageSnapshot(ctx, equal, nil); !errors.Is(err, promotion.ErrStaleSnapshot) {
+		t.Errorf("equal snapshot error = %v, want stale snapshot", err)
+	}
+
+	conflicting := latest
+	conflicting.ObservedAt = conflicting.ObservedAt.Add(time.Second)
+	conflicting.AcceptedAt = conflicting.AcceptedAt.Add(time.Second)
+	if err := database.ReplacePromotionStageSnapshot(
+		ctx,
+		conflicting,
+		nil,
+	); !errors.Is(err, promotion.ErrSnapshotConflict) {
+		t.Errorf("current snapshot identity conflict error = %v, want snapshot conflict", err)
+	}
+	conflictingPair := promotionTestSnapshot(
+		latest.SnapshotID,
+		"global",
+		"identity",
+		latest.ObservedAt.Add(time.Minute),
+	)
+	if err := database.ReplacePromotionStageSnapshot(
+		ctx,
+		conflictingPair,
+		nil,
+	); !errors.Is(err, promotion.ErrSnapshotConflict) {
+		t.Errorf("cross-checkpoint snapshot identity conflict error = %v, want snapshot conflict", err)
+	}
+}
+
 func TestPromotionStageReviewProjectionFiltersAndPaginatesIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)

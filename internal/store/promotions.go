@@ -20,7 +20,7 @@ import (
 const (
 	promotionIdentityConstraint        = "promotions_external_identity_key"
 	promotionCandidateBranchConstraint = "promotions_candidate_branch_identity_key"
-	kargoSnapshotIdentityConstraint    = "kargo_stage_snapshots_pkey"
+	kargoSnapshotIdentityConstraint    = "kargo_stage_snapshots_snapshot_id_key"
 )
 
 func recordPromotionCommits(
@@ -194,9 +194,9 @@ func (d *Database) ReplacePromotionStageSnapshot(
 		return fmt.Errorf("archive missing promotion Stages: %w", err)
 	}
 
-	if _, err := queries.CreateKargoStageSnapshot(
+	if _, err := queries.UpsertKargoStageSnapshot(
 		ctx,
-		storedb.CreateKargoStageSnapshotParams{
+		storedb.UpsertKargoStageSnapshotParams{
 			SnapshotID:  databaseUUID(snapshot.SnapshotID),
 			Integration: snapshot.Integration,
 			ClusterName: snapshot.ClusterName,
@@ -205,8 +205,10 @@ func (d *Database) ReplacePromotionStageSnapshot(
 		},
 	); constraintMatches(err, kargoSnapshotIdentityConstraint) {
 		return promotion.ErrSnapshotConflict
+	} else if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.ErrStaleSnapshot
 	} else if err != nil {
-		return fmt.Errorf("insert Kargo Stage snapshot: %w", err)
+		return fmt.Errorf("upsert Kargo Stage snapshot: %w", err)
 	}
 
 	if err := transaction.Commit(ctx); err != nil {
