@@ -45,15 +45,10 @@ type Server struct {
 	shutdownTimeout      time.Duration
 	logger               *slog.Logger
 	httpServer           *http.Server
-	metricsServer        metricsRunner
 	persistence          *persistence
-	workers              []func(context.Context)
+	workers              []serverWorker
 	promotionBranchDrift *projection.BranchDriftService
 	telemetry            *telemetry.Telemetry
-}
-
-type metricsRunner interface {
-	Run(context.Context) error
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion string) (*Server, error) {
@@ -256,16 +251,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			},
 		},
 	}
-	workers := []func(context.Context){
-		repositoryRefresher.Run,
-		commitHistoryIndexer.Run,
-		gitTriggerDispatcher.Run,
-		scheduleTriggerScheduler.Run,
-		notificationDispatcher.Run,
-		metrics.RunSnapshotWorker,
-	}
+	var promotionPreparations *preparation.PreparationCoordinator
 	if len(cfg.KargoIntegrations) > 0 {
-		promotionPreparations := preparation.NewPreparationCoordinator(
+		promotionPreparations = preparation.NewPreparationCoordinator(
 			cfg.KargoIntegrations,
 			repositories,
 			catalogs,
@@ -287,7 +275,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 				return err
 			},
 		})
-		workers = append(workers, promotionPreparations.Run)
 	}
 	if cfg.KargoIntegrations.CandidateBranchCleanupEnabled() {
 		maintenanceJobs = append(maintenanceJobs, maintenance.Job{
@@ -307,7 +294,28 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 
 		return nil, fmt.Errorf("initialize maintenance: %w", err)
 	}
-	workers = append(workers, maintenanceCoordinator.Run, promotionBranchDrift.Run)
+	metricsServer := metricsserver.New(
+		cfg.MetricsAddress,
+		metrics.Handler(),
+		logger.With("component", "server_metrics"),
+	)
+	workers := []serverWorker{
+		newServerWorker("repository refresh", repositoryRefresher.Run),
+		newServerWorker("commit-history indexing", commitHistoryIndexer.Run),
+		newServerWorker("git-trigger dispatch", gitTriggerDispatcher.Run),
+		newServerWorker("schedule evaluation", scheduleTriggerScheduler.Run),
+		newServerWorker("notification dispatch", notificationDispatcher.Run),
+		newServerWorker("metrics snapshots", metrics.RunSnapshotWorker),
+		newServerWorker("maintenance", maintenanceCoordinator.Run),
+		newServerWorker("promotion branch-drift refresh", promotionBranchDrift.Run),
+		{
+			name: "metrics server",
+			run:  metricsServer.Run,
+		},
+	}
+	if promotionPreparations != nil {
+		workers = append(workers, newServerWorker("promotion preparation", promotionPreparations.Run))
+	}
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			ServiceVersion:           serviceVersion,
@@ -379,11 +387,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	server.workers = workers
 	server.promotionBranchDrift = promotionBranchDrift
 	server.telemetry = metrics
-	server.metricsServer = metricsserver.New(
-		cfg.MetricsAddress,
-		metrics.Handler(),
-		logger.With("component", "server_metrics"),
-	)
 
 	return server, nil
 }
@@ -430,16 +433,9 @@ func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) er
 	defer stop(nil)
 
 	var workers sync.WaitGroup
-	for _, runWorker := range s.workers {
+	for _, worker := range s.workers {
 		workers.Go(func() {
-			runWorker(runContext)
-		})
-	}
-	if s.metricsServer != nil {
-		workers.Go(func() {
-			if err := s.metricsServer.Run(runContext); err != nil {
-				stop(err)
-			}
+			runServerWorker(runContext, stop, worker)
 		})
 	}
 
@@ -450,8 +446,10 @@ func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) er
 		stop(nil)
 	}
 	workers.Wait()
-	if serveErr == nil && ctx.Err() == nil {
-		serveErr = context.Cause(runContext)
+	if serveErr == nil {
+		if workerErr, ok := errors.AsType[*serverWorkerError](context.Cause(runContext)); ok {
+			serveErr = workerErr
+		}
 	}
 	telemetryErr := s.shutdownTelemetry()
 

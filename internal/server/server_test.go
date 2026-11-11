@@ -65,14 +65,14 @@ func TestServerWorkersShareCancellationAndFinishBeforeReturn(t *testing.T) {
 			}
 		}()
 		for index := range 3 {
-			app.workers = append(app.workers, func(workerContext context.Context) {
+			app.workers = append(app.workers, newServerWorker("test worker", func(workerContext context.Context) {
 				started <- workerContext
 				<-workerContext.Done()
 				canceled <- struct{}{}
 				if index == 0 {
 					<-releaseCleanup
 				}
-			})
+			}))
 		}
 		serveResult := make(chan error, 1)
 		go func() {
@@ -117,18 +117,23 @@ func TestServerWorkersShareCancellationAndFinishBeforeReturn(t *testing.T) {
 	})
 }
 
-func TestMetricsServerFailureStopsServer(t *testing.T) {
+func TestServerWorkerFailureStopsServer(t *testing.T) {
 	t.Parallel()
 
 	listener := newBlockingListener()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app := newServer(DefaultConfig(), logger, http.NewServeMux())
-	wantErr := errors.New("metrics listener failed")
-	app.metricsServer = metricsRunnerFunc(func(context.Context) error {
-		<-listener.accepting
+	wantErr := errors.New("dispatch failed")
+	app.workers = []serverWorker{
+		{
+			name: "test dispatcher",
+			run: func(context.Context) error {
+				<-listener.accepting
 
-		return wantErr
-	})
+				return wantErr
+			},
+		},
+	}
 
 	result := make(chan error, 1)
 	go func() {
@@ -140,8 +145,77 @@ func TestMetricsServerFailureStopsServer(t *testing.T) {
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("serveWithWorkers() error = %v, want %v", err, wantErr)
 		}
+		if got := err.Error(); got != `worker "test dispatcher" failed: dispatch failed` {
+			t.Errorf("serveWithWorkers() error = %q", got)
+		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("Server did not stop after the metrics server failed")
+		t.Fatal("Server did not stop after the worker failed")
+	}
+}
+
+func TestServerUnexpectedWorkerReturnStopsServer(t *testing.T) {
+	t.Parallel()
+
+	listener := newBlockingListener()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := newServer(DefaultConfig(), logger, http.NewServeMux())
+	app.workers = []serverWorker{
+		newServerWorker("test scheduler", func(context.Context) {
+			<-listener.accepting
+		}),
+	}
+
+	result := make(chan error, 1)
+	go func() {
+		result <- app.serveWithWorkers(t.Context(), listener)
+	}()
+
+	select {
+	case err := <-result:
+		if got := err.Error(); got != `worker "test scheduler" failed: returned unexpectedly` {
+			t.Fatalf("serveWithWorkers() error = %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Server did not stop after the worker returned")
+	}
+}
+
+func TestServerWorkerReturnAfterCancellationIsSuccessful(t *testing.T) {
+	t.Parallel()
+
+	listener := newBlockingListener()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := newServer(DefaultConfig(), logger, http.NewServeMux())
+	app.workers = []serverWorker{
+		{
+			name: "test worker",
+			run: func(ctx context.Context) error {
+				<-ctx.Done()
+
+				return errors.New("worker stopped")
+			},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- app.serveWithWorkers(ctx, listener)
+	}()
+
+	select {
+	case <-listener.accepting:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Server did not start")
+	}
+	cancel()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("serveWithWorkers() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Server did not stop after cancellation")
 	}
 }
 
@@ -314,10 +388,4 @@ func (localAddress) Network() string {
 
 func (a localAddress) String() string {
 	return string(a)
-}
-
-type metricsRunnerFunc func(context.Context) error
-
-func (f metricsRunnerFunc) Run(ctx context.Context) error {
-	return f(ctx)
 }
