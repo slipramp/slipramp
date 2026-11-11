@@ -213,7 +213,7 @@ function PromotionFilters({
 function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={760} type="native">
+      <Table.ScrollContainer minWidth={880} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
@@ -221,6 +221,7 @@ function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
               <Table.Th>Status</Table.Th>
               <Table.Th>Application</Table.Th>
               <Table.Th>Requested</Table.Th>
+              <Table.Th>Created</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -296,8 +297,10 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             name={promotion.requestedBy.displayName}
             nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
           />
-          <RelativeTime c="dimmed" size="xs" value={promotion.createdAt} />
         </Stack>
+      </Table.Td>
+      <Table.Td style={{ whiteSpace: "nowrap" }}>
+        <RelativeTime size="sm" value={promotion.createdAt} />
       </Table.Td>
     </Table.Tr>
   );
