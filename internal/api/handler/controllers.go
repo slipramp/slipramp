@@ -30,6 +30,10 @@ type ControllerCommandService interface {
 	Next(context.Context, string) (controllercommand.Command, error)
 }
 
+type ControllerCommandWakeups interface {
+	Watch(clusterName string) <-chan struct{}
+}
+
 const (
 	defaultControllerPollWaitSeconds = 25
 	maximumControllerPollWaitSeconds = 30
@@ -134,46 +138,48 @@ func (h *Handler) PollForControllerCommand(
 		return nil, err
 	}
 
-	command, err := h.controllerCommands.Next(ctx, principal.ClusterName)
-	if err != nil {
-		return nil, err
+	var timer *time.Timer
+	var timeout <-chan time.Time
+	if timeoutSeconds > 0 {
+		timer = time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
+		defer timer.Stop()
+		timeout = timer.C
 	}
-	if command != nil {
-		body, err := h.controllerCommandResponse(command)
+	timedOut := timeoutSeconds == 0
+
+	for {
+		var wakeup <-chan struct{}
+		if h.controllerCommandWakeups != nil {
+			// Register before consulting durable state so a concurrent commit
+			// cannot be lost between the database check and the wait.
+			wakeup = h.controllerCommandWakeups.Watch(principal.ClusterName)
+		}
+
+		command, err := h.controllerCommands.Next(ctx, principal.ClusterName)
 		if err != nil {
 			return nil, err
 		}
+		if command != nil {
+			body, err := h.controllerCommandResponse(command)
+			if err != nil {
+				return nil, err
+			}
 
-		return api.PollForControllerCommand200JSONResponse(body), nil
+			return api.PollForControllerCommand200JSONResponse(body), nil
+		}
+		if timedOut {
+			return api.PollForControllerCommand204Response{}, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timeout:
+			// Preserve the final scheduling check at the timeout boundary.
+			timedOut = true
+		case <-wakeup:
+		}
 	}
-
-	if timeoutSeconds == 0 {
-		return api.PollForControllerCommand204Response{}, nil
-	}
-
-	timer := time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
-	defer timer.Stop()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-timer.C:
-	}
-
-	command, err = h.controllerCommands.Next(ctx, principal.ClusterName)
-	if err != nil {
-		return nil, err
-	}
-	if command == nil {
-		return api.PollForControllerCommand204Response{}, nil
-	}
-
-	body, err := h.controllerCommandResponse(command)
-	if err != nil {
-		return nil, err
-	}
-
-	return api.PollForControllerCommand200JSONResponse(body), nil
 }
 
 func (h *Handler) ReportRunObservation(

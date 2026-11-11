@@ -210,6 +210,9 @@ func (s *Service) createRun(
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
 	}
+	if created.Review.State != ReviewStatePending {
+		s.notifyController(created)
+	}
 
 	return created, nil
 }

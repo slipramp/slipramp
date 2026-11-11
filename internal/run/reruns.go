@@ -101,6 +101,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 	if err != nil {
 		return Run{}, fmt.Errorf("create rerun: %w", err)
 	}
+	s.notifyController(created)
 
 	return created, nil
 }

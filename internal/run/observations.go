@@ -52,6 +52,7 @@ func (s *Service) ReportObservation(ctx context.Context, observation Observation
 			return fmt.Errorf("record Run observation: %w", err)
 		}
 	}
+	s.notifyControllerCluster(observation.ClusterName)
 
 	return nil
 }

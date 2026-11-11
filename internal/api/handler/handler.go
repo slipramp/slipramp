@@ -24,6 +24,7 @@ type Handler struct {
 	placementPreflights      PlacementPreflightService
 	identities               ControllerIdentityService
 	controllerCommands       ControllerCommandService
+	controllerCommandWakeups ControllerCommandWakeups
 	repositories             RepositoryService
 	gitTriggerDeliveries     GitTriggerDeliveryService
 	commits                  CommitService
@@ -72,6 +73,7 @@ type Dependencies struct {
 	PlacementPreflights      PlacementPreflightService
 	ControllerIdentities     ControllerIdentityService
 	ControllerCommands       ControllerCommandService
+	ControllerCommandWakeups ControllerCommandWakeups
 	Repositories             RepositoryService
 	GitTriggerDeliveries     GitTriggerDeliveryService
 	Commits                  CommitService
@@ -108,6 +110,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		placementPreflights:      dependencies.PlacementPreflights,
 		identities:               dependencies.ControllerIdentities,
 		controllerCommands:       dependencies.ControllerCommands,
+		controllerCommandWakeups: dependencies.ControllerCommandWakeups,
 		repositories:             dependencies.Repositories,
 		gitTriggerDeliveries:     dependencies.GitTriggerDeliveries,
 		commits:                  dependencies.Commits,

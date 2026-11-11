@@ -19,6 +19,8 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	t.Parallel()
 
 	service, runs := testService(t)
+	commands := &recordingControllerCommandNotifier{}
+	service.controllerCommands = commands
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	createdAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
 	service.newID = func() uuid.UUID { return runID }
@@ -80,6 +82,9 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		runs.idempotencyPrincipalID == nil ||
 		*runs.idempotencyPrincipalID != actor.ID {
 		t.Errorf("Run attribution = %#v, idempotency principal = %v", created.CreatedBy, runs.idempotencyPrincipalID)
+	}
+	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
+		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
 	}
 	if created.Snapshot.Repository.CloneURL !=
 		"https://github.com/example/infrastructure.git" ||
@@ -271,6 +276,8 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
+	commands := &recordingControllerCommandNotifier{}
+	service.controllerCommands = commands
 	pinnedRevision := testRevision()
 	pinnedRevision.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1302")
 	pinnedRevision.CommitSHA = strings.Repeat("b", 40)
@@ -305,5 +312,8 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	if created.CatalogRevisionID != pinnedRevision.ID || created.CommitSHA != pinnedRevision.CommitSHA ||
 		created.Review.State != ReviewStatePending {
 		t.Errorf("created Run pin = (%s, %s)", created.CatalogRevisionID, created.CommitSHA)
+	}
+	if len(commands.clusters) != 0 {
+		t.Errorf("pending-review Run notified Controllers for %v", commands.clusters)
 	}
 }

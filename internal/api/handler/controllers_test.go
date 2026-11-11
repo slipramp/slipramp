@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -220,6 +221,69 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	}
 	if commands.calls != 1 || commands.clusterName != "colo" {
 		t.Errorf("command selection calls = %d for %q, want 1 for colo", commands.calls, commands.clusterName)
+	}
+}
+
+func TestControllerPollWakesWhenCommandBecomesAvailable(t *testing.T) {
+	t.Parallel()
+
+	wakeups := controllercommand.NewWakeups()
+	commands := &wakeableControllerCommands{firstCheck: make(chan struct{})}
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request := httptest.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"/controller/v1/poll?timeoutSeconds=30",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+	httpHandler := NewHTTP(Dependencies{
+		Clusters:                 &recordingClusterService{},
+		ControllerIdentities:     controllerIdentityFor("controller-token", "colo"),
+		ControllerCommands:       commands,
+		ControllerCommandWakeups: wakeups,
+	}, HTTPOptions{})
+	done := make(chan struct{})
+	go func() {
+		httpHandler.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	select {
+	case <-commands.firstCheck:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Controller poll did not perform its initial scheduling check")
+	}
+	commands.Set(controllercommand.Cancellation{Run: run.Run{
+		ID:    runID,
+		Phase: run.PhaseAssigned,
+		Snapshot: run.Snapshot{Placement: run.PlacementSnapshot{
+			JobNamespace: "slipramp-runs",
+		}},
+	}})
+	wakeups.Notify("colo")
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Controller poll did not return after the wakeup")
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+
+	var command api.ControllerCommand
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if command.Type != api.ControllerCommandTypeCancelRun || command.Cancel == nil || command.Cancel.ID != runID {
+		t.Errorf("command = %#v", command)
+	}
+	if calls := commands.Calls(); calls != 2 {
+		t.Errorf("command selection calls = %d, want 2", calls)
 	}
 }
 
@@ -1063,6 +1127,41 @@ type recordingControllerCommands struct {
 	err         error
 	calls       int
 	clusterName string
+}
+
+type wakeableControllerCommands struct {
+	mutex      sync.Mutex
+	command    controllercommand.Command
+	calls      int
+	firstCheck chan struct{}
+	checked    sync.Once
+}
+
+func (s *wakeableControllerCommands) Next(
+	_ context.Context,
+	_ string,
+) (controllercommand.Command, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.calls++
+	s.checked.Do(func() { close(s.firstCheck) })
+
+	return s.command, nil
+}
+
+func (s *wakeableControllerCommands) Set(command controllercommand.Command) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.command = command
+}
+
+func (s *wakeableControllerCommands) Calls() int {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.calls
 }
 
 func (s *recordingControllerCommands) Next(_ context.Context, clusterName string) (controllercommand.Command, error) {

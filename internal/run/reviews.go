@@ -66,6 +66,9 @@ func (s *Service) DecideRunReview(ctx context.Context, request ReviewDecisionReq
 			return Run{}, fmt.Errorf("decide Run review: %w", err)
 		}
 	}
+	if record.Phase == PhaseQueued && record.Review.State == ReviewStateApproved {
+		s.notifyController(record)
+	}
 
 	return record, nil
 }

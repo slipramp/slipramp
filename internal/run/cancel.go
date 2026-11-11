@@ -43,6 +43,7 @@ func (s *Service) CancelRun(ctx context.Context, request CancelRequest) (Run, er
 			return Run{}, fmt.Errorf("cancel Run: %w", err)
 		}
 	}
+	s.notifyController(record)
 
 	return record, nil
 }

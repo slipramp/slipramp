@@ -110,18 +110,20 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 
 		return nil, fmt.Errorf("initialize notifications: %w", err)
 	}
+	controllerCommandWakeups := controllercommand.NewWakeups()
 	runs := run.NewService(run.Dependencies{
-		Creation:      persistence.database,
-		History:       persistence.database,
-		Scheduling:    persistence.database,
-		Assignments:   persistence.database,
-		Cancellations: persistence.database,
-		Reviews:       persistence.database,
-		Observations:  persistence.database,
-		Repositories:  repositories,
-		Catalogs:      catalogs,
-		Placements:    cfg.Placements,
-		Notifications: notificationService,
+		Creation:           persistence.database,
+		History:            persistence.database,
+		Scheduling:         persistence.database,
+		Assignments:        persistence.database,
+		Cancellations:      persistence.database,
+		Reviews:            persistence.database,
+		Observations:       persistence.database,
+		ControllerCommands: controllerCommandWakeups,
+		Repositories:       repositories,
+		Catalogs:           catalogs,
+		Placements:         cfg.Placements,
+		Notifications:      notificationService,
 	})
 	artifacts := artifact.NewService(artifact.Dependencies{
 		Runs:           persistence.database,
@@ -277,6 +279,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			PlacementPreflights:      placementPreflights,
 			ControllerIdentities:     identities,
 			ControllerCommands:       controllerCommands,
+			ControllerCommandWakeups: controllerCommandWakeups,
 			Repositories:             repositories,
 			GitTriggerDeliveries:     persistence.database,
 			Commits:                  persistence.database,

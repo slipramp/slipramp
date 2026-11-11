@@ -17,6 +17,8 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	t.Parallel()
 
 	service, runs := testService(t)
+	commands := &recordingControllerCommandNotifier{}
+	service.controllerCommands = commands
 	original := finishedTestRun(t)
 	originalRelevanceCommitSHA := strings.Repeat("b", 40)
 	original.TargetRelevanceCommitSHA = &originalRelevanceCommitSHA
@@ -70,6 +72,9 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	if !reflect.DeepEqual(created.Parameters, original.Parameters) ||
 		!reflect.DeepEqual(created.Snapshot, original.Snapshot) {
 		t.Errorf("exact rerun did not preserve frozen execution")
+	}
+	if len(commands.clusters) != 1 || commands.clusters[0] != original.ClusterName {
+		t.Errorf("Controller command notifications = %v, want [%s]", commands.clusters, original.ClusterName)
 	}
 }
 

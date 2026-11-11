@@ -140,6 +140,14 @@ type recordingRuns struct {
 	notificationPlan       *notification.EnqueuePlan
 }
 
+type recordingControllerCommandNotifier struct {
+	clusters []string
+}
+
+func (n *recordingControllerCommandNotifier) Notify(clusterName string) {
+	n.clusters = append(n.clusters, clusterName)
+}
+
 func (s *recordingRuns) DecideRunReview(_ context.Context, transition ReviewTransition) (Run, error) {
 	s.reviewTransition = transition
 

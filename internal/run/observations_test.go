@@ -14,7 +14,8 @@ func TestReportObservationRecordsObservation(t *testing.T) {
 	t.Parallel()
 
 	runs := &recordingObservations{}
-	service := &Service{observations: runs}
+	commands := &recordingControllerCommandNotifier{}
+	service := &Service{observations: runs, controllerCommands: commands}
 	location := time.FixedZone("test", -6*60*60)
 	reportedAt := time.Date(2026, time.October, 17, 10, 0, 0, 0, location)
 	service.now = func() time.Time { return reportedAt }
@@ -31,6 +32,9 @@ func TestReportObservationRecordsObservation(t *testing.T) {
 	}
 	if !runs.observation.ObservedAt.Equal(reportedAt) || runs.observation.ObservedAt.Location() != time.UTC {
 		t.Errorf("observed at = %s, want %s in UTC", runs.observation.ObservedAt, reportedAt)
+	}
+	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
+		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
 	}
 }
 

@@ -22,8 +22,13 @@ func TestDecideRunReviewNormalizesComment(t *testing.T) {
 		DisplayName: "Ada Lovelace",
 	}
 	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
-	runs := &recordingRuns{reviewed: Run{ID: runID}}
-	service := &Service{reviews: runs, now: func() time.Time { return decidedAt }}
+	runs := &recordingRuns{reviewed: Run{
+		ID: runID, Phase: PhaseQueued, ClusterName: "colo", Review: Review{State: ReviewStateApproved},
+	}}
+	commands := &recordingControllerCommandNotifier{}
+	service := &Service{
+		reviews: runs, controllerCommands: commands, now: func() time.Time { return decidedAt },
+	}
 	comment := "  Reviewed against change request 42.  \n"
 
 	record, err := service.DecideRunReview(context.Background(), ReviewDecisionRequest{
@@ -39,6 +44,9 @@ func TestDecideRunReviewNormalizesComment(t *testing.T) {
 	if !runs.reviewTransition.DecidedAt.Equal(decidedAt) ||
 		runs.reviewTransition.DecidedAt.Location() != time.UTC {
 		t.Errorf("decided at = %s, want %s in UTC", runs.reviewTransition.DecidedAt, decidedAt)
+	}
+	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
+		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
 	}
 }
 

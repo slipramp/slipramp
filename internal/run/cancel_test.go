@@ -15,9 +15,10 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 	t.Parallel()
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
-	want := Run{ID: runID, Phase: PhaseAssigned}
+	want := Run{ID: runID, Phase: PhaseAssigned, ClusterName: "colo"}
 	runs := &recordingCancellations{canceled: want}
-	service := &Service{cancellations: runs}
+	commands := &recordingControllerCommandNotifier{}
+	service := &Service{cancellations: runs, controllerCommands: commands}
 	location := time.FixedZone("test", -6*60*60)
 	requestedAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return requestedAt }
@@ -40,6 +41,9 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 	if runs.canceledBy == nil || runs.canceledBy.PrincipalID != actor.ID ||
 		runs.canceledBy.DisplayName != actor.DisplayName {
 		t.Errorf("cancellation actor = %#v", runs.canceledBy)
+	}
+	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
+		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
 	}
 }
 
