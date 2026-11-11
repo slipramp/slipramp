@@ -21,7 +21,7 @@ test("unavailable promotion is presented without actionable policy controls", ()
     assert.equal(presentation.editable, false);
     assert.equal(presentation.label, "Not promotable");
     assert.equal(presentation.reviewRequiredDisabled, true);
-    assert.notEqual(presentation.label, "Automatic policy");
+    assert.notEqual(presentation.label, "Auto");
     assert.notEqual(presentation.label, "Review required");
   }
 });
@@ -33,7 +33,7 @@ test("policy editing remains available for promotable metadata-free and enriched
   );
 
   assert.equal(metadataFree.editable, true);
-  assert.equal(metadataFree.label, "Automatic policy");
+  assert.equal(metadataFree.label, "Auto");
   assert.equal(enriched.editable, true);
   assert.equal(enriched.label, "Review required");
 });

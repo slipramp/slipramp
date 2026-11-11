@@ -44,6 +44,7 @@ import { submitPromotionCreation } from "~/features/promotions/promotion-creatio
 import {
   buildFreightColumns,
   buildFreightRows,
+  freightArtifactReference,
   freightArtifactVersionLabel,
   freightAlignmentForSource,
   freightAlignmentPresentation,
@@ -670,10 +671,9 @@ function StageInventory({
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Stage</Table.Th>
-              <Table.Th>Application / Environment</Table.Th>
-              <Table.Th>Health</Table.Th>
+              <Table.Th miw={180}>Health</Table.Th>
               <Table.Th>Current Freight</Table.Th>
-              <Table.Th>Policy</Table.Th>
+              <Table.Th miw={150}>Policy</Table.Th>
               <Table.Th>Last observed</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
@@ -696,6 +696,17 @@ function StageInventory({
                         ) : (
                           <Text fw={650}>{stage.name}</Text>
                         )}
+                        {stage.enrichment?.application || stage.enrichment?.environment ? (
+                          <Text size="sm">
+                            {[stage.enrichment.application, stage.enrichment.environment]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </Text>
+                        ) : (
+                          <Text c="dimmed" size="xs">
+                            Kargo native
+                          </Text>
+                        )}
                         {stage.controlFlow ? (
                           <Badge size="xs" variant="light">
                             Control flow
@@ -704,34 +715,35 @@ function StageInventory({
                       </Stack>
                     </Table.Td>
                     <Table.Td>
-                      <Stack gap={2}>
-                        <Text size="sm">{stage.enrichment?.application ?? "Kargo native"}</Text>
-                        <Text c="dimmed" size="xs">
-                          {stage.enrichment?.environment ?? "No environment metadata"}
-                        </Text>
-                      </Stack>
-                    </Table.Td>
-                    <Table.Td>
                       <StageHealthBadge stage={stage} />
                     </Table.Td>
                     <Table.Td>
                       {currentFreight.length > 0 ? (
                         <Stack gap={3}>
-                          {currentFreight.slice(0, 2).map((freight) => (
+                          {currentFreight.map((freight) => (
                             <Stack gap={0} key={`${freight.origin}:${freight.name}`}>
-                              <Text fw={600} size="sm">
-                                {freightDisplayLabel(freight)}
-                              </Text>
-                              <Text c="dimmed" size="xs">
-                                {freightOriginLabel(freight.origin)}
-                              </Text>
+                              {freight.artifacts.length > 0 ? (
+                                <>
+                                  {freight.artifacts.map((artifact) => (
+                                    <Text
+                                      fw={600}
+                                      key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
+                                      size="sm"
+                                    >
+                                      {freightArtifactReference(artifact)}
+                                    </Text>
+                                  ))}
+                                  <Text c="dimmed" size="xs">
+                                    {freightOriginLabel(freight.origin)}
+                                  </Text>
+                                </>
+                              ) : (
+                                <Text fw={600} size="sm">
+                                  {freightOriginLabel(freight.origin)}
+                                </Text>
+                              )}
                             </Stack>
                           ))}
-                          {currentFreight.length > 2 ? (
-                            <Text c="dimmed" size="xs">
-                              +{currentFreight.length - 2} more
-                            </Text>
-                          ) : null}
                         </Stack>
                       ) : (
                         <Text c="dimmed" size="sm">
@@ -1100,36 +1112,6 @@ function StageFreight({
         </Text>
       )}
 
-      {canWrite && upstreamPromotions.length > 0 ? (
-        <Stack gap="xs">
-          <Text fw={600} size="sm">
-            Promote from upstream
-          </Text>
-          {upstreamPromotions.map((promotion) => (
-            <Paper key={promotion.key} p="sm" withBorder>
-              <Group align="center" justify="space-between" wrap="wrap">
-                <Stack gap={2}>
-                  <Text fw={600} size="sm">
-                    {promotion.sourceStageName}
-                  </Text>
-                  <Text c="dimmed" size="xs">
-                    {freightDisplayLabel(promotion.freight)}
-                  </Text>
-                </Stack>
-                <PromotionCreateButton
-                  environment={stage.enrichment?.environment}
-                  freight={[promotion.freight]}
-                  initialFreightName={promotion.freight.name}
-                  sourceStageId={promotion.sourceStageId}
-                  sourceStageName={promotion.sourceStageName}
-                  stage={stage}
-                />
-              </Group>
-            </Paper>
-          ))}
-        </Stack>
-      ) : null}
-
       {requests.length > 0 ? (
         <Accordion variant="contained">
           <Accordion.Item value="other-freight">
@@ -1203,6 +1185,36 @@ function StageFreight({
             </Accordion.Panel>
           </Accordion.Item>
         </Accordion>
+      ) : null}
+
+      {canWrite && upstreamPromotions.length > 0 ? (
+        <Stack gap="xs">
+          <Text fw={600} size="sm">
+            Promote from upstream
+          </Text>
+          {upstreamPromotions.map((promotion) => (
+            <Paper key={promotion.key} p="sm" withBorder>
+              <Group align="center" justify="space-between" wrap="wrap">
+                <Stack gap={2}>
+                  <Text fw={600} size="sm">
+                    {promotion.sourceStageName}
+                  </Text>
+                  <Text c="dimmed" size="xs">
+                    {freightDisplayLabel(promotion.freight)}
+                  </Text>
+                </Stack>
+                <PromotionCreateButton
+                  environment={stage.enrichment?.environment}
+                  freight={[promotion.freight]}
+                  initialFreightName={promotion.freight.name}
+                  sourceStageId={promotion.sourceStageId}
+                  sourceStageName={promotion.sourceStageName}
+                  stage={stage}
+                />
+              </Group>
+            </Paper>
+          ))}
+        </Stack>
       ) : null}
     </Stack>
   );

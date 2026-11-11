@@ -11,7 +11,7 @@ export function promotionStagePolicyPresentation(stage: PromotionStagePolicyPres
 
   return {
     editable,
-    label: editable ? (reviewRequired ? "Review required" : "Automatic policy") : "Not promotable",
+    label: editable ? (reviewRequired ? "Review required" : "Auto") : "Not promotable",
     reviewRequiredDisabled: !editable || stage.capabilities.review.status !== "ready",
   };
 }

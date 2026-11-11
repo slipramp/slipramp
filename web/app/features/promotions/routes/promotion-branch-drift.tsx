@@ -1,4 +1,4 @@
-import { Alert, Badge, Code, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Group, Paper, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
 import { redirect, type ShouldRevalidateFunctionArgs } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -227,8 +227,6 @@ function BranchDriftRepository({
   repository: PromotionBranchDriftRepository;
   repositoryId?: string;
 }>) {
-  const sharedSourcePaths = commonSourcePaths(repository.stages);
-
   return (
     <Paper withBorder>
       <Stack gap={0}>
@@ -240,20 +238,6 @@ function BranchDriftRepository({
             <Text c="dimmed" size="sm">
               Source branch {repository.sourceBranch ?? "unavailable"}
             </Text>
-            {sharedSourcePaths.length > 0 ? (
-              <Group gap="xs" mt={4} wrap="wrap">
-                <Text c="dimmed" size="xs">
-                  {sharedSourcePaths.length === 1
-                    ? "Shared watch path on this page"
-                    : "Shared watch paths on this page"}
-                </Text>
-                {sharedSourcePaths.map((path) => (
-                  <Text ff="monospace" key={path} size="xs">
-                    {path}
-                  </Text>
-                ))}
-              </Group>
-            ) : null}
           </Stack>
           <Group gap={4}>
             <Text c="dimmed" size="sm">
@@ -284,7 +268,6 @@ function BranchDriftRepository({
                   canWrite={canWrite}
                   key={stage.id}
                   repositoryId={repositoryId}
-                  sharedSourcePaths={sharedSourcePaths}
                   sourceBranch={repository.sourceBranch}
                   stage={stage}
                 />
@@ -299,19 +282,15 @@ function BranchDriftRepository({
 
 function BranchDriftRow({
   canWrite,
-  sharedSourcePaths,
   sourceBranch,
   stage,
   repositoryId,
 }: Readonly<{
   canWrite: boolean;
   repositoryId?: string;
-  sharedSourcePaths: string[];
   sourceBranch?: string;
   stage: PromotionBranchDriftStage;
 }>) {
-  const stageSpecificPaths = stage.sourcePaths.filter((path) => !sharedSourcePaths.includes(path));
-
   return (
     <Table.Tr>
       <Table.Td>
@@ -331,35 +310,33 @@ function BranchDriftRow({
           <Text c="dimmed" size="xs">
             {stage.integration} · {stage.cluster} · {stage.project}
           </Text>
-          {stageSpecificPaths.length > 0 ? (
-            <Group gap={4} mt={4} wrap="wrap">
-              {stageSpecificPaths.map((path) => (
-                <Code key={path}>{path}</Code>
-              ))}
-            </Group>
-          ) : null}
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Stack align="flex-start" gap="xs">
+        {stage.message ? (
+          <Tooltip label={stage.message} maw={300} multiline withArrow>
+            <Badge
+              aria-label={`${statusLabel(stage.status)}: ${stage.message}`}
+              color={statusColor(stage.status)}
+              variant="light"
+            >
+              {statusLabel(stage.status)}
+            </Badge>
+          </Tooltip>
+        ) : (
           <Badge color={statusColor(stage.status)} variant="light">
             {statusLabel(stage.status)}
           </Badge>
-          {stage.message ? (
-            <Text c="dimmed" maw={300} size="xs">
-              {stage.message}
-            </Text>
-          ) : null}
-        </Stack>
+        )}
       </Table.Td>
-      <Table.Td>
+      <Table.Td style={{ whiteSpace: "nowrap" }}>
         <CommitMoment
           branch={sourceBranch}
           commit={stage.sourceBranchCommit}
           repositoryId={repositoryId}
         />
       </Table.Td>
-      <Table.Td>
+      <Table.Td style={{ whiteSpace: "nowrap" }}>
         <CommitMoment
           branch={stage.targetBranch}
           commit={stage.acknowledgedRenderCommit}
@@ -395,7 +372,7 @@ function CommitMoment({
       <Text fw={600} size="sm">
         {branch ?? "Unknown branch"}
       </Text>
-      <Group gap="xs" wrap="wrap">
+      <Group gap="xs" wrap="nowrap">
         <Text c="dimmed" size="xs">
           Commit
         </Text>
@@ -405,7 +382,7 @@ function CommitMoment({
           <Text size="xs">Unknown</Text>
         )}
       </Group>
-      <Group gap="xs" wrap="wrap">
+      <Group gap="xs" wrap="nowrap">
         <Text c="dimmed" size="xs">
           Date
         </Text>
@@ -439,17 +416,6 @@ function statusLabel(status: PromotionBranchDriftStage["status"]) {
     default:
       return "Unknown";
   }
-}
-
-function commonSourcePaths(stages: PromotionBranchDriftStage[]) {
-  const [firstStage, ...remainingStages] = stages;
-  if (!firstStage) {
-    return [];
-  }
-
-  return firstStage.sourcePaths.filter((path) =>
-    remainingStages.every((stage) => stage.sourcePaths.includes(path)),
-  );
 }
 
 function optionalValue(value: string | null) {
