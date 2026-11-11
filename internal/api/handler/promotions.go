@@ -42,6 +42,7 @@ type PromotionStageService interface {
 		clusterName string,
 		replacement promotion.StageSnapshotReplacement,
 	) error
+	ListIntegrationHealth(context.Context) ([]promotion.IntegrationHealth, error)
 }
 
 type PromotionReviewService interface {
@@ -334,6 +335,12 @@ func (h *Handler) ListPromotions(
 	}
 	if request.Params.Status != nil {
 		filter.Status = promotion.LifecycleState(*request.Params.Status)
+	}
+	if request.Params.CreationDispatch != nil {
+		filter.CreationDispatch = promotion.CreationDispatchPhase(*request.Params.CreationDispatch)
+	}
+	if request.Params.KargoOutcome != nil {
+		filter.KargoOutcome = promotion.KargoPhase(*request.Params.KargoOutcome)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)

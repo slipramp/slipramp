@@ -19,6 +19,16 @@ const (
 	LifecycleError     LifecycleState = "error"
 )
 
+func (p CreationDispatchPhase) Valid() bool {
+	switch p {
+	case CreationDispatchNotApplicable, CreationDispatchAwaitingDelivery,
+		CreationDispatchDelivered, CreationDispatchPhaseFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // PromotionLifecycle is the public review lifecycle. It does not include the
 // independently observed Kargo execution outcome.
 type PromotionLifecycle struct {

@@ -293,16 +293,18 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 	service := NewReviewService(nil, store)
 	service.now = func() time.Time { return now }
 	filter := PromotionListFilter{
-		RepositoryID: new(uuid.New()),
-		CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
-		Status:       LifecycleExpired,
-		Integration:  "prod",
-		StageID:      new(uuid.New()),
-		Cluster:      "colo",
-		Project:      "kargo-core",
-		Application:  "external-dns",
-		Limit:        1,
-		Offset:       2,
+		RepositoryID:     new(uuid.New()),
+		CommitSHA:        "0123456789abcdef0123456789abcdef01234567",
+		Status:           LifecycleExpired,
+		CreationDispatch: CreationDispatchPhaseFailed,
+		KargoOutcome:     KargoPhaseErrored,
+		Integration:      "prod",
+		StageID:          new(uuid.New()),
+		Cluster:          "colo",
+		Project:          "kargo-core",
+		Application:      "external-dns",
+		Limit:            1,
+		Offset:           2,
 	}
 
 	result, err := service.ListPromotions(t.Context(), filter)
@@ -331,6 +333,20 @@ func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("ListPromotions() error = %v, want invalid filter", err)
+	}
+}
+
+func TestReviewServiceRejectsInvalidOperationalFilters(t *testing.T) {
+	t.Parallel()
+
+	service := NewReviewService(nil, &reviewStore{})
+	for _, filter := range []PromotionListFilter{
+		{CreationDispatch: CreationDispatchPhase("missing"), Limit: DefaultListLimit},
+		{KargoOutcome: KargoPhase("Running"), Limit: DefaultListLimit},
+	} {
+		if _, err := service.ListPromotions(t.Context(), filter); !errors.Is(err, ErrInvalid) {
+			t.Errorf("ListPromotions(%#v) error = %v, want invalid filter", filter, err)
+		}
 	}
 }
 

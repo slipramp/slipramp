@@ -80,6 +80,12 @@ WHERE id = $1`, fixture.stage.ID, createdAt.Add(6*time.Minute)); err != nil {
 			name: "pending first then newest and UUID", total: 5, ids: allIDs,
 			filter: promotion.PromotionListFilter{Limit: 10},
 		},
+		{
+			name: "Kargo-originated delivery state", total: 5, ids: allIDs,
+			filter: promotion.PromotionListFilter{
+				CreationDispatch: promotion.CreationDispatchNotApplicable, Limit: 10,
+			},
+		},
 		{name: "ordered page", filter: promotion.PromotionListFilter{Limit: 2, Offset: 1}, total: 5, ids: tiedIDs},
 		{name: "empty page retains total", filter: promotion.PromotionListFilter{Limit: 2, Offset: 1 << 31}, total: 5},
 		{

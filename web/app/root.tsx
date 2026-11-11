@@ -27,6 +27,8 @@ import {
 } from "react-router";
 
 import { csrfProtectionMiddleware } from "~/api/csrf.server";
+import { createServerAPIClient } from "~/api/client.server";
+import { getClientCompatibility } from "~/api/generated";
 import { shouldAutomaticallyBeginOIDCLogin } from "~/api/request-auth.server";
 import {
   getProductAuthentication,
@@ -60,14 +62,20 @@ export function headers() {
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
-  const authentication = await getProductAuthentication(context);
+  const [authentication, compatibility] = await Promise.all([
+    getProductAuthentication(context),
+    getClientCompatibility({ client: createServerAPIClient(request, context) }),
+  ]);
   if (authentication.authentication === "required") {
     if (shouldAutomaticallyBeginOIDCLogin(request)) {
       return redirect("/api/v1/auth/login");
     }
   }
 
-  return authentication;
+  return {
+    ...authentication,
+    kargoEnabled: compatibility.data?.kargoEnabled ?? true,
+  };
 }
 
 export function Layout({ children }: Readonly<{ children: ReactNode }>) {
@@ -104,7 +112,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <ProductShell principal={loaderData.principal}>
+    <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
       <Outlet />
     </ProductShell>
   );

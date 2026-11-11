@@ -45,10 +45,18 @@ SELECT
     target_branch,
     status,
     message,
+    dispatched_at,
+    dispatch_failed_at,
+    dispatch_diagnostic,
+    kargo_outcome_phase,
+    kargo_outcome_observed_at,
+    kargo_outcome_diagnostic,
     created_at,
     updated_at
 FROM promotions
 WHERE status IN ('pending', 'error')
+   OR dispatch_failed_at IS NOT NULL
+   OR kargo_outcome_phase IN ('Failed', 'Errored', 'Aborted')
 ORDER BY created_at DESC, id DESC;
 
 -- name: ListInboxFailedGitTriggerDeliveries :many

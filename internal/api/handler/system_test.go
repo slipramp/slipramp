@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
@@ -61,10 +62,29 @@ func TestClientCompatibilityEndpoint(t *testing.T) {
 	if body.ServerVersion != "test-version" || body.ProductAPIContract != productAPIContract {
 		t.Errorf("compatibility response = %#v", body)
 	}
+	if body.KargoEnabled {
+		t.Error("Kargo reported enabled without a configured integration")
+	}
 	if len(body.AuthenticationMethods) != 2 ||
 		body.AuthenticationMethods[0] != "oidc-native" ||
 		body.AuthenticationMethods[1] != "api-key" {
 		t.Errorf("authentication methods = %#v, want [oidc-native api-key]", body.AuthenticationMethods)
+	}
+}
+
+func TestClientCompatibilityReportsConfiguredKargo(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(Dependencies{KargoIntegrations: map[string]promotion.IntegrationConfig{
+		"prod": {},
+	}})
+	response, err := handler.GetClientCompatibility(t.Context(), api.GetClientCompatibilityRequestObject{})
+	if err != nil {
+		t.Fatalf("GetClientCompatibility() error = %v", err)
+	}
+	body, ok := response.(api.GetClientCompatibility200JSONResponse)
+	if !ok || !body.KargoEnabled {
+		t.Errorf("compatibility response = %#v", response)
 	}
 }
 

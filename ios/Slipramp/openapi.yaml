@@ -58,7 +58,7 @@ paths:
     get:
       operationId: getClientCompatibility
       summary: Check client compatibility
-      description: Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+      description: Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
       security: []
       tags:
         - System
@@ -3998,8 +3998,19 @@ paths:
             maxLength: 200
         - name: status
           in: query
+          description: Limit results by Slipramp review lifecycle.
           schema:
             $ref: '#/components/schemas/PromotionStatus'
+        - name: creationDispatch
+          in: query
+          description: Limit results by Slipramp-to-Kargo object delivery state.
+          schema:
+            $ref: '#/components/schemas/PromotionCreationDispatchPhase'
+        - name: kargoOutcome
+          in: query
+          description: Limit results by exact terminal phase reported by Kargo.
+          schema:
+            $ref: '#/components/schemas/KargoPromotionOutcomePhase'
         - name: cluster
           in: query
           schema:
@@ -4455,6 +4466,7 @@ components:
         - serverVersion
         - productApiContract
         - authenticationMethods
+        - kargoEnabled
       properties:
         serverVersion:
           type: string
@@ -4472,6 +4484,9 @@ components:
             type: string
             minLength: 1
             maxLength: 64
+        kargoEnabled:
+          type: boolean
+          description: Whether this Server has at least one Kargo integration configured.
     DependencyStatus:
       type: string
       enum:
@@ -5557,6 +5572,7 @@ components:
         - connectionState
         - firstSeenAt
         - lastSeenAt
+        - kargoIntegrations
       properties:
         name:
           type: string
@@ -5578,6 +5594,37 @@ components:
           type: string
           format: date-time
           description: Time at which the Server most recently heard from the controller.
+        kargoIntegrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/KargoIntegrationHealth'
+    KargoIntegrationHealth:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - observationState
+        - maximumObservationAgeSeconds
+      properties:
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        observationState:
+          type: string
+          enum:
+            - not-observed
+            - current
+            - stale
+          description: Freshness of the most recent complete Kargo Stage snapshot accepted by the Server.
+        lastObservedAt:
+          type: string
+          format: date-time
+        maximumObservationAgeSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+        kargoUrl:
+          type: string
+          format: uri
     ClusterList:
       type: object
       required:
@@ -7267,6 +7314,20 @@ components:
           type: string
           format: uri
           description: Direct link to the snapshotted Stage Application in the configured Argo CD UI.
+    PromotionCreationDispatchPhase:
+      type: string
+      enum:
+        - not-applicable
+        - awaiting-delivery
+        - delivered
+        - failed
+    KargoPromotionOutcomePhase:
+      type: string
+      enum:
+        - Succeeded
+        - Failed
+        - Errored
+        - Aborted
     PromotionCreate:
       type: object
       additionalProperties: false
@@ -9715,12 +9776,7 @@ components:
         - attemptCount
       properties:
         phase:
-          type: string
-          enum:
-            - not-applicable
-            - awaiting-delivery
-            - delivered
-            - failed
+          $ref: '#/components/schemas/PromotionCreationDispatchPhase'
         attemptCount:
           type: integer
           minimum: 0
@@ -9748,12 +9804,7 @@ components:
         - observedAt
       properties:
         phase:
-          type: string
-          enum:
-            - Succeeded
-            - Failed
-            - Errored
-            - Aborted
+          $ref: '#/components/schemas/KargoPromotionOutcomePhase'
           description: Exact terminal phase reported by Kargo.
         observedAt:
           type: string

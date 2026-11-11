@@ -216,22 +216,36 @@ SELECT
     target_branch,
     status,
     message,
+    dispatched_at,
+    dispatch_failed_at,
+    dispatch_diagnostic,
+    kargo_outcome_phase,
+    kargo_outcome_observed_at,
+    kargo_outcome_diagnostic,
     created_at,
     updated_at
 FROM promotions
 WHERE status IN ('pending', 'error')
+   OR dispatch_failed_at IS NOT NULL
+   OR kargo_outcome_phase IN ('Failed', 'Errored', 'Aborted')
 ORDER BY created_at DESC, id DESC
 `
 
 type ListInboxPromotionsRow struct {
-	ID              pgtype.UUID
-	StageSnapshot   []byte
-	CandidateBranch *string
-	TargetBranch    *string
-	Status          string
-	Message         *string
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
+	ID                     pgtype.UUID
+	StageSnapshot          []byte
+	CandidateBranch        *string
+	TargetBranch           *string
+	Status                 string
+	Message                *string
+	DispatchedAt           pgtype.Timestamptz
+	DispatchFailedAt       pgtype.Timestamptz
+	DispatchDiagnostic     *string
+	KargoOutcomePhase      *string
+	KargoOutcomeObservedAt pgtype.Timestamptz
+	KargoOutcomeDiagnostic *string
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
 }
 
 func (q *Queries) ListInboxPromotions(ctx context.Context) ([]ListInboxPromotionsRow, error) {
@@ -250,6 +264,12 @@ func (q *Queries) ListInboxPromotions(ctx context.Context) ([]ListInboxPromotion
 			&i.TargetBranch,
 			&i.Status,
 			&i.Message,
+			&i.DispatchedAt,
+			&i.DispatchFailedAt,
+			&i.DispatchDiagnostic,
+			&i.KargoOutcomePhase,
+			&i.KargoOutcomeObservedAt,
+			&i.KargoOutcomeDiagnostic,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

@@ -244,6 +244,11 @@ func (s *BranchDriftService) List(
 				stage.Stage,
 				s.integrations[stage.Stage.Integration],
 				items[itemIndex].Repository.CloneURL,
+				stageObservationStale(
+					stage.Stage,
+					s.integrations[stage.Stage.Integration],
+					s.currentTime(),
+				),
 			)
 		}
 	}

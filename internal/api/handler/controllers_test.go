@@ -75,6 +75,44 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	}
 }
 
+func TestListClustersIncludesConfiguredKargoIntegrationHealth(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
+	clusters := &recordingClusterService{clusters: []cluster.Status{{
+		Name:            "colo",
+		FirstSeenAt:     observedAt,
+		LastSeenAt:      observedAt,
+		ConnectionState: cluster.ConnectionStateConnected,
+	}}}
+	stages := &recordingPromotionService{health: []promotion.IntegrationHealth{{
+		Name: "prod", ClusterName: "colo", KargoURL: "https://kargo.example",
+		ObservationState: promotion.IntegrationStale, LastObservedAt: &observedAt,
+		MaximumObservationAge: 5 * time.Minute,
+	}}}
+	handler := newHandler(Dependencies{Clusters: clusters, PromotionStages: stages})
+
+	response, err := handler.ListClusters(t.Context(), api.ListClustersRequestObject{
+		Params: api.ListClustersParams{},
+	})
+	if err != nil {
+		t.Fatalf("ListClusters() error = %v", err)
+	}
+	body, ok := response.(api.ListClusters200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %T", response)
+	}
+	if len(body.Items) != 1 || len(body.Items[0].KargoIntegrations) != 1 {
+		t.Fatalf("clusters = %#v", body.Items)
+	}
+	health := body.Items[0].KargoIntegrations[0]
+	if health.Name != "prod" || health.ObservationState != api.KargoIntegrationHealthObservationStateStale ||
+		health.LastObservedAt == nil || health.MaximumObservationAgeSeconds != 300 ||
+		health.KargoURL == nil || *health.KargoURL != "https://kargo.example" {
+		t.Errorf("Kargo integration health = %#v", health)
+	}
+}
+
 func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	t.Parallel()
 
@@ -230,7 +268,7 @@ func TestControllerPollWakesWhenCommandBecomesAvailable(t *testing.T) {
 	wakeups := controllercommand.NewWakeups()
 	commands := &wakeableControllerCommands{firstCheck: make(chan struct{})}
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	request := httptest.NewRequestWithContext(
 		ctx,

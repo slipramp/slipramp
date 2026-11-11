@@ -36,6 +36,14 @@ import { CommitReference } from "~/features/commits/git-commit";
 import { ContextValue } from "~/shared/context-value";
 import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
+import {
+  promotionDeliveryStatus,
+  promotionExecutionStatus,
+  promotionOverallStatus,
+  promotionReviewStatus,
+  type PromotionStatusPresentation,
+} from "~/features/promotions/promotion-status";
+import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
@@ -52,7 +60,6 @@ import {
 import { pageTitle } from "~/shared/page-title";
 import { runStatusLabel } from "~/features/runs/run-status";
 
-import { promotionStatusColor, promotionStatusLabel } from "./promotions";
 import styles from "./promotion.module.css";
 import type { Route } from "./+types/promotion";
 
@@ -151,6 +158,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
   const promotion = loaderData.promotion;
   const canWrite = canWritePromotions(loaderData.principal);
   const detailActivity = promotionDetailActivity(promotion);
+  const overallStatus = promotionOverallStatus(promotion);
 
   return (
     <Stack gap="lg">
@@ -176,11 +184,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           ) : undefined
         }
         back={<PageBackLink label="Back to promotions" to="/promotions" />}
-        badges={
-          <Badge color={promotionStatusColor(promotion)} variant="light">
-            {promotionStatusLabel(promotion)}
-          </Badge>
-        }
+        badges={<PromotionStatusBadge status={overallStatus} />}
         details={
           <PageHeaderFacts>
             <PageHeaderFact label="Promotion">
@@ -209,6 +213,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       />
 
       <KawaiiActivity activity={detailActivity} animationKey={promotion.id} />
+      <PromotionStatusDetails promotion={promotion} />
 
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">
@@ -232,7 +237,6 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <CreationDispatchNotice promotion={promotion} />
       <KargoOutcomeNotice promotion={promotion} />
 
-      <PromotionContext promotion={promotion} />
       <Preparation promotion={promotion} />
       <Diffs
         argoDiff={loaderData.argoDiff}
@@ -241,69 +245,72 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         promotion={promotion}
       />
       <DecisionPanel canWrite={canWrite} promotion={promotion} />
+      <PromotionContext promotion={promotion} />
     </Stack>
   );
 }
 
 function CreationDispatchNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
   const dispatch = promotion.creationDispatch;
-  if (dispatch.phase === "not-applicable" || dispatch.phase === "delivered") return null;
-  if (dispatch.phase === "failed") {
-    return (
-      <Alert color="red" title="Kargo object delivery failed">
-        {dispatch.diagnostic ?? "Slipramp could not materialize the Kargo Promotion."}
-      </Alert>
-    );
-  }
+  if (dispatch.phase !== "failed") return null;
 
   return (
-    <Alert color="cyan" title="Awaiting Kargo object delivery">
-      Slipramp approved and persisted this Promotion. The responsible Controller is delivering the
-      exact Stage and Freight identity to Kargo.
+    <Alert color="red" title="Kargo object delivery failed">
+      {dispatch.diagnostic ?? "Slipramp could not materialize the Kargo Promotion."}
     </Alert>
   );
 }
 
 function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
-  if (
-    promotion.status === "approved" &&
-    promotion.creationDispatch.phase !== "awaiting-delivery" &&
-    promotion.creationDispatch.phase !== "failed" &&
-    !promotion.kargoOutcome
-  ) {
-    return (
-      <Alert className={styles.outcomeNotice} color="cyan" title="Approved — Kargo still running">
-        Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal
-        Promotion phase.
-      </Alert>
-    );
-  }
-  if (!promotion.kargoOutcome) return null;
+  if (!promotion.kargoOutcome || promotion.kargoOutcome.phase === "Succeeded") return null;
 
-  const succeeded = promotion.kargoOutcome.phase === "Succeeded";
   return (
-    <Alert
-      className={styles.outcomeNotice}
-      color={succeeded ? "green" : "red"}
-      title={
-        succeeded ? "Kargo Promotion succeeded" : `Kargo Promotion ${promotion.kargoOutcome.phase}`
-      }
-    >
+    <Alert color="red" title={`Kargo Promotion ${promotion.kargoOutcome.phase.toLowerCase()}`}>
       <Stack gap="xs">
         <Text>
-          {succeeded
-            ? "Kargo completed this Promotion's configured steps. Slipramp does not separately verify Argo CD application health."
-            : (promotion.kargoOutcome.diagnostic ??
-              "Kargo reached an unsuccessful terminal phase without a diagnostic.")}
+          {promotion.kargoOutcome.diagnostic ??
+            "Kargo reached an unsuccessful terminal phase without a diagnostic."}
         </Text>
-        {succeeded && promotion.kargoOutcome.diagnostic ? (
-          <Text size="sm">Kargo diagnostic: {promotion.kargoOutcome.diagnostic}</Text>
-        ) : null}
         <Text c="dimmed" size="sm">
           Observed <Timestamp value={promotion.kargoOutcome.observedAt} />
         </Text>
       </Stack>
     </Alert>
+  );
+}
+
+function PromotionStatusDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
+  return (
+    <Paper p="md" withBorder>
+      <Stack gap="md">
+        <Title order={2}>Status details</Title>
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
+          <PromotionStatusFact label="Review" status={promotionReviewStatus(promotion)} />
+          <PromotionStatusFact label="Kargo delivery" status={promotionDeliveryStatus(promotion)} />
+          <PromotionStatusFact
+            label="Kargo execution"
+            status={promotionExecutionStatus(promotion)}
+          />
+        </SimpleGrid>
+      </Stack>
+    </Paper>
+  );
+}
+
+function PromotionStatusFact({
+  label,
+  status,
+}: Readonly<{ label: string; status: PromotionStatusPresentation }>) {
+  return (
+    <Stack gap={4}>
+      <Text c="dimmed" size="xs">
+        {label}
+      </Text>
+      <Group gap="xs" wrap="wrap">
+        <PromotionStatusBadge status={status} />
+        {status.recordedAt ? <Timestamp c="dimmed" size="xs" value={status.recordedAt} /> : null}
+      </Group>
+    </Stack>
   );
 }
 
@@ -410,35 +417,28 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
 
 function Preparation({ promotion }: Readonly<{ promotion: Promotion }>) {
   const run = promotion.preparationRun;
+  if (!run) return null;
 
   return (
     <Paper p="md" withBorder>
       <Stack gap="sm">
         <Title order={2}>Preparation Run</Title>
-        {!run ? (
-          <Text c="dimmed">
-            {promotion.reviewRequired
-              ? "The preparation Run has not been attached yet."
-              : "This Promotion was approved automatically and did not require preparation."}
-          </Text>
-        ) : (
-          <Group justify="space-between">
-            <Stack gap={0}>
-              <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
-                Run {run.id.slice(0, 8)}
-              </Anchor>
-              <Text c="dimmed" size="sm">
-                {run.target} · {run.action}
-              </Text>
-            </Stack>
-            <Group>
-              <Anchor component={Link} to={`/runs/${run.id}`}>
-                View status and logs
-              </Anchor>
-              <Badge variant="light">{runStatusLabel(run)}</Badge>
-            </Group>
+        <Group justify="space-between">
+          <Stack gap={0}>
+            <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
+              Run {run.id.slice(0, 8)}
+            </Anchor>
+            <Text c="dimmed" size="sm">
+              {run.target} · {run.action}
+            </Text>
+          </Stack>
+          <Group>
+            <Anchor component={Link} to={`/runs/${run.id}`}>
+              View status and logs
+            </Anchor>
+            <Badge variant="light">{runStatusLabel(run)}</Badge>
           </Group>
-        )}
+        </Group>
       </Stack>
     </Paper>
   );
@@ -582,6 +582,7 @@ function DecisionPanel({
   promotion,
 }: Readonly<{ canWrite: boolean; promotion: Promotion }>) {
   const navigation = useNavigation();
+  if (!promotion.decision && promotion.status !== "pending") return null;
 
   return (
     <Paper p="md" withBorder>
@@ -602,12 +603,6 @@ function DecisionPanel({
               This attribution is immutable.
             </Text>
           </Stack>
-        ) : promotion.status !== "pending" ? (
-          <Text c="dimmed">
-            {promotion.status === "expired"
-              ? "The review window expired before a decision was recorded."
-              : "This Promotion is not awaiting an operator decision."}
-          </Text>
         ) : canWrite ? (
           <Form method="post">
             <Stack gap="sm">

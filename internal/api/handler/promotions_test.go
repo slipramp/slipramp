@@ -23,6 +23,7 @@ type recordingPromotionService struct {
 	request     promotion.KargoRequest
 	principal   productidentity.Principal
 	record      promotion.Promotion
+	health      []promotion.IntegrationHealth
 	err         error
 }
 
@@ -124,6 +125,12 @@ func (s *recordingPromotionService) ReplaceStageSnapshot(
 	s.replacement = replacement
 
 	return s.err
+}
+
+func (s *recordingPromotionService) ListIntegrationHealth(
+	context.Context,
+) ([]promotion.IntegrationHealth, error) {
+	return s.health, s.err
 }
 
 func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
@@ -522,7 +529,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		http.MethodGet,
 		"/api/v1/promotions?status=pending&integration=prod&cluster=colo&project=kargo-core&application=external-dns&stageId="+
 			stageID.String()+"&repositoryId="+repositoryID.String()+"&commitSha="+commitSHA+
-			"&limit=10&offset=2",
+			"&creationDispatch=not-applicable&kargoOutcome=Failed&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -534,6 +541,8 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
 	if reviews.promotionFilter.Status != promotion.LifecyclePending ||
+		reviews.promotionFilter.CreationDispatch != promotion.CreationDispatchNotApplicable ||
+		reviews.promotionFilter.KargoOutcome != promotion.KargoPhaseFailed ||
 		reviews.promotionFilter.RepositoryID == nil ||
 		*reviews.promotionFilter.RepositoryID != repositoryID ||
 		reviews.promotionFilter.CommitSHA != commitSHA ||

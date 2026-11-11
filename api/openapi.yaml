@@ -248,6 +248,8 @@ components:
       $ref: ./components/catalog.yaml#/TargetDefinition
     Cluster:
       $ref: ./components/controllers.yaml#/Cluster
+    KargoIntegrationHealth:
+      $ref: ./components/controllers.yaml#/KargoIntegrationHealth
     ClusterList:
       $ref: ./components/controllers.yaml#/ClusterList
     Placement:
@@ -352,6 +354,10 @@ components:
       $ref: ./components/artifacts.yaml#/LogEvent
     Promotion:
       $ref: ./components/promotions.yaml#/Promotion
+    PromotionCreationDispatchPhase:
+      $ref: ./components/promotions.yaml#/PromotionCreationDispatchPhase
+    KargoPromotionOutcomePhase:
+      $ref: ./components/promotions.yaml#/KargoPromotionOutcomePhase
     PromotionCreate:
       $ref: ./components/promotions.yaml#/PromotionCreate
     PromotionList:

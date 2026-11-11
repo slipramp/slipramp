@@ -83,8 +83,19 @@ promotions:
           maxLength: 200
       - name: status
         in: query
+        description: Limit results by Slipramp review lifecycle.
         schema:
           $ref: ../components/promotions.yaml#/PromotionStatus
+      - name: creationDispatch
+        in: query
+        description: Limit results by Slipramp-to-Kargo object delivery state.
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionCreationDispatchPhase
+      - name: kargoOutcome
+        in: query
+        description: Limit results by exact terminal phase reported by Kargo.
+        schema:
+          $ref: ../components/promotions.yaml#/KargoPromotionOutcomePhase
       - name: cluster
         in: query
         schema:

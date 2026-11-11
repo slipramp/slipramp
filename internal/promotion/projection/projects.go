@@ -271,7 +271,12 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 			ObservationStale:      stale[stage.ID],
 			RequestedFreight:      requests,
 			FreightAlignments:     alignments[stage.ID],
-			Capabilities:          stageCapabilities(stage, integration, repositories[stage.RepositoryName].CloneURL),
+			Capabilities: stageCapabilities(
+				stage,
+				integration,
+				repositories[stage.RepositoryName].CloneURL,
+				stale[stage.ID],
+			),
 		})
 	}
 	slices.SortFunc(items, func(left, right ProjectStage) int {

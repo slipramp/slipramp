@@ -18,6 +18,10 @@ export type ClientCompatibility = {
   serverVersion: string;
   productApiContract: number;
   authenticationMethods: Array<string>;
+  /**
+   * Whether this Server has at least one Kargo integration configured.
+   */
+  kargoEnabled: boolean;
 };
 
 export type DependencyStatus = "available" | "unavailable";
@@ -517,6 +521,18 @@ export type Cluster = {
    * Time at which the Server most recently heard from the controller.
    */
   lastSeenAt: string;
+  kargoIntegrations: Array<KargoIntegrationHealth>;
+};
+
+export type KargoIntegrationHealth = {
+  name: CatalogName;
+  /**
+   * Freshness of the most recent complete Kargo Stage snapshot accepted by the Server.
+   */
+  observationState: "not-observed" | "current" | "stale";
+  lastObservedAt?: string;
+  maximumObservationAgeSeconds: number;
+  kargoUrl?: string;
 };
 
 export type ClusterList = {
@@ -1244,6 +1260,14 @@ export type Promotion = {
    */
   argoCdUrl?: string;
 };
+
+export type PromotionCreationDispatchPhase =
+  | "not-applicable"
+  | "awaiting-delivery"
+  | "delivered"
+  | "failed";
+
+export type KargoPromotionOutcomePhase = "Succeeded" | "Failed" | "Errored" | "Aborted";
 
 export type PromotionCreate = {
   /**
@@ -2385,7 +2409,7 @@ export type PromotionReviewContext = {
 export type PromotionPolicyMode = "automatic" | "review-required";
 
 export type PromotionCreationDispatch = {
-  phase: "not-applicable" | "awaiting-delivery" | "delivered" | "failed";
+  phase: PromotionCreationDispatchPhase;
   attemptCount: number;
   nextAttemptAt?: string;
   lastAttemptAt?: string;
@@ -2398,7 +2422,7 @@ export type KargoPromotionOutcome = {
   /**
    * Exact terminal phase reported by Kargo.
    */
-  phase: "Succeeded" | "Failed" | "Errored" | "Aborted";
+  phase: KargoPromotionOutcomePhase;
   /**
    * Time Slipramp accepted the Controller's terminal observation.
    */
@@ -5771,7 +5795,18 @@ export type ListPromotionsData = {
     integration?: CatalogName;
     project?: CatalogName;
     application?: string;
+    /**
+     * Limit results by Slipramp review lifecycle.
+     */
     status?: PromotionStatus;
+    /**
+     * Limit results by Slipramp-to-Kargo object delivery state.
+     */
+    creationDispatch?: PromotionCreationDispatchPhase;
+    /**
+     * Limit results by exact terminal phase reported by Kargo.
+     */
+    kargoOutcome?: KargoPromotionOutcomePhase;
     cluster?: CatalogName;
     stageId?: string;
     limit?: number;

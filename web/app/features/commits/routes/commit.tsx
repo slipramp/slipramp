@@ -13,6 +13,8 @@ import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { abbreviateMiddle, shortIdentifier } from "~/shared/display";
 import { promotionActivity, runActivity } from "~/features/mascot/execution-activity";
+import { promotionOverallStatus } from "~/features/promotions/promotion-status";
+import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
@@ -290,9 +292,7 @@ function PromotionAssociations({
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs" justify="space-between" wrap="nowrap">
-                    <Badge color={promotionStatusColor(promotion.status)} variant="light">
-                      {promotionStatusLabel(promotion.status)}
-                    </Badge>
+                    <PromotionStatusBadge status={promotionOverallStatus(promotion)} />
                     <KawaiiActivity
                       activity={promotionActivity(promotion)}
                       animationKey={promotion.id}
@@ -324,43 +324,6 @@ function promotionCommitRole(promotion: Promotion, commitSha: string) {
   const candidate = promotion.reviewContext?.git?.candidateCommit.sha === commitSha;
   if (base && candidate) return "Base and candidate";
   return candidate ? "Candidate" : "Base";
-}
-
-function promotionStatusColor(status: Promotion["status"]) {
-  switch (status) {
-    case "approved":
-      return "green";
-    case "creating":
-      return "cyan";
-    case "error":
-    case "rejected":
-      return "red";
-    case "pending":
-      return "yellow";
-    case "preparing":
-      return "blue";
-    case "expired":
-      return "gray";
-  }
-}
-
-function promotionStatusLabel(status: Promotion["status"]) {
-  switch (status) {
-    case "approved":
-      return "Approved";
-    case "creating":
-      return "Creating in Kargo";
-    case "error":
-      return "Failed";
-    case "expired":
-      return "Expired";
-    case "pending":
-      return "Pending review";
-    case "preparing":
-      return "Preparing diffs";
-    case "rejected":
-      return "Rejected";
-  }
 }
 
 function setPage(url: URL, name: string, page: number) {

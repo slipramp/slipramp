@@ -216,6 +216,25 @@ func (d *Database) ReplacePromotionStageSnapshot(
 	return nil
 }
 
+func (d *Database) GetLatestKargoStageSnapshot(
+	ctx context.Context,
+	integration string,
+	clusterName string,
+) (promotion.StageSnapshot, bool, error) {
+	row, err := d.queries.GetLatestKargoStageSnapshot(
+		ctx,
+		storedb.GetLatestKargoStageSnapshotParams{Integration: integration, ClusterName: clusterName},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.StageSnapshot{}, false, nil
+	}
+	if err != nil {
+		return promotion.StageSnapshot{}, false, fmt.Errorf("get latest Kargo Stage snapshot: %w", err)
+	}
+
+	return stageSnapshotFromRow(row), true, nil
+}
+
 func (d *Database) GetPromotion(ctx context.Context, promotionID uuid.UUID) (promotion.Promotion, error) {
 	row, err := d.queries.GetPromotion(ctx, databaseUUID(promotionID))
 	if errors.Is(err, pgx.ErrNoRows) {

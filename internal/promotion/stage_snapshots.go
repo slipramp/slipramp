@@ -42,6 +42,24 @@ type StageSnapshotReplacement struct {
 
 type StageSnapshotStore interface {
 	ReplacePromotionStageSnapshot(context.Context, StageSnapshot, []Stage) error
+	GetLatestKargoStageSnapshot(context.Context, string, string) (StageSnapshot, bool, error)
+}
+
+type IntegrationObservationState string
+
+const (
+	IntegrationNotObserved IntegrationObservationState = "not-observed"
+	IntegrationCurrent     IntegrationObservationState = "current"
+	IntegrationStale       IntegrationObservationState = "stale"
+)
+
+type IntegrationHealth struct {
+	Name                  string
+	ClusterName           string
+	KargoURL              string
+	ObservationState      IntegrationObservationState
+	LastObservedAt        *time.Time
+	MaximumObservationAge time.Duration
 }
 
 type RepositoryLister interface {
@@ -164,6 +182,39 @@ func (s *StageService) ReplaceStageSnapshot(
 	}
 
 	return s.snapshots.ReplacePromotionStageSnapshot(ctx, snapshot, stages)
+}
+
+func (s *StageService) ListIntegrationHealth(ctx context.Context) ([]IntegrationHealth, error) {
+	now := s.now().UTC()
+	items := make([]IntegrationHealth, 0, len(s.integrations))
+	for _, name := range s.integrations.Names() {
+		integration := s.integrations[name]
+		item := IntegrationHealth{
+			Name:                  name,
+			ClusterName:           integration.ClusterName,
+			KargoURL:              integration.UIURL,
+			ObservationState:      IntegrationNotObserved,
+			MaximumObservationAge: integration.MaximumStageObservationAge,
+		}
+		snapshot, found, err := s.snapshots.GetLatestKargoStageSnapshot(
+			ctx,
+			name,
+			integration.ClusterName,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("get latest Kargo Stage snapshot for %s: %w", name, err)
+		}
+		if found {
+			item.LastObservedAt = new(snapshot.ObservedAt)
+			item.ObservationState = IntegrationCurrent
+			if snapshot.ObservedAt.Before(now.Add(-integration.MaximumStageObservationAge)) {
+				item.ObservationState = IntegrationStale
+			}
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
 }
 
 func cloneStageConditions(values []StageCondition) []StageCondition {

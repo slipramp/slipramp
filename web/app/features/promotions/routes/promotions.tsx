@@ -1,8 +1,14 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { listPromotions, type Promotion, type PromotionStatus } from "~/api/generated";
+import {
+  listPromotions,
+  type KargoPromotionOutcomePhase,
+  type Promotion,
+  type PromotionCreationDispatchPhase,
+  type PromotionStatus,
+} from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
@@ -13,6 +19,8 @@ import { PageHeader } from "~/shared/page";
 import { promotionScopeFilters } from "~/features/promotions/promotion-scope-filters";
 import { abbreviateMiddle } from "~/shared/display";
 import { promotionActivity } from "~/features/mascot/execution-activity";
+import { promotionOverallStatus } from "~/features/promotions/promotion-status";
+import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
 
@@ -31,6 +39,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const application = optionalValue(url.searchParams.get("application"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const status = optionalStatus(url.searchParams.get("status"));
+  const creationDispatch = optionalCreationDispatch(url.searchParams.get("creationDispatch"));
+  const kargoOutcome = optionalKargoOutcome(url.searchParams.get("kargoOutcome"));
   const stageId = optionalValue(url.searchParams.get("stageId"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
@@ -39,7 +49,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     query: {
       application,
       cluster,
+      creationDispatch,
       integration,
+      kargoOutcome,
       limit: pageSize,
       offset: (requestedPage - 1) * pageSize,
       project,
@@ -59,7 +71,16 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return {
     available: result.data !== undefined,
     error: result.error?.detail ?? result.error?.title,
-    filters: { application, cluster, integration, project, stageId, status },
+    filters: {
+      application,
+      cluster,
+      creationDispatch,
+      integration,
+      kargoOutcome,
+      project,
+      stageId,
+      status,
+    },
     page: requestedPage,
     promotions: result.data?.items ?? [],
     total: result.data?.total ?? 0,
@@ -111,7 +132,9 @@ function PromotionFilters({
   filters: {
     application?: string;
     cluster?: string;
+    creationDispatch?: PromotionCreationDispatchPhase;
     integration?: string;
+    kargoOutcome?: KargoPromotionOutcomePhase;
     project?: string;
     stageId?: string;
     status?: PromotionStatus;
@@ -142,9 +165,37 @@ function PromotionFilters({
             { label: "Error", value: "error" },
           ],
           kind: "select",
-          label: "Status",
+          label: "Review status",
           name: "status",
           value: filters.status,
+        },
+        {
+          active: Boolean(filters.creationDispatch),
+          data: [
+            { label: "All delivery states", value: "" },
+            { label: "Awaiting delivery", value: "awaiting-delivery" },
+            { label: "Delivered", value: "delivered" },
+            { label: "Delivery failed", value: "failed" },
+            { label: "Kargo-originated", value: "not-applicable" },
+          ],
+          kind: "select",
+          label: "Kargo delivery",
+          name: "creationDispatch",
+          value: filters.creationDispatch,
+        },
+        {
+          active: Boolean(filters.kargoOutcome),
+          data: [
+            { label: "All Kargo outcomes", value: "" },
+            { label: "Succeeded", value: "Succeeded" },
+            { label: "Failed", value: "Failed" },
+            { label: "Errored", value: "Errored" },
+            { label: "Aborted", value: "Aborted" },
+          ],
+          kind: "select",
+          label: "Kargo outcome",
+          name: "kargoOutcome",
+          value: filters.kargoOutcome,
         },
         {
           active: Boolean(filters.stageId),
@@ -168,8 +219,7 @@ function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
               <Table.Th>Promotion / Stage</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Application</Table.Th>
-              <Table.Th>Source / author</Table.Th>
-              <Table.Th>Created</Table.Th>
+              <Table.Th>Requested</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -187,6 +237,7 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stageName = promotion.stageSnapshot.name;
   const project = promotion.stageSnapshot.project;
   const application = promotion.stageSnapshot.enrichment?.application ?? "Kargo native";
+  const status = promotionOverallStatus(promotion);
 
   return (
     <Table.Tr>
@@ -215,9 +266,7 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Badge color={promotionStatusColor(promotion)} variant="light">
-            {promotionStatusLabel(promotion)}
-          </Badge>
+          <PromotionStatusBadge status={status} />
           <KawaiiActivity
             activity={promotionActivity(promotion)}
             animationKey={promotion.id}
@@ -246,55 +295,11 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             name={promotion.requestedBy.displayName}
             nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
           />
+          <RelativeTime c="dimmed" size="xs" value={promotion.createdAt} />
         </Stack>
-      </Table.Td>
-      <Table.Td style={{ whiteSpace: "nowrap" }}>
-        <RelativeTime size="sm" value={promotion.createdAt} />
       </Table.Td>
     </Table.Tr>
   );
-}
-
-export function promotionStatusColor(promotion: Pick<Promotion, "status" | "kargoOutcome">) {
-  if (promotion.status === "approved") {
-    if (!promotion.kargoOutcome) return "cyan";
-    return promotion.kargoOutcome.phase === "Succeeded" ? "green" : "red";
-  }
-
-  switch (promotion.status) {
-    case "creating":
-      return "cyan";
-    case "pending":
-      return "yellow";
-    case "rejected":
-    case "error":
-      return "red";
-    case "expired":
-      return "gray";
-    case "preparing":
-      return "blue";
-  }
-}
-
-export function promotionStatusLabel(promotion: Pick<Promotion, "status" | "kargoOutcome">) {
-  if (promotion.status === "approved") {
-    return promotion.kargoOutcome ? promotion.kargoOutcome.phase : "Kargo running";
-  }
-
-  switch (promotion.status) {
-    case "creating":
-      return "Creating in Kargo";
-    case "pending":
-      return "Pending review";
-    case "preparing":
-      return "Preparing diffs";
-    case "rejected":
-      return "Rejected";
-    case "expired":
-      return "Expired";
-    case "error":
-      return "Failed";
-  }
 }
 
 function optionalStatus(value: string | null): PromotionStatus | undefined {
@@ -306,6 +311,32 @@ function optionalStatus(value: string | null): PromotionStatus | undefined {
     case "rejected":
     case "expired":
     case "error":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function optionalCreationDispatch(
+  value: string | null,
+): PromotionCreationDispatchPhase | undefined {
+  switch (value) {
+    case "not-applicable":
+    case "awaiting-delivery":
+    case "delivered":
+    case "failed":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function optionalKargoOutcome(value: string | null): KargoPromotionOutcomePhase | undefined {
+  switch (value) {
+    case "Succeeded":
+    case "Failed":
+    case "Errored":
+    case "Aborted":
       return value;
     default:
       return undefined;

@@ -5,6 +5,7 @@ Cluster:
     - connectionState
     - firstSeenAt
     - lastSeenAt
+    - kargoIntegrations
   properties:
     name:
       type: string
@@ -28,6 +29,38 @@ Cluster:
       type: string
       format: date-time
       description: Time at which the Server most recently heard from the controller.
+    kargoIntegrations:
+      type: array
+      items:
+        $ref: "#/KargoIntegrationHealth"
+
+KargoIntegrationHealth:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - observationState
+    - maximumObservationAgeSeconds
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    observationState:
+      type: string
+      enum:
+        - not-observed
+        - current
+        - stale
+      description: Freshness of the most recent complete Kargo Stage snapshot accepted by the Server.
+    lastObservedAt:
+      type: string
+      format: date-time
+    maximumObservationAgeSeconds:
+      type: integer
+      format: int64
+      minimum: 1
+    kargoUrl:
+      type: string
+      format: uri
 
 ClusterList:
   type: object

@@ -1209,12 +1209,7 @@ PromotionCreationDispatch:
     - attemptCount
   properties:
     phase:
-      type: string
-      enum:
-        - not-applicable
-        - awaiting-delivery
-        - delivered
-        - failed
+      $ref: "#/PromotionCreationDispatchPhase"
     attemptCount:
       type: integer
       minimum: 0
@@ -1235,6 +1230,14 @@ PromotionCreationDispatch:
       minLength: 1
       maxLength: 4096
 
+PromotionCreationDispatchPhase:
+  type: string
+  enum:
+    - not-applicable
+    - awaiting-delivery
+    - delivered
+    - failed
+
 KargoPromotionOutcome:
   type: object
   additionalProperties: false
@@ -1243,12 +1246,7 @@ KargoPromotionOutcome:
     - observedAt
   properties:
     phase:
-      type: string
-      enum:
-        - Succeeded
-        - Failed
-        - Errored
-        - Aborted
+      $ref: "#/KargoPromotionOutcomePhase"
       description: Exact terminal phase reported by Kargo.
     observedAt:
       type: string
@@ -1259,6 +1257,14 @@ KargoPromotionOutcome:
       minLength: 1
       maxLength: 4096
       description: Bounded sanitized Kargo diagnostic, when available.
+
+KargoPromotionOutcomePhase:
+  type: string
+  enum:
+    - Succeeded
+    - Failed
+    - Errored
+    - Aborted
 
 Promotion:
   type: object

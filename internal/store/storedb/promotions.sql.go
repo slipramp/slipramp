@@ -316,22 +316,37 @@ WHERE ($1::uuid IS NULL OR repository_id = $1)
       OR candidate_revision = $2
   )
   AND ($3::text IS NULL OR status = $3)
-  AND ($4::text IS NULL OR integration = $4)
-  AND ($5::uuid IS NULL OR stage_id = $5)
-  AND ($6::text IS NULL OR stage_snapshot->>'cluster' = $6)
-  AND ($7::text IS NULL OR stage_snapshot->>'project' = $7)
-  AND ($8::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = $8)
+  AND (
+      $4::text IS NULL
+      OR ($4 = 'not-applicable' AND source = 'kargo')
+      OR (
+          $4 = 'awaiting-delivery'
+          AND source = 'slipramp'
+          AND dispatched_at IS NULL
+          AND dispatch_failed_at IS NULL
+      )
+      OR ($4 = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
+      OR ($4 = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
+  )
+  AND ($5::text IS NULL OR kargo_outcome_phase = $5)
+  AND ($6::text IS NULL OR integration = $6)
+  AND ($7::uuid IS NULL OR stage_id = $7)
+  AND ($8::text IS NULL OR stage_snapshot->>'cluster' = $8)
+  AND ($9::text IS NULL OR stage_snapshot->>'project' = $9)
+  AND ($10::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = $10)
 `
 
 type CountPromotionReviewsParams struct {
-	RepositoryID pgtype.UUID
-	CommitSha    *string
-	Status       *string
-	Integration  *string
-	StageID      pgtype.UUID
-	ClusterName  *string
-	Project      *string
-	Application  *string
+	RepositoryID     pgtype.UUID
+	CommitSha        *string
+	Status           *string
+	CreationDispatch *string
+	KargoOutcome     *string
+	Integration      *string
+	StageID          pgtype.UUID
+	ClusterName      *string
+	Project          *string
+	Application      *string
 }
 
 func (q *Queries) CountPromotionReviews(ctx context.Context, arg CountPromotionReviewsParams) (int64, error) {
@@ -339,6 +354,8 @@ func (q *Queries) CountPromotionReviews(ctx context.Context, arg CountPromotionR
 		arg.RepositoryID,
 		arg.CommitSha,
 		arg.Status,
+		arg.CreationDispatch,
+		arg.KargoOutcome,
 		arg.Integration,
 		arg.StageID,
 		arg.ClusterName,
@@ -1559,27 +1576,42 @@ WHERE ($1::uuid IS NULL OR repository_id = $1)
       OR candidate_revision = $2
   )
   AND ($3::text IS NULL OR status = $3)
-  AND ($4::text IS NULL OR integration = $4)
-  AND ($5::uuid IS NULL OR stage_id = $5)
-  AND ($6::text IS NULL OR stage_snapshot->>'cluster' = $6)
-  AND ($7::text IS NULL OR stage_snapshot->>'project' = $7)
-  AND ($8::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = $8)
+  AND (
+      $4::text IS NULL
+      OR ($4 = 'not-applicable' AND source = 'kargo')
+      OR (
+          $4 = 'awaiting-delivery'
+          AND source = 'slipramp'
+          AND dispatched_at IS NULL
+          AND dispatch_failed_at IS NULL
+      )
+      OR ($4 = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
+      OR ($4 = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
+  )
+  AND ($5::text IS NULL OR kargo_outcome_phase = $5)
+  AND ($6::text IS NULL OR integration = $6)
+  AND ($7::uuid IS NULL OR stage_id = $7)
+  AND ($8::text IS NULL OR stage_snapshot->>'cluster' = $8)
+  AND ($9::text IS NULL OR stage_snapshot->>'project' = $9)
+  AND ($10::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = $10)
 ORDER BY (status = 'pending') DESC, created_at DESC, id DESC
-LIMIT $10
-OFFSET $9::bigint
+LIMIT $12
+OFFSET $11::bigint
 `
 
 type ListPromotionReviewsParams struct {
-	RepositoryID pgtype.UUID
-	CommitSha    *string
-	Status       *string
-	Integration  *string
-	StageID      pgtype.UUID
-	ClusterName  *string
-	Project      *string
-	Application  *string
-	ResultOffset int64
-	ResultLimit  int32
+	RepositoryID     pgtype.UUID
+	CommitSha        *string
+	Status           *string
+	CreationDispatch *string
+	KargoOutcome     *string
+	Integration      *string
+	StageID          pgtype.UUID
+	ClusterName      *string
+	Project          *string
+	Application      *string
+	ResultOffset     int64
+	ResultLimit      int32
 }
 
 func (q *Queries) ListPromotionReviews(ctx context.Context, arg ListPromotionReviewsParams) ([]Promotion, error) {
@@ -1587,6 +1619,8 @@ func (q *Queries) ListPromotionReviews(ctx context.Context, arg ListPromotionRev
 		arg.RepositoryID,
 		arg.CommitSha,
 		arg.Status,
+		arg.CreationDispatch,
+		arg.KargoOutcome,
 		arg.Integration,
 		arg.StageID,
 		arg.ClusterName,

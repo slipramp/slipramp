@@ -47,6 +47,14 @@ namespace owner, or belonged to a namespace removed from the integration while
 retaining policy and history. Inventory failure affects Stage freshness without
 archiving Stages or interrupting ordinary Run delivery.
 
+The latest accepted complete snapshot is also the durable integration-health
+signal. Each configured integration appears on its Cluster as never observed,
+current, or stale using that integration's Stage freshness limit. This signal
+does not claim to diagnose a Kubernetes-side listing failure the Server never
+observed. Installations with no configured integration omit Kargo-specific
+product navigation; an empty or stale configured integration remains visible
+for recovery.
+
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace and Cluster supplied by the authenticated Controller.
 Stored observations contain typed current and candidate Freight, native
@@ -57,13 +65,13 @@ acknowledgement. Missing enrichment disables only the Slipramp capability that
 needs it; the Stage remains visible in its Kargo Project.
 
 Each Stage exposes independent `promotion`, `review`, and `branchDrift`
-capabilities. Native promotion is ready for a non-control-flow Stage with
-addressable native identity; exact eligible Freight is selected under Kargo's observed
-availability, verification, and soak rules. Review additionally requires the
-complete Stage enrichment, an active Repository whose URL matches the observed
-URL, and the integration's review configuration. Branch drift retains its own
-Git mapping and acknowledgement requirements. Review or branch-drift
-limitations never disable native promotion.
+capabilities. Native promotion is ready for a freshly observed non-control-flow
+Stage with addressable native identity; exact eligible Freight is selected
+under Kargo's observed availability, verification, and soak rules. Review
+additionally requires the complete Stage enrichment, an active Repository whose
+URL matches the observed URL, and the integration's review configuration.
+Branch drift retains its own Git mapping and acknowledgement requirements.
+Review or branch-drift limitations never disable native promotion.
 
 Stage policy defaults to `automatic`. `review-required` may have an expiry and
 may be configured only while review is ready. Promotion acceptance snapshots
@@ -138,6 +146,13 @@ execution machine remains reconciling. A terminal report adds an immutable
 outcome without rewriting the approval decision or review status. Failed,
 errored, and aborted outcomes are therefore visible on an approved Promotion
 rather than being collapsed into a review failure.
+
+Product views derive one overall operator-facing state from review lifecycle,
+creation delivery, and Kargo outcome. The list uses that state for quick
+scanning while retaining filters over the separate facts. Promotion detail uses
+the same overall state and shows the three underlying facts explicitly. Terminal
+creation-delivery failures and unsuccessful Kargo outcomes also enter the
+operational Inbox even when the public review lifecycle remains approved.
 
 Domain states return as domain responses; expected lifecycle errors are not
 disguised as transport failures. Callback hydration, Controller reports,
@@ -279,9 +294,11 @@ eligible. Upstream Freight requires observed verification and required soak-time
 evidence unless Kargo records explicit approval for the target Stage. `OneOf`
 requires one eligible source and `All` requires every requested source. Missing
 evidence is `unknown`, never assumed ready. Every configured Stage remains in
-the topology. Every non-control-flow Stage can use native automatic promotion
-when exact eligible Freight exists, including a Stage with no Slipramp
-annotations. Control-flow Stages remain visible but non-promotable.
+the topology. Every freshly observed non-control-flow Stage can use native
+automatic promotion when exact eligible Freight exists, including a Stage with
+no Slipramp annotations. A stale Stage remains visible but non-promotable until
+a current complete snapshot arrives. Control-flow Stages remain visible but
+non-promotable.
 
 Project and Promotion reads do not query Kargo or Argo CD. Branch drift uses
 cached read-only Git evidence. Project and branch-drift responses report the

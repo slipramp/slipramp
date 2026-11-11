@@ -82,6 +82,26 @@ func (h *Handler) ListClusters(
 	if err != nil {
 		return nil, err
 	}
+	var integrationHealth []promotion.IntegrationHealth
+	if h.promotionStages != nil {
+		integrationHealth, err = h.promotionStages.ListIntegrationHealth(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	integrationsByCluster := make(map[string][]api.KargoIntegrationHealth)
+	for _, health := range integrationHealth {
+		item := api.KargoIntegrationHealth{
+			Name:                         health.Name,
+			ObservationState:             api.KargoIntegrationHealthObservationState(health.ObservationState),
+			MaximumObservationAgeSeconds: int64(health.MaximumObservationAge / time.Second),
+			LastObservedAt:               health.LastObservedAt,
+		}
+		if health.KargoURL != "" {
+			item.KargoURL = new(health.KargoURL)
+		}
+		integrationsByCluster[health.ClusterName] = append(integrationsByCluster[health.ClusterName], item)
+	}
 
 	query := ""
 	if request.Params.Q != nil {
@@ -103,11 +123,16 @@ func (h *Handler) ListClusters(
 
 	items := make([]api.Cluster, 0, len(filtered))
 	for _, status := range filtered {
+		kargoIntegrations := integrationsByCluster[status.Name]
+		if kargoIntegrations == nil {
+			kargoIntegrations = []api.KargoIntegrationHealth{}
+		}
 		items = append(items, api.Cluster{
-			Name:            status.Name,
-			ConnectionState: api.ClusterConnectionState(status.ConnectionState),
-			FirstSeenAt:     status.FirstSeenAt,
-			LastSeenAt:      status.LastSeenAt,
+			Name:              status.Name,
+			ConnectionState:   api.ClusterConnectionState(status.ConnectionState),
+			FirstSeenAt:       status.FirstSeenAt,
+			LastSeenAt:        status.LastSeenAt,
+			KargoIntegrations: kargoIntegrations,
 		})
 	}
 

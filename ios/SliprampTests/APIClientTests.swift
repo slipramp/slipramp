@@ -25,7 +25,8 @@ final class APIClientTests: XCTestCase {
                 {
                   "serverVersion": "test-version",
                   "productApiContract": 1,
-                  "authenticationMethods": ["api-key"]
+                  "authenticationMethods": ["api-key"],
+                  "kargoEnabled": false
                 }
                 """.utf8
             )
@@ -39,7 +40,8 @@ final class APIClientTests: XCTestCase {
         let incompatible = ServerCompatibility(
             serverVersion: "future-version",
             productApiContract: 2,
-            authenticationMethods: ["api-key"]
+            authenticationMethods: ["api-key"],
+            kargoEnabled: false
         )
         XCTAssertThrowsError(try ClientCompatibilityPolicy.validate(incompatible)) { error in
             XCTAssertEqual(

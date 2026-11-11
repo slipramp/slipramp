@@ -20,15 +20,19 @@ type StageCapability struct {
 }
 
 const controlFlowPromotionReason = "Control-flow Stages do not materialize Promotions."
+const staleObservationPromotionReason = "Promotion is unavailable until the Kargo Stage inventory is current."
 
 func stageCapabilities(
 	stage promotion.Stage,
 	integration promotion.IntegrationConfig,
 	activeRepositoryURL string,
+	observationStale bool,
 ) StageCapabilities {
-	native := StageCapability{Ready: !stage.ControlFlow}
+	native := StageCapability{Ready: !stage.ControlFlow && !observationStale}
 	if stage.ControlFlow {
 		native.Reason = controlFlowPromotionReason
+	} else if observationStale {
+		native.Reason = staleObservationPromotionReason
 	}
 
 	repositoryMatches := activeRepositoryURL != "" && activeRepositoryURL == stage.RepositoryURL

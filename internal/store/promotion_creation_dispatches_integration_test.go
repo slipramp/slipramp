@@ -215,6 +215,11 @@ func TestPromotionCreationDispatchRejectsWrongClusterAndTerminallyFailsIntegrati
 		*failed.CreationDispatch.Diagnostic != diagnostic || failed.Message != nil {
 		t.Errorf("failed Promotion = %#v", failed)
 	}
+	inboxPromotions, err := fixture.database.ListInboxPromotions(fixture.ctx)
+	if err != nil || len(inboxPromotions) != 1 || inboxPromotions[0].ID != failed.ID ||
+		inboxPromotions[0].CreationDispatch.FailedAt == nil {
+		t.Errorf("Inbox delivery failure = %#v, %v", inboxPromotions, err)
+	}
 	if _, err := fixture.database.ReportPromotionCreation(fixture.ctx, promotion.CreationDispatchReport{
 		PromotionID: record.ID,
 		ClusterName: "edge",
@@ -323,6 +328,12 @@ func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 		failed.KargoExecution.Outcome.Phase != promotion.KargoPhaseFailed ||
 		!failed.KargoExecution.Outcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
 		t.Errorf("terminal reconciliation = %#v", failed)
+	}
+	inboxPromotions, err := fixture.database.ListInboxPromotions(fixture.ctx)
+	if err != nil || len(inboxPromotions) != 1 || inboxPromotions[0].ID != failed.ID ||
+		inboxPromotions[0].KargoOutcome == nil ||
+		inboxPromotions[0].KargoOutcome.Phase != promotion.KargoPhaseFailed {
+		t.Errorf("Inbox Kargo outcome = %#v, %v", inboxPromotions, err)
 	}
 
 	repeated, err := fixture.database.ReportPromotionReconciliation(

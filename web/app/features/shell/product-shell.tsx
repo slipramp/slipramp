@@ -60,7 +60,11 @@ type NavigationItem = {
   to: string;
 };
 
-const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
+const navigationGroups: Array<{
+  feature?: "kargo";
+  label: string;
+  items: NavigationItem[];
+}> = [
   {
     items: [
       { icon: IconInbox, label: "Inbox", to: "/" },
@@ -72,6 +76,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     label: "Operate",
   },
   {
+    feature: "kargo",
     items: [
       { icon: IconFolder, label: "Kargo projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
@@ -96,19 +101,23 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
 
 export function ProductShell({
   children,
+  kargoEnabled,
   principal,
-}: Readonly<{ children: ReactNode; principal?: ProductPrincipal }>) {
+}: Readonly<{ children: ReactNode; kargoEnabled: boolean; principal?: ProductPrincipal }>) {
   return (
     <ActivityRefreshProvider>
-      <ProductShellLayout principal={principal}>{children}</ProductShellLayout>
+      <ProductShellLayout kargoEnabled={kargoEnabled} principal={principal}>
+        {children}
+      </ProductShellLayout>
     </ActivityRefreshProvider>
   );
 }
 
 function ProductShellLayout({
   children,
+  kargoEnabled,
   principal,
-}: Readonly<{ children: ReactNode; principal?: ProductPrincipal }>) {
+}: Readonly<{ children: ReactNode; kargoEnabled: boolean; principal?: ProductPrincipal }>) {
   const [mobileOpened, setMobileOpened] = useState(false);
   const [desktopOpened, setDesktopOpened] = useState(true);
   const navigation = useNavigation();
@@ -185,13 +194,15 @@ function ProductShellLayout({
       <AppShell.Navbar className="product-navbar" p="sm">
         <AppShell.Section component={ScrollArea} grow>
           <Stack gap="md">
-            {navigationGroups.map((group) => (
-              <NavigationGroup
-                closeMobile={() => setMobileOpened(false)}
-                group={group}
-                key={group.label}
-              />
-            ))}
+            {navigationGroups
+              .filter((group) => group.feature !== "kargo" || kargoEnabled)
+              .map((group) => (
+                <NavigationGroup
+                  closeMobile={() => setMobileOpened(false)}
+                  group={group}
+                  key={group.label}
+                />
+              ))}
             {principal ? (
               <NavigationGroup
                 closeMobile={() => setMobileOpened(false)}

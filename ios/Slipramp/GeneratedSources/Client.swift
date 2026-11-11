@@ -40,7 +40,7 @@ internal struct Client: APIProtocol {
     }
     /// Check client compatibility
     ///
-    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
     ///
     /// - Remark: HTTP `GET /api/v1/client-compatibility`.
     /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
@@ -2626,6 +2626,20 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "status",
                     value: input.query.status
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "creationDispatch",
+                    value: input.query.creationDispatch
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "kargoOutcome",
+                    value: input.query.kargoOutcome
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

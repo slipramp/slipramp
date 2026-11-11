@@ -13,7 +13,7 @@ import struct Foundation.Date
 internal protocol APIProtocol: Sendable {
     /// Check client compatibility
     ///
-    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
     ///
     /// - Remark: HTTP `GET /api/v1/client-compatibility`.
     /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
@@ -119,7 +119,7 @@ internal protocol APIProtocol: Sendable {
 extension APIProtocol {
     /// Check client compatibility
     ///
-    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
     ///
     /// - Remark: HTTP `GET /api/v1/client-compatibility`.
     /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
@@ -374,25 +374,33 @@ internal enum Components {
             internal var productApiContract: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ClientCompatibility/authenticationMethods`.
             internal var authenticationMethods: [Swift.String]
+            /// Whether this Server has at least one Kargo integration configured.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ClientCompatibility/kargoEnabled`.
+            internal var kargoEnabled: Swift.Bool
             /// Creates a new `ClientCompatibility`.
             ///
             /// - Parameters:
             ///   - serverVersion:
             ///   - productApiContract:
             ///   - authenticationMethods:
+            ///   - kargoEnabled: Whether this Server has at least one Kargo integration configured.
             internal init(
                 serverVersion: Swift.String,
                 productApiContract: Swift.Int,
-                authenticationMethods: [Swift.String]
+                authenticationMethods: [Swift.String],
+                kargoEnabled: Swift.Bool
             ) {
                 self.serverVersion = serverVersion
                 self.productApiContract = productApiContract
                 self.authenticationMethods = authenticationMethods
+                self.kargoEnabled = kargoEnabled
             }
             internal enum CodingKeys: String, CodingKey {
                 case serverVersion
                 case productApiContract
                 case authenticationMethods
+                case kargoEnabled
             }
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -408,10 +416,15 @@ internal enum Components {
                     [Swift.String].self,
                     forKey: .authenticationMethods
                 )
+                self.kargoEnabled = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .kargoEnabled
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "serverVersion",
                     "productApiContract",
-                    "authenticationMethods"
+                    "authenticationMethods",
+                    "kargoEnabled"
                 ])
             }
         }
@@ -3006,6 +3019,20 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatchPhase`.
+        internal enum PromotionCreationDispatchPhase: String, Codable, Hashable, Sendable, CaseIterable {
+            case notApplicable = "not-applicable"
+            case awaitingDelivery = "awaiting-delivery"
+            case delivered = "delivered"
+            case failed = "failed"
+        }
+        /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcomePhase`.
+        internal enum KargoPromotionOutcomePhase: String, Codable, Hashable, Sendable, CaseIterable {
+            case succeeded = "Succeeded"
+            case failed = "Failed"
+            case errored = "Errored"
+            case aborted = "Aborted"
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionList`.
         internal struct PromotionList: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionList/items`.
@@ -5393,14 +5420,7 @@ internal enum Components {
         /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch`.
         internal struct PromotionCreationDispatch: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/phase`.
-            internal enum PhasePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case notApplicable = "not-applicable"
-                case awaitingDelivery = "awaiting-delivery"
-                case delivered = "delivered"
-                case failed = "failed"
-            }
-            /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/phase`.
-            internal var phase: Components.Schemas.PromotionCreationDispatch.PhasePayload
+            internal var phase: Components.Schemas.PromotionCreationDispatchPhase
             /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/attemptCount`.
             internal var attemptCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/PromotionCreationDispatch/nextAttemptAt`.
@@ -5424,7 +5444,7 @@ internal enum Components {
             ///   - failedAt:
             ///   - diagnostic:
             internal init(
-                phase: Components.Schemas.PromotionCreationDispatch.PhasePayload,
+                phase: Components.Schemas.PromotionCreationDispatchPhase,
                 attemptCount: Swift.Int,
                 nextAttemptAt: Foundation.Date? = nil,
                 lastAttemptAt: Foundation.Date? = nil,
@@ -5452,7 +5472,7 @@ internal enum Components {
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.phase = try container.decode(
-                    Components.Schemas.PromotionCreationDispatch.PhasePayload.self,
+                    Components.Schemas.PromotionCreationDispatchPhase.self,
                     forKey: .phase
                 )
                 self.attemptCount = try container.decode(
@@ -5495,16 +5515,7 @@ internal enum Components {
             /// Exact terminal phase reported by Kargo.
             ///
             /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/phase`.
-            internal enum PhasePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case succeeded = "Succeeded"
-                case failed = "Failed"
-                case errored = "Errored"
-                case aborted = "Aborted"
-            }
-            /// Exact terminal phase reported by Kargo.
-            ///
-            /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/phase`.
-            internal var phase: Components.Schemas.KargoPromotionOutcome.PhasePayload
+            internal var phase: Components.Schemas.KargoPromotionOutcomePhase
             /// Time Slipramp accepted the Controller's terminal observation.
             ///
             /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/observedAt`.
@@ -5520,7 +5531,7 @@ internal enum Components {
             ///   - observedAt: Time Slipramp accepted the Controller's terminal observation.
             ///   - diagnostic: Bounded sanitized Kargo diagnostic, when available.
             internal init(
-                phase: Components.Schemas.KargoPromotionOutcome.PhasePayload,
+                phase: Components.Schemas.KargoPromotionOutcomePhase,
                 observedAt: Foundation.Date,
                 diagnostic: Swift.String? = nil
             ) {
@@ -5536,7 +5547,7 @@ internal enum Components {
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.phase = try container.decode(
-                    Components.Schemas.KargoPromotionOutcome.PhasePayload.self,
+                    Components.Schemas.KargoPromotionOutcomePhase.self,
                     forKey: .phase
                 )
                 self.observedAt = try container.decode(
@@ -5993,7 +6004,7 @@ internal enum Components {
 internal enum Operations {
     /// Check client compatibility
     ///
-    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
     ///
     /// - Remark: HTTP `GET /api/v1/client-compatibility`.
     /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
@@ -11272,8 +11283,18 @@ internal enum Operations {
                 internal var project: Components.Schemas.CatalogName?
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/application`.
                 internal var application: Swift.String?
+                /// Limit results by Slipramp review lifecycle.
+                ///
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/status`.
                 internal var status: Components.Schemas.PromotionStatus?
+                /// Limit results by Slipramp-to-Kargo object delivery state.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/creationDispatch`.
+                internal var creationDispatch: Components.Schemas.PromotionCreationDispatchPhase?
+                /// Limit results by exact terminal phase reported by Kargo.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/kargoOutcome`.
+                internal var kargoOutcome: Components.Schemas.KargoPromotionOutcomePhase?
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/cluster`.
                 internal var cluster: Components.Schemas.CatalogName?
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/stageId`.
@@ -11290,7 +11311,9 @@ internal enum Operations {
                 ///   - integration:
                 ///   - project:
                 ///   - application:
-                ///   - status:
+                ///   - status: Limit results by Slipramp review lifecycle.
+                ///   - creationDispatch: Limit results by Slipramp-to-Kargo object delivery state.
+                ///   - kargoOutcome: Limit results by exact terminal phase reported by Kargo.
                 ///   - cluster:
                 ///   - stageId:
                 ///   - limit:
@@ -11302,6 +11325,8 @@ internal enum Operations {
                     project: Components.Schemas.CatalogName? = nil,
                     application: Swift.String? = nil,
                     status: Components.Schemas.PromotionStatus? = nil,
+                    creationDispatch: Components.Schemas.PromotionCreationDispatchPhase? = nil,
+                    kargoOutcome: Components.Schemas.KargoPromotionOutcomePhase? = nil,
                     cluster: Components.Schemas.CatalogName? = nil,
                     stageId: Swift.String? = nil,
                     limit: Components.Parameters.Limit? = nil,
@@ -11313,6 +11338,8 @@ internal enum Operations {
                     self.project = project
                     self.application = application
                     self.status = status
+                    self.creationDispatch = creationDispatch
+                    self.kargoOutcome = kargoOutcome
                     self.cluster = cluster
                     self.stageId = stageId
                     self.limit = limit

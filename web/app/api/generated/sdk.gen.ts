@@ -285,7 +285,7 @@ export const getReadiness = <ThrowOnError extends boolean = false>(
 /**
  * Check client compatibility
  *
- * Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+ * Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
  */
 export const getClientCompatibility = <ThrowOnError extends boolean = false>(
   options?: Options<GetClientCompatibilityData, ThrowOnError>,

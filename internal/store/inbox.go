@@ -120,7 +120,7 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 		if stage.Enrichment != nil {
 			application = stage.Enrichment.Application
 		}
-		records = append(records, inbox.PromotionState{
+		record := inbox.PromotionState{
 			ID:              uuid.UUID(row.ID.Bytes),
 			StageName:       stage.Name,
 			Application:     application,
@@ -128,9 +128,25 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 			TargetBranch:    textValue(row.TargetBranch),
 			Status:          promotion.LifecycleState(row.Status),
 			Message:         row.Message,
-			CreatedAt:       row.CreatedAt.Time.UTC(),
-			UpdatedAt:       row.UpdatedAt.Time.UTC(),
-		})
+			CreationDispatch: promotion.CreationDispatchState{
+				DispatchedAt: applicationTime(row.DispatchedAt),
+				FailedAt:     applicationTime(row.DispatchFailedAt),
+				Diagnostic:   row.DispatchDiagnostic,
+			},
+			CreatedAt: row.CreatedAt.Time.UTC(),
+			UpdatedAt: row.UpdatedAt.Time.UTC(),
+		}
+		if row.KargoOutcomePhase != nil {
+			if !row.KargoOutcomeObservedAt.Valid {
+				return nil, fmt.Errorf("decode Inbox Promotion Kargo outcome: observation time is missing")
+			}
+			record.KargoOutcome = &promotion.KargoOutcome{
+				Phase:      promotion.KargoPhase(*row.KargoOutcomePhase),
+				ObservedAt: row.KargoOutcomeObservedAt.Time.UTC(),
+				Diagnostic: row.KargoOutcomeDiagnostic,
+			}
+		}
+		records = append(records, record)
 	}
 
 	return records, nil

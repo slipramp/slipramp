@@ -413,7 +413,8 @@ final class AppModelTests: XCTestCase {
             {
               "serverVersion": "\(version)",
               "productApiContract": \(contract),
-              "authenticationMethods": \(methods)
+              "authenticationMethods": \(methods),
+              "kargoEnabled": false
             }
             """.utf8
         )

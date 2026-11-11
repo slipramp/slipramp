@@ -485,6 +485,19 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR candidate_revision = sqlc.narg(commit_sha)
   )
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+  AND (
+      sqlc.narg(creation_dispatch)::text IS NULL
+      OR (sqlc.narg(creation_dispatch) = 'not-applicable' AND source = 'kargo')
+      OR (
+          sqlc.narg(creation_dispatch) = 'awaiting-delivery'
+          AND source = 'slipramp'
+          AND dispatched_at IS NULL
+          AND dispatch_failed_at IS NULL
+      )
+      OR (sqlc.narg(creation_dispatch) = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
+      OR (sqlc.narg(creation_dispatch) = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
+  )
+  AND (sqlc.narg(kargo_outcome)::text IS NULL OR kargo_outcome_phase = sqlc.narg(kargo_outcome))
   AND (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
   AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
   AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
@@ -501,6 +514,19 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR candidate_revision = sqlc.narg(commit_sha)
   )
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+  AND (
+      sqlc.narg(creation_dispatch)::text IS NULL
+      OR (sqlc.narg(creation_dispatch) = 'not-applicable' AND source = 'kargo')
+      OR (
+          sqlc.narg(creation_dispatch) = 'awaiting-delivery'
+          AND source = 'slipramp'
+          AND dispatched_at IS NULL
+          AND dispatch_failed_at IS NULL
+      )
+      OR (sqlc.narg(creation_dispatch) = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
+      OR (sqlc.narg(creation_dispatch) = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
+  )
+  AND (sqlc.narg(kargo_outcome)::text IS NULL OR kargo_outcome_phase = sqlc.narg(kargo_outcome))
   AND (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
   AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
   AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))

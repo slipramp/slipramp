@@ -27,8 +27,7 @@ func runReviewItem(record ActiveRun) Item {
 
 func promotionItem(record PromotionState) (Item, error) {
 	destination := Destination{Type: DestinationPromotion, ID: record.ID.String()}
-	switch record.Status {
-	case promotion.LifecyclePending:
+	if record.Status == promotion.LifecyclePending {
 		title := "Promotion awaits review"
 		if record.StageName != "" {
 			title = fmt.Sprintf("Promotion to %s awaits review", record.StageName)
@@ -48,7 +47,49 @@ func promotionItem(record PromotionState) (Item, error) {
 			ActionLabel: "Review",
 			Destination: destination,
 		}, nil
-	case promotion.LifecycleError:
+	}
+	if record.CreationDispatch.FailedAt != nil {
+		description := "Slipramp could not materialize the approved Promotion in Kargo."
+		if record.CreationDispatch.Diagnostic != nil {
+			description = *record.CreationDispatch.Diagnostic
+		}
+		title := "Kargo Promotion delivery failed"
+		if record.StageName != "" {
+			title = fmt.Sprintf("Promotion to %s could not be delivered", record.StageName)
+		}
+
+		return newProblem(
+			KindPromotionError,
+			record.ID.String(),
+			*record.CreationDispatch.FailedAt,
+			title,
+			description,
+			"View promotion",
+			destination,
+		), nil
+	}
+	if record.KargoOutcome != nil && record.KargoOutcome.Phase != promotion.KargoPhaseSucceeded {
+		description := "Kargo reached an unsuccessful terminal phase without a diagnostic."
+		if record.KargoOutcome.Diagnostic != nil {
+			description = *record.KargoOutcome.Diagnostic
+		}
+		outcome := strings.ToLower(string(record.KargoOutcome.Phase))
+		title := fmt.Sprintf("Kargo Promotion %s", outcome)
+		if record.StageName != "" {
+			title = fmt.Sprintf("Promotion to %s %s", record.StageName, outcome)
+		}
+
+		return newProblem(
+			KindPromotionError,
+			record.ID.String(),
+			record.KargoOutcome.ObservedAt,
+			title,
+			description,
+			"View promotion",
+			destination,
+		), nil
+	}
+	if record.Status == promotion.LifecycleError {
 		description := "Slipramp could not prepare the review artifacts."
 		if record.Message != nil {
 			description = *record.Message
@@ -67,9 +108,9 @@ func promotionItem(record PromotionState) (Item, error) {
 			"View promotion",
 			destination,
 		), nil
-	default:
-		return Item{}, fmt.Errorf("promotion status %q cannot produce an Inbox item", record.Status)
 	}
+
+	return Item{}, fmt.Errorf("promotion %s has no Inbox-relevant state", record.ID)
 }
 
 func repositoryRefreshItem(record repository.Repository) (Item, error) {

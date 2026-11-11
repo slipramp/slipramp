@@ -27,16 +27,18 @@ type StageListFilter struct {
 }
 
 type PromotionListFilter struct {
-	RepositoryID *uuid.UUID
-	CommitSHA    string
-	Status       LifecycleState
-	Integration  string
-	Cluster      string
-	Project      string
-	Application  string
-	StageID      *uuid.UUID
-	Limit        int
-	Offset       int
+	RepositoryID     *uuid.UUID
+	CommitSHA        string
+	Status           LifecycleState
+	CreationDispatch CreationDispatchPhase
+	KargoOutcome     KargoPhase
+	Integration      string
+	Cluster          string
+	Project          string
+	Application      string
+	StageID          *uuid.UUID
+	Limit            int
+	Offset           int
 }
 
 type StageReview struct {
@@ -163,6 +165,12 @@ func (s *ReviewService) ListPromotions(
 	}
 	if filter.Status != "" && !filter.Status.Valid() {
 		return PromotionReviewList{}, fmt.Errorf("%w: Promotion status filter is invalid", ErrInvalid)
+	}
+	if filter.CreationDispatch != "" && !filter.CreationDispatch.Valid() {
+		return PromotionReviewList{}, fmt.Errorf("%w: Promotion creation dispatch filter is invalid", ErrInvalid)
+	}
+	if filter.KargoOutcome != "" && !filter.KargoOutcome.Terminal() {
+		return PromotionReviewList{}, fmt.Errorf("%w: Kargo outcome filter is invalid", ErrInvalid)
 	}
 	if filter.RepositoryID != nil && *filter.RepositoryID == uuid.Nil {
 		return PromotionReviewList{}, fmt.Errorf("%w: repository ID must not be empty", ErrInvalid)

@@ -13,7 +13,6 @@ import (
 
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/gittrigger"
-	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -252,15 +251,15 @@ func buildSnapshot(query Query, generatedAt time.Time, source projectionSource) 
 		if err != nil {
 			return Snapshot{}, err
 		}
-		switch record.Status {
-		case promotion.LifecyclePending:
+		switch item.Kind {
+		case KindPromotionReview:
 			if query.IncludePromotionDecisions {
 				result.Decisions = append(result.Decisions, item)
 			}
-		case promotion.LifecycleError:
+		case KindPromotionError:
 			result.Problems = append(result.Problems, item)
 		default:
-			return Snapshot{}, fmt.Errorf("relevant Promotion %s has status %q", record.ID, record.Status)
+			return Snapshot{}, fmt.Errorf("relevant Promotion %s produced kind %q", record.ID, item.Kind)
 		}
 	}
 

@@ -17,6 +17,7 @@ func (h *Handler) GetClientCompatibility(
 		ServerVersion:         h.serviceVersion,
 		ProductAPIContract:    productAPIContract,
 		AuthenticationMethods: []string{"oidc-native", "api-key"},
+		KargoEnabled:          len(h.kargoIntegrations) > 0,
 	}, nil
 }
 

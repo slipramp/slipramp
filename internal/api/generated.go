@@ -433,6 +433,27 @@ func (e InfrastructureResourceChangeReplacementOrder) Valid() bool {
 	}
 }
 
+// Defines values for KargoIntegrationHealthObservationState.
+const (
+	KargoIntegrationHealthObservationStateCurrent     KargoIntegrationHealthObservationState = "current"
+	KargoIntegrationHealthObservationStateNotObserved KargoIntegrationHealthObservationState = "not-observed"
+	KargoIntegrationHealthObservationStateStale       KargoIntegrationHealthObservationState = "stale"
+)
+
+// Valid indicates whether the value is a known member of the KargoIntegrationHealthObservationState enum.
+func (e KargoIntegrationHealthObservationState) Valid() bool {
+	switch e {
+	case KargoIntegrationHealthObservationStateCurrent:
+		return true
+	case KargoIntegrationHealthObservationStateNotObserved:
+		return true
+	case KargoIntegrationHealthObservationStateStale:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KargoPromotionDispatchReportResult.
 const (
 	KargoPromotionDispatchReportResultCreated   KargoPromotionDispatchReportResult = "created"
@@ -2203,8 +2224,11 @@ type CatalogSourceRange struct {
 // ClientCompatibility defines model for ClientCompatibility.
 type ClientCompatibility struct {
 	AuthenticationMethods []string `json:"authenticationMethods"`
-	ProductAPIContract    int      `json:"productApiContract"`
-	ServerVersion         string   `json:"serverVersion"`
+
+	// KargoEnabled Whether this Server has at least one Kargo integration configured.
+	KargoEnabled       bool   `json:"kargoEnabled"`
+	ProductAPIContract int    `json:"productApiContract"`
+	ServerVersion      string `json:"serverVersion"`
 }
 
 // Cluster defines model for Cluster.
@@ -2213,7 +2237,8 @@ type Cluster struct {
 	ConnectionState ClusterConnectionState `json:"connectionState"`
 
 	// FirstSeenAt Time at which this Server first observed the controller.
-	FirstSeenAt time.Time `json:"firstSeenAt"`
+	FirstSeenAt       time.Time                `json:"firstSeenAt"`
+	KargoIntegrations []KargoIntegrationHealth `json:"kargoIntegrations"`
 
 	// LastSeenAt Time at which the Server most recently heard from the controller.
 	LastSeenAt time.Time `json:"lastSeenAt"`
@@ -2612,6 +2637,20 @@ type InputExplanation struct {
 	Producer      ExplainedArtifact      `json:"producer"`
 }
 
+// KargoIntegrationHealth defines model for KargoIntegrationHealth.
+type KargoIntegrationHealth struct {
+	KargoURL                     *string     `json:"kargoUrl,omitempty"`
+	LastObservedAt               *time.Time  `json:"lastObservedAt,omitempty"`
+	MaximumObservationAgeSeconds int64       `json:"maximumObservationAgeSeconds"`
+	Name                         CatalogName `json:"name"`
+
+	// ObservationState Freshness of the most recent complete Kargo Stage snapshot accepted by the Server.
+	ObservationState KargoIntegrationHealthObservationState `json:"observationState"`
+}
+
+// KargoIntegrationHealthObservationState Freshness of the most recent complete Kargo Stage snapshot accepted by the Server.
+type KargoIntegrationHealthObservationState string
+
 // KargoPromotionCreationCommand defines model for KargoPromotionCreationCommand.
 type KargoPromotionCreationCommand struct {
 	// Attempt Monotonic dispatch attempt used to reject stale reports.
@@ -2668,7 +2707,7 @@ type KargoPromotionOutcome struct {
 	Phase KargoPromotionOutcomePhase `json:"phase"`
 }
 
-// KargoPromotionOutcomePhase Exact terminal phase reported by Kargo.
+// KargoPromotionOutcomePhase defines model for KargoPromotionOutcomePhase.
 type KargoPromotionOutcomePhase string
 
 // KargoPromotionReconciliationCommand defines model for KargoPromotionReconciliationCommand.
@@ -3296,7 +3335,7 @@ type PromotionCreationDispatch struct {
 	Phase         PromotionCreationDispatchPhase `json:"phase"`
 }
 
-// PromotionCreationDispatchPhase defines model for PromotionCreationDispatch.Phase.
+// PromotionCreationDispatchPhase defines model for PromotionCreationDispatchPhase.
 type PromotionCreationDispatchPhase string
 
 // PromotionDecision defines model for PromotionDecision.
@@ -4769,15 +4808,23 @@ type ListPromotionsParams struct {
 	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
 
 	// CommitSha Limit results to Promotions whose base or candidate revision matches this full Git object ID. Requires repositoryId.
-	CommitSha   *string             `form:"commitSha,omitempty" json:"commitSha,omitempty"`
-	Integration *CatalogName        `form:"integration,omitempty" json:"integration,omitempty"`
-	Project     *CatalogName        `form:"project,omitempty" json:"project,omitempty"`
-	Application *string             `form:"application,omitempty" json:"application,omitempty"`
-	Status      *PromotionStatus    `form:"status,omitempty" json:"status,omitempty"`
-	Cluster     *CatalogName        `form:"cluster,omitempty" json:"cluster,omitempty"`
-	StageID     *openapi_types.UUID `form:"stageId,omitempty" json:"stageId,omitempty"`
-	Limit       *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *Offset             `form:"offset,omitempty" json:"offset,omitempty"`
+	CommitSha   *string      `form:"commitSha,omitempty" json:"commitSha,omitempty"`
+	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
+	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
+	Application *string      `form:"application,omitempty" json:"application,omitempty"`
+
+	// Status Limit results by Slipramp review lifecycle.
+	Status *PromotionStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// CreationDispatch Limit results by Slipramp-to-Kargo object delivery state.
+	CreationDispatch *PromotionCreationDispatchPhase `form:"creationDispatch,omitempty" json:"creationDispatch,omitempty"`
+
+	// KargoOutcome Limit results by exact terminal phase reported by Kargo.
+	KargoOutcome *KargoPromotionOutcomePhase `form:"kargoOutcome,omitempty" json:"kargoOutcome,omitempty"`
+	Cluster      *CatalogName                `form:"cluster,omitempty" json:"cluster,omitempty"`
+	StageID      *openapi_types.UUID         `form:"stageId,omitempty" json:"stageId,omitempty"`
+	Limit        *Limit                      `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset       *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRepositoriesParams defines parameters for ListRepositories.
@@ -5576,7 +5623,7 @@ type ClientInterface interface {
 
 	// GetClientCompatibility Check client compatibility
 	//
-	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
 	//
 	// Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
 	GetClientCompatibility(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6448,7 +6495,7 @@ func (c *Client) GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrin
 
 // GetClientCompatibility Check client compatibility
 //
-// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
 //
 // Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
 func (c *Client) GetClientCompatibility(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10062,6 +10109,30 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 
 		}
 
+		if params.CreationDispatch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "creationDispatch", *params.CreationDispatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.KargoOutcome != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kargoOutcome", *params.KargoOutcome, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Cluster != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -12215,7 +12286,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetClientCompatibilityWithResponse Check client compatibility
 	//
-	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19092,7 +19163,7 @@ func (c *ClientWithResponses) GetCurrentPrincipalWithResponse(ctx context.Contex
 
 // GetClientCompatibilityWithResponse Check client compatibility
 //
-// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential, plus non-sensitive feature availability needed to shape the product shell. The response excludes identity-provider details and sensitive deployment configuration.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27121,6 +27192,32 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "creationDispatch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "creationDispatch", r.URL.Query(), &params.CreationDispatch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "creationDispatch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "creationDispatch", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kargoOutcome" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kargoOutcome", r.URL.Query(), &params.KargoOutcome, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kargoOutcome"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kargoOutcome", Err: err})
 		}
 		return
 	}

@@ -128,7 +128,7 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 	controlFlowCapabilities := stageCapabilities(controlFlow, promotion.IntegrationConfig{
 		ClusterName: "colo", Repositories: []string{"ops"},
 		Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
-	}, target.RepositoryURL)
+	}, target.RepositoryURL, false)
 	if controlFlowCapabilities.Promotion.Ready ||
 		controlFlowCapabilities.Promotion.Reason != controlFlowPromotionReason {
 		t.Errorf("control-flow Stage capabilities = %#v", controlFlowCapabilities)
@@ -139,6 +139,14 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 	}
 	if !controlFlowCapabilities.BranchDrift.Ready {
 		t.Errorf("control-flow Stage branch-drift capability = %#v", controlFlowCapabilities.BranchDrift)
+	}
+	staleCapabilities := stageCapabilities(target, promotion.IntegrationConfig{
+		ClusterName: "colo", Repositories: []string{"ops"},
+		Preparation: promotion.PreparationConfig{Repository: "ops", Target: "app", Action: "prepare"},
+	}, target.RepositoryURL, true)
+	if staleCapabilities.Promotion.Ready || !staleCapabilities.Review.Ready || !staleCapabilities.BranchDrift.Ready ||
+		staleCapabilities.Promotion.Reason != staleObservationPromotionReason {
+		t.Errorf("stale Stage capabilities = %#v", staleCapabilities)
 	}
 }
 

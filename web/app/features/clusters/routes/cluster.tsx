@@ -1,9 +1,29 @@
-import { Alert, Badge, Button, Paper, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Tabs,
+  Text,
+} from "@mantine/core";
 import { IconListDetails } from "@tabler/icons-react";
 import { Link } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { listClusters, listPromotionStages, listRuns, type PromotionStage } from "~/api/generated";
+import {
+  listClusters,
+  listPromotionStages,
+  listRuns,
+  type Cluster,
+  type KargoIntegrationHealth,
+  type PromotionStage,
+  type Run,
+} from "~/api/generated";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, SectionHeader } from "~/shared/page";
@@ -93,6 +113,49 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : null}
 
+      <Tabs defaultValue="overview" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="overview">Overview</Tabs.Tab>
+          {cluster.kargoIntegrations.length > 0 ? <Tabs.Tab value="kargo">Kargo</Tabs.Tab> : null}
+        </Tabs.List>
+        <Tabs.Panel pt="lg" value="overview">
+          <ClusterOverview
+            activeRuns={activeRuns}
+            cluster={cluster}
+            recentRuns={loaderData.recentRuns}
+            runsAvailable={loaderData.runsAvailable}
+          />
+        </Tabs.Panel>
+        {cluster.kargoIntegrations.length > 0 ? (
+          <Tabs.Panel pt="lg" value="kargo">
+            <Stack gap="lg">
+              <KargoIntegrationHealthPanel integrations={cluster.kargoIntegrations} />
+              <PromotionStages
+                available={loaderData.stagesAvailable}
+                clusterName={cluster.name}
+                stages={loaderData.stages}
+              />
+            </Stack>
+          </Tabs.Panel>
+        ) : null}
+      </Tabs>
+    </Stack>
+  );
+}
+
+function ClusterOverview({
+  activeRuns,
+  cluster,
+  recentRuns,
+  runsAvailable,
+}: Readonly<{
+  activeRuns: number;
+  cluster: Cluster;
+  recentRuns: Run[];
+  runsAvailable: boolean;
+}>) {
+  return (
+    <Stack gap="lg">
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
         <Paper p="md" withBorder>
           <Stack gap={2}>
@@ -120,7 +183,7 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
               Recent execution
             </Text>
             <Text fw={700} size="lg">
-              {loaderData.recentRuns.length} runs
+              {recentRuns.length} runs
             </Text>
             <Text c="dimmed" size="xs">
               {activeRuns} active in the latest {recentRunLimit} cluster Runs
@@ -130,19 +193,111 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
       </SimpleGrid>
 
       <RecentRuns
-        available={loaderData.runsAvailable}
+        available={runsAvailable}
         description={`The latest ${recentRunLimit} executions assigned to this cluster.`}
         emptyMessage="No recent Runs were assigned to this cluster."
-        runs={loaderData.recentRuns}
+        runs={recentRuns}
         viewAllTo={`/runs?cluster=${encodeURIComponent(cluster.name)}`}
-      />
-      <PromotionStages
-        available={loaderData.stagesAvailable}
-        clusterName={cluster.name}
-        stages={loaderData.stages}
       />
     </Stack>
   );
+}
+
+function KargoIntegrationHealthPanel({
+  integrations,
+}: Readonly<{ integrations: KargoIntegrationHealth[] }>) {
+  const degraded = integrations.filter((integration) => integration.observationState !== "current");
+
+  return (
+    <Stack gap="md">
+      <SectionHeader
+        description="Controller observation health for each Kargo integration configured on this cluster."
+        title="Kargo integrations"
+      />
+      {degraded.length > 0 ? (
+        <Alert color="red" title="Kargo inventory is not current">
+          {degraded.length === 1
+            ? `${degraded[0]!.name} is configured but is not reporting a current complete Stage snapshot.`
+            : `${degraded.length} Kargo integrations are configured but are not reporting current complete Stage snapshots.`}
+        </Alert>
+      ) : null}
+      <Paper withBorder>
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Integration</Table.Th>
+                <Table.Th>Observation</Table.Th>
+                <Table.Th>Last complete snapshot</Table.Th>
+                <Table.Th>Freshness window</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {integrations.map((integration) => (
+                <Table.Tr key={integration.name}>
+                  <Table.Td>
+                    {integration.kargoUrl ? (
+                      <Anchor href={integration.kargoUrl} rel="noreferrer" target="_blank">
+                        {integration.name}
+                      </Anchor>
+                    ) : (
+                      <Text fw={600} size="sm">
+                        {integration.name}
+                      </Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge
+                      color={integrationHealthColor(integration.observationState)}
+                      variant="light"
+                    >
+                      {integrationHealthLabel(integration.observationState)}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    {integration.lastObservedAt ? (
+                      <Group gap="xs" wrap="nowrap">
+                        <RelativeTime size="sm" value={integration.lastObservedAt} />
+                        <Timestamp c="dimmed" size="xs" value={integration.lastObservedAt} />
+                      </Group>
+                    ) : (
+                      <Text c="dimmed" size="sm">
+                        Never reported
+                      </Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {formatObservationWindow(integration.maximumObservationAgeSeconds)}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </Paper>
+    </Stack>
+  );
+}
+
+function integrationHealthColor(state: KargoIntegrationHealth["observationState"]) {
+  return state === "current" ? "green" : "red";
+}
+
+function integrationHealthLabel(state: KargoIntegrationHealth["observationState"]) {
+  switch (state) {
+    case "current":
+      return "Current";
+    case "not-observed":
+      return "Never reported";
+    case "stale":
+      return "Not reporting";
+  }
+}
+
+function formatObservationWindow(seconds: number) {
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 }
 
 function PromotionStages({

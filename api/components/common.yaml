@@ -38,6 +38,7 @@ ClientCompatibility:
     - serverVersion
     - productApiContract
     - authenticationMethods
+    - kargoEnabled
   properties:
     serverVersion:
       type: string
@@ -55,6 +56,9 @@ ClientCompatibility:
         type: string
         minLength: 1
         maxLength: 64
+    kargoEnabled:
+      type: boolean
+      description: Whether this Server has at least one Kargo integration configured.
 
 GitCommit:
   type: object

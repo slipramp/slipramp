@@ -23,13 +23,15 @@ type ActiveRun struct {
 
 // PromotionState contains only the current Promotion facts used by the Inbox.
 type PromotionState struct {
-	ID              uuid.UUID
-	StageName       string
-	Application     string
-	CandidateBranch string
-	TargetBranch    string
-	Status          promotion.LifecycleState
-	Message         *string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID               uuid.UUID
+	StageName        string
+	Application      string
+	CandidateBranch  string
+	TargetBranch     string
+	Status           promotion.LifecycleState
+	Message          *string
+	CreationDispatch promotion.CreationDispatchState
+	KargoOutcome     *promotion.KargoOutcome
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }

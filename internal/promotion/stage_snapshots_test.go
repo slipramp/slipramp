@@ -14,6 +14,7 @@ import (
 type recordingStageSnapshotStore struct {
 	snapshot StageSnapshot
 	stages   []Stage
+	found    bool
 	err      error
 }
 
@@ -26,6 +27,46 @@ func (s *recordingStageSnapshotStore) ReplacePromotionStageSnapshot(
 	s.stages = stages
 
 	return s.err
+}
+
+func (s *recordingStageSnapshotStore) GetLatestKargoStageSnapshot(
+	context.Context,
+	string,
+	string,
+) (StageSnapshot, bool, error) {
+	return s.snapshot, s.found, s.err
+}
+
+func TestStageServiceListsIntegrationHealth(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	store := &recordingStageSnapshotStore{
+		found: true,
+		snapshot: StageSnapshot{
+			Integration: "prod", ClusterName: "colo", ObservedAt: now.Add(-6 * time.Minute),
+		},
+	}
+	service := NewStageService(IntegrationSet{"prod": {
+		ClusterName: "colo", UIURL: "https://kargo.example", MaximumStageObservationAge: 5 * time.Minute,
+	}}, staticRepositoryLister{}, store)
+	service.now = func() time.Time { return now }
+
+	health, err := service.ListIntegrationHealth(t.Context())
+	if err != nil {
+		t.Fatalf("ListIntegrationHealth() error = %v", err)
+	}
+	if len(health) != 1 || health[0].ObservationState != IntegrationStale ||
+		health[0].LastObservedAt == nil || health[0].KargoURL != "https://kargo.example" {
+		t.Fatalf("health = %#v", health)
+	}
+
+	store.found = false
+	health, err = service.ListIntegrationHealth(t.Context())
+	if err != nil || len(health) != 1 || health[0].ObservationState != IntegrationNotObserved ||
+		health[0].LastObservedAt != nil {
+		t.Fatalf("unobserved health = %#v, %v", health, err)
+	}
 }
 
 type staticRepositoryLister []repository.Repository
