@@ -19,7 +19,7 @@ import {
   Title,
 } from "@mantine/core";
 import { IconArrowsDiff, IconListDetails, IconRoute, IconSearch } from "@tabler/icons-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -66,12 +66,15 @@ import { RelativeTime } from "~/shared/display-values";
 import { formValue, optionalFormValue, problemDetail } from "~/shared/form-data";
 import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
+import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/promotion-project";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.project?.project ?? "Kargo project") }];
 }
+
+export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
@@ -147,7 +150,7 @@ function ProjectDetail({
   const activeView = projectView(searchParams.get("view"));
   const attention = promotionProjectAttention(searchParams.get("attention"));
   const alignment = projectAlignment(searchParams.get("alignment"));
-  const [query, setQuery] = useState("");
+  const query = searchParams.get("q") ?? "";
   const policyStage = project.stages.find(
     (stage) =>
       stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
@@ -176,6 +179,14 @@ function ProjectDetail({
       stageMatchesAttention(stage, attention) &&
       stageMatchesAlignment(stage, alignment),
   );
+  const validPipelineKeys = new Set(pipelines.map((pipeline) => pipeline.key));
+  const explicitPipelineSelection =
+    searchParams.has("pipeline") || searchParams.get("pipelines") === "collapsed";
+  const expandedPipelineKeys = explicitPipelineSelection
+    ? [...new Set(searchParams.getAll("pipeline"))].filter((key) => validPipelineKeys.has(key))
+    : visiblePipelines.length <= 4
+      ? visiblePipelines.map((pipeline) => pipeline.key)
+      : [];
 
   function closePolicy() {
     const next = new URLSearchParams(searchParams);
@@ -220,6 +231,22 @@ function ProjectDetail({
     setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
+  function changeQuery(nextQuery: string) {
+    const next = new URLSearchParams(searchParams);
+    if (nextQuery) next.set("q", nextQuery);
+    else next.delete("q");
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
+  function changeExpandedPipelines(keys: string[]) {
+    const next = new URLSearchParams(searchParams);
+    next.delete("pipeline");
+    next.delete("pipelines");
+    if (keys.length === 0) next.set("pipelines", "collapsed");
+    else for (const key of keys) next.append("pipeline", key);
+    setSearchParams(next, { preventScrollReset: true });
+  }
+
   function changeSelectedStageIds(ids: string[]) {
     const next = new URLSearchParams(searchParams);
     next.delete("stage");
@@ -256,6 +283,7 @@ function ProjectDetail({
       <ProjectSummary pipelineCount={pipelines.length} stages={project.stages} />
 
       <Tabs
+        keepMounted={false}
         onChange={(value) => {
           if (value) changeView(value as ProjectView);
         }}
@@ -298,11 +326,13 @@ function ProjectDetail({
               noun="pipeline"
               onAlignmentChange={changeAlignment}
               onAttentionChange={changeAttention}
-              onChange={setQuery}
+              onChange={changeQuery}
               query={query}
             />
             <PipelineList
               canWrite={canWrite}
+              expandedKeys={expandedPipelineKeys}
+              onExpandedKeysChange={changeExpandedPipelines}
               onCompareFreight={compareFreight}
               onEditPolicy={editPolicy}
               pipelines={visiblePipelines}
@@ -320,7 +350,7 @@ function ProjectDetail({
               noun="Stage"
               onAlignmentChange={changeAlignment}
               onAttentionChange={changeAttention}
-              onChange={setQuery}
+              onChange={changeQuery}
               query={query}
             />
             <StageInventory
@@ -479,14 +509,18 @@ function ProjectFilter({
 
 function PipelineList({
   canWrite,
+  expandedKeys,
   onCompareFreight,
   onEditPolicy,
+  onExpandedKeysChange,
   pipelines,
   query,
 }: Readonly<{
   canWrite: boolean;
+  expandedKeys: string[];
   onCompareFreight: (alignment: PromotionFreightAlignment) => void;
   onEditPolicy: (stage: PromotionProjectStage) => void;
+  onExpandedKeysChange: (keys: string[]) => void;
   pipelines: ProjectPipeline[];
   query: string;
 }>) {
@@ -503,15 +537,8 @@ function PipelineList({
     );
   }
 
-  const values = pipelines.length <= 4 ? pipelines.map((pipeline) => pipeline.key) : [];
-
   return (
-    <Accordion
-      defaultValue={values}
-      key={pipelines.map((pipeline) => pipeline.key).join("|")}
-      multiple
-      variant="separated"
-    >
+    <Accordion multiple onChange={onExpandedKeysChange} value={expandedKeys} variant="separated">
       {pipelines.map((pipeline) => (
         <Accordion.Item key={pipeline.key} value={pipeline.key}>
           <Accordion.Control>

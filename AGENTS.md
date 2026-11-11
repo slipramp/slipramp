@@ -66,6 +66,14 @@ Use the established names consistently:
 - Pin generator versions, validate and bundle the specification in CI, and fail CI when generated output is stale.
 - Standard requests use the generated frontend client. A small handwritten SSE transport may handle live-log reconnection while using generated event payload types.
 
+## Web URL State
+
+- Treat the URL as the source of truth for user-visible page state that should survive refresh, browser navigation, bookmarking, or sharing. This includes filters, search queries, pagination, sorting, tabs and views, selected domain items, and route-level dialogs.
+- Validate URL state at the route boundary, omit default values from canonical URLs, preserve unrelated parameters, and reset dependent state such as pagination when its filters change. Use repeated parameters for multi-value selections.
+- Replace browser history for high-frequency or corrective changes such as typing, toggles, and invalid-value normalization. Push history for meaningful navigation such as changing views, selecting domain items, and opening dialogs so Back restores the prior UI.
+- Keep only ephemeral interaction state client-local, including unfinished form input, menu and popover visibility, live-stream pause state, animation state, scroll position, and incremental rendering batches. Persist durable user preferences locally when they are not part of a shareable page view.
+- Do not re-run route loaders for search-parameter changes that only affect client-side presentation. Add proportionate tests for URL parsing, canonicalization, and state transitions.
+
 ## Technology and Quality
 
 - Use the Go module path `github.com/slipramp/slipramp` and the latest stable Go release selected by the project.

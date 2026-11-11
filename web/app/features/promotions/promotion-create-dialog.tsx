@@ -15,11 +15,16 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconArrowUp, IconExternalLink } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useEffect, useRef } from "react";
+import { Link, useFetcher, useSearchParams } from "react-router";
 
 import type { PromotionCreationActionResult } from "~/features/promotions/promotion-creation";
-import { initialPromotionFreightName } from "~/features/promotions/promotion-creation";
+import {
+  initialPromotionFreightName,
+  promotionCreationContext,
+  promotionCreationURLSelection,
+  updatePromotionCreationSearchParams,
+} from "~/features/promotions/promotion-creation";
 import {
   freightArtifactVersionLabel,
   freightDisplayLabel,
@@ -49,15 +54,17 @@ function PromotionCreateDialog({
   freight,
   environment,
   inPlace,
-  initialFreightName,
   sourceStageId,
   sourceStageName,
   onClose,
-}: PromotionCreateProps & { onClose: () => void }) {
+  onSelectedNameChange,
+  selectedName,
+}: PromotionCreateProps & {
+  onClose: () => void;
+  onSelectedNameChange: (name: string) => void;
+  selectedName: string;
+}) {
   const fetcher = useFetcher<PromotionCreationActionResult>();
-  const [selectedName, setSelectedName] = useState(() =>
-    initialPromotionFreightName(freight, initialFreightName),
-  );
   const handledPromotionID = useRef<string | undefined>(undefined);
   const selected = freight.find((item) => item.name === selectedName);
   const submittingMode = fetcher.formData?.get("mode");
@@ -99,7 +106,7 @@ function PromotionCreateDialog({
                 })),
               ]}
               label="Source Freight"
-              onChange={(event) => setSelectedName(event.currentTarget.value)}
+              onChange={(event) => onSelectedNameChange(event.currentTarget.value)}
               required
               value={selected?.name ?? ""}
             />
@@ -232,8 +239,49 @@ export function PromotionCreateButton({
   unavailableLabel = "No eligible Freight is currently observed.",
   ...props
 }: PromotionCreateProps & { unavailableLabel?: string }) {
-  const [opened, setOpened] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const capability = props.stage.capabilities.promotion;
+  const context = promotionCreationContext(props);
+  const requested = promotionCreationURLSelection(searchParams);
+  const opened =
+    requested?.stageId === props.stage.id &&
+    requested.context === context &&
+    requested.sourceStageId === props.sourceStageId;
+  const selectedName = initialPromotionFreightName(
+    props.freight,
+    opened ? requested.freightName : props.initialFreightName,
+  );
+
+  function open() {
+    setSearchParams(
+      updatePromotionCreationSearchParams(searchParams, {
+        context,
+        freightName: selectedName || undefined,
+        sourceStageId: props.sourceStageId,
+        stageId: props.stage.id,
+      }),
+      { preventScrollReset: true },
+    );
+  }
+
+  function close() {
+    setSearchParams(updatePromotionCreationSearchParams(searchParams), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }
+
+  function changeSelectedName(name: string) {
+    if (!requested) return;
+    setSearchParams(
+      updatePromotionCreationSearchParams(searchParams, {
+        ...requested,
+        freightName: name || undefined,
+      }),
+      { preventScrollReset: true, replace: true },
+    );
+  }
+
   if (capability.status !== "ready" || (props.freight.length === 0 && !opened)) {
     return (
       <Tooltip label={capability.reason ?? unavailableLabel}>
@@ -250,13 +298,20 @@ export function PromotionCreateButton({
     <>
       <Button
         leftSection={<IconArrowUp aria-hidden size={14} />}
-        onClick={() => setOpened(true)}
+        onClick={open}
         size="compact-xs"
         variant="light"
       >
         Promote
       </Button>
-      {opened ? <PromotionCreateDialog {...props} onClose={() => setOpened(false)} /> : null}
+      {opened ? (
+        <PromotionCreateDialog
+          {...props}
+          onClose={close}
+          onSelectedNameChange={changeSelectedName}
+          selectedName={selectedName}
+        />
+      ) : null}
     </>
   );
 }

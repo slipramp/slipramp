@@ -18,6 +18,7 @@ import {
 } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
 import { useDeferredValue, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import type {
   AnsibleHostTotals,
@@ -41,6 +42,14 @@ import {
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
 import type { ReportLoad } from "~/features/runs/run-reports";
 import { SectionHeader } from "~/shared/page";
+import {
+  runReportSearchParam,
+  runReportSearchParamNames,
+  runReportSearchParams,
+  updateRunReportSearchParams,
+  type RunReportSearchParam,
+} from "~/features/runs/run-report-url-state";
+import { pageFromSearchParam } from "~/shared/search-params";
 
 const ansibleResultBatchSize = 100;
 
@@ -122,7 +131,7 @@ export function AnsiblePlaybookReportView({
 
         <AnsibleHostRecap totals={report.summary.hostTotals} />
         <ReportDetailNotice state={load.state} />
-        {detail ? <AnsiblePlaybookDetail report={detail} /> : null}
+        {detail ? <AnsiblePlaybookDetail artifactId={artifact.id} report={detail} /> : null}
       </Stack>
     </Paper>
   );
@@ -216,11 +225,38 @@ function HostCount({ value }: Readonly<{ value: number }>) {
   return <Table.Td c={value === 0 ? "dimmed" : undefined}>{value.toLocaleString()}</Table.Td>;
 }
 
-function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookReport }>) {
-  const [keyword, setKeyword] = useState("");
-  const [outcomes, setOutcomes] = useState<AnsibleOutcome[]>([]);
-  const [page, setPage] = useState(1);
-  const [showUnchanged, setShowUnchanged] = useState(false);
+function AnsiblePlaybookDetail({
+  artifactId,
+  report,
+}: Readonly<{ artifactId: string; report: AnsiblePlaybookReport }>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const keyword =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.query) ?? "";
+  const outcomes = useMemo(
+    () => [
+      ...new Set(
+        runReportSearchParams(searchParams, artifactId, runReportSearchParamNames.outcome).filter(
+          isAnsibleOutcome,
+        ),
+      ),
+    ],
+    [artifactId, searchParams],
+  );
+  const page = pageFromSearchParam(
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.page),
+    ANSIBLE_TASK_PAGE_SIZE,
+  );
+  const showUnchanged =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.showUnchanged) ===
+    "true";
+  const validTaskIds = new Set(report.plays.flatMap((play) => play.tasks.map((task) => task.id)));
+  const expandedTaskIds = [
+    ...new Set(
+      runReportSearchParams(searchParams, artifactId, runReportSearchParamNames.task).filter((id) =>
+        validTaskIds.has(id),
+      ),
+    ),
+  ];
   const deferredKeyword = useDeferredValue(keyword);
   const unchangedResults = useMemo(
     () => countAnsibleUnchangedResults(report.plays),
@@ -237,6 +273,25 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
   );
   const paginated = useMemo(() => paginateAnsiblePlays(filteredPlays, page), [filteredPlays, page]);
 
+  function updateState(
+    updates: Partial<Record<RunReportSearchParam, string | string[] | undefined>>,
+    replace = true,
+  ) {
+    setSearchParams(updateRunReportSearchParams(searchParams, artifactId, updates), {
+      preventScrollReset: true,
+      replace,
+    });
+  }
+
+  function changeExpandedTasks(play: AnsiblePlaybookReport["plays"][number], taskIds: string[]) {
+    const playTaskIds = new Set(play.tasks.map((task) => task.id));
+    const nextTaskIds = [
+      ...expandedTaskIds.filter((taskId) => !playTaskIds.has(taskId)),
+      ...taskIds,
+    ];
+    updateState({ [runReportSearchParamNames.task]: nextTaskIds }, false);
+  }
+
   return (
     <Stack gap="lg">
       <Stack gap={6}>
@@ -246,8 +301,10 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
             label="Filter playbook detail"
             leftSection={<IconSearch aria-hidden size={15} />}
             onChange={(event) => {
-              setKeyword(event.currentTarget.value);
-              setPage(1);
+              updateState({
+                [runReportSearchParamNames.page]: undefined,
+                [runReportSearchParamNames.query]: event.currentTarget.value,
+              });
             }}
             placeholder="Play, task, module, host, or outcome"
             value={keyword}
@@ -258,8 +315,10 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
             data={ansibleOutcomeOptions}
             label="Outcomes"
             onChange={(values) => {
-              setOutcomes(values.filter(isAnsibleOutcome));
-              setPage(1);
+              updateState({
+                [runReportSearchParamNames.outcome]: values.filter(isAnsibleOutcome),
+                [runReportSearchParamNames.page]: undefined,
+              });
             }}
             placeholder="All outcomes"
             searchable
@@ -271,8 +330,12 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
             checked={showUnchanged}
             label={`Show OK / unchanged results (${unchangedResults.toLocaleString()})`}
             onChange={(event) => {
-              setShowUnchanged(event.currentTarget.checked);
-              setPage(1);
+              updateState({
+                [runReportSearchParamNames.page]: undefined,
+                [runReportSearchParamNames.showUnchanged]: event.currentTarget.checked
+                  ? "true"
+                  : undefined,
+              });
             }}
           />
         ) : null}
@@ -295,12 +358,24 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
       ) : (
         <Stack gap="xl">
           {paginated.plays.map((play) => (
-            <AnsiblePlayGroup key={play.id} play={play} />
+            <AnsiblePlayGroup
+              expandedTaskIds={expandedTaskIds}
+              key={play.id}
+              onExpandedTaskIdsChange={(taskIds) => changeExpandedTasks(play, taskIds)}
+              play={play}
+            />
           ))}
           {paginated.totalPages > 1 ? (
             <Pagination
               aria-label="Ansible task pages"
-              onChange={setPage}
+              onChange={(nextPage) =>
+                updateState(
+                  {
+                    [runReportSearchParamNames.page]: nextPage === 1 ? undefined : String(nextPage),
+                  },
+                  false,
+                )
+              }
               total={paginated.totalPages}
               value={paginated.page}
               withEdges
@@ -312,9 +387,18 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
   );
 }
 
-function AnsiblePlayGroup({ play }: Readonly<{ play: AnsiblePlaybookReport["plays"][number] }>) {
-  const [expandedTasks, setExpandedTasks] = useState<string[]>([]);
-
+function AnsiblePlayGroup({
+  expandedTaskIds,
+  onExpandedTaskIdsChange,
+  play,
+}: Readonly<{
+  expandedTaskIds: string[];
+  onExpandedTaskIdsChange: (taskIds: string[]) => void;
+  play: AnsiblePlaybookReport["plays"][number];
+}>) {
+  const expandedTasks = play.tasks
+    .map((task) => task.id)
+    .filter((taskId) => expandedTaskIds.includes(taskId));
   return (
     <Stack gap="xs">
       <Group justify="space-between" wrap="wrap">
@@ -328,7 +412,7 @@ function AnsiblePlayGroup({ play }: Readonly<{ play: AnsiblePlaybookReport["play
       <Accordion
         aria-label={`Tasks in ${play.name}`}
         multiple
-        onChange={setExpandedTasks}
+        onChange={onExpandedTaskIdsChange}
         value={expandedTasks}
         variant="separated"
       >

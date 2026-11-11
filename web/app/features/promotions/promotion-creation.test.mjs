@@ -5,7 +5,9 @@ import {
   eligibleStageFreight,
   initialPromotionFreightName,
   parsePromotionReviewPolicySelection,
+  promotionCreationURLSelection,
   promotionReviewPolicyUpdate,
+  updatePromotionCreationSearchParams,
 } from "./promotion-creation.ts";
 
 const freight = (origin, name, version) => ({
@@ -42,6 +44,28 @@ test("promotion Freight preselection honors a valid requested Freight", () => {
   assert.equal(initialPromotionFreightName([app, config], "freight-43"), "freight-43");
   assert.equal(initialPromotionFreightName([app, config], "missing"), "");
   assert.equal(initialPromotionFreightName([app]), "freight-42");
+});
+
+test("promotion creation round-trips through URL state without disturbing page filters", () => {
+  const current = new URLSearchParams("view=stages&attention=unhealthy");
+  const opened = updatePromotionCreationSearchParams(current, {
+    context: "upstream",
+    freightName: "freight-42",
+    sourceStageId: "stage-dev",
+    stageId: "stage-prod",
+  });
+
+  assert.equal(opened.get("view"), "stages");
+  assert.equal(opened.get("attention"), "unhealthy");
+  assert.deepEqual(promotionCreationURLSelection(opened), {
+    context: "upstream",
+    freightName: "freight-42",
+    sourceStageId: "stage-dev",
+    stageId: "stage-prod",
+  });
+
+  const closed = updatePromotionCreationSearchParams(opened);
+  assert.equal(closed.toString(), "view=stages&attention=unhealthy");
 });
 
 test("review policy choices produce permanent and time-boxed updates", () => {

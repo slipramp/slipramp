@@ -12,7 +12,7 @@ import {
   Text,
 } from "@mantine/core";
 import { IconListDetails } from "@tabler/icons-react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -31,6 +31,7 @@ import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { formatDuration } from "~/shared/display";
 import { pageTitle } from "~/shared/page-title";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/cluster";
 
@@ -39,6 +40,8 @@ const stageLimit = 10;
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.cluster?.name ?? "Cluster") }];
 }
+
+export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
@@ -76,6 +79,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
   useActivityRefresh((loaderData.cluster?.kargoIntegrations.length ?? 0) > 0, 30_000);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   if (!loaderData.cluster) {
     return (
@@ -95,6 +99,19 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
 
   const cluster = loaderData.cluster;
   const activeRuns = loaderData.recentRuns.filter((run) => run.phase !== "finished").length;
+  const activeView =
+    searchParams.get("view") === "kargo" && cluster.kargoIntegrations.length > 0
+      ? "kargo"
+      : "overview";
+
+  function changeView(view: string | null) {
+    if (!view) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (view === "overview") next.delete("view");
+    else next.set("view", view);
+    setSearchParams(next, { preventScrollReset: true });
+  }
 
   return (
     <Stack gap="lg">
@@ -116,7 +133,7 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : null}
 
-      <Tabs defaultValue="overview" keepMounted={false}>
+      <Tabs keepMounted={false} onChange={changeView} value={activeView}>
         <Tabs.List>
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           {cluster.kargoIntegrations.length > 0 ? <Tabs.Tab value="kargo">Kargo</Tabs.Tab> : null}

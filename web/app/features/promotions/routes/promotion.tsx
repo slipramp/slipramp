@@ -16,8 +16,8 @@ import {
   Title,
 } from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
-import { useMemo, useState, type ReactNode } from "react";
-import { Form, Link, useNavigation } from "react-router";
+import { useMemo, type ReactNode } from "react";
+import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
@@ -59,6 +59,7 @@ import {
 } from "~/features/promotions/promotion-diff";
 import { pageTitle } from "~/shared/page-title";
 import { runStatusLabel } from "~/features/runs/run-status";
+import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import styles from "./promotion.module.css";
 import type { Route } from "./+types/promotion";
@@ -69,6 +70,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
     : "Promotion";
   return [{ title: pageTitle(title) }];
 }
+
+export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
@@ -455,8 +458,20 @@ function Diffs({
   gitDiff: ArtifactText;
   promotion: Promotion;
 }>) {
+  const [searchParams, setSearchParams] = useSearchParams();
   if (!promotion.gitDiffArtifactId && !promotion.argoDiffArtifactId) {
     return null;
+  }
+
+  const activeDiff = searchParams.get("diff") === "argo" ? "argo" : "git";
+
+  function changeDiff(value: string | null) {
+    if (!value) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (value === "git") next.delete("diff");
+    else next.set("diff", value);
+    setSearchParams(next, { preventScrollReset: true });
   }
 
   return (
@@ -491,7 +506,7 @@ function Diffs({
             ) : null}
           </Stack>
         ) : null}
-        <Tabs defaultValue="git">
+        <Tabs keepMounted={false} onChange={changeDiff} value={activeDiff}>
           <Tabs.List>
             <Tabs.Tab value="git">Git</Tabs.Tab>
             <Tabs.Tab value="argo">Argo CD resources</Tabs.Tab>
@@ -519,27 +534,37 @@ function Diffs({
 }
 
 function ArgoDiff({ resources }: Readonly<{ resources: ArgoDiffResource[] }>) {
-  const [query, setQuery] = useState("");
-  const [showVersionMetadata, setShowVersionMetadata] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("resourceQuery") ?? "";
+  const showVersionMetadata = searchParams.get("showVersionMetadata") === "true";
   const filtered = useMemo(
     () => filterArgoDiffResources(resources, query, showVersionMetadata),
     [query, resources, showVersionMetadata],
   );
   const hiddenVersionCount = resources.filter((resource) => resource.versionMetadataOnly).length;
 
+  function updateFilter(name: "resourceQuery" | "showVersionMetadata", value?: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(name, value);
+    else next.delete(name);
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
   return (
     <Stack gap="md">
       <Group align="flex-end">
         <TextInput
           label="Filter by kind or name"
-          onChange={(event) => setQuery(event.currentTarget.value)}
+          onChange={(event) => updateFilter("resourceQuery", event.currentTarget.value)}
           placeholder="Deployment or external-dns"
           value={query}
         />
         <Checkbox
           checked={showVersionMetadata}
           label={`Show version-metadata-only changes (${hiddenVersionCount})`}
-          onChange={(event) => setShowVersionMetadata(event.currentTarget.checked)}
+          onChange={(event) =>
+            updateFilter("showVersionMetadata", event.currentTarget.checked ? "true" : undefined)
+          }
         />
       </Group>
       {filtered.length === 0 ? (

@@ -1,5 +1,5 @@
 import { Alert, Badge, Code, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
-import { redirect } from "react-router";
+import { redirect, type ShouldRevalidateFunctionArgs } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   listPromotionBranchDrift,
@@ -29,6 +29,29 @@ const pageSize = 25;
 
 export function meta() {
   return [{ title: pageTitle("Promotion branch drift") }];
+}
+
+export function shouldRevalidate({
+  currentUrl,
+  defaultShouldRevalidate,
+  formMethod,
+  nextUrl,
+}: ShouldRevalidateFunctionArgs) {
+  const loaderParamNames = [
+    "application",
+    "integration",
+    "page",
+    "project",
+    "repository",
+    "status",
+  ];
+  const loaderStateChanged = loaderParamNames.some(
+    (name) => currentUrl.searchParams.get(name) !== nextUrl.searchParams.get(name),
+  );
+  if (formMethod === undefined && currentUrl.pathname === nextUrl.pathname && !loaderStateChanged) {
+    return false;
+  }
+  return defaultShouldRevalidate;
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {

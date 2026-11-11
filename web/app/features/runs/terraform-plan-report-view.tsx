@@ -12,7 +12,8 @@ import {
   TextInput,
 } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo } from "react";
+import { useSearchParams } from "react-router";
 
 import type {
   Artifact,
@@ -34,6 +35,11 @@ import {
 } from "~/features/runs/terraform-plan-report";
 import type { ReportLoad } from "~/features/runs/run-reports";
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
+import {
+  runReportSearchParam,
+  runReportSearchParamNames,
+  updateRunReportSearchParams,
+} from "~/features/runs/run-report-url-state";
 
 type InfrastructurePlanDetailReport = OpenTofuPlanReport | TerraformPlanReport;
 type InfrastructurePlanSummaryReport = OpenTofuPlanReportSummary | TerraformPlanReportSummary;
@@ -99,17 +105,21 @@ export function InfrastructurePlanReportView({
 
         <ReportDetailNotice state={load.state} />
 
-        {detail ? <InfrastructurePlanDetail report={detail} /> : null}
+        {detail ? <InfrastructurePlanDetail artifactId={artifact.id} report={detail} /> : null}
       </Stack>
     </Paper>
   );
 }
 
 function InfrastructurePlanDetail({
+  artifactId,
   report,
-}: Readonly<{ report: InfrastructurePlanDetailReport }>) {
-  const [keyword, setKeyword] = useState("");
-  const [showNoOp, setShowNoOp] = useState(false);
+}: Readonly<{ artifactId: string; report: InfrastructurePlanDetailReport }>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const keyword =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.query) ?? "";
+  const showNoOp =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.showNoOp) === "true";
   const deferredKeyword = useDeferredValue(keyword);
   const resourceChanges = useMemo(
     () =>
@@ -137,6 +147,13 @@ function InfrastructurePlanDetail({
     [report.resourceChanges, report.resourceDrift],
   );
 
+  function updateFilter(name: "reportQuery" | "reportShowNoOp", value?: string) {
+    setSearchParams(updateRunReportSearchParams(searchParams, artifactId, { [name]: value }), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }
+
   return (
     <Stack gap="lg">
       <Stack gap={6}>
@@ -145,7 +162,9 @@ function InfrastructurePlanDetail({
             aria-label={`Filter ${infrastructureToolName(report.tool)} resources by keyword`}
             label="Filter resources"
             leftSection={<IconSearch aria-hidden size={15} />}
-            onChange={(event) => setKeyword(event.currentTarget.value)}
+            onChange={(event) =>
+              updateFilter(runReportSearchParamNames.query, event.currentTarget.value)
+            }
             placeholder="Address, type, provider, or reason"
             style={{ flex: "1 1 24rem" }}
             value={keyword}
@@ -154,7 +173,12 @@ function InfrastructurePlanDetail({
             <Switch
               checked={showNoOp}
               label={`Show no-op (${noOpRows.toLocaleString()})`}
-              onChange={(event) => setShowNoOp(event.currentTarget.checked)}
+              onChange={(event) =>
+                updateFilter(
+                  runReportSearchParamNames.showNoOp,
+                  event.currentTarget.checked ? "true" : undefined,
+                )
+              }
             />
           ) : null}
         </Group>

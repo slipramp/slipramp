@@ -15,7 +15,7 @@ import {
 } from "@mantine/core";
 import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import {
   actionRunPath,
@@ -68,6 +68,7 @@ import {
   ResourceRequirementsTable,
   TechnicalValue,
 } from "~/shared/technical-definition";
+import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/target";
 
@@ -77,6 +78,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
     : "Target";
   return [{ title: pageTitle(targetName) }];
 }
+
+export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
@@ -130,6 +133,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 }
 
 export default function TargetDetail({ loaderData }: Route.ComponentProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   if (!loaderData.target) {
     return (
       <Stack gap="md">
@@ -145,6 +150,17 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   const target = record.definition;
   const actions = sortedEntries(target.spec.actions);
   const definitionDocument = canonicalTargetDefinition(target);
+  const requestedAction = searchParams.get("action");
+  const expandedAction = actions.some(([name]) => name === requestedAction)
+    ? requestedAction
+    : null;
+
+  function changeExpandedAction(name: string | null) {
+    const next = new URLSearchParams(searchParams);
+    if (name) next.set("action", name);
+    else next.delete("action");
+    setSearchParams(next, { preventScrollReset: true });
+  }
 
   return (
     <Stack gap="lg">
@@ -214,7 +230,13 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
           description="Each action resolves the target defaults below into an immutable execution."
           title="Actions"
         />
-        <Accordion chevronPosition="left" className="target-actions" variant="separated">
+        <Accordion
+          chevronPosition="left"
+          className="target-actions"
+          onChange={changeExpandedAction}
+          value={expandedAction}
+          variant="separated"
+        >
           {actions.map(([name, actionDefinition]) => (
             <ActionAccordionItem
               actionDefinition={actionDefinition}

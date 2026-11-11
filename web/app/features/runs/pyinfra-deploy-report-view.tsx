@@ -14,6 +14,7 @@ import {
 } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
 import { useDeferredValue, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import type { Artifact, PyinfraDeployReport, PyinfraOperation } from "~/api/generated";
 import {
@@ -28,6 +29,11 @@ import {
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
 import type { ReportLoad } from "~/features/runs/run-reports";
 import { SectionHeader } from "~/shared/page";
+import {
+  runReportSearchParam,
+  runReportSearchParamNames,
+  updateRunReportSearchParams,
+} from "~/features/runs/run-report-url-state";
 
 export function PyinfraDeployReportView({
   artifact,
@@ -81,15 +87,21 @@ export function PyinfraDeployReportView({
         ) : null}
 
         <ReportDetailNotice state={load.state} />
-        {detail ? <PyinfraDeployDetail report={detail} /> : null}
+        {detail ? <PyinfraDeployDetail artifactId={artifact.id} report={detail} /> : null}
       </Stack>
     </Paper>
   );
 }
 
-function PyinfraDeployDetail({ report }: Readonly<{ report: PyinfraDeployReport }>) {
-  const [keyword, setKeyword] = useState("");
-  const [showNoOp, setShowNoOp] = useState(false);
+function PyinfraDeployDetail({
+  artifactId,
+  report,
+}: Readonly<{ artifactId: string; report: PyinfraDeployReport }>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const keyword =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.query) ?? "";
+  const showNoOp =
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.showNoOp) === "true";
   const deferredKeyword = useDeferredValue(keyword);
   const operations = useMemo(
     () =>
@@ -104,6 +116,13 @@ function PyinfraDeployDetail({ report }: Readonly<{ report: PyinfraDeployReport 
     [report.operations],
   );
 
+  function updateFilter(name: "reportQuery" | "reportShowNoOp", value?: string) {
+    setSearchParams(updateRunReportSearchParams(searchParams, artifactId, { [name]: value }), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }
+
   return (
     <Stack gap="lg">
       {report.failedHosts.length > 0 ? (
@@ -117,7 +136,9 @@ function PyinfraDeployDetail({ report }: Readonly<{ report: PyinfraDeployReport 
             aria-label="Filter pyinfra operations by keyword"
             label="Filter operations"
             leftSection={<IconSearch aria-hidden size={15} />}
-            onChange={(event) => setKeyword(event.currentTarget.value)}
+            onChange={(event) =>
+              updateFilter(runReportSearchParamNames.query, event.currentTarget.value)
+            }
             placeholder="Operation or host"
             style={{ flex: "1 1 24rem" }}
             value={keyword}
@@ -126,7 +147,12 @@ function PyinfraDeployDetail({ report }: Readonly<{ report: PyinfraDeployReport 
             <Switch
               checked={showNoOp}
               label={`Show no-op (${noOpRows.toLocaleString()})`}
-              onChange={(event) => setShowNoOp(event.currentTarget.checked)}
+              onChange={(event) =>
+                updateFilter(
+                  runReportSearchParamNames.showNoOp,
+                  event.currentTarget.checked ? "true" : undefined,
+                )
+              }
             />
           ) : null}
         </Group>

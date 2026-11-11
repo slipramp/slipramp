@@ -87,6 +87,7 @@ import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { reportDetailRequestState, type ReportLoad } from "~/features/runs/run-reports";
 import { targetFilterPath } from "~/features/targets/target-filter";
+import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import styles from "./run.module.css";
 import type { Route } from "./+types/run";
@@ -98,6 +99,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   const runName = loaderData?.run ? `Run ${loaderData.run.id.slice(0, 8)}` : "Run";
   return [{ title: pageTitle(runName) }];
 }
+
+export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
