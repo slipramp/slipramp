@@ -1,7 +1,7 @@
 apiVersion: slipramp.com/v1alpha1
 kind: KargoIntegrationConfig
 integrations:
-  homelab:
+  main:
     cluster: prod-sjc1
     uiUrl: https://kargo.k8s.kcloud.io
     argoCdUiUrls:
