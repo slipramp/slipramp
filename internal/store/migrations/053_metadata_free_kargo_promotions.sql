@@ -11,14 +11,6 @@ WHERE source = 'slipramp'
   AND next_dispatch_at IS NULL;
 
 UPDATE promotions
-SET status = 'approved',
-    message = NULL
-WHERE source = 'slipramp'
-  AND NOT review_required
-  AND request_digest IS NULL
-  AND status IN ('creating', 'error');
-
-UPDATE promotions
 SET stage_snapshot = stage_snapshot
     - 'application'
     - 'environment'
@@ -49,6 +41,14 @@ DROP CONSTRAINT promotions_source_state_valid,
 DROP CONSTRAINT promotions_dispatch_valid,
 DROP CONSTRAINT promotions_automatic_state_valid,
 DROP CONSTRAINT promotions_preparation_state_valid;
+
+UPDATE promotions
+SET status = 'approved',
+    message = NULL
+WHERE source = 'slipramp'
+  AND NOT review_required
+  AND request_digest IS NULL
+  AND status IN ('creating', 'error');
 
 ALTER TABLE promotions
 ADD CONSTRAINT promotions_snapshots_valid CHECK (
