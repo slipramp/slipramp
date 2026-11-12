@@ -29,7 +29,7 @@ import {
   IconTruckDelivery,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
@@ -647,95 +647,92 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
   const policy = promotion.policySnapshot;
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Title order={2}>Promotion context</Title>
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-          <Fact
-            label="Integration"
-            value={
-              <Anchor
-                component={Link}
-                to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
-              >
-                {promotion.integration}
-              </Anchor>
-            }
-          />
-          <Fact
-            label="Stage"
-            value={
-              <PromotionStageLink
-                label={`${stage.project}/${stage.name}`}
-                stage={{ id: promotion.stageId, name: stage.name }}
-              />
-            }
-          />
-          <Fact label="Policy snapshot" value={policy.effectiveMode} />
-          {promotion.expiresAt ? (
-            <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
+    <Stack gap="md">
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+        <Fact
+          label="Integration"
+          value={
+            <Anchor
+              component={Link}
+              to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
+            >
+              {promotion.integration}
+            </Anchor>
+          }
+        />
+        <Fact
+          label="Stage"
+          value={
+            <PromotionStageLink
+              label={`${stage.project}/${stage.name}`}
+              stage={{ id: promotion.stageId, name: stage.name }}
+            />
+          }
+        />
+        <Fact label="Policy snapshot" value={policy.effectiveMode} />
+        {promotion.expiresAt ? (
+          <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
+        ) : null}
+      </SimpleGrid>
+      {enrichment ? (
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+          {enrichment.application ? (
+            <Fact
+              label="Application"
+              value={
+                <Anchor
+                  component={Link}
+                  to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
+                >
+                  {enrichment.application}
+                </Anchor>
+              }
+            />
+          ) : null}
+          {enrichment.environment ? (
+            <Fact label="Environment" value={enrichment.environment} />
           ) : null}
         </SimpleGrid>
-        {enrichment ? (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-            {enrichment.application ? (
-              <Fact
-                label="Application"
-                value={
-                  <Anchor
-                    component={Link}
-                    to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
-                  >
-                    {enrichment.application}
-                  </Anchor>
-                }
-              />
-            ) : null}
-            {enrichment.environment ? (
-              <Fact label="Environment" value={enrichment.environment} />
-            ) : null}
+      ) : null}
+      {review ? (
+        <>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+            <Fact
+              label="Repository"
+              value={
+                <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
+                  {review.repositorySnapshot.name}
+                </Anchor>
+              }
+            />
+            <Fact label="Target branch" value={review.targetBranch} />
+            <Fact
+              label="Candidate branch"
+              value={review.git?.candidateBranch ?? "Waiting for Kargo"}
+            />
           </SimpleGrid>
-        ) : null}
-        {review ? (
-          <>
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-              <Fact
-                label="Repository"
-                value={
-                  <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
-                    {review.repositorySnapshot.name}
-                  </Anchor>
-                }
+          {review.git ? (
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+              <Revision
+                commit={review.git.baseCommit}
+                label="Base revision"
+                repositoryId={review.repositoryId}
               />
-              <Fact label="Target branch" value={review.targetBranch} />
-              <Fact
-                label="Candidate branch"
-                value={review.git?.candidateBranch ?? "Waiting for Kargo"}
+              <Revision
+                commit={review.git.candidateCommit}
+                label="Candidate revision"
+                repositoryId={review.repositoryId}
               />
             </SimpleGrid>
-            {review.git ? (
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-                <Revision
-                  commit={review.git.baseCommit}
-                  label="Base revision"
-                  repositoryId={review.repositoryId}
-                />
-                <Revision
-                  commit={review.git.candidateCommit}
-                  label="Candidate revision"
-                  repositoryId={review.repositoryId}
-                />
-              </SimpleGrid>
-            ) : null}
-          </>
-        ) : (
-          <Alert color="blue" title="Kargo-native Promotion">
-            This Promotion has no Slipramp Repository review context. Kargo received only the exact
-            Stage and Freight identity.
-          </Alert>
-        )}
-      </Stack>
-    </Paper>
+          ) : null}
+        </>
+      ) : (
+        <Alert color="blue" title="Kargo-native Promotion">
+          This Promotion has no Slipramp Repository review context. Kargo received only the exact
+          Stage and Freight identity.
+        </Alert>
+      )}
+    </Stack>
   );
 }
 
@@ -757,30 +754,22 @@ function PromotionWorkspace({
     promotion.gitDiffArtifactId,
     promotion.argoDiffArtifactId,
   );
-  const [initialAutomaticView] = useState(automaticView);
-  const activeView = selectedPromotionDetailView(searchParams, initialAutomaticView);
+  const activeView = selectedPromotionDetailView(searchParams, automaticView);
   const requestedView = searchParams.get(promotionDetailSearchParamNames.view);
 
   useEffect(() => {
     if (requestedView === null || requestedView === activeView) return;
 
-    setSearchParams(
-      updatePromotionDetailSearchParams(searchParams, activeView, initialAutomaticView),
-      {
-        preventScrollReset: true,
-        replace: true,
-      },
-    );
-  }, [activeView, initialAutomaticView, requestedView, searchParams, setSearchParams]);
+    setSearchParams(updatePromotionDetailSearchParams(searchParams, activeView, automaticView), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }, [activeView, automaticView, requestedView, searchParams, setSearchParams]);
 
   function changeView(value: string | null) {
     if (!value) return;
     setSearchParams(
-      updatePromotionDetailSearchParams(
-        searchParams,
-        value as PromotionDetailView,
-        initialAutomaticView,
-      ),
+      updatePromotionDetailSearchParams(searchParams, value as PromotionDetailView, automaticView),
       { preventScrollReset: true },
     );
   }
@@ -816,10 +805,6 @@ function PromotionWorkspace({
                   </Button>
                 ) : undefined
               }
-              description={
-                promotion.gitDiffArtifact?.description ??
-                "Exact base-to-candidate changes prepared for this Promotion."
-              }
               title="Git diff"
             />
             <ArtifactError error={gitDiff.error} />
@@ -851,10 +836,6 @@ function PromotionWorkspace({
                   </Button>
                 ) : undefined
               }
-              description={
-                promotion.argoDiffArtifact?.description ??
-                "Rendered resource changes Argo CD would apply for this Promotion."
-              }
               title="Argo CD resources"
             />
             <ArtifactError error={argoDiff.error} />
@@ -867,10 +848,7 @@ function PromotionWorkspace({
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
             <Stack gap="lg">
-              <SectionHeader
-                description="Review source, policy, revisions, and preparation details captured for this Promotion."
-                title="Promotion details"
-              />
+              <SectionHeader title="Promotion details" />
               <PromotionContext promotion={promotion} />
             </Stack>
           </Tabs.Panel>
@@ -988,9 +966,6 @@ function DecisionPanel({
               <Timestamp value={promotion.decision.decidedAt} />
             </Group>
             {promotion.decision.comment ? <Text>{promotion.decision.comment}</Text> : null}
-            <Text c="dimmed" size="sm">
-              This attribution is immutable.
-            </Text>
           </Stack>
         ) : canWrite ? (
           <Form method="post">

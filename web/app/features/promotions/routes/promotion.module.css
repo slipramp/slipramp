@@ -1,6 +1,6 @@
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 23rem);
   align-items: start;
   gap: var(--mantine-spacing-lg);
 }

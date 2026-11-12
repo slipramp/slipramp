@@ -23,6 +23,15 @@ test("selects a valid requested view and falls back for invalid values", () => {
   );
 });
 
+test("an unselected view follows newly prepared Git artifacts", () => {
+  const automatic = new URLSearchParams();
+  assert.equal(selectedPromotionDetailView(automatic, "details"), "details");
+  assert.equal(selectedPromotionDetailView(automatic, "git"), "git");
+
+  const explicit = new URLSearchParams("view=details");
+  assert.equal(selectedPromotionDetailView(explicit, "git"), "details");
+});
+
 test("updates the view without losing filters and omits the default", () => {
   const current = new URLSearchParams("view=argo&resourceQuery=deployment");
   const selected = updatePromotionDetailSearchParams(current, "details", "git");
