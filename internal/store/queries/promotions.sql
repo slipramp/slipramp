@@ -94,53 +94,6 @@ SELECT *
 FROM promotion_stages
 ORDER BY integration, project, name;
 
--- name: CountPromotionStageReviews :one
-SELECT count(*)
-FROM promotion_stages
-WHERE (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
-  AND (sqlc.narg(cluster_name)::text IS NULL OR cluster_name = sqlc.narg(cluster_name))
-  AND (sqlc.narg(project)::text IS NULL OR project = sqlc.narg(project))
-  AND (sqlc.narg(application)::text IS NULL OR application = sqlc.narg(application))
-  AND (sqlc.narg(archived)::boolean IS NULL OR (archived_at IS NOT NULL) = sqlc.narg(archived));
-
--- name: ListPromotionStageReviews :many
-WITH paged_stages AS (
-    SELECT id
-    FROM promotion_stages
-    WHERE (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
-      AND (sqlc.narg(cluster_name)::text IS NULL OR cluster_name = sqlc.narg(cluster_name))
-      AND (sqlc.narg(project)::text IS NULL OR project = sqlc.narg(project))
-      AND (sqlc.narg(application)::text IS NULL OR application = sqlc.narg(application))
-      AND (sqlc.narg(archived)::boolean IS NULL OR (archived_at IS NOT NULL) = sqlc.narg(archived))
-    ORDER BY integration COLLATE "C", project COLLATE "C", name COLLATE "C"
-    LIMIT sqlc.arg(result_limit)
-    OFFSET sqlc.arg(result_offset)::bigint
-), pending_counts AS (
-    SELECT promotions.stage_id, count(*) AS pending_promotion_count
-    FROM promotions
-    JOIN paged_stages ON paged_stages.id = promotions.stage_id
-    WHERE promotions.status = 'pending'
-    GROUP BY promotions.stage_id
-)
-SELECT
-    sqlc.embed(promotion_stages),
-    promotion_stage_policies.stage_id AS policy_stage_id,
-    promotion_stage_policies.mode AS policy_mode,
-    promotion_stage_policies.expires_at AS policy_expires_at,
-    promotion_stage_policies.reason AS policy_reason,
-    promotion_stage_policies.updated_by_principal_id AS policy_updated_by_principal_id,
-    promotion_stage_policies.updated_by_snapshot AS policy_updated_by_snapshot,
-    promotion_stage_policies.updated_at AS policy_updated_at,
-    COALESCE(pending_counts.pending_promotion_count, 0)::bigint AS pending_promotion_count
-FROM paged_stages
-JOIN promotion_stages ON promotion_stages.id = paged_stages.id
-LEFT JOIN promotion_stage_policies ON promotion_stage_policies.stage_id = promotion_stages.id
-LEFT JOIN pending_counts ON pending_counts.stage_id = promotion_stages.id
-ORDER BY
-    promotion_stages.integration COLLATE "C",
-    promotion_stages.project COLLATE "C",
-    promotion_stages.name COLLATE "C";
-
 -- name: UpsertPromotionStagePolicy :one
 INSERT INTO promotion_stage_policies (
     stage_id,

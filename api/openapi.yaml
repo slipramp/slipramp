@@ -370,8 +370,6 @@ components:
       $ref: ./components/promotions.yaml#/PromotionProjectList
     PromotionProjectDetail:
       $ref: ./components/promotions.yaml#/PromotionProjectDetail
-    PromotionStage:
-      $ref: ./components/promotions.yaml#/PromotionStage
     PromotionStageList:
       $ref: ./components/promotions.yaml#/PromotionStageList
     PromotionStagePolicy:

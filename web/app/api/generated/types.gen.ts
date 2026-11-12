@@ -1327,40 +1327,8 @@ export type PromotionProjectDetail = {
   stages: Array<PromotionProjectStage>;
 };
 
-export type PromotionStage = {
-  id: string;
-  integration: CatalogName;
-  cluster: CatalogName;
-  project: CatalogName;
-  name: string;
-  kubernetesUid: string;
-  resourceVersion: string;
-  application?: string;
-  environment?: string;
-  repository?: CatalogName;
-  repositoryUrl?: string;
-  targetBranch?: string;
-  sourcePaths: Array<string>;
-  requestedFreight: Array<PromotionFreightRequest>;
-  freight: PromotionFreight;
-  /**
-   * Effective Kargo auto-promotion state for this Stage.
-   */
-  autoPromotionEnabled: boolean;
-  successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
-  policy: PromotionStagePolicy;
-  pendingPromotionCount: number;
-  firstObservedAt: string;
-  lastObservedAt: string;
-  archivedAt?: string;
-  /**
-   * Direct link to this Stage in the configured Kargo UI.
-   */
-  kargoUrl?: string;
-};
-
 export type PromotionStageList = {
-  items: Array<PromotionStage>;
+  items: Array<PromotionStageDetail>;
   total: number;
   limit: number;
   offset: number;
@@ -6072,7 +6040,22 @@ export type ListPromotionStagesData = {
     project?: CatalogName;
     application?: string;
     cluster?: CatalogName;
-    archived?: boolean;
+    /**
+     * Select Stages containing at least one comparison in this Freight alignment state.
+     */
+    freightAlignment?: PromotionFreightAlignmentStatus;
+    /**
+     * Select current non-ready Stages.
+     */
+    unhealthy?: boolean;
+    /**
+     * Select Stages whose latest observation is stale.
+     */
+    stale?: boolean;
+    /**
+     * Select Stages with at least one Promotion awaiting review.
+     */
+    pendingReview?: boolean;
     limit?: number;
     offset?: number;
   };

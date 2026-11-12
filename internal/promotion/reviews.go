@@ -16,16 +16,6 @@ const (
 	MaximumListLimit = 200
 )
 
-type StageListFilter struct {
-	Integration string
-	Cluster     string
-	Project     string
-	Application string
-	Archived    *bool
-	Limit       int
-	Offset      int
-}
-
 type PromotionListFilter struct {
 	RepositoryID     *uuid.UUID
 	CommitSHA        string
@@ -39,19 +29,6 @@ type PromotionListFilter struct {
 	StageID          *uuid.UUID
 	Limit            int
 	Offset           int
-}
-
-type StageReview struct {
-	Stage                 Stage
-	Policy                PromotionPolicySnapshot
-	PendingPromotionCount int
-}
-
-type StageReviewList struct {
-	Items  []StageReview
-	Total  int
-	Limit  int
-	Offset int
 }
 
 type PromotionReview struct {
@@ -85,7 +62,6 @@ type DecisionRequest struct {
 }
 
 type ReviewStore interface {
-	StageReviewStore
 	GetPromotionStage(context.Context, uuid.UUID) (Stage, error)
 	UpsertPromotionStagePolicy(context.Context, StagePolicy) (StagePolicy, error)
 	ListPromotionReviews(context.Context, PromotionListFilter) (PromotionReviewPage, error)

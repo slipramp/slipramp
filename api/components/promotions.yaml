@@ -783,101 +783,6 @@ PromotionStageCapability:
       minLength: 1
       maxLength: 512
 
-PromotionStage:
-  type: object
-  additionalProperties: false
-  required:
-    - id
-    - integration
-    - cluster
-    - project
-    - name
-    - kubernetesUid
-    - resourceVersion
-    - sourcePaths
-    - requestedFreight
-    - freight
-    - autoPromotionEnabled
-    - policy
-    - pendingPromotionCount
-    - firstObservedAt
-    - lastObservedAt
-  properties:
-    id:
-      type: string
-      format: uuid
-    integration:
-      $ref: ./runs.yaml#/CatalogName
-    cluster:
-      $ref: ./runs.yaml#/CatalogName
-    project:
-      $ref: ./runs.yaml#/CatalogName
-    name:
-      type: string
-      minLength: 1
-      maxLength: 253
-    kubernetesUid:
-      type: string
-      minLength: 1
-      maxLength: 200
-    resourceVersion:
-      type: string
-      minLength: 1
-      maxLength: 200
-    application:
-      type: string
-      minLength: 1
-      maxLength: 200
-    environment:
-      type: string
-      minLength: 1
-      maxLength: 200
-    repository:
-      $ref: ./runs.yaml#/CatalogName
-    repositoryUrl:
-      type: string
-      minLength: 1
-      maxLength: 2048
-    targetBranch:
-      type: string
-      minLength: 1
-      maxLength: 255
-    sourcePaths:
-      type: array
-      items:
-        type: string
-        minLength: 1
-        maxLength: 1024
-    requestedFreight:
-      type: array
-      items:
-        $ref: "#/PromotionFreightRequest"
-    freight:
-      $ref: "#/PromotionFreight"
-    autoPromotionEnabled:
-      type: boolean
-      description: Effective Kargo auto-promotion state for this Stage.
-    successfulRenderAcknowledgement:
-      $ref: "#/SuccessfulRenderAcknowledgement"
-    policy:
-      $ref: "#/PromotionStagePolicy"
-    pendingPromotionCount:
-      type: integer
-      minimum: 0
-    firstObservedAt:
-      type: string
-      format: date-time
-    lastObservedAt:
-      type: string
-      format: date-time
-    archivedAt:
-      type: string
-      format: date-time
-    kargoUrl:
-      type: string
-      format: uri
-      description: Direct link to this Stage in the configured Kargo UI.
-
 PromotionStageList:
   type: object
   additionalProperties: false
@@ -890,7 +795,7 @@ PromotionStageList:
     items:
       type: array
       items:
-        $ref: "#/PromotionStage"
+        $ref: "#/PromotionStageDetail"
     total:
       type: integer
       minimum: 0

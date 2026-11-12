@@ -524,7 +524,6 @@ export type {
   PromotionReviewContext,
   PromotionRunSource,
   PromotionSource,
-  PromotionStage,
   PromotionStageCapabilities,
   PromotionStageCapability,
   PromotionStageCondition,

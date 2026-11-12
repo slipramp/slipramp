@@ -2064,7 +2064,9 @@ export const getPromotionProject = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * List observed Kargo Stages and their effective policies
+ * List active observed Kargo Stages with their Project context
+ *
+ * Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
  */
 export const listPromotionStages = <ThrowOnError extends boolean = false>(
   options?: Options<ListPromotionStagesData, ThrowOnError>,

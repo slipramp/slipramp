@@ -22,6 +22,7 @@ test("aggregate inventory presentation state does not reload Project data", () =
   assert.equal(shouldRevalidate(base, `${base}&pipeline=stage-1%3Astage-2`), false);
   assert.equal(shouldRevalidate(base, `${base}&pipelines=collapsed`), false);
   assert.equal(shouldRevalidate(base, `${base}&policy=stage-1`), false);
+  assert.equal(shouldRevalidate(base, `${base}&freight=visible`), false);
 });
 
 test("aggregate inventory scope and server filters reload Project data", () => {

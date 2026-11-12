@@ -28,12 +28,10 @@ type recordingPromotionService struct {
 }
 
 type recordingPromotionReviewService struct {
-	stageFilter     promotion.StageListFilter
 	promotionFilter promotion.PromotionListFilter
 	policyStageID   uuid.UUID
 	policyUpdate    promotion.PolicyUpdate
 	decision        promotion.DecisionRequest
-	stages          promotion.StageReviewList
 	promotions      promotion.PromotionReviewList
 	review          promotion.PromotionReview
 	policy          promotion.PromotionPolicySnapshot
@@ -53,15 +51,6 @@ func (s *recordingPromotionCreationService) Create(
 	s.request = request
 
 	return s.record, s.err
-}
-
-func (s *recordingPromotionReviewService) ListStages(
-	_ context.Context,
-	filter promotion.StageListFilter,
-) (promotion.StageReviewList, error) {
-	s.stageFilter = filter
-
-	return s.stages, s.err
 }
 
 func (s *recordingPromotionReviewService) UpdateStagePolicy(
@@ -418,47 +407,6 @@ func TestSubmitKargoPromotionMapsIneligibleStageToConflict(t *testing.T) {
 	httpHandler.ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusConflict)
-}
-
-func TestListPromotionStagesUsesScopeFilters(t *testing.T) {
-	t.Parallel()
-
-	reviews := &recordingPromotionReviewService{
-		stages: promotion.StageReviewList{Items: []promotion.StageReview{}, Total: 0, Limit: 10, Offset: 2},
-	}
-	httpHandler := NewHTTP(
-		Dependencies{
-			PromotionReviews: reviews,
-			ProductAuthentication: &recordingProductAuthenticationService{
-				authentication: productAuthentication(
-					productidentity.RoleViewer,
-					productidentity.AuthenticationMethodAPIKey,
-					[]productidentity.Scope{productidentity.ScopeRead},
-				),
-			},
-		},
-		HTTPOptions{},
-	)
-	request := httptest.NewRequestWithContext(
-		t.Context(),
-		http.MethodGet,
-		"/api/v1/promotion-stages?integration=prod&project=kargo-core&application=external-dns&cluster=colo&archived=false&limit=10&offset=2",
-		nil,
-	)
-	request.Header.Set("Authorization", "Bearer viewer-key")
-	response := httptest.NewRecorder()
-
-	httpHandler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
-	}
-	if reviews.stageFilter.Integration != "prod" || reviews.stageFilter.Project != "kargo-core" ||
-		reviews.stageFilter.Application != "external-dns" || reviews.stageFilter.Cluster != "colo" ||
-		reviews.stageFilter.Archived == nil || *reviews.stageFilter.Archived ||
-		reviews.stageFilter.Limit != 10 || reviews.stageFilter.Offset != 2 {
-		t.Errorf("Stage filter = %#v", reviews.stageFilter)
-	}
 }
 
 func TestListPromotionsUsesOperatorFilters(t *testing.T) {

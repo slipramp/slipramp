@@ -1,18 +1,17 @@
-import { Alert, Stack } from "@mantine/core";
+import { Alert, Checkbox, Stack } from "@mantine/core";
 import { redirect } from "react-router";
 
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
-import { loadPromotionProjectInventory } from "~/features/promotions/promotion-project-inventory.server";
 import {
   PromotionInventoryScopeFilters,
-  PromotionProjectSectionHeader,
   usePromotionInventoryPresentation,
 } from "~/features/promotions/promotion-project-inventory";
 import {
-  promotionProjectInventoryPageSize,
+  promotionStageInventoryPageSize,
   shouldRevalidatePromotionInventory,
 } from "~/features/promotions/promotion-project-inventory-state";
+import { loadPromotionStageInventory } from "~/features/promotions/promotion-stage-inventory.server";
 import {
   ProjectFilter,
   StageInventory,
@@ -36,9 +35,9 @@ export function meta() {
 export const shouldRevalidate = shouldRevalidatePromotionInventory;
 
 export async function loader({ context, request }: Route.LoaderArgs) {
-  const data = await loadPromotionProjectInventory(request, context);
+  const data = await loadPromotionStageInventory(request, context);
   if (data.available) {
-    const lastPage = Math.max(1, Math.ceil(data.total / promotionProjectInventoryPageSize));
+    const lastPage = Math.max(1, Math.ceil(data.total / promotionStageInventoryPageSize));
     if (data.page > lastPage) {
       const url = new URL(request.url);
       if (lastPage === 1) url.searchParams.delete("page");
@@ -57,29 +56,22 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
   useActivityRefresh(true, 30_000);
 
   const presentation = usePromotionInventoryPresentation();
-  const projects = loaderData.projects.flatMap((entry) => (entry.detail ? [entry.detail] : []));
-  const visibleProjects = projects
-    .map((project) => ({
-      project,
-      stages: project.stages.filter(
-        (stage) =>
-          stageMatchesQuery(stage, presentation.query) &&
-          stageMatchesAttention(stage, presentation.attention) &&
-          stageMatchesAlignment(stage, presentation.alignment),
-      ),
-    }))
-    .filter(({ stages }) => stages.length > 0);
-  const visibleStageCount = visibleProjects.reduce(
-    (count, project) => count + project.stages.length,
-    0,
+  const showFreight = presentation.searchParams.get("freight") === "visible";
+  const stages = loaderData.stages.map(({ cluster, integration, project, stage }) => ({
+    ...stage,
+    projectContext: { cluster, integration, project },
+  }));
+  const visibleStages = stages.filter(
+    (stage) =>
+      stageMatchesQuery(stage, presentation.query) &&
+      stageMatchesAttention(stage, presentation.attention) &&
+      stageMatchesAlignment(stage, presentation.alignment),
   );
-  const policyStage = projects
-    .flatMap((project) => project.stages)
-    .find(
-      (stage) =>
-        stage.id === presentation.searchParams.get("policy") &&
-        promotionStagePolicyPresentation(stage).editable,
-    );
+  const policyStage = stages.find(
+    (stage) =>
+      stage.id === presentation.searchParams.get("policy") &&
+      promotionStagePolicyPresentation(stage).editable,
+  );
   const canWrite = canWritePromotions(loaderData.principal);
   const filtered = Boolean(
     loaderData.cluster ||
@@ -102,6 +94,13 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
     presentation.setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
+  function changeShowFreight(checked: boolean) {
+    const next = new URLSearchParams(presentation.searchParams);
+    if (checked) next.set("freight", "visible");
+    else next.delete("freight");
+    presentation.setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
+
   return (
     <Stack gap="lg">
       <PageHeader
@@ -119,7 +118,7 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
       <ProjectFilter
         alignment={presentation.alignment}
         attention={presentation.attention}
-        count={visibleStageCount}
+        count={visibleStages.length}
         noun="Stage"
         onAlignmentChange={presentation.changeAlignment}
         onAttentionChange={presentation.changeAttention}
@@ -127,11 +126,17 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
         query={presentation.query}
       />
 
+      <Checkbox
+        checked={showFreight}
+        label="Show current Freight"
+        onChange={(event) => changeShowFreight(event.currentTarget.checked)}
+      />
+
       {!loaderData.available ? (
         <Alert color="red" title="Kargo Stages unavailable">
           {loaderData.error}
         </Alert>
-      ) : loaderData.projects.length === 0 ? (
+      ) : loaderData.stages.length === 0 ? (
         <EmptyState
           description={
             filtered
@@ -139,7 +144,7 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
               : "No active Kargo Stage observations are available yet."
           }
         />
-      ) : visibleProjects.length === 0 ? (
+      ) : visibleStages.length === 0 ? (
         <EmptyState
           description={
             presentation.query.trim()
@@ -149,37 +154,22 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
           title="No matching Stages"
         />
       ) : (
-        visibleProjects.map(({ project, stages }) => (
-          <Stack gap="sm" key={`${project.integration}:${project.cluster}:${project.project}`}>
-            <PromotionProjectSectionHeader project={project} view="stages" />
-            <StageInventory
-              canWrite={canWrite}
-              onEditPolicy={(stage) => editPolicy(stage.id)}
-              query={presentation.query}
-              stages={stages}
-            />
-          </Stack>
-        ))
-      )}
-
-      {loaderData.projects.map((entry) =>
-        entry.error ? (
-          <Alert
-            color="yellow"
-            key={`${entry.summary.integration}:${entry.summary.cluster}:${entry.summary.project}`}
-            title={`${entry.summary.project} unavailable`}
-          >
-            {entry.error}
-          </Alert>
-        ) : null,
+        <StageInventory
+          canWrite={canWrite}
+          onEditPolicy={(stage) => editPolicy(stage.id)}
+          query={presentation.query}
+          showFreight={showFreight}
+          showProject
+          stages={visibleStages}
+        />
       )}
 
       {loaderData.available && loaderData.total > 0 ? (
         <ListPagination
-          itemCount={loaderData.projects.length}
-          noun="Projects"
+          itemCount={loaderData.stages.length}
+          noun="Stages"
           page={loaderData.page}
-          pageSize={promotionProjectInventoryPageSize}
+          pageSize={promotionStageInventoryPageSize}
           total={loaderData.total}
         />
       ) : null}

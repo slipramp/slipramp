@@ -3,6 +3,7 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { PromotionProjectDetail } from "~/api/generated";
 
 export const promotionProjectInventoryPageSize = 8;
+export const promotionStageInventoryPageSize = 25;
 
 export function promotionProjectDetailPath(
   project: Pick<PromotionProjectDetail, "cluster" | "integration" | "project">,
@@ -27,6 +28,6 @@ export function shouldRevalidatePromotionInventory({
 
 function dataSearchParams(searchParams: URLSearchParams) {
   const result = new URLSearchParams(searchParams);
-  for (const name of ["q", "pipeline", "pipelines", "policy"]) result.delete(name);
+  for (const name of ["freight", "q", "pipeline", "pipelines", "policy"]) result.delete(name);
   return result.toString();
 }

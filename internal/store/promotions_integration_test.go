@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1549,101 +1548,6 @@ func TestReplacePromotionStageSnapshotRetainsCurrentCheckpointsIntegration(t *te
 		nil,
 	); !errors.Is(err, promotion.ErrSnapshotConflict) {
 		t.Errorf("cross-checkpoint snapshot identity conflict error = %v, want snapshot conflict", err)
-	}
-}
-
-func TestPromotionStageReviewProjectionFiltersAndPaginatesIntegration(t *testing.T) {
-	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
-	fixture := newPromotionIntegrationFixture(t, createdAt)
-	if _, err := fixture.database.AcceptPromotionRequest(
-		fixture.ctx, fixture.acceptance(t, fixture.request("automatic"), createdAt.Add(2*time.Minute)),
-	); err != nil {
-		t.Fatal(err)
-	}
-	preparePromotionForReview(t, fixture, "pending", createdAt.Add(3*time.Minute))
-	if _, err := fixture.database.AcceptPromotionRequest(
-		fixture.ctx, fixture.acceptance(t, fixture.request("preparing"), createdAt.Add(3*time.Minute+time.Second)),
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	base := fixture.stage
-	metrics := promotionTestStage("prod", "colo", "kargo-core", "metrics-prod", createdAt)
-	platform := promotionTestStage("prod", "colo", "kargo-platform", "external-dns-prod", createdAt)
-	archived := promotionTestStage("prod", "colo", "kargo-core", "archived-prod", createdAt)
-	edge := promotionTestStage("edge", "edge-cluster", "kargo-core", "external-dns-prod", createdAt)
-	replaceSnapshot := func(stages []promotion.Stage, observedAt time.Time) {
-		t.Helper()
-		for index := range stages {
-			stages[index].FirstObservedAt = observedAt
-			stages[index].LastObservedAt = observedAt
-		}
-		if err := fixture.database.ReplacePromotionStageSnapshot(
-			fixture.ctx,
-			promotionTestSnapshot(uuid.New(), stages[0].Integration, stages[0].ClusterName, observedAt),
-			stages,
-		); err != nil {
-			t.Fatal(err)
-		}
-	}
-	replaceSnapshot([]promotion.Stage{metrics, archived, base, platform}, createdAt.Add(4*time.Minute))
-	replaceSnapshot([]promotion.Stage{platform, metrics, base}, createdAt.Add(5*time.Minute))
-	replaceSnapshot([]promotion.Stage{edge}, createdAt.Add(5*time.Minute))
-
-	for _, test := range []struct {
-		name   string
-		filter promotion.StageListFilter
-		total  int
-		ids    []uuid.UUID
-	}{
-		{
-			name:   "ordered page includes archived by default",
-			filter: promotion.StageListFilter{Limit: 2, Offset: 1}, total: 5,
-			ids: []uuid.UUID{archived.ID, base.ID},
-		},
-		{
-			name: "active inventory", filter: promotion.StageListFilter{Archived: new(false), Limit: 10}, total: 4,
-			ids: []uuid.UUID{edge.ID, base.ID, metrics.ID, platform.ID},
-		},
-		{
-			name: "archived inventory", filter: promotion.StageListFilter{Archived: new(true), Limit: 10}, total: 1,
-			ids: []uuid.UUID{archived.ID},
-		},
-		{
-			name: "combined filters", total: 1, ids: []uuid.UUID{base.ID},
-			filter: promotion.StageListFilter{
-				Integration: "prod", Cluster: "colo", Project: "kargo-core", Application: "external-dns",
-				Archived: new(false), Limit: 10,
-			},
-		},
-		{
-			name:   "mismatched integration and cluster",
-			filter: promotion.StageListFilter{Integration: "prod", Cluster: "edge-cluster", Limit: 10},
-		},
-		{name: "empty page retains total", filter: promotion.StageListFilter{Limit: 2, Offset: 1 << 31}, total: 5},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			page, err := fixture.database.ListPromotionStageReviews(fixture.ctx, test.filter)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ids := make([]uuid.UUID, 0, len(page.Items))
-			for _, item := range page.Items {
-				ids = append(ids, item.Stage.ID)
-				if item.Stage.ID == base.ID {
-					if item.PendingPromotionCount != 1 || item.Policy == nil ||
-						item.Policy.Mode != promotion.PolicyModeReviewRequired ||
-						item.Policy.UpdatedBySnapshot != fixture.actor {
-						t.Errorf("joined review policy and pending count = %#v", item)
-					}
-				} else if item.PendingPromotionCount != 0 || item.Policy != nil {
-					t.Errorf("Stage without reviews or policy = %#v", item)
-				}
-			}
-			if page.Total != test.total || !slices.Equal(ids, test.ids) {
-				t.Errorf("Stage page = %v, total %d; want %v, total %d", ids, page.Total, test.ids, test.total)
-			}
-		})
 	}
 }
 

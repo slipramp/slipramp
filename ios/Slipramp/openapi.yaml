@@ -4203,7 +4203,8 @@ paths:
   /api/v1/promotion-stages:
     get:
       operationId: listPromotionStages
-      summary: List observed Kargo Stages and their effective policies
+      summary: List active observed Kargo Stages with their Project context
+      description: Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
       security:
         - ProductSession: []
         - ProductBearer: []
@@ -4228,10 +4229,26 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/CatalogName'
-        - name: archived
+        - name: freightAlignment
+          in: query
+          schema:
+            $ref: '#/components/schemas/PromotionFreightAlignmentStatus'
+          description: Select Stages containing at least one comparison in this Freight alignment state.
+        - name: unhealthy
           in: query
           schema:
             type: boolean
+          description: Select current non-ready Stages.
+        - name: stale
+          in: query
+          schema:
+            type: boolean
+          description: Select Stages whose latest observation is stale.
+        - name: pendingReview
+          in: query
+          schema:
+            type: boolean
+          description: Select Stages with at least one Promotion awaiting review.
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -7508,100 +7525,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionProjectStage'
-    PromotionStage:
-      type: object
-      additionalProperties: false
-      required:
-        - id
-        - integration
-        - cluster
-        - project
-        - name
-        - kubernetesUid
-        - resourceVersion
-        - sourcePaths
-        - requestedFreight
-        - freight
-        - autoPromotionEnabled
-        - policy
-        - pendingPromotionCount
-        - firstObservedAt
-        - lastObservedAt
-      properties:
-        id:
-          type: string
-          format: uuid
-        integration:
-          $ref: '#/components/schemas/CatalogName'
-        cluster:
-          $ref: '#/components/schemas/CatalogName'
-        project:
-          $ref: '#/components/schemas/CatalogName'
-        name:
-          type: string
-          minLength: 1
-          maxLength: 253
-        kubernetesUid:
-          type: string
-          minLength: 1
-          maxLength: 200
-        resourceVersion:
-          type: string
-          minLength: 1
-          maxLength: 200
-        application:
-          type: string
-          minLength: 1
-          maxLength: 200
-        environment:
-          type: string
-          minLength: 1
-          maxLength: 200
-        repository:
-          $ref: '#/components/schemas/CatalogName'
-        repositoryUrl:
-          type: string
-          minLength: 1
-          maxLength: 2048
-        targetBranch:
-          type: string
-          minLength: 1
-          maxLength: 255
-        sourcePaths:
-          type: array
-          items:
-            type: string
-            minLength: 1
-            maxLength: 1024
-        requestedFreight:
-          type: array
-          items:
-            $ref: '#/components/schemas/PromotionFreightRequest'
-        freight:
-          $ref: '#/components/schemas/PromotionFreight'
-        autoPromotionEnabled:
-          type: boolean
-          description: Effective Kargo auto-promotion state for this Stage.
-        successfulRenderAcknowledgement:
-          $ref: '#/components/schemas/SuccessfulRenderAcknowledgement'
-        policy:
-          $ref: '#/components/schemas/PromotionStagePolicy'
-        pendingPromotionCount:
-          type: integer
-          minimum: 0
-        firstObservedAt:
-          type: string
-          format: date-time
-        lastObservedAt:
-          type: string
-          format: date-time
-        archivedAt:
-          type: string
-          format: date-time
-        kargoUrl:
-          type: string
-          format: uri
-          description: Direct link to this Stage in the configured Kargo UI.
     PromotionStageList:
       type: object
       additionalProperties: false
@@ -7614,7 +7537,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/PromotionStage'
+            $ref: '#/components/schemas/PromotionStageDetail'
         total:
           type: integer
           minimum: 0

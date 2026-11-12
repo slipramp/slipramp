@@ -89,7 +89,7 @@ export function PromotionInventoryScopeFilters({
           value: cluster,
         },
       ]}
-      preserve={["q", "attention", "alignment"]}
+      preserve={["q", "attention", "alignment", "freight"]}
     />
   );
 }

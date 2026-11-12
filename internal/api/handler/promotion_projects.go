@@ -14,6 +14,7 @@ import (
 
 type PromotionProjectService interface {
 	List(context.Context, projection.ProjectListFilter) (projection.ProjectList, error)
+	ListStages(context.Context, projection.StageListFilter) (projection.StageList, error)
 	Get(context.Context, projection.ProjectKey) (projection.ProjectDetail, error)
 	GetStage(context.Context, uuid.UUID) (projection.StageDetail, error)
 }
@@ -89,6 +90,54 @@ func (h *Handler) ListPromotionProjects(
 	}, nil
 }
 
+func (h *Handler) ListPromotionStages(
+	ctx context.Context,
+	request api.ListPromotionStagesRequestObject,
+) (api.ListPromotionStagesResponseObject, error) {
+	filter := projection.StageListFilter{
+		Integration: optionalCatalogName(request.Params.Integration),
+		Cluster:     optionalCatalogName(request.Params.Cluster),
+		Project:     optionalCatalogName(request.Params.Project),
+		Limit:       promotion.DefaultListLimit,
+	}
+	if request.Params.Application != nil {
+		filter.Application = *request.Params.Application
+	}
+	if request.Params.FreightAlignment != nil {
+		filter.FreightAlignment = projection.FreightAlignmentStatus(*request.Params.FreightAlignment)
+	}
+	filter.Unhealthy = request.Params.Unhealthy != nil && *request.Params.Unhealthy
+	filter.Stale = request.Params.Stale != nil && *request.Params.Stale
+	filter.PendingReview = request.Params.PendingReview != nil && *request.Params.PendingReview
+	if request.Params.Limit != nil {
+		filter.Limit = int(*request.Params.Limit)
+	}
+	if request.Params.Offset != nil {
+		filter.Offset = int(*request.Params.Offset)
+	}
+
+	result, err := h.promotionProjects.ListStages(ctx, filter)
+	if errors.Is(err, promotion.ErrInvalid) {
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+
+		return api.ListPromotionStages400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]api.PromotionStageDetail, 0, len(result.Items))
+	for _, stage := range result.Items {
+		items = append(items, h.promotionStageDetailResponse(stage))
+	}
+
+	return api.ListPromotionStages200JSONResponse{
+		Items: items, Total: result.Total, Limit: result.Limit, Offset: result.Offset,
+	}, nil
+}
+
 func (h *Handler) GetPromotionProject(
 	ctx context.Context,
 	request api.GetPromotionProjectRequestObject,
@@ -137,12 +186,16 @@ func (h *Handler) GetPromotionStage(
 		return nil, err
 	}
 
-	return api.GetPromotionStage200JSONResponse{
+	return api.GetPromotionStage200JSONResponse(h.promotionStageDetailResponse(result)), nil
+}
+
+func (h *Handler) promotionStageDetailResponse(result projection.StageDetail) api.PromotionStageDetail {
+	return api.PromotionStageDetail{
 		Integration: api.CatalogName(result.Integration),
 		Cluster:     api.CatalogName(result.ClusterName),
 		Project:     api.CatalogName(result.Project),
 		Stage:       h.promotionProjectStageResponse(result.Stage),
-	}, nil
+	}
 }
 
 func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) api.PromotionProjectStage {

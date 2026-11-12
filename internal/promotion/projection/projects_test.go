@@ -228,6 +228,52 @@ func TestProjectServiceFiltersAndPaginatesProjects(t *testing.T) {
 	}
 }
 
+func TestProjectServiceListsLooseStagesByName(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	alphaPlatform := projectTestStage("prod", "colo", "platform", "alpha", now)
+	alphaCore := projectTestStage("prod", "colo", "core", "alpha", now)
+	bravo := projectTestStage("prod", "colo", "core", "bravo", now)
+	bravo.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
+	store := &projectionTestStore{
+		stages:        []promotion.Stage{bravo, alphaPlatform, alphaCore},
+		pendingCounts: map[uuid.UUID]int{bravo.ID: 1},
+	}
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		store,
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.ListStages(t.Context(), StageListFilter{Limit: 2})
+	if err != nil {
+		t.Fatalf("ListStages() error = %v", err)
+	}
+	if result.Total != 3 || len(result.Items) != 2 || result.Limit != 2 || result.Offset != 0 {
+		t.Fatalf("Stage page = %#v", result)
+	}
+	want := []string{"alpha/core", "alpha/platform"}
+	got := []string{
+		result.Items[0].Stage.Stage.Name + "/" + result.Items[0].Project,
+		result.Items[1].Stage.Stage.Name + "/" + result.Items[1].Project,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Stage order = %v, want %v", got, want)
+	}
+
+	filtered, err := service.ListStages(t.Context(), StageListFilter{
+		Integration: "prod", Cluster: "colo", Project: "core", Application: bravo.Application,
+		Unhealthy: true, PendingReview: true, Limit: promotion.DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("ListStages(filtered) error = %v", err)
+	}
+	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].Stage.Stage.ID != bravo.ID {
+		t.Errorf("filtered Stages = %#v", filtered)
+	}
+}
+
 func TestProjectServiceSummarizesAndFiltersFreightAlignmentBeforePagination(t *testing.T) {
 	t.Parallel()
 

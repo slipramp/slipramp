@@ -21,7 +21,7 @@ import {
   listRuns,
   type Cluster,
   type KargoIntegrationHealth,
-  type PromotionStage,
+  type PromotionStageDetail,
   type Run,
 } from "~/api/generated";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
@@ -56,7 +56,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       clustersAvailable: clustersResult.data !== undefined,
       recentRuns: [],
       runsAvailable: false,
-      stages: [] as PromotionStage[],
+      stages: [] as PromotionStageDetail[],
       stagesAvailable: false,
     };
   }
@@ -65,7 +65,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     listRuns({ client, query: { cluster: cluster.name, limit: recentRunLimit } }),
     listPromotionStages({
       client,
-      query: { archived: false, cluster: cluster.name, limit: stageLimit, offset: 0 },
+      query: { cluster: cluster.name, limit: stageLimit, offset: 0 },
     }),
   ]);
 
@@ -326,7 +326,7 @@ function PromotionStages({
   available,
   clusterName,
   stages,
-}: Readonly<{ available: boolean; clusterName: string; stages: PromotionStage[] }>) {
+}: Readonly<{ available: boolean; clusterName: string; stages: PromotionStageDetail[] }>) {
   return (
     <Stack gap="md">
       <SectionHeader
@@ -341,7 +341,7 @@ function PromotionStages({
             View Kargo projects
           </Button>
         }
-        description={`The latest ${stageLimit} active Kargo Stages observed in this execution cluster.`}
+        description={`Up to ${stageLimit} active Kargo Stages in this execution cluster, sorted by name.`}
         title="Promotion stages"
       />
       {!available ? (
@@ -366,28 +366,28 @@ function PromotionStages({
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {stages.map((stage) => (
-                  <Table.Tr key={stage.id}>
+                {stages.map((item) => (
+                  <Table.Tr key={item.stage.id}>
                     <Table.Td>
                       <Stack gap={0}>
-                        <PromotionStageLink stage={stage} />
+                        <PromotionStageLink stage={item.stage} />
                         <Text c="dimmed" size="xs">
-                          {stage.environment}
+                          {item.stage.enrichment?.environment}
                         </Text>
                       </Stack>
                     </Table.Td>
-                    <Table.Td>{stage.application}</Table.Td>
-                    <Table.Td>{stage.project}</Table.Td>
+                    <Table.Td>{item.stage.enrichment?.application}</Table.Td>
+                    <Table.Td>{item.project}</Table.Td>
                     <Table.Td>
                       <Badge
-                        color={promotionStagePolicyColor(stage.policy.effectiveMode)}
+                        color={promotionStagePolicyColor(item.stage.policy.effectiveMode)}
                         variant="light"
                       >
-                        {stage.policy.effectiveMode}
+                        {item.stage.policy.effectiveMode}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <RelativeTime size="sm" value={stage.lastObservedAt} />
+                      <RelativeTime size="sm" value={item.stage.lastObservedAt} />
                     </Table.Td>
                   </Table.Tr>
                 ))}

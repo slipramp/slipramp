@@ -3595,37 +3595,6 @@ type PromotionRunSource struct {
 // PromotionSource defines model for PromotionSource.
 type PromotionSource string
 
-// PromotionStage defines model for PromotionStage.
-type PromotionStage struct {
-	Application *string    `json:"application,omitempty"`
-	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
-
-	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
-	AutoPromotionEnabled bool               `json:"autoPromotionEnabled"`
-	Cluster              CatalogName        `json:"cluster"`
-	Environment          *string            `json:"environment,omitempty"`
-	FirstObservedAt      time.Time          `json:"firstObservedAt"`
-	Freight              PromotionFreight   `json:"freight"`
-	ID                   openapi_types.UUID `json:"id"`
-	Integration          CatalogName        `json:"integration"`
-
-	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL                        *string                          `json:"kargoUrl,omitempty"`
-	KubernetesUID                   string                           `json:"kubernetesUid"`
-	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
-	Name                            string                           `json:"name"`
-	PendingPromotionCount           int                              `json:"pendingPromotionCount"`
-	Policy                          PromotionStagePolicy             `json:"policy"`
-	Project                         CatalogName                      `json:"project"`
-	Repository                      *CatalogName                     `json:"repository,omitempty"`
-	RepositoryURL                   *string                          `json:"repositoryUrl,omitempty"`
-	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
-	ResourceVersion                 string                           `json:"resourceVersion"`
-	SourcePaths                     []string                         `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    *string                          `json:"targetBranch,omitempty"`
-}
-
 // PromotionStageCapabilities defines model for PromotionStageCapabilities.
 type PromotionStageCapabilities struct {
 	// BranchDrift Cached Git branch-drift capability.
@@ -3678,10 +3647,10 @@ type PromotionStageEnrichment struct {
 
 // PromotionStageList defines model for PromotionStageList.
 type PromotionStageList struct {
-	Items  []PromotionStage `json:"items"`
-	Limit  int              `json:"limit"`
-	Offset int              `json:"offset"`
-	Total  int              `json:"total"`
+	Items  []PromotionStageDetail `json:"items"`
+	Limit  int                    `json:"limit"`
+	Offset int                    `json:"offset"`
+	Total  int                    `json:"total"`
 }
 
 // PromotionStageObservation defines model for PromotionStageObservation.
@@ -4834,9 +4803,20 @@ type ListPromotionStagesParams struct {
 	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
 	Application *string      `form:"application,omitempty" json:"application,omitempty"`
 	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Archived    *bool        `form:"archived,omitempty" json:"archived,omitempty"`
-	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// FreightAlignment Select Stages containing at least one comparison in this Freight alignment state.
+	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
+
+	// Unhealthy Select current non-ready Stages.
+	Unhealthy *bool `form:"unhealthy,omitempty" json:"unhealthy,omitempty"`
+
+	// Stale Select Stages whose latest observation is stale.
+	Stale *bool `form:"stale,omitempty" json:"stale,omitempty"`
+
+	// PendingReview Select Stages with at least one Promotion awaiting review.
+	PendingReview *bool   `form:"pendingReview,omitempty" json:"pendingReview,omitempty"`
+	Limit         *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset        *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionsParams defines parameters for ListPromotions.
@@ -5842,7 +5822,9 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
 	GetPromotionProject(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListPromotionStages List observed Kargo Stages and their effective policies
+	// ListPromotionStages List active observed Kargo Stages with their Project context
+	//
+	// Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
 	//
 	// Corresponds with GET /api/v1/promotion-stages (the `ListPromotionStages` operationId).
 	ListPromotionStages(ctx context.Context, params *ListPromotionStagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6979,7 +6961,9 @@ func (c *Client) GetPromotionProject(ctx context.Context, integration CatalogNam
 	return c.Client.Do(req)
 }
 
-// ListPromotionStages List observed Kargo Stages and their effective policies
+// ListPromotionStages List active observed Kargo Stages with their Project context
+//
+// Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
 //
 // Corresponds with GET /api/v1/promotion-stages (the `ListPromotionStages` operationId).
 func (c *Client) ListPromotionStages(ctx context.Context, params *ListPromotionStagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9958,9 +9942,45 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 
 		}
 
-		if params.Archived != nil {
+		if params.FreightAlignment != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "archived", *params.Archived, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "freightAlignment", *params.FreightAlignment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Unhealthy != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "unhealthy", *params.Unhealthy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Stale != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "stale", *params.Stale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PendingReview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pendingReview", *params.PendingReview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -12631,7 +12651,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
 	GetPromotionProjectWithResponse(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*GetPromotionProjectResponse, error)
 
-	// ListPromotionStagesWithResponse List observed Kargo Stages and their effective policies
+	// ListPromotionStagesWithResponse List active observed Kargo Stages with their Project context
+	//
+	// Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19740,7 +19762,9 @@ func (c *ClientWithResponses) GetPromotionProjectWithResponse(ctx context.Contex
 	return ParseGetPromotionProjectResponse(rsp)
 }
 
-// ListPromotionStagesWithResponse List observed Kargo Stages and their effective policies
+// ListPromotionStagesWithResponse List active observed Kargo Stages with their Project context
+//
+// Returns active Stages ordered by Stage name, then Project, integration, cluster, and durable Stage ID. Operational and Freight filters select individual Stages before pagination.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -25769,7 +25793,7 @@ type ServerInterface interface {
 	// GetPromotionProject Get one Kargo Project and its observed Stage topology
 	// (GET /api/v1/promotion-projects/{integration}/{cluster}/{project})
 	GetPromotionProject(w http.ResponseWriter, r *http.Request, integration CatalogName, cluster CatalogName, project CatalogName)
-	// ListPromotionStages List observed Kargo Stages and their effective policies
+	// ListPromotionStages List active observed Kargo Stages with their Project context
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(w http.ResponseWriter, r *http.Request, params ListPromotionStagesParams)
 	// GetPromotionStage Get one observed Kargo Stage with its Project topology context
@@ -27319,15 +27343,54 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 		return
 	}
 
-	// ------------- Optional query parameter "archived" -------------
+	// ------------- Optional query parameter "freightAlignment" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "freightAlignment", r.URL.Query(), &params.FreightAlignment, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "freightAlignment"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "freightAlignment", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "unhealthy" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "unhealthy", r.URL.Query(), &params.Unhealthy, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unhealthy"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unhealthy", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "stale" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stale", r.URL.Query(), &params.Stale, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stale"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stale", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pendingReview" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pendingReview", r.URL.Query(), &params.PendingReview, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pendingReview"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pendingReview", Err: err})
 		}
 		return
 	}
@@ -37133,7 +37196,7 @@ type StrictServerInterface interface {
 	// GetPromotionProject Get one Kargo Project and its observed Stage topology
 	// (GET /api/v1/promotion-projects/{integration}/{cluster}/{project})
 	GetPromotionProject(ctx context.Context, request GetPromotionProjectRequestObject) (GetPromotionProjectResponseObject, error)
-	// ListPromotionStages List observed Kargo Stages and their effective policies
+	// ListPromotionStages List active observed Kargo Stages with their Project context
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(ctx context.Context, request ListPromotionStagesRequestObject) (ListPromotionStagesResponseObject, error)
 	// GetPromotionStage Get one observed Kargo Stage with its Project topology context

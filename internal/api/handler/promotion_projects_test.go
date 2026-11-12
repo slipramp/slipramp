@@ -16,13 +16,24 @@ import (
 )
 
 type recordingPromotionProjectService struct {
-	filter  projection.ProjectListFilter
-	result  projection.ProjectList
-	key     projection.ProjectKey
-	detail  projection.ProjectDetail
-	stageID uuid.UUID
-	stage   projection.StageDetail
-	err     error
+	filter      projection.ProjectListFilter
+	result      projection.ProjectList
+	stageFilter projection.StageListFilter
+	stageResult projection.StageList
+	key         projection.ProjectKey
+	detail      projection.ProjectDetail
+	stageID     uuid.UUID
+	stage       projection.StageDetail
+	err         error
+}
+
+func (s *recordingPromotionProjectService) ListStages(
+	_ context.Context,
+	filter projection.StageListFilter,
+) (projection.StageList, error) {
+	s.stageFilter = filter
+
+	return s.stageResult, s.err
 }
 
 func (s *recordingPromotionProjectService) List(
@@ -141,6 +152,83 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 		`"summary":{"freightDifferenceCount":4,"pendingReviewCount":3,"stageCount":4,"staleStageCount":2,"unhealthyStageCount":1,"unknownFreightComparisonCount":5}`,
 		`"latestObservedAt":"2026-10-22T12:00:00Z"`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core"`,
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
+		}
+	}
+}
+
+func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1931")
+	projects := &recordingPromotionProjectService{
+		stageResult: projection.StageList{
+			Items: []projection.StageDetail{{
+				Integration: "prod",
+				ClusterName: "colo",
+				Project:     "kargo-core",
+				Stage: projection.ProjectStage{
+					Stage: promotion.Stage{
+						ID: stageID, Integration: "prod", ClusterName: "colo", Project: "kargo-core", Name: "prod",
+						KubernetesUID: "stage-uid", ResourceVersion: "42",
+						Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
+						FirstObservedAt: now.Add(-time.Hour), LastObservedAt: now,
+					},
+					Policy: promotion.PromotionPolicySnapshot{
+						ConfiguredMode: promotion.PolicyModeAutomatic,
+						EffectiveMode:  promotion.PolicyModeAutomatic,
+					},
+				},
+			}},
+			Total: 7, Limit: 10, Offset: 2,
+		},
+	}
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionProjects: projects,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: productAuthentication(
+					productidentity.RoleViewer,
+					productidentity.AuthenticationMethodAPIKey,
+					[]productidentity.Scope{productidentity.ScopeRead},
+				),
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/promotion-stages?integration=prod&cluster=colo&project=kargo-core&application=api&"+
+			"freightAlignment=different&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer viewer-key")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	filter := projects.stageFilter
+	if filter.Integration != "prod" || filter.Cluster != "colo" || filter.Project != "kargo-core" ||
+		filter.Application != "api" || filter.FreightAlignment != projection.FreightAlignmentDifferent ||
+		!filter.Unhealthy || !filter.Stale || !filter.PendingReview || filter.Limit != 10 || filter.Offset != 2 {
+		t.Errorf("Stage filter = %#v", filter)
+	}
+	for _, expected := range []string{
+		`"integration":"prod"`,
+		`"cluster":"colo"`,
+		`"project":"kargo-core"`,
+		`"stage":{"autoPromotionEnabled":false`,
+		`"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1931"`,
+		`"total":7`,
+		`"limit":10`,
+		`"offset":2`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)

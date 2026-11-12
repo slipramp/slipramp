@@ -63,6 +63,26 @@ type ProjectList struct {
 	Offset  int
 }
 
+type StageListFilter struct {
+	Integration      string
+	Cluster          string
+	Project          string
+	Application      string
+	FreightAlignment FreightAlignmentStatus
+	Unhealthy        bool
+	Stale            bool
+	PendingReview    bool
+	Limit            int
+	Offset           int
+}
+
+type StageList struct {
+	Items  []StageDetail
+	Total  int
+	Limit  int
+	Offset int
+}
+
 type ProjectDetail struct {
 	Integration string
 	ClusterName string
@@ -214,6 +234,61 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 	return ProjectList{
 		Items: page(items, filter.Offset, filter.Limit), Summary: listSummary,
 		Total: total, Limit: filter.Limit, Offset: filter.Offset,
+	}, nil
+}
+
+func (s *ProjectService) ListStages(ctx context.Context, filter StageListFilter) (StageList, error) {
+	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
+		return StageList{}, err
+	}
+	if !filter.FreightAlignment.Valid() {
+		return StageList{}, fmt.Errorf("%w: Freight alignment filter is invalid", promotion.ErrInvalid)
+	}
+
+	stages, err := s.store.ListPromotionStages(ctx)
+	if err != nil {
+		return StageList{}, err
+	}
+	keys := make(map[ProjectKey]struct{})
+	for _, stage := range stages {
+		if stage.ArchivedAt != nil || !stageMatchesStageScope(stage, filter) {
+			continue
+		}
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if !configured || integration.ClusterName != stage.ClusterName {
+			continue
+		}
+		keys[ProjectKey{
+			Integration: stage.Integration,
+			Cluster:     stage.ClusterName,
+			Project:     stage.Project,
+		}] = struct{}{}
+	}
+
+	items := make([]StageDetail, 0)
+	for key := range keys {
+		project, detailErr := s.projectDetail(ctx, key, stages)
+		if detailErr != nil {
+			return StageList{}, detailErr
+		}
+		for _, stage := range project.Stages {
+			if !projectStageMatchesListFilter(stage, filter) {
+				continue
+			}
+			items = append(items, StageDetail{
+				Integration: project.Integration,
+				ClusterName: project.ClusterName,
+				Project:     project.Project,
+				Stage:       stage,
+			})
+		}
+	}
+	slices.SortFunc(items, compareStageDetails)
+	total := len(items)
+
+	return StageList{
+		Items: page(items, filter.Offset, filter.Limit), Total: total,
+		Limit: filter.Limit, Offset: filter.Offset,
 	}, nil
 }
 
@@ -397,8 +472,50 @@ func compareProjects(left, right ProjectSummary) int {
 	return 0
 }
 
+func compareStageDetails(left, right StageDetail) int {
+	for _, values := range [][2]string{
+		{left.Stage.Stage.Name, right.Stage.Stage.Name},
+		{left.Project, right.Project},
+		{left.Integration, right.Integration},
+		{left.ClusterName, right.ClusterName},
+		{left.Stage.Stage.ID.String(), right.Stage.Stage.ID.String()},
+	} {
+		if value := cmp.Compare(values[0], values[1]); value != 0 {
+			return value
+		}
+	}
+	return 0
+}
+
 func stageMatchesProjectFilter(stage promotion.Stage, filter ProjectListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
 		(filter.Project == "" || stage.Project == filter.Project)
+}
+
+func stageMatchesStageScope(stage promotion.Stage, filter StageListFilter) bool {
+	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
+		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
+		(filter.Project == "" || stage.Project == filter.Project) &&
+		(filter.Application == "" || stage.Application == filter.Application)
+}
+
+func projectStageMatchesListFilter(stage ProjectStage, filter StageListFilter) bool {
+	if filter.Unhealthy && (stage.ObservationStale || !stageNonReady(stage.Stage)) {
+		return false
+	}
+	if filter.Stale && !stage.ObservationStale {
+		return false
+	}
+	if filter.PendingReview && stage.PendingPromotionCount == 0 {
+		return false
+	}
+	if filter.FreightAlignment != "" && !slices.ContainsFunc(
+		stage.FreightAlignments,
+		func(alignment FreightAlignment) bool { return alignment.Status == filter.FreightAlignment },
+	) {
+		return false
+	}
+
+	return true
 }

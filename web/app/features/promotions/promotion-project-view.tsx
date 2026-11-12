@@ -18,8 +18,9 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { useDebouncedCallback } from "@mantine/hooks";
 import { IconArrowsDiff, IconListDetails, IconRoute, IconSearch } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import {
@@ -65,6 +66,7 @@ import {
   type PromotionTopologyPipeline,
 } from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
+import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
 import { RelativeTime } from "~/shared/display-values";
 import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 
@@ -393,15 +395,27 @@ export function ProjectFilter({
   onChange: (value: string) => void;
   query: string;
 }>) {
+  const [queryDraft, setQueryDraft] = useState({ source: query, value: query });
+  const updateQuery = useDebouncedCallback(onChange, 250);
+  const draftQuery = queryDraft.source === query ? queryDraft.value : query;
+
   return (
     <Group align="flex-end" justify="space-between" wrap="wrap">
       <TextInput
         aria-label={`Filter ${noun}s`}
         leftSection={<IconSearch aria-hidden size={15} />}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onBlur={updateQuery.flush}
+        onChange={(event) => {
+          const value = event.currentTarget.value;
+          setQueryDraft({ source: query, value });
+          updateQuery(value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") updateQuery.flush();
+        }}
         placeholder="Filter by application, Stage, environment, or Warehouse"
         style={{ flex: "1 1 24rem" }}
-        value={query}
+        value={draftQuery}
       />
       <NativeSelect
         aria-label="Filter by attention state"
@@ -569,12 +583,16 @@ export function StageInventory({
   canWrite,
   onEditPolicy,
   query,
+  showFreight = true,
+  showProject = false,
   stages,
 }: Readonly<{
   canWrite: boolean;
   onEditPolicy: (stage: PromotionProjectStage) => void;
   query: string;
-  stages: PromotionProjectStage[];
+  showFreight?: boolean;
+  showProject?: boolean;
+  stages: StageInventoryStage[];
 }>) {
   if (stages.length === 0) {
     return (
@@ -591,13 +609,17 @@ export function StageInventory({
 
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={1040} type="native">
+      <Table.ScrollContainer
+        minWidth={(showProject ? 1220 : 1040) - (showFreight ? 0 : 240)}
+        type="native"
+      >
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Stage</Table.Th>
+              {showProject ? <Table.Th miw={180}>Project</Table.Th> : null}
               <Table.Th miw={180}>Health</Table.Th>
-              <Table.Th>Current Freight</Table.Th>
+              {showFreight ? <Table.Th>Current Freight</Table.Th> : null}
               <Table.Th miw={150}>Policy</Table.Th>
               <Table.Th>Last observed</Table.Th>
               <Table.Th>Actions</Table.Th>
@@ -633,43 +655,63 @@ export function StageInventory({
                         ) : null}
                       </Stack>
                     </Table.Td>
+                    {showProject ? (
+                      <Table.Td>
+                        {stage.projectContext ? (
+                          <Stack gap={2}>
+                            <Anchor
+                              component={Link}
+                              fw={600}
+                              to={promotionProjectDetailPath(stage.projectContext)}
+                            >
+                              {stage.projectContext.project}
+                            </Anchor>
+                            <Text c="dimmed" size="xs">
+                              {stage.projectContext.integration} · {stage.projectContext.cluster}
+                            </Text>
+                          </Stack>
+                        ) : null}
+                      </Table.Td>
+                    ) : null}
                     <Table.Td>
                       <StageHealthBadge stage={stage} />
                     </Table.Td>
-                    <Table.Td>
-                      {currentFreight.length > 0 ? (
-                        <Stack gap={3}>
-                          {currentFreight.map((freight) => (
-                            <Stack gap={0} key={`${freight.origin}:${freight.name}`}>
-                              {freight.artifacts.length > 0 ? (
-                                <>
-                                  {freight.artifacts.map((artifact) => (
-                                    <Text
-                                      fw={600}
-                                      key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
-                                      size="sm"
-                                    >
-                                      {freightArtifactReference(artifact)}
+                    {showFreight ? (
+                      <Table.Td>
+                        {currentFreight.length > 0 ? (
+                          <Stack gap={3}>
+                            {currentFreight.map((freight) => (
+                              <Stack gap={0} key={`${freight.origin}:${freight.name}`}>
+                                {freight.artifacts.length > 0 ? (
+                                  <>
+                                    {freight.artifacts.map((artifact) => (
+                                      <Text
+                                        fw={600}
+                                        key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
+                                        size="sm"
+                                      >
+                                        {freightArtifactReference(artifact)}
+                                      </Text>
+                                    ))}
+                                    <Text c="dimmed" size="xs">
+                                      {freightOriginLabel(freight.origin)}
                                     </Text>
-                                  ))}
-                                  <Text c="dimmed" size="xs">
+                                  </>
+                                ) : (
+                                  <Text fw={600} size="sm">
                                     {freightOriginLabel(freight.origin)}
                                   </Text>
-                                </>
-                              ) : (
-                                <Text fw={600} size="sm">
-                                  {freightOriginLabel(freight.origin)}
-                                </Text>
-                              )}
-                            </Stack>
-                          ))}
-                        </Stack>
-                      ) : (
-                        <Text c="dimmed" size="sm">
-                          None observed
-                        </Text>
-                      )}
-                    </Table.Td>
+                                )}
+                              </Stack>
+                            ))}
+                          </Stack>
+                        ) : (
+                          <Text c="dimmed" size="sm">
+                            None observed
+                          </Text>
+                        )}
+                      </Table.Td>
+                    ) : null}
                     <Table.Td>
                       <Stack gap={4}>
                         <StagePolicyBadge
@@ -705,6 +747,10 @@ export function StageInventory({
   );
 }
 
+type StageInventoryStage = PromotionProjectStage & {
+  projectContext?: Pick<PromotionProjectDetail, "cluster" | "integration" | "project">;
+};
+
 function pipelineLabel(pipeline: PromotionTopologyPipeline, index: number) {
   const applications = pipelineApplications(pipeline);
   if (applications.length === 1) return applications[0] ?? `Pipeline ${index + 1}`;
@@ -733,7 +779,7 @@ function pipelineApplications(pipeline: PromotionTopologyPipeline) {
     .toSorted((left, right) => left.localeCompare(right));
 }
 
-export function stageMatchesQuery(stage: PromotionProjectStage, query: string) {
+export function stageMatchesQuery(stage: StageInventoryStage, query: string) {
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return true;
 
@@ -742,6 +788,9 @@ export function stageMatchesQuery(stage: PromotionProjectStage, query: string) {
     stage.enrichment?.application,
     stage.enrichment?.environment,
     stage.enrichment?.repository,
+    stage.projectContext?.project,
+    stage.projectContext?.integration,
+    stage.projectContext?.cluster,
     ...stage.requestedFreight.map((request) => request.origin.replace(/^Warehouse\//, "")),
     ...freightNames(stage),
   ].some((value) => value?.toLocaleLowerCase().includes(normalized));

@@ -171,7 +171,7 @@ func (s *suite) findTargetID(t *testing.T, name string) uuid.UUID {
 	return uuid.Nil
 }
 
-func (s *suite) waitForKargoStage(t *testing.T) api.PromotionStage {
+func (s *suite) waitForKargoStage(t *testing.T) api.PromotionProjectStage {
 	t.Helper()
 
 	integration := api.CatalogName("acceptance")
@@ -184,12 +184,12 @@ func (s *suite) waitForKargoStage(t *testing.T) api.PromotionStage {
 		if err == nil {
 			lastBody = response.Body
 			if response.JSON200 != nil {
-				for _, stage := range response.JSON200.Items {
-					if stage.Name == "acceptance" && stage.Project == "kargo-acceptance" &&
-						slices.ContainsFunc(stage.Freight.Items, func(freight api.PromotionFreightItem) bool {
+				for _, item := range response.JSON200.Items {
+					if item.Stage.Name == "acceptance" && item.Project == "kargo-acceptance" &&
+						slices.ContainsFunc(item.Stage.Freight.Items, func(freight api.PromotionFreightItem) bool {
 							return freight.Name == "acceptance-freight"
 						}) {
-						return stage
+						return item.Stage
 					}
 				}
 			}
@@ -197,7 +197,7 @@ func (s *suite) waitForKargoStage(t *testing.T) api.PromotionStage {
 		wait(t, time.Second)
 	}
 	t.Fatalf("Kargo acceptance Stage was not observed: %s", lastBody)
-	return api.PromotionStage{}
+	return api.PromotionProjectStage{}
 }
 
 func (s *suite) waitForOperatorPromotionDispatch(t *testing.T, promotionID uuid.UUID) api.Promotion {

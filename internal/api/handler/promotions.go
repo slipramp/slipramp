@@ -46,7 +46,6 @@ type PromotionStageService interface {
 }
 
 type PromotionReviewService interface {
-	ListStages(context.Context, promotion.StageListFilter) (promotion.StageReviewList, error)
 	UpdateStagePolicy(
 		context.Context,
 		uuid.UUID,
@@ -210,53 +209,6 @@ func (h *Handler) CreatePromotion(
 		Headers: api.CreatePromotion201ResponseHeaders{
 			Location: &location,
 		},
-	}, nil
-}
-
-func (h *Handler) ListPromotionStages(
-	ctx context.Context,
-	request api.ListPromotionStagesRequestObject,
-) (api.ListPromotionStagesResponseObject, error) {
-	filter := promotion.StageListFilter{
-		Integration: optionalCatalogName(request.Params.Integration),
-		Cluster:     optionalCatalogName(request.Params.Cluster),
-		Project:     optionalCatalogName(request.Params.Project),
-		Archived:    request.Params.Archived,
-		Limit:       promotion.DefaultListLimit,
-	}
-	if request.Params.Application != nil {
-		filter.Application = *request.Params.Application
-	}
-	if request.Params.Limit != nil {
-		filter.Limit = int(*request.Params.Limit)
-	}
-	if request.Params.Offset != nil {
-		filter.Offset = int(*request.Params.Offset)
-	}
-
-	result, err := h.promotionReviews.ListStages(ctx, filter)
-	if errors.Is(err, promotion.ErrInvalid) {
-		problem := NewProblem(http.StatusBadRequest, err.Error())
-
-		return api.ListPromotionStages400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
-		}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	items := make([]api.PromotionStage, 0, len(result.Items))
-	for _, review := range result.Items {
-		item := h.promotionStageResponse(review)
-		items = append(items, item)
-	}
-
-	return api.ListPromotionStages200JSONResponse{
-		Items:  items,
-		Total:  result.Total,
-		Limit:  result.Limit,
-		Offset: result.Offset,
 	}, nil
 }
 
@@ -486,43 +438,6 @@ func optionalCatalogName(value *api.CatalogName) string {
 	}
 
 	return string(*value)
-}
-
-func (h *Handler) promotionStageResponse(review promotion.StageReview) api.PromotionStage {
-	var repository *api.CatalogName
-	if review.Stage.RepositoryName != "" {
-		value := api.CatalogName(review.Stage.RepositoryName)
-		repository = &value
-	}
-	return api.PromotionStage{
-		ID:                              review.Stage.ID,
-		Integration:                     api.CatalogName(review.Stage.Integration),
-		Cluster:                         api.CatalogName(review.Stage.ClusterName),
-		Project:                         api.CatalogName(review.Stage.Project),
-		Name:                            review.Stage.Name,
-		KubernetesUID:                   review.Stage.KubernetesUID,
-		ResourceVersion:                 review.Stage.ResourceVersion,
-		Application:                     optionalString(review.Stage.Application),
-		Environment:                     optionalString(review.Stage.Environment),
-		Repository:                      repository,
-		RepositoryURL:                   optionalString(review.Stage.RepositoryURL),
-		TargetBranch:                    optionalString(review.Stage.TargetBranch),
-		SourcePaths:                     review.Stage.SourcePaths,
-		RequestedFreight:                promotionFreightRequestResponse(review.Stage.RequestedFreight),
-		Freight:                         promotionFreightResponse(review.Stage.Freight),
-		AutoPromotionEnabled:            review.Stage.AutoPromotionEnabled,
-		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(review.Stage.SuccessfulRenderAcknowledgement),
-		Policy:                          promotionPolicyResponse(review.Policy),
-		PendingPromotionCount:           review.PendingPromotionCount,
-		FirstObservedAt:                 review.Stage.FirstObservedAt,
-		LastObservedAt:                  review.Stage.LastObservedAt,
-		ArchivedAt:                      review.Stage.ArchivedAt,
-		KargoURL: h.kargoIntegrations.KargoStageURL(
-			review.Stage.Integration,
-			review.Stage.Project,
-			review.Stage.Name,
-		),
-	}
 }
 
 func promotionFreightRequestResponse(values []promotion.FreightRequest) []api.PromotionFreightRequest {

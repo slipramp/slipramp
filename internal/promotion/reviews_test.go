@@ -16,21 +16,11 @@ type reviewStore struct {
 	policies        map[uuid.UUID]StagePolicy
 	promotions      []Promotion
 	decisions       map[uuid.UUID]Decision
-	stagePage       StageReviewPage
-	stageFilter     StageListFilter
-	stageCalls      int
 	expiredAt       time.Time
 	promotionPage   PromotionReviewPage
 	promotionFilter PromotionListFilter
 	promotionCalls  int
 	promotionReadAt time.Time
-}
-
-func (s *reviewStore) ListPromotionStageReviews(_ context.Context, filter StageListFilter) (StageReviewPage, error) {
-	s.stageFilter = filter
-	s.stageCalls++
-
-	return s.stagePage, nil
 }
 
 func (s *reviewStore) GetPromotionStage(_ context.Context, id uuid.UUID) (Stage, error) {
@@ -126,81 +116,6 @@ func (s *reviewStore) ExpirePendingPromotions(
 	}
 
 	return expired, nil
-}
-
-func TestReviewServiceForwardsStagePageAndEvaluatesPoliciesAtOneTime(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, time.October, 21, 18, 0, 0, 0, time.UTC)
-	actor := reviewActor(t, now)
-	active := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", now)
-	expired := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
-	defaultPolicy := reviewStage("prod", "colo", "kargo-core", "cert-manager-prod", now)
-	policyUpdatedAt := now.Add(-2 * time.Hour)
-	expiresAt := now.Add(-time.Hour)
-	store := &reviewStore{
-		stagePage: StageReviewPage{
-			Total: 17,
-			Items: []StageReviewRecord{
-				{
-					Stage: active,
-					Policy: &StagePolicy{
-						StageID: active.ID, Mode: PolicyModeReviewRequired, ExpiresAt: new(now.Add(30 * time.Minute)),
-						UpdatedByPrincipalID: actor.PrincipalID, UpdatedBySnapshot: actor, UpdatedAt: policyUpdatedAt,
-					},
-					PendingPromotionCount: 3,
-				},
-				{
-					Stage: expired,
-					Policy: &StagePolicy{
-						StageID: expired.ID, Mode: PolicyModeReviewRequired, ExpiresAt: &expiresAt,
-						UpdatedByPrincipalID: actor.PrincipalID, UpdatedBySnapshot: actor, UpdatedAt: policyUpdatedAt,
-					},
-				},
-				{Stage: defaultPolicy},
-			},
-		},
-		promotions: []Promotion{{
-			ID:        uuid.New(),
-			Lifecycle: PromotionLifecycle{State: LifecyclePending, ExpiresAt: &now},
-		}},
-	}
-	service := NewReviewService(nil, store)
-	clockCalls := 0
-	service.now = func() time.Time {
-		clockCalls++
-		return now.Add(time.Duration(clockCalls-1) * time.Hour)
-	}
-	includeArchived := false
-	filter := StageListFilter{
-		Integration: "prod", Cluster: "colo", Project: "kargo-core", Application: active.Application,
-		Archived: &includeArchived, Limit: 3, Offset: 2,
-	}
-
-	result, err := service.ListStages(t.Context(), filter)
-	if err != nil {
-		t.Fatalf("ListStages() error = %v", err)
-	}
-	if store.stageFilter != filter || store.stageCalls != 1 ||
-		result.Total != 17 || result.Limit != filter.Limit || result.Offset != filter.Offset || len(result.Items) != 3 {
-		t.Fatalf("ListStages() = %#v", result)
-	}
-	item := result.Items[0]
-	if item.Stage.ID != active.ID || item.PendingPromotionCount != 3 ||
-		item.Policy.ConfiguredMode != PolicyModeReviewRequired ||
-		item.Policy.EffectiveMode != PolicyModeReviewRequired || item.Policy.UpdatedBy == nil {
-		t.Errorf("Stage review = %#v", item)
-	}
-	if result.Items[1].Stage.ID != expired.ID || result.Items[1].Policy.ConfiguredMode != PolicyModeReviewRequired ||
-		result.Items[1].Policy.EffectiveMode != PolicyModeAutomatic ||
-		result.Items[2].Stage.ID != defaultPolicy.ID || result.Items[2].Policy.ConfiguredMode != PolicyModeAutomatic ||
-		result.Items[2].Policy.UpdatedBy != nil {
-		t.Errorf("expired/default Stage policies = %#v", result.Items[1:])
-	}
-	if clockCalls != 1 || !store.expiredAt.Equal(now) ||
-		store.promotions[0].Lifecycle.State != LifecycleExpired {
-		t.Errorf("evaluation times = %d clock calls, expired at %v, Promotions %#v", clockCalls, store.expiredAt, store.promotions)
-	}
 }
 
 func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *testing.T) {
@@ -433,15 +348,4 @@ func reviewPrincipal(now time.Time) productidentity.Principal {
 		CreatedAt:   now.Add(-24 * time.Hour),
 		UpdatedAt:   now.Add(-24 * time.Hour),
 	}
-}
-
-func reviewActor(t *testing.T, now time.Time) productidentity.ActorSnapshot {
-	t.Helper()
-
-	actor, err := reviewPrincipal(now).ActorSnapshot()
-	if err != nil {
-		t.Fatalf("ActorSnapshot() error = %v", err)
-	}
-
-	return actor
 }
