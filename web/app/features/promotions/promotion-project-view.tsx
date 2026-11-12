@@ -647,12 +647,14 @@ export function StageInventory({
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Stage</Table.Th>
+              <Table.Th miw={200} style={{ whiteSpace: "nowrap" }}>
+                Stage
+              </Table.Th>
               {showProject ? <Table.Th miw={180}>Project</Table.Th> : null}
               <Table.Th miw={180}>Health</Table.Th>
               {showFreight ? <Table.Th>Current Freight</Table.Th> : null}
-              <Table.Th miw={150}>Policy</Table.Th>
               <Table.Th>Last observed</Table.Th>
+              <Table.Th miw={150}>Policy</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -665,11 +667,11 @@ export function StageInventory({
 
                 return (
                   <Table.Tr key={stage.id}>
-                    <Table.Td>
+                    <Table.Td style={{ whiteSpace: "nowrap" }}>
                       <Stack gap={3}>
                         <PromotionStageLink fw={650} stage={stage} />
                         {stage.enrichment?.application || stage.enrichment?.environment ? (
-                          <Text size="sm">
+                          <Text c="dimmed" size="xs" style={{ whiteSpace: "nowrap" }}>
                             {[stage.enrichment.application, stage.enrichment.environment]
                               .filter(Boolean)
                               .join(" · ")}
@@ -713,7 +715,8 @@ export function StageInventory({
                                       <Text
                                         fw={600}
                                         key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
-                                        size="sm"
+                                        size="xs"
+                                        style={{ overflowWrap: "anywhere" }}
                                       >
                                         {freightArtifactReference(artifact)}
                                       </Text>
@@ -723,7 +726,7 @@ export function StageInventory({
                                     </Text>
                                   </>
                                 ) : (
-                                  <Text fw={600} size="sm">
+                                  <Text fw={600} size="xs" style={{ overflowWrap: "anywhere" }}>
                                     {freightOriginLabel(freight.origin)}
                                   </Text>
                                 )}
@@ -731,12 +734,15 @@ export function StageInventory({
                             ))}
                           </Stack>
                         ) : (
-                          <Text c="dimmed" size="sm">
+                          <Text c="dimmed" size="xs">
                             None observed
                           </Text>
                         )}
                       </Table.Td>
                     ) : null}
+                    <Table.Td>
+                      <RelativeTime size="sm" value={stage.lastObservedAt} />
+                    </Table.Td>
                     <Table.Td>
                       <Stack gap={4}>
                         <StagePolicyBadge
@@ -753,9 +759,6 @@ export function StageInventory({
                           </Anchor>
                         ) : null}
                       </Stack>
-                    </Table.Td>
-                    <Table.Td>
-                      <RelativeTime size="sm" value={stage.lastObservedAt} />
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
