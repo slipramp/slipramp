@@ -14,7 +14,7 @@ import {
 } from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconFilter, IconPlus, IconX } from "@tabler/icons-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Form, Link, useSearchParams, useSubmit } from "react-router";
 
 const filterDebounceMs = 250;
@@ -280,18 +280,54 @@ export function ListPagination({
   const firstItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = firstItem + itemCount - 1;
 
-  function changePage(nextPage: number) {
-    const nextSearchParams = new URLSearchParams(searchParams);
-    if (nextPage === 1) {
-      nextSearchParams.delete(pageParam);
-    } else {
-      nextSearchParams.set(pageParam, String(nextPage));
+  const changePage = useCallback(
+    (nextPage: number) => {
+      const nextSearchParams = new URLSearchParams(searchParams);
+      if (nextPage === 1) {
+        nextSearchParams.delete(pageParam);
+      } else {
+        nextSearchParams.set(pageParam, String(nextPage));
+      }
+      setSearchParams(nextSearchParams);
+    },
+    [pageParam, searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (pageCount <= 1) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        (event.key !== "ArrowLeft" && event.key !== "ArrowRight") ||
+        isEditableKeyboardTarget(event.target) ||
+        document.querySelectorAll("[data-list-pagination-shortcuts]").length !== 1
+      ) {
+        return;
+      }
+
+      const nextPage = event.key === "ArrowLeft" ? page - 1 : page + 1;
+      if (nextPage < 1 || nextPage > pageCount) return;
+
+      event.preventDefault();
+      changePage(nextPage);
     }
-    setSearchParams(nextSearchParams);
-  }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [changePage, page, pageCount]);
 
   return (
-    <Group justify="space-between">
+    <Group
+      data-list-pagination-shortcuts={pageCount > 1 ? true : undefined}
+      justify="space-between"
+    >
       <Text c="dimmed" size="sm">
         Showing {firstItem}–{lastItem} of {total} {noun}
       </Text>
@@ -299,5 +335,13 @@ export function ListPagination({
         <Pagination onChange={changePage} total={pageCount} value={page} withEdges />
       ) : null}
     </Group>
+  );
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target.closest('input, select, textarea, [contenteditable="true"], [role="textbox"]') !== null
   );
 }
