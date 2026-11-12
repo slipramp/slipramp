@@ -362,6 +362,11 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 							Readiness: promotion.FreightReadinessReady,
 							Facts:     []string{"The Stage accepts Freight directly from its origin."},
 						},
+					}, {
+						Freight: promotion.FreightItem{Origin: "Warehouse/app", Name: "freight-2"},
+						Evidence: promotion.FreightReadinessEvidence{
+							Readiness: promotion.FreightReadinessUnavailable,
+						},
 					}},
 				}},
 				FreightAlignments: []projection.FreightAlignment{{
@@ -433,6 +438,7 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 		"\"observationStale\":true",
 		"\"availabilityStrategy\":\"OneOf\"",
 		"\"readiness\":\"ready\"",
+		"\"evidence\":[],\"freight\":{\"artifacts\":[],\"name\":\"freight-2\",\"origin\":\"Warehouse/app\"},\"readiness\":\"unavailable\"",
 		"\"sourceStageName\":\"qa\"",
 		"\"status\":\"different\"",
 		"\"sourceCurrentFreight\":{\"artifacts\":[{\"kind\":\"image\",\"version\":\"2.0.0\"}],\"name\":\"freight-2\",\"origin\":\"Warehouse/app\"}",

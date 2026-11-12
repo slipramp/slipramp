@@ -1,15 +1,13 @@
 import { Alert, Stack } from "@mantine/core";
-import { redirect, useNavigate, useSearchParams } from "react-router";
+import { redirect, useSearchParams } from "react-router";
 
-import type { PromotionFreightAlignment, PromotionPipeline } from "~/api/generated";
+import type { PromotionPipeline } from "~/api/generated";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
-import { freightComparisonStageIds } from "~/features/promotions/promotion-freight";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
 import { loadPromotionPipelineInventory } from "~/features/promotions/promotion-pipeline-inventory.server";
 import { PromotionInventoryFilters } from "~/features/promotions/promotion-project-inventory";
 import {
   promotionPipelineInventoryPageSize,
-  promotionProjectDetailPath,
   shouldRevalidatePromotionInventory,
 } from "~/features/promotions/promotion-project-inventory-state";
 import {
@@ -70,7 +68,6 @@ export async function action({ context, request }: Route.ActionArgs) {
 export default function PromotionPipelines({ actionData, loaderData }: Route.ComponentProps) {
   useActivityRefresh(true, 30_000);
 
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const pipelines = loaderData.pipelines.flatMap((item) => inventoryPipeline(item));
   const validPipelineKeys = new Set(pipelines.map((pipeline) => pipeline.key));
@@ -85,13 +82,6 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
   const policyStage = stages.find(
     (stage) =>
       stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
-  );
-  const projectsByStage = new Map(
-    pipelines.flatMap((pipeline) =>
-      pipeline.projectContext
-        ? pipeline.stages.map((stage) => [stage.id, pipeline.projectContext] as const)
-        : [],
-    ),
   );
   const canWrite = canWritePromotions(loaderData.principal);
   const filtered = Boolean(
@@ -121,16 +111,6 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
     if (keys.length === 0) next.set("pipelines", "collapsed");
     else for (const key of keys) next.append("pipeline", key);
     setSearchParams(next, { preventScrollReset: true });
-  }
-
-  function compareFreight(alignment: PromotionFreightAlignment) {
-    const project = projectsByStage.get(alignment.targetStageId);
-    const stageIds = freightComparisonStageIds(alignment);
-    if (!project || !stageIds) return;
-
-    const search = new URLSearchParams({ view: "compare" });
-    for (const id of stageIds) search.append("stage", id);
-    navigate(`${promotionProjectDetailPath(project)}?${search}`);
   }
 
   return (
@@ -167,7 +147,6 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
         <PipelineList
           canWrite={canWrite}
           expandedKeys={expandedPipelineKeys}
-          onCompareFreight={compareFreight}
           onEditPolicy={(stage) => editPolicy(stage.id)}
           onExpandedKeysChange={changeExpandedPipelines}
           pipelines={pipelines}

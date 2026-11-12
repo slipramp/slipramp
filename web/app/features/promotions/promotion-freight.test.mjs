@@ -2,17 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildFreightColumns,
-  buildFreightRows,
+  buildPipelineFreightSourceRows,
   freightArtifactReference,
   freightArtifactVersionLabel,
   freightAlignmentForSource,
   freightAlignmentPresentation,
-  freightComparisonStageIds,
   freightDisplayLabel,
   freightNames,
   freightOriginLabel,
-  freightRowStatus,
   otherFreightCandidates,
 } from "./promotion-freight.ts";
 
@@ -33,42 +30,70 @@ const stage = (id, name, environment, version) => ({
   pendingPromotionCount: 0,
 });
 
-test("buildFreightColumns sorts explicitly selected Stages without inferred gaps", () => {
-  const columns = buildFreightColumns([
-    stage("2", "app-canary", "canary", "1.2.0"),
-    stage("1", "app-homelab", "homelab", "1.2.0"),
-  ]);
+test("pipeline Freight rows group artifact sources by Warehouse across Stage columns", () => {
+  const homelab = stage("1", "app-homelab", "homelab", "1.2.0");
+  homelab.requestedFreight = [
+    { origin: "Warehouse/app", sources: [] },
+    { origin: "Warehouse/config", sources: [] },
+  ];
+  homelab.freight.items.push({
+    artifacts: [{ kind: "git", repository: "https://example.com/config", version: "abc123" }],
+    name: "config-freight",
+    origin: "Warehouse/config",
+  });
+
+  const production = stage("2", "app-prod", "production", "1.1.0");
+  production.requestedFreight = [{ origin: "Warehouse/app", sources: [] }];
+
+  const rows = buildPipelineFreightSourceRows([homelab, production]);
 
   assert.deepEqual(
-    columns.map(({ key, label }) => [key, label]),
+    rows.map((row) => ({
+      kind: row.kind,
+      origin: row.origin,
+      source: row.source,
+      values: row.values,
+    })),
     [
-      ["2", "app-canary · canary"],
-      ["1", "app-homelab · homelab"],
+      {
+        kind: "image",
+        origin: "Warehouse/app",
+        source: "ghcr.io/example/app",
+        values: { 1: ["1.2.0"], 2: ["1.1.0"] },
+      },
+      {
+        kind: "git",
+        origin: "Warehouse/config",
+        source: "https://example.com/config",
+        values: { 1: ["abc123"] },
+      },
     ],
   );
 });
 
-test("buildFreightRows aligns versions and reports exact equality", () => {
-  const columns = buildFreightColumns([
-    stage("1", "app-homelab", "homelab", "1.2.0"),
-    stage("2", "app-prod", "prod", "1.2.0"),
-  ]);
-  const rows = buildFreightRows(columns);
+test("pipeline Freight rows retain unversioned and not-yet-observed Warehouses", () => {
+  const unversioned = stage("1", "gate", "gate", "unused");
+  unversioned.freight.items = [{ artifacts: [], name: "gate-freight", origin: "Warehouse/gate" }];
+  unversioned.requestedFreight = [
+    { origin: "Warehouse/gate", sources: [] },
+    { origin: "Warehouse/pending", sources: [] },
+  ];
 
-  assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0].values, { 1: ["1.2.0"], 2: ["1.2.0"] });
-  assert.equal(freightRowStatus(rows[0], columns), "equal");
-  assert.deepEqual(freightNames(columns[0].stage), ["freight-1.2.0"]);
-
-  rows[0].values["2"] = ["1.1.0"];
-  assert.equal(freightRowStatus(rows[0], columns), "different");
-});
-
-test("Freight is not comparable until two Stages are selected", () => {
-  const columns = buildFreightColumns([stage("1", "app-homelab", "homelab", "1.2.0")]);
-  const rows = buildFreightRows(columns);
-
-  assert.equal(freightRowStatus(rows[0], columns), undefined);
+  assert.deepEqual(
+    buildPipelineFreightSourceRows([unversioned]).map((row) => ({
+      origin: row.origin,
+      source: row.source,
+      values: row.values,
+    })),
+    [
+      {
+        origin: "Warehouse/gate",
+        source: "Kargo Freight",
+        values: { 1: ["gate-freight"] },
+      },
+      { origin: "Warehouse/pending", source: "Current Freight", values: {} },
+    ],
+  );
 });
 
 test("Freight presentation favors artifact sources and versions over opaque names", () => {
@@ -88,6 +113,7 @@ test("Freight presentation favors artifact sources and versions over opaque name
   assert.equal(freightArtifactVersionLabel("chart"), "Version");
   assert.equal(freightDisplayLabel(item), "ghcr.io/example/app · 1.2.3 + 1 more");
   assert.equal(freightDisplayLabel({ ...item, artifacts: [] }), "app");
+  assert.deepEqual(freightNames(stage("1", "app-homelab", "homelab", "1.2.0")), ["freight-1.2.0"]);
 });
 
 test("other Freight excludes every active item from a multi-Freight Stage", () => {
@@ -118,7 +144,7 @@ test("other Freight excludes every active item from a multi-Freight Stage", () =
   );
 });
 
-test("Freight alignment presentation and comparison selection use the exact relationship", () => {
+test("Freight alignment presentation uses the exact relationship", () => {
   const target = stage("target", "app-prod", "prod", "1.1.0");
   target.freightAlignments = [
     {
@@ -146,6 +172,4 @@ test("Freight alignment presentation and comparison selection use the exact rela
     color: "gray",
     label: "Unknown",
   });
-  assert.deepEqual(freightComparisonStageIds(alignment), ["source", "target"]);
-  assert.equal(freightComparisonStageIds({ ...alignment, sourceStageId: undefined }), undefined);
 });

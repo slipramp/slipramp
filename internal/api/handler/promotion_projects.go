@@ -274,7 +274,8 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 			candidates = append(candidates, api.PromotionFreightCandidate{
 				Freight:   promotionFreightItemResponse(candidate.Freight),
 				Readiness: api.PromotionFreightCandidateReadiness(candidate.Evidence.Readiness),
-				Reason:    optionalString(candidate.Evidence.Reason), Evidence: candidate.Evidence.Facts,
+				Reason:    optionalString(candidate.Evidence.Reason),
+				Evidence:  append([]string{}, candidate.Evidence.Facts...),
 			})
 		}
 		var requiredSoakTime *string

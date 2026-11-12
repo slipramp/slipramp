@@ -13,18 +13,16 @@ import {
 } from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
 import type { ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getPromotionStage,
-  type PromotionFreightAlignment,
   type PromotionProjectStage,
   type PromotionStageCapability,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
-import { freightComparisonStageIds } from "~/features/promotions/promotion-freight";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
 import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
@@ -72,7 +70,6 @@ export async function action({ context, request }: Route.ActionArgs) {
 export default function PromotionStage({ actionData, loaderData }: Route.ComponentProps) {
   useActivityRefresh(true, 30_000);
 
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const detail = loaderData.detail;
 
@@ -104,15 +101,6 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
     const next = new URLSearchParams(searchParams);
     next.delete("policy");
     setSearchParams(next, { preventScrollReset: true, replace: true });
-  }
-
-  function compareFreight(alignment: PromotionFreightAlignment) {
-    const stageIds = freightComparisonStageIds(alignment);
-    if (!stageIds) return;
-
-    const search = new URLSearchParams({ view: "compare" });
-    for (const id of stageIds) search.append("stage", id);
-    navigate(`${projectPath}?${search}`);
   }
 
   return (
@@ -169,7 +157,6 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
       <StageCard
         canWrite={canWritePromotions(loaderData.principal)}
         linkName={false}
-        onCompareFreight={compareFreight}
         onEditPolicy={editPolicy}
         showKargoLink={false}
         stage={stage}
