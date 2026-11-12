@@ -285,6 +285,9 @@ Top-level Stage and pipeline views page by this canonical Project boundary and
 reuse the same Project detail projection. Pipelines remain disconnected graphs
 within one Project; the aggregate view never joins Stages across Projects,
 integrations, or Clusters.
+An active Stage remains directly addressable by its durable Stage ID. Its detail
+view combines the same topology, Freight, policy, health, capability, and
+observation projection with links back to its Project and related Promotions.
 
 Freight alignment is a read-time projection over active durable Stage
 observations. Slipramp creates one comparison for each exact

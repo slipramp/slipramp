@@ -46,6 +46,7 @@ export default [
   route("promotions/:promotionId", "features/promotions/routes/promotion.tsx"),
   route("promotion-projects", "features/promotions/routes/promotion-projects.tsx"),
   route("promotion-stages", "features/promotions/routes/promotion-stages.tsx"),
+  route("promotion-stages/:stageId", "features/promotions/routes/promotion-stage.tsx"),
   route("promotion-pipelines", "features/promotions/routes/promotion-pipelines.tsx"),
   route(
     "promotion-projects/:integration/:cluster/:project",

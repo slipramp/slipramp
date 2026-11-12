@@ -58,6 +58,7 @@ import {
   type ArgoDiffResource,
 } from "~/features/promotions/promotion-diff";
 import { pageTitle } from "~/shared/page-title";
+import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { runStatusLabel } from "~/features/runs/run-status";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
@@ -342,12 +343,10 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
           <Fact
             label="Stage"
             value={
-              <Anchor
-                component={Link}
-                to={`/promotions?stageId=${encodeURIComponent(promotion.stageId)}`}
-              >
-                {stage.project}/{stage.name}
-              </Anchor>
+              <PromotionStageLink
+                label={`${stage.project}/${stage.name}`}
+                stage={{ id: promotion.stageId, name: stage.name }}
+              />
             }
           />
           <Fact label="Policy snapshot" value={policy.effectiveMode} />

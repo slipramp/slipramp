@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/promotion/projection"
@@ -13,6 +15,7 @@ import (
 type PromotionProjectService interface {
 	List(context.Context, projection.ProjectListFilter) (projection.ProjectList, error)
 	Get(context.Context, projection.ProjectKey) (projection.ProjectDetail, error)
+	GetStage(context.Context, uuid.UUID) (projection.StageDetail, error)
 }
 
 func (h *Handler) ListPromotionProjects(
@@ -115,6 +118,30 @@ func (h *Handler) GetPromotionProject(
 		Project:     api.CatalogName(result.Project),
 		KargoURL:    h.kargoIntegrations.KargoProjectURL(result.Integration, result.Project),
 		Stages:      stages,
+	}, nil
+}
+
+func (h *Handler) GetPromotionStage(
+	ctx context.Context,
+	request api.GetPromotionStageRequestObject,
+) (api.GetPromotionStageResponseObject, error) {
+	result, err := h.promotionProjects.GetStage(ctx, request.StageID)
+	if errors.Is(err, promotion.ErrStageNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The observed Kargo Stage does not exist.")
+
+		return api.GetPromotionStage404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetPromotionStage200JSONResponse{
+		Integration: api.CatalogName(result.Integration),
+		Cluster:     api.CatalogName(result.ClusterName),
+		Project:     api.CatalogName(result.Project),
+		Stage:       h.promotionProjectStageResponse(result.Stage),
 	}, nil
 }
 

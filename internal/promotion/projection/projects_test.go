@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -152,6 +153,41 @@ func TestProjectServiceBuildsNativeTopologyAndRetainsUnenrichedStages(t *testing
 		staleCapabilities.BranchDrift.Status != StageCapabilityReady ||
 		staleCapabilities.Promotion.Reason != staleObservationPromotionReason {
 		t.Errorf("stale Stage capabilities = %#v", staleCapabilities)
+	}
+}
+
+func TestProjectServiceGetsActiveStageByDurableID(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	stage := projectTestStage("prod", "colo", "kargo-core", "prod", now)
+	archived := projectTestStage("prod", "colo", "kargo-core", "old", now)
+	archived.ArchivedAt = new(now)
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		&projectionTestStore{stages: []promotion.Stage{archived, stage}},
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.GetStage(t.Context(), stage.ID)
+	if err != nil {
+		t.Fatalf("GetStage() error = %v", err)
+	}
+	if result.Integration != "prod" || result.ClusterName != "colo" || result.Project != "kargo-core" ||
+		result.Stage.Stage.ID != stage.ID {
+		t.Errorf("Stage detail = %#v", result)
+	}
+
+	for name, stageID := range map[string]uuid.UUID{
+		"archived": archived.ID,
+		"unknown":  uuid.New(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, getErr := service.GetStage(t.Context(), stageID)
+			if !errors.Is(getErr, promotion.ErrStageNotFound) {
+				t.Errorf("GetStage() error = %v, want ErrStageNotFound", getErr)
+			}
+		})
 	}
 }
 

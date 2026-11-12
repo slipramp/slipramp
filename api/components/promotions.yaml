@@ -504,6 +504,24 @@ PromotionProjectDetail:
       items:
         $ref: "#/PromotionProjectStage"
 
+PromotionStageDetail:
+  type: object
+  additionalProperties: false
+  required:
+    - integration
+    - cluster
+    - project
+    - stage
+  properties:
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    stage:
+      $ref: "#/PromotionProjectStage"
+
 PromotionProjectStage:
   type: object
   additionalProperties: false

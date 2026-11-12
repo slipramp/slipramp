@@ -2577,6 +2577,13 @@ export type PromotionProjectStage = {
   argoCdUrl?: string;
 };
 
+export type PromotionStageDetail = {
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  stage: PromotionProjectStage;
+};
+
 export type PromotionStagePolicyUpdate = {
   mode: PromotionPolicyMode;
   expiresAt?: string;
@@ -6102,6 +6109,46 @@ export type ListPromotionStagesResponses = {
 
 export type ListPromotionStagesResponse =
   ListPromotionStagesResponses[keyof ListPromotionStagesResponses];
+
+export type GetPromotionStageData = {
+  body?: never;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotion-stages/{stageId}";
+};
+
+export type GetPromotionStageErrors = {
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type GetPromotionStageError = GetPromotionStageErrors[keyof GetPromotionStageErrors];
+
+export type GetPromotionStageResponses = {
+  /**
+   * The canonical observed Stage projection and its Project identity.
+   */
+  200: PromotionStageDetail;
+};
+
+export type GetPromotionStageResponse =
+  GetPromotionStageResponses[keyof GetPromotionStageResponses];
 
 export type CreatePromotionData = {
   body: PromotionCreate;

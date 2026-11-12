@@ -3658,6 +3658,14 @@ type PromotionStageCondition struct {
 	Type               string     `json:"type"`
 }
 
+// PromotionStageDetail defines model for PromotionStageDetail.
+type PromotionStageDetail struct {
+	Cluster     CatalogName           `json:"cluster"`
+	Integration CatalogName           `json:"integration"`
+	Project     CatalogName           `json:"project"`
+	Stage       PromotionProjectStage `json:"stage"`
+}
+
 // PromotionStageEnrichment defines model for PromotionStageEnrichment.
 type PromotionStageEnrichment struct {
 	Application   *string      `json:"application,omitempty"`
@@ -5839,6 +5847,11 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/promotion-stages (the `ListPromotionStages` operationId).
 	ListPromotionStages(ctx context.Context, params *ListPromotionStagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetPromotionStage Get one observed Kargo Stage with its Project topology context
+	//
+	// Corresponds with GET /api/v1/promotion-stages/{stageId} (the `GetPromotionStage` operationId).
+	GetPromotionStage(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// UpdatePromotionStagePolicyWithBody Update review policy for an observed Kargo Stage
 	//
 	// Takes any type of body and a specified content type.
@@ -6971,6 +6984,21 @@ func (c *Client) GetPromotionProject(ctx context.Context, integration CatalogNam
 // Corresponds with GET /api/v1/promotion-stages (the `ListPromotionStages` operationId).
 func (c *Client) ListPromotionStages(ctx context.Context, params *ListPromotionStagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPromotionStagesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetPromotionStage Get one observed Kargo Stage with its Project topology context
+//
+// Corresponds with GET /api/v1/promotion-stages/{stageId} (the `GetPromotionStage` operationId).
+func (c *Client) GetPromotionStage(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPromotionStageRequest(c.Server, stageID)
 	if err != nil {
 		return nil, err
 	}
@@ -9980,6 +10008,40 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 	return req, nil
 }
 
+// NewGetPromotionStageRequest constructs an http.Request for the GetPromotionStage method
+func NewGetPromotionStageRequest(server string, stageID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotion-stages/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewUpdatePromotionStagePolicyRequest calls the generic UpdatePromotionStagePolicy builder with application/json body
 func NewUpdatePromotionStagePolicyRequest(server string, stageID openapi_types.UUID, body UpdatePromotionStagePolicyJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -12575,6 +12637,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/promotion-stages (the `ListPromotionStages` operationId).
 	ListPromotionStagesWithResponse(ctx context.Context, params *ListPromotionStagesParams, reqEditors ...RequestEditorFn) (*ListPromotionStagesResponse, error)
+
+	// GetPromotionStageWithResponse Get one observed Kargo Stage with its Project topology context
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/promotion-stages/{stageId} (the `GetPromotionStage` operationId).
+	GetPromotionStageWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPromotionStageResponse, error)
 
 	// UpdatePromotionStagePolicyWithBodyWithResponse Update review policy for an observed Kargo Stage
 	//
@@ -15725,6 +15794,75 @@ func (r ListPromotionStagesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListPromotionStagesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetPromotionStageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PromotionStageDetail
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Unauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Forbidden
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *NotFound
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InternalError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetPromotionStageResponse) GetJSON200() *PromotionStageDetail {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetPromotionStageResponse) GetApplicationProblemJSON401() *Unauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetPromotionStageResponse) GetApplicationProblemJSON403() *Forbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetPromotionStageResponse) GetApplicationProblemJSON404() *NotFound {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetPromotionStageResponse) GetApplicationProblemJSON500() *InternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetPromotionStageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPromotionStageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPromotionStageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetPromotionStageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19615,6 +19753,19 @@ func (c *ClientWithResponses) ListPromotionStagesWithResponse(ctx context.Contex
 	return ParseListPromotionStagesResponse(rsp)
 }
 
+// GetPromotionStageWithResponse Get one observed Kargo Stage with its Project topology context
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/promotion-stages/{stageId} (the `GetPromotionStage` operationId).
+func (c *ClientWithResponses) GetPromotionStageWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPromotionStageResponse, error) {
+	rsp, err := c.GetPromotionStage(ctx, stageID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPromotionStageResponse(rsp)
+}
+
 // UpdatePromotionStagePolicyWithBodyWithResponse Update review policy for an observed Kargo Stage
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -22724,6 +22875,60 @@ func ParseListPromotionStagesResponse(rsp *http.Response) (*ListPromotionStagesR
 	return response, nil
 }
 
+// ParseGetPromotionStageResponse parses an HTTP response from a GetPromotionStageWithResponse call
+func ParseGetPromotionStageResponse(rsp *http.Response) (*GetPromotionStageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPromotionStageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PromotionStageDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseUpdatePromotionStagePolicyResponse parses an HTTP response from a UpdatePromotionStagePolicyWithResponse call
 func ParseUpdatePromotionStagePolicyResponse(rsp *http.Response) (*UpdatePromotionStagePolicyResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -25567,6 +25772,9 @@ type ServerInterface interface {
 	// ListPromotionStages List observed Kargo Stages and their effective policies
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(w http.ResponseWriter, r *http.Request, params ListPromotionStagesParams)
+	// GetPromotionStage Get one observed Kargo Stage with its Project topology context
+	// (GET /api/v1/promotion-stages/{stageId})
+	GetPromotionStage(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
 	// UpdatePromotionStagePolicy Update review policy for an observed Kargo Stage
 	// (PUT /api/v1/promotion-stages/{stageId}/policy)
 	UpdatePromotionStagePolicy(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
@@ -27152,6 +27360,32 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPromotionStages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPromotionStage operation middleware
+func (siw *ServerInterfaceWrapper) GetPromotionStage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPromotionStage(w, r, stageID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -28957,6 +29191,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects/{integration}/{cluster}/{project}", wrapper.GetPromotionProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages", wrapper.ListPromotionStages)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}", wrapper.GetPromotionStage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/promotions", wrapper.CreatePromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/policy", wrapper.UpdatePromotionStagePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-branch-drift", wrapper.ListPromotionBranchDrift)
@@ -32314,6 +32549,92 @@ type ListPromotionStages500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListPromotionStages500ApplicationProblemPlusJSONResponse) VisitListPromotionStagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionStageRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+}
+
+type GetPromotionStageResponseObject interface {
+	VisitGetPromotionStageResponse(w http.ResponseWriter) error
+}
+
+type GetPromotionStage200JSONResponse PromotionStageDetail
+
+func (response GetPromotionStage200JSONResponse) VisitGetPromotionStageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionStage401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionStage401ApplicationProblemPlusJSONResponse) VisitGetPromotionStageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionStage403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionStage403ApplicationProblemPlusJSONResponse) VisitGetPromotionStageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionStage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionStage404ApplicationProblemPlusJSONResponse) VisitGetPromotionStageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionStage500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionStage500ApplicationProblemPlusJSONResponse) VisitGetPromotionStageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -36815,6 +37136,9 @@ type StrictServerInterface interface {
 	// ListPromotionStages List observed Kargo Stages and their effective policies
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(ctx context.Context, request ListPromotionStagesRequestObject) (ListPromotionStagesResponseObject, error)
+	// GetPromotionStage Get one observed Kargo Stage with its Project topology context
+	// (GET /api/v1/promotion-stages/{stageId})
+	GetPromotionStage(ctx context.Context, request GetPromotionStageRequestObject) (GetPromotionStageResponseObject, error)
 	// UpdatePromotionStagePolicy Update review policy for an observed Kargo Stage
 	// (PUT /api/v1/promotion-stages/{stageId}/policy)
 	UpdatePromotionStagePolicy(ctx context.Context, request UpdatePromotionStagePolicyRequestObject) (UpdatePromotionStagePolicyResponseObject, error)
@@ -37914,6 +38238,32 @@ func (sh *strictHandler) ListPromotionStages(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPromotionStagesResponseObject); ok {
 		if err := validResponse.VisitListPromotionStagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPromotionStage operation middleware
+func (sh *strictHandler) GetPromotionStage(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request GetPromotionStageRequestObject
+
+	request.StageID = stageID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPromotionStage(ctx, request.(GetPromotionStageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPromotionStage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPromotionStageResponseObject); ok {
+		if err := validResponse.VisitGetPromotionStageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

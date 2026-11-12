@@ -20,6 +20,7 @@ import { promotionScopeFilters } from "~/features/promotions/promotion-scope-fil
 import { abbreviateMiddle } from "~/shared/display";
 import { promotionActivity } from "~/features/mascot/execution-activity";
 import { promotionOverallStatus } from "~/features/promotions/promotion-status";
+import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
@@ -254,10 +255,11 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             {abbreviateMiddle(promotion.externalPromotionId, 36)}
           </Anchor>
           <Group gap="xs" wrap="wrap">
-            <Text c="dimmed" size="xs">
-              {stageName}
-              {project ? ` · ${project}` : ""}
-            </Text>
+            <PromotionStageLink
+              label={`${stageName}${project ? ` · ${project}` : ""}`}
+              size="xs"
+              stage={{ id: promotion.stageId, name: stageName }}
+            />
             {promotion.kargoUrl ? (
               <KargoLink size="xs" url={promotion.kargoUrl}>
                 Kargo

@@ -31,6 +31,8 @@ import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { formatDuration } from "~/shared/display";
 import { pageTitle } from "~/shared/page-title";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
+import { promotionStagePolicyColor } from "~/features/promotions/promotion-policy";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/cluster";
@@ -368,9 +370,7 @@ function PromotionStages({
                   <Table.Tr key={stage.id}>
                     <Table.Td>
                       <Stack gap={0}>
-                        <Text fw={600} size="sm">
-                          {stage.name}
-                        </Text>
+                        <PromotionStageLink stage={stage} />
                         <Text c="dimmed" size="xs">
                           {stage.environment}
                         </Text>
@@ -380,7 +380,7 @@ function PromotionStages({
                     <Table.Td>{stage.project}</Table.Td>
                     <Table.Td>
                       <Badge
-                        color={stage.policy.effectiveMode === "automatic" ? "green" : "yellow"}
+                        color={promotionStagePolicyColor(stage.policy.effectiveMode)}
                         variant="light"
                       >
                         {stage.policy.effectiveMode}

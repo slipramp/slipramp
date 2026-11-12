@@ -103,6 +103,9 @@ import type {
   GetPromotionProjectErrors,
   GetPromotionProjectResponses,
   GetPromotionResponses,
+  GetPromotionStageData,
+  GetPromotionStageErrors,
+  GetPromotionStageResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -2086,6 +2089,31 @@ export const listPromotionStages = <ThrowOnError extends boolean = false>(
     url: "/api/v1/promotion-stages",
     ...options,
   });
+
+/**
+ * Get one observed Kargo Stage with its Project topology context
+ */
+export const getPromotionStage = <ThrowOnError extends boolean = false>(
+  options: Options<GetPromotionStageData, ThrowOnError>,
+): RequestResult<GetPromotionStageResponses, GetPromotionStageErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetPromotionStageResponses, GetPromotionStageErrors, ThrowOnError>(
+    {
+      security: [
+        {
+          in: "cookie",
+          name: "slipramp_session",
+          type: "apiKey",
+        },
+        {
+          key: "ProductBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/api/v1/promotion-stages/{stageId}",
+      ...options,
+    },
+  );
 
 /**
  * Create a Kargo Promotion for exact observed Freight

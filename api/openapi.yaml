@@ -132,6 +132,8 @@ paths:
     $ref: ./paths/promotions.yaml#/promotionProject
   /api/v1/promotion-stages:
     $ref: ./paths/promotions.yaml#/promotionStages
+  /api/v1/promotion-stages/{stageId}:
+    $ref: ./paths/promotions.yaml#/promotionStage
   /api/v1/promotion-stages/{stageId}/promotions:
     $ref: ./paths/promotions.yaml#/promotionStagePromotions
   /api/v1/promotion-stages/{stageId}/policy:

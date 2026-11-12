@@ -12,7 +12,6 @@ import {
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { CommitReference } from "~/features/commits/git-commit";
-import { KargoLink } from "~/features/promotions/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
 import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
@@ -22,6 +21,7 @@ import { pageFromSearchParam } from "~/shared/search-params";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { submitPromotionCreation } from "~/features/promotions/promotion-creation.server";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 
 import type { Route } from "./+types/promotion-branch-drift";
 
@@ -295,13 +295,7 @@ function BranchDriftRow({
     <Table.Tr>
       <Table.Td>
         <Stack gap={0}>
-          {stage.kargoUrl ? (
-            <KargoLink fw={600} size="sm" url={stage.kargoUrl}>
-              {stage.name}
-            </KargoLink>
-          ) : (
-            <Text fw={600}>{stage.name}</Text>
-          )}
+          <PromotionStageLink stage={stage} />
           {stage.application || stage.environment ? (
             <Text size="sm">
               {[stage.application, stage.environment].filter(Boolean).join(" · ")}

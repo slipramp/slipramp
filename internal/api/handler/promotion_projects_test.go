@@ -16,11 +16,13 @@ import (
 )
 
 type recordingPromotionProjectService struct {
-	filter projection.ProjectListFilter
-	result projection.ProjectList
-	key    projection.ProjectKey
-	detail projection.ProjectDetail
-	err    error
+	filter  projection.ProjectListFilter
+	result  projection.ProjectList
+	key     projection.ProjectKey
+	detail  projection.ProjectDetail
+	stageID uuid.UUID
+	stage   projection.StageDetail
+	err     error
 }
 
 func (s *recordingPromotionProjectService) List(
@@ -45,6 +47,21 @@ func (s *recordingPromotionProjectService) Get(
 	}
 
 	return projection.ProjectDetail{}, promotion.ErrProjectNotFound
+}
+
+func (s *recordingPromotionProjectService) GetStage(
+	_ context.Context,
+	stageID uuid.UUID,
+) (projection.StageDetail, error) {
+	s.stageID = stageID
+	if s.err != nil {
+		return projection.StageDetail{}, s.err
+	}
+	if s.stage.Stage.Stage.ID != uuid.Nil {
+		return s.stage, nil
+	}
+
+	return projection.StageDetail{}, promotion.ErrStageNotFound
 }
 
 func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
@@ -244,6 +261,78 @@ func TestGetPromotionProjectReturnsCanonicalStageTopology(t *testing.T) {
 		"\"conditions\":[{\"status\":\"False\",\"type\":\"Ready\"}]",
 		"\"promotion\":{\"reason\":\"Control-flow Stages do not materialize Promotions.\",\"status\":\"not-applicable\"}",
 		"\"kargoUrl\":\"https://kargo.example.com/project/kargo-core/stage/prod\"",
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
+		}
+	}
+}
+
+func TestGetPromotionStageReturnsCanonicalProjectStage(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1931")
+	projects := &recordingPromotionProjectService{
+		stage: projection.StageDetail{
+			Integration: "prod",
+			ClusterName: "colo",
+			Project:     "kargo-core",
+			Stage: projection.ProjectStage{
+				Stage: promotion.Stage{
+					ID: stageID, Integration: "prod", ClusterName: "colo", Project: "kargo-core", Name: "prod",
+					KubernetesUID: "stage-uid", ResourceVersion: "42",
+					Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
+					FirstObservedAt: now.Add(-time.Hour), LastObservedAt: now,
+				},
+				Policy: promotion.PromotionPolicySnapshot{
+					ConfiguredMode: promotion.PolicyModeAutomatic,
+					EffectiveMode:  promotion.PolicyModeAutomatic,
+				},
+			},
+		},
+	}
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionProjects: projects,
+			KargoIntegrations: promotion.IntegrationSet{
+				"prod": {UIURL: "https://kargo.example.com"},
+			},
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: productAuthentication(
+					productidentity.RoleViewer,
+					productidentity.AuthenticationMethodAPIKey,
+					[]productidentity.Scope{productidentity.ScopeRead},
+				),
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/promotion-stages/018f90ff-9fd8-7b5f-b7e1-f32ff54c1931",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer viewer-key")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if projects.stageID != stageID {
+		t.Errorf("Stage ID = %s, want %s", projects.stageID, stageID)
+	}
+	for _, expected := range []string{
+		`"integration":"prod"`,
+		`"cluster":"colo"`,
+		`"project":"kargo-core"`,
+		`"stage":{"autoPromotionEnabled":false`,
+		`"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1931"`,
+		`"name":"prod"`,
+		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/prod"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)

@@ -1,4 +1,12 @@
-import type { PromotionStageCapabilities, PromotionStagePolicy } from "~/api/generated";
+import type {
+  PromotionPolicyMode,
+  PromotionStageCapabilities,
+  PromotionStagePolicy,
+} from "~/api/generated";
+
+export function promotionStagePolicyColor(mode: PromotionPolicyMode) {
+  return mode === "review-required" ? "yellow" : "gray";
+}
 
 type PromotionStagePolicyPresentationInput = Readonly<{
   capabilities: Pick<PromotionStageCapabilities, "promotion" | "review">;

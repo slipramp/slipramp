@@ -3,6 +3,7 @@ package projection
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -67,6 +68,13 @@ type ProjectDetail struct {
 	ClusterName string
 	Project     string
 	Stages      []ProjectStage
+}
+
+type StageDetail struct {
+	Integration string
+	ClusterName string
+	Project     string
+	Stage       ProjectStage
 }
 
 type ProjectStage struct {
@@ -214,6 +222,15 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 	if err != nil {
 		return ProjectDetail{}, err
 	}
+
+	return s.projectDetail(ctx, key, stages)
+}
+
+func (s *ProjectService) projectDetail(
+	ctx context.Context,
+	key ProjectKey,
+	stages []promotion.Stage,
+) (ProjectDetail, error) {
 	integration, configured := s.integrations.Lookup(key.Integration)
 	if !configured || integration.ClusterName != key.Cluster {
 		return ProjectDetail{}, promotion.ErrProjectNotFound
@@ -302,6 +319,48 @@ func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail
 	return ProjectDetail{
 		Integration: key.Integration, ClusterName: key.Cluster, Project: key.Project, Stages: items,
 	}, nil
+}
+
+func (s *ProjectService) GetStage(ctx context.Context, stageID uuid.UUID) (StageDetail, error) {
+	stages, err := s.store.ListPromotionStages(ctx)
+	if err != nil {
+		return StageDetail{}, err
+	}
+
+	var key ProjectKey
+	for _, stage := range stages {
+		if stage.ID == stageID && stage.ArchivedAt == nil {
+			key = ProjectKey{
+				Integration: stage.Integration,
+				Cluster:     stage.ClusterName,
+				Project:     stage.Project,
+			}
+			break
+		}
+	}
+	if key == (ProjectKey{}) {
+		return StageDetail{}, promotion.ErrStageNotFound
+	}
+
+	project, err := s.projectDetail(ctx, key, stages)
+	if errors.Is(err, promotion.ErrProjectNotFound) {
+		return StageDetail{}, promotion.ErrStageNotFound
+	}
+	if err != nil {
+		return StageDetail{}, err
+	}
+	for _, stage := range project.Stages {
+		if stage.Stage.ID == stageID {
+			return StageDetail{
+				Integration: project.Integration,
+				ClusterName: project.ClusterName,
+				Project:     project.Project,
+				Stage:       stage,
+			}, nil
+		}
+	}
+
+	return StageDetail{}, promotion.ErrStageNotFound
 }
 
 func stageNonReady(stage promotion.Stage) bool {

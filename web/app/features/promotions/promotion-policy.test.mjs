@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { promotionStagePolicyPresentation } from "./promotion-policy.ts";
+import { promotionStagePolicyColor, promotionStagePolicyPresentation } from "./promotion-policy.ts";
 
 const stage = (promotion, review, effectiveMode, enrichment) => ({
   capabilities: {
@@ -48,4 +48,9 @@ test("review-required remains disabled while review capability is unavailable", 
     promotionStagePolicyPresentation(stage("ready", "ready", "automatic")).reviewRequiredDisabled,
     false,
   );
+});
+
+test("automatic policy is neutral while review-required remains attention-colored", () => {
+  assert.equal(promotionStagePolicyColor("automatic"), "gray");
+  assert.equal(promotionStagePolicyColor("review-required"), "yellow");
 });

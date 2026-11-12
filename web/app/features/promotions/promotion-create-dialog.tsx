@@ -26,6 +26,7 @@ import {
   promotionCreationURLSelection,
   updatePromotionCreationSearchParams,
 } from "~/features/promotions/promotion-creation";
+import { promotionStagePolicyColor } from "~/features/promotions/promotion-policy";
 import {
   freightArtifactVersionLabel,
   freightDisplayLabel,
@@ -191,7 +192,7 @@ function StagePolicyControl({
       <Stack gap="sm">
         <Group justify="space-between" wrap="wrap">
           <Text fw={600}>Current Stage policy</Text>
-          <Badge color={reviewRequired ? "yellow" : "green"} variant="light">
+          <Badge color={promotionStagePolicyColor(policy.effectiveMode)} variant="light">
             {reviewRequired ? "Review required" : "Automatic"}
           </Badge>
         </Group>

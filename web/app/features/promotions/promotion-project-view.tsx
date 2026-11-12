@@ -50,7 +50,11 @@ import {
   freightRowStatus,
   otherFreightCandidates,
 } from "~/features/promotions/promotion-freight";
-import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
+import {
+  promotionStagePolicyColor,
+  promotionStagePolicyPresentation,
+} from "~/features/promotions/promotion-policy";
+import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import {
   promotionProjectAttention,
   type PromotionProjectAttention,
@@ -610,13 +614,7 @@ export function StageInventory({
                   <Table.Tr key={stage.id}>
                     <Table.Td>
                       <Stack gap={3}>
-                        {stage.kargoUrl ? (
-                          <KargoLink fw={650} url={stage.kargoUrl}>
-                            {stage.name}
-                          </KargoLink>
-                        ) : (
-                          <Text fw={650}>{stage.name}</Text>
-                        )}
+                        <PromotionStageLink fw={650} stage={stage} />
                         {stage.enrichment?.application || stage.enrichment?.environment ? (
                           <Text size="sm">
                             {[stage.enrichment.application, stage.enrichment.environment]
@@ -817,7 +815,7 @@ function stageCapabilityWarnings(stage: PromotionProjectStage) {
   return [...new Set(warnings)];
 }
 
-function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
+export function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
   const nonReady = stage.conditions.find(
     (condition) => condition.type === "Ready" && condition.status !== "True",
   );
@@ -872,7 +870,7 @@ function StagePolicyBadge({
   onEdit: () => void;
   stageName: string;
 }>) {
-  const color = !editable ? "gray" : mode === "review-required" ? "yellow" : "green";
+  const color = editable ? promotionStagePolicyColor(mode) : "gray";
   if (!canEdit) {
     return (
       <Badge color={color} variant="light">
@@ -896,15 +894,19 @@ function StagePolicyBadge({
   );
 }
 
-function StageCard({
+export function StageCard({
   canWrite,
+  linkName = true,
   onCompareFreight,
   onEditPolicy,
+  showKargoLink = true,
   stage,
 }: Readonly<{
   canWrite: boolean;
+  linkName?: boolean;
   onCompareFreight: (alignment: PromotionFreightAlignment) => void;
   onEditPolicy: () => void;
+  showKargoLink?: boolean;
   stage: PromotionProjectStage;
 }>) {
   const policyPresentation = promotionStagePolicyPresentation(stage);
@@ -916,10 +918,8 @@ function StageCard({
         <Group align="flex-start" justify="space-between" wrap="nowrap">
           <Stack gap={3}>
             <Group gap="xs">
-              {stage.kargoUrl ? (
-                <KargoLink fw={700} url={stage.kargoUrl}>
-                  {stage.name}
-                </KargoLink>
+              {linkName ? (
+                <PromotionStageLink heading showKargoLink={showKargoLink} stage={stage} />
               ) : (
                 <Title order={3} size="h4">
                   {stage.name}
