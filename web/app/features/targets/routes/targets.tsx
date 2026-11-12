@@ -18,6 +18,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, listTargets, type TargetReconciliationStatus } from "~/api/generated";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { CommitReference } from "~/features/commits/git-commit";
+import { RelativeTime } from "~/shared/display-values";
 import { EmptyState, PageHeader } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
@@ -188,14 +189,6 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                                   {target.name}
                                 </Text>
                               ) : null}
-                              <Anchor
-                                c="dimmed"
-                                component={Link}
-                                size="xs"
-                                to={`/repositories/${target.repositoryId}`}
-                              >
-                                {target.repositoryName}
-                              </Anchor>
                             </Stack>
                           </Table.Td>
                           <Table.Td>
@@ -228,10 +221,24 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                             </Stack>
                           </Table.Td>
                           <Table.Td>
-                            <CommitReference
-                              commit={target.desiredCommit}
-                              repositoryId={target.repositoryId}
-                            />
+                            <Stack gap={0}>
+                              <CommitReference
+                                commit={target.desiredCommit}
+                                repositoryId={target.repositoryId}
+                              />
+                              {(target.desiredCommit.committedAt ??
+                              target.desiredCommit.authoredAt) ? (
+                                <RelativeTime
+                                  c="dimmed"
+                                  size="xs"
+                                  value={
+                                    target.desiredCommit.committedAt ??
+                                    target.desiredCommit.authoredAt ??
+                                    ""
+                                  }
+                                />
+                              ) : null}
+                            </Stack>
                           </Table.Td>
                           <Table.Td>
                             <TargetReconciliationBadge
