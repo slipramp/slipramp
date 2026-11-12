@@ -1,19 +1,18 @@
 import { Alert, Stack } from "@mantine/core";
 import { redirect, useNavigate } from "react-router";
 
-import type { PromotionFreightAlignment, PromotionProjectDetail } from "~/api/generated";
+import type { PromotionFreightAlignment, PromotionPipeline } from "~/api/generated";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { freightComparisonStageIds } from "~/features/promotions/promotion-freight";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
-import { loadPromotionProjectInventory } from "~/features/promotions/promotion-project-inventory.server";
+import { loadPromotionPipelineInventory } from "~/features/promotions/promotion-pipeline-inventory.server";
 import {
   PromotionInventoryScopeFilters,
-  PromotionProjectSectionHeader,
   usePromotionInventoryPresentation,
 } from "~/features/promotions/promotion-project-inventory";
 import {
+  promotionPipelineInventoryPageSize,
   promotionProjectDetailPath,
-  promotionProjectInventoryPageSize,
   shouldRevalidatePromotionInventory,
 } from "~/features/promotions/promotion-project-inventory-state";
 import {
@@ -24,6 +23,7 @@ import {
   stageMatchesAlignment,
   stageMatchesAttention,
   stageMatchesQuery,
+  type ProjectPipeline,
 } from "~/features/promotions/promotion-project-view";
 import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
@@ -40,9 +40,9 @@ export function meta() {
 export const shouldRevalidate = shouldRevalidatePromotionInventory;
 
 export async function loader({ context, request }: Route.LoaderArgs) {
-  const data = await loadPromotionProjectInventory(request, context);
+  const data = await loadPromotionPipelineInventory(request, context);
   if (data.available) {
-    const lastPage = Math.max(1, Math.ceil(data.total / promotionProjectInventoryPageSize));
+    const lastPage = Math.max(1, Math.ceil(data.total / promotionPipelineInventoryPageSize));
     if (data.page > lastPage) {
       const url = new URL(request.url);
       if (lastPage === 1) url.searchParams.delete("page");
@@ -62,32 +62,16 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
 
   const navigate = useNavigate();
   const presentation = usePromotionInventoryPresentation();
-  const projects = loaderData.projects.flatMap((entry) => (entry.detail ? [entry.detail] : []));
-  const pipelineGroups = projects
-    .map((project) => ({
-      pipelines: projectPipelines(project.stages).filter(
-        (pipeline) =>
-          pipeline.stages.some((stage) => stageMatchesQuery(stage, presentation.query)) &&
-          (!presentation.attention ||
-            pipeline.stages.some((stage) =>
-              stageMatchesAttention(stage, presentation.attention),
-            )) &&
-          (!presentation.alignment ||
-            pipeline.stages.some((stage) => stageMatchesAlignment(stage, presentation.alignment))),
-      ),
-      project,
-    }))
-    .filter(({ pipelines }) => pipelines.length > 0);
-  const visiblePipelineCount = pipelineGroups.reduce(
-    (count, project) => count + project.pipelines.length,
-    0,
+  const pipelines = loaderData.pipelines.flatMap((item) => inventoryPipeline(item));
+  const visiblePipelines = pipelines.filter(
+    (pipeline) =>
+      pipelineMatchesQuery(pipeline, presentation.query) &&
+      (!presentation.attention ||
+        pipeline.stages.some((stage) => stageMatchesAttention(stage, presentation.attention))) &&
+      (!presentation.alignment ||
+        pipeline.stages.some((stage) => stageMatchesAlignment(stage, presentation.alignment))),
   );
-  const visiblePipelineKeys = pipelineGroups.flatMap((project) =>
-    project.pipelines.map((pipeline) => pipeline.key),
-  );
-  const validPipelineKeys = new Set(
-    projects.flatMap((project) => projectPipelines(project.stages).map((pipeline) => pipeline.key)),
-  );
+  const validPipelineKeys = new Set(pipelines.map((pipeline) => pipeline.key));
   const explicitPipelineSelection =
     presentation.searchParams.has("pipeline") ||
     presentation.searchParams.get("pipelines") === "collapsed";
@@ -95,16 +79,22 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
     ? [...new Set(presentation.searchParams.getAll("pipeline"))].filter((key) =>
         validPipelineKeys.has(key),
       )
-    : visiblePipelineCount <= 4
-      ? visiblePipelineKeys
+    : visiblePipelines.length <= 4
+      ? visiblePipelines.map((pipeline) => pipeline.key)
       : [];
-  const policyStage = projects
-    .flatMap((project) => project.stages)
-    .find(
-      (stage) =>
-        stage.id === presentation.searchParams.get("policy") &&
-        promotionStagePolicyPresentation(stage).editable,
-    );
+  const stages = pipelines.flatMap((pipeline) => pipeline.stages);
+  const policyStage = stages.find(
+    (stage) =>
+      stage.id === presentation.searchParams.get("policy") &&
+      promotionStagePolicyPresentation(stage).editable,
+  );
+  const projectsByStage = new Map(
+    pipelines.flatMap((pipeline) =>
+      pipeline.projectContext
+        ? pipeline.stages.map((stage) => [stage.id, pipeline.projectContext] as const)
+        : [],
+    ),
+  );
   const canWrite = canWritePromotions(loaderData.principal);
   const filtered = Boolean(
     loaderData.cluster ||
@@ -127,20 +117,19 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
     presentation.setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
-  function changeExpandedPipelines(projectKeys: string[], keys: string[]) {
-    const projectKeySet = new Set(projectKeys);
-    const nextKeys = [...expandedPipelineKeys.filter((key) => !projectKeySet.has(key)), ...keys];
+  function changeExpandedPipelines(keys: string[]) {
     const next = new URLSearchParams(presentation.searchParams);
     next.delete("pipeline");
     next.delete("pipelines");
-    if (nextKeys.length === 0) next.set("pipelines", "collapsed");
-    else for (const key of nextKeys) next.append("pipeline", key);
+    if (keys.length === 0) next.set("pipelines", "collapsed");
+    else for (const key of keys) next.append("pipeline", key);
     presentation.setSearchParams(next, { preventScrollReset: true });
   }
 
-  function compareFreight(project: PromotionProjectDetail, alignment: PromotionFreightAlignment) {
+  function compareFreight(alignment: PromotionFreightAlignment) {
+    const project = projectsByStage.get(alignment.targetStageId);
     const stageIds = freightComparisonStageIds(alignment);
-    if (!stageIds) return;
+    if (!project || !stageIds) return;
 
     const search = new URLSearchParams({ view: "compare" });
     for (const id of stageIds) search.append("stage", id);
@@ -150,7 +139,7 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
   return (
     <Stack gap="lg">
       <PageHeader
-        description="Disconnected Kargo Stage graphs across every observed Project and configured integration."
+        description="Connected Kargo Stage graphs across every observed Project and configured integration."
         title="Pipelines"
       />
 
@@ -164,7 +153,7 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
       <ProjectFilter
         alignment={presentation.alignment}
         attention={presentation.attention}
-        count={visiblePipelineCount}
+        count={visiblePipelines.length}
         noun="pipeline"
         onAlignmentChange={presentation.changeAlignment}
         onAttentionChange={presentation.changeAttention}
@@ -176,66 +165,74 @@ export default function PromotionPipelines({ actionData, loaderData }: Route.Com
         <Alert color="red" title="Kargo pipelines unavailable">
           {loaderData.error}
         </Alert>
-      ) : loaderData.projects.length === 0 ? (
+      ) : loaderData.pipelines.length === 0 ? (
         <EmptyState
           description={
             filtered
               ? "No active observed Kargo pipelines match these filters."
-              : "No Kargo Projects with active Stage observations are available yet."
+              : "No Kargo pipelines with active Stage observations are available yet."
           }
         />
-      ) : pipelineGroups.length === 0 ? (
+      ) : visiblePipelines.length === 0 ? (
         <EmptyState
-          description={
-            presentation.query.trim()
-              ? `No pipelines on this page match “${presentation.query.trim()}”.`
-              : "No pipelines on this page match the active filters."
-          }
+          description={`No pipelines on this page match “${presentation.query.trim()}”.`}
           title="No matching pipelines"
         />
       ) : (
-        pipelineGroups.map(({ pipelines, project }) => {
-          const projectKeys = projectPipelines(project.stages).map((pipeline) => pipeline.key);
-          return (
-            <Stack gap="sm" key={`${project.integration}:${project.cluster}:${project.project}`}>
-              <PromotionProjectSectionHeader project={project} view="pipelines" />
-              <PipelineList
-                canWrite={canWrite}
-                expandedKeys={expandedPipelineKeys.filter((key) => projectKeys.includes(key))}
-                onCompareFreight={(alignment) => compareFreight(project, alignment)}
-                onEditPolicy={(stage) => editPolicy(stage.id)}
-                onExpandedKeysChange={(keys) => changeExpandedPipelines(projectKeys, keys)}
-                pipelines={pipelines}
-                query={presentation.query}
-              />
-            </Stack>
-          );
-        })
-      )}
-
-      {loaderData.projects.map((entry) =>
-        entry.error ? (
-          <Alert
-            color="yellow"
-            key={`${entry.summary.integration}:${entry.summary.cluster}:${entry.summary.project}`}
-            title={`${entry.summary.project} unavailable`}
-          >
-            {entry.error}
-          </Alert>
-        ) : null,
+        <PipelineList
+          canWrite={canWrite}
+          expandedKeys={expandedPipelineKeys}
+          onCompareFreight={compareFreight}
+          onEditPolicy={(stage) => editPolicy(stage.id)}
+          onExpandedKeysChange={changeExpandedPipelines}
+          pipelines={visiblePipelines}
+          query={presentation.query}
+          showProject
+        />
       )}
 
       {loaderData.available && loaderData.total > 0 ? (
         <ListPagination
-          itemCount={loaderData.projects.length}
-          noun="Projects"
+          itemCount={loaderData.pipelines.length}
+          noun="Pipelines"
           page={loaderData.page}
-          pageSize={promotionProjectInventoryPageSize}
+          pageSize={promotionPipelineInventoryPageSize}
           total={loaderData.total}
         />
       ) : null}
 
       <StagePolicyDialog actionData={actionData} onClose={closePolicy} stage={policyStage} />
     </Stack>
+  );
+}
+
+function inventoryPipeline(item: PromotionPipeline): ProjectPipeline[] {
+  const pipeline = projectPipelines(item.stages)[0];
+  if (!pipeline) return [];
+
+  return [
+    {
+      ...pipeline,
+      key: `${item.integration}:${item.cluster}:${item.project}:${pipeline.key}`,
+      label: item.name,
+      projectContext: {
+        cluster: item.cluster,
+        integration: item.integration,
+        project: item.project,
+      },
+    },
+  ];
+}
+
+function pipelineMatchesQuery(pipeline: ProjectPipeline, query: string) {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return true;
+
+  return (
+    pipeline.label.toLocaleLowerCase().includes(normalized) ||
+    pipeline.projectContext?.project.toLocaleLowerCase().includes(normalized) ||
+    pipeline.projectContext?.integration.toLocaleLowerCase().includes(normalized) ||
+    pipeline.projectContext?.cluster.toLocaleLowerCase().includes(normalized) ||
+    pipeline.stages.some((stage) => stageMatchesQuery(stage, query))
   );
 }

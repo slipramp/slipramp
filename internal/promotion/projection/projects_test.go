@@ -274,6 +274,68 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	}
 }
 
+func TestProjectServiceListsCompletePipelinesByName(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	alpha := projectTestStage("prod", "colo", "core", "alpha-prod", now)
+	alpha.Application = "alpha"
+	beta := projectTestStage("prod", "colo", "platform", "beta-prod", now)
+	beta.Application = "beta"
+	zetaSource := projectTestStage("prod", "colo", "core", "zeta-test", now)
+	zetaSource.Application = "zeta"
+	zetaTarget := projectTestStage("prod", "colo", "core", "zeta-prod", now)
+	zetaTarget.Application = "zeta"
+	zetaTarget.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/zeta", SourceStages: []string{zetaSource.Name},
+	}}
+	zetaTarget.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
+	store := &projectionTestStore{
+		stages: []promotion.Stage{zetaTarget, beta, alpha, zetaSource},
+		pendingCounts: map[uuid.UUID]int{
+			zetaTarget.ID: 1,
+		},
+	}
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		store,
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.ListPipelines(t.Context(), PipelineListFilter{Limit: 2})
+	if err != nil {
+		t.Fatalf("ListPipelines() error = %v", err)
+	}
+	if result.Total != 3 || len(result.Items) != 2 {
+		t.Fatalf("Pipeline page = %#v", result)
+	}
+	if names := []string{result.Items[0].Name, result.Items[1].Name}; !reflect.DeepEqual(
+		names,
+		[]string{"alpha", "beta"},
+	) {
+		t.Errorf("pipeline order = %v", names)
+	}
+
+	page, err := service.ListPipelines(t.Context(), PipelineListFilter{Limit: 2, Offset: 1})
+	if err != nil {
+		t.Fatalf("ListPipelines(page) error = %v", err)
+	}
+	if len(page.Items) != 2 || page.Items[1].Name != "zeta" || len(page.Items[1].Stages) != 2 {
+		t.Errorf("paginated pipelines = %#v", page)
+	}
+
+	filtered, err := service.ListPipelines(t.Context(), PipelineListFilter{
+		Integration: "prod", Cluster: "colo", Project: "core",
+		Unhealthy: true, PendingReview: true, Limit: promotion.DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("ListPipelines(filtered) error = %v", err)
+	}
+	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].Name != "zeta" {
+		t.Errorf("filtered pipelines = %#v", filtered)
+	}
+}
+
 func TestProjectServiceSummarizesAndFiltersFreightAlignmentBeforePagination(t *testing.T) {
 	t.Parallel()
 

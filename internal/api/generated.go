@@ -3461,6 +3461,23 @@ type PromotionList struct {
 	Total  int         `json:"total"`
 }
 
+// PromotionPipeline defines model for PromotionPipeline.
+type PromotionPipeline struct {
+	Cluster     CatalogName             `json:"cluster"`
+	Integration CatalogName             `json:"integration"`
+	Name        string                  `json:"name"`
+	Project     CatalogName             `json:"project"`
+	Stages      []PromotionProjectStage `json:"stages"`
+}
+
+// PromotionPipelineList defines model for PromotionPipelineList.
+type PromotionPipelineList struct {
+	Items  []PromotionPipeline `json:"items"`
+	Limit  int                 `json:"limit"`
+	Offset int                 `json:"offset"`
+	Total  int                 `json:"total"`
+}
+
 // PromotionPolicyMode defines model for PromotionPolicyMode.
 type PromotionPolicyMode string
 
@@ -4776,6 +4793,27 @@ type ListPromotionBranchDriftParams struct {
 	Offset      *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListPromotionPipelinesParams defines parameters for ListPromotionPipelines.
+type ListPromotionPipelinesParams struct {
+	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
+	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
+	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
+
+	// FreightAlignment Select pipelines containing at least one comparison in this Freight alignment state.
+	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
+
+	// Unhealthy Select pipelines containing at least one current non-ready Stage.
+	Unhealthy *bool `form:"unhealthy,omitempty" json:"unhealthy,omitempty"`
+
+	// Stale Select pipelines containing at least one stale Stage observation.
+	Stale *bool `form:"stale,omitempty" json:"stale,omitempty"`
+
+	// PendingReview Select pipelines containing at least one Promotion awaiting review.
+	PendingReview *bool   `form:"pendingReview,omitempty" json:"pendingReview,omitempty"`
+	Limit         *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset        *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListPromotionProjectsParams defines parameters for ListPromotionProjects.
 type ListPromotionProjectsParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
@@ -5811,6 +5849,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 	ListPromotionBranchDrift(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPromotionPipelines List disconnected Kargo Stage graphs with their Project context
+	//
+	// Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+	//
+	// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
+	ListPromotionPipelines(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	//
@@ -6921,6 +6966,23 @@ func (c *Client) RevokePrincipalSessions(ctx context.Context, principalID openap
 // Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 func (c *Client) ListPromotionBranchDrift(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPromotionBranchDriftRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPromotionPipelines List disconnected Kargo Stage graphs with their Project context
+//
+// Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+//
+// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
+func (c *Client) ListPromotionPipelines(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPromotionPipelinesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9621,6 +9683,156 @@ func NewListPromotionBranchDriftRequest(server string, params *ListPromotionBran
 		if params.Repository != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repository", *params.Repository, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPromotionPipelinesRequest constructs an http.Request for the ListPromotionPipelines method
+func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipelinesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotion-pipelines")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Integration != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "integration", *params.Integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Project != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cluster != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FreightAlignment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "freightAlignment", *params.FreightAlignment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Unhealthy != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "unhealthy", *params.Unhealthy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Stale != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "stale", *params.Stale, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PendingReview != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pendingReview", *params.PendingReview, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -12637,6 +12849,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 	ListPromotionBranchDriftWithResponse(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*ListPromotionBranchDriftResponse, error)
 
+	// ListPromotionPipelinesWithResponse List disconnected Kargo Stage graphs with their Project context
+	//
+	// Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
+	ListPromotionPipelinesWithResponse(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*ListPromotionPipelinesResponse, error)
+
 	// ListPromotionProjectsWithResponse List Kargo Projects derived from active observed Stages
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -15609,6 +15830,75 @@ func (r ListPromotionBranchDriftResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListPromotionBranchDriftResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListPromotionPipelinesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PromotionPipelineList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *BadRequest
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Unauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Forbidden
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InternalError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPromotionPipelinesResponse) GetJSON200() *PromotionPipelineList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON400() *BadRequest {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON401() *Unauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON403() *Forbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON500() *InternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPromotionPipelinesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPromotionPipelinesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPromotionPipelinesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPromotionPipelinesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19736,6 +20026,21 @@ func (c *ClientWithResponses) ListPromotionBranchDriftWithResponse(ctx context.C
 	return ParseListPromotionBranchDriftResponse(rsp)
 }
 
+// ListPromotionPipelinesWithResponse List disconnected Kargo Stage graphs with their Project context
+//
+// Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
+func (c *ClientWithResponses) ListPromotionPipelinesWithResponse(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*ListPromotionPipelinesResponse, error) {
+	rsp, err := c.ListPromotionPipelines(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPromotionPipelinesResponse(rsp)
+}
+
 // ListPromotionProjectsWithResponse List Kargo Projects derived from active observed Stages
 //
 // Returns a wrapper object for the known response body format(s).
@@ -22699,6 +23004,60 @@ func ParseListPromotionBranchDriftResponse(rsp *http.Response) (*ListPromotionBr
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest PromotionBranchDriftList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPromotionPipelinesResponse parses an HTTP response from a ListPromotionPipelinesWithResponse call
+func ParseListPromotionPipelinesResponse(rsp *http.Response) (*ListPromotionPipelinesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPromotionPipelinesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PromotionPipelineList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -25787,6 +26146,9 @@ type ServerInterface interface {
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
+	// ListPromotionPipelines List disconnected Kargo Stage graphs with their Project context
+	// (GET /api/v1/promotion-pipelines)
+	ListPromotionPipelines(w http.ResponseWriter, r *http.Request, params ListPromotionPipelinesParams)
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	// (GET /api/v1/promotion-projects)
 	ListPromotionProjects(w http.ResponseWriter, r *http.Request, params ListPromotionProjectsParams)
@@ -27092,6 +27454,143 @@ func (siw *ServerInterfaceWrapper) ListPromotionBranchDrift(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPromotionBranchDrift(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPromotionPipelines operation middleware
+func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPromotionPipelinesParams
+
+	// ------------- Optional query parameter "integration" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "integration", r.URL.Query(), &params.Integration, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "integration"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integration", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "project" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cluster" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "freightAlignment" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "freightAlignment", r.URL.Query(), &params.FreightAlignment, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "freightAlignment"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "freightAlignment", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "unhealthy" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "unhealthy", r.URL.Query(), &params.Unhealthy, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unhealthy"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unhealthy", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "stale" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stale", r.URL.Query(), &params.Stale, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stale"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stale", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pendingReview" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pendingReview", r.URL.Query(), &params.PendingReview, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pendingReview"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pendingReview", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPromotionPipelines(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -29252,6 +29751,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-pipelines", wrapper.ListPromotionPipelines)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects/{integration}/{cluster}/{project}", wrapper.GetPromotionProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages", wrapper.ListPromotionStages)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}", wrapper.GetPromotionStage)
@@ -32352,6 +32852,92 @@ type ListPromotionBranchDrift500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListPromotionBranchDrift500ApplicationProblemPlusJSONResponse) VisitListPromotionBranchDriftResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionPipelinesRequestObject struct {
+	Params ListPromotionPipelinesParams
+}
+
+type ListPromotionPipelinesResponseObject interface {
+	VisitListPromotionPipelinesResponse(w http.ResponseWriter) error
+}
+
+type ListPromotionPipelines200JSONResponse PromotionPipelineList
+
+func (response ListPromotionPipelines200JSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionPipelines400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListPromotionPipelines400ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionPipelines401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListPromotionPipelines401ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionPipelines403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListPromotionPipelines403ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionPipelines500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListPromotionPipelines500ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -37190,6 +37776,9 @@ type StrictServerInterface interface {
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
+	// ListPromotionPipelines List disconnected Kargo Stage graphs with their Project context
+	// (GET /api/v1/promotion-pipelines)
+	ListPromotionPipelines(ctx context.Context, request ListPromotionPipelinesRequestObject) (ListPromotionPipelinesResponseObject, error)
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	// (GET /api/v1/promotion-projects)
 	ListPromotionProjects(ctx context.Context, request ListPromotionProjectsRequestObject) (ListPromotionProjectsResponseObject, error)
@@ -38221,6 +38810,32 @@ func (sh *strictHandler) ListPromotionBranchDrift(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPromotionBranchDriftResponseObject); ok {
 		if err := validResponse.VisitListPromotionBranchDriftResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPromotionPipelines operation middleware
+func (sh *strictHandler) ListPromotionPipelines(w http.ResponseWriter, r *http.Request, params ListPromotionPipelinesParams) {
+	var request ListPromotionPipelinesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPromotionPipelines(ctx, request.(ListPromotionPipelinesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPromotionPipelines")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPromotionPipelinesResponseObject); ok {
+		if err := validResponse.VisitListPromotionPipelinesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

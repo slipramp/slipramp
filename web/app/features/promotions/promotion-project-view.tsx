@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   Code,
+  Grid,
   Group,
   Modal,
   NativeSelect,
@@ -29,6 +30,7 @@ import {
   type PromotionFreightCandidate,
   type PromotionFreightItem,
   type PromotionPolicyMode,
+  type PromotionPipeline,
   type PromotionProjectDetail,
   type PromotionProjectStage,
 } from "~/api/generated";
@@ -321,6 +323,7 @@ export function projectAlignment(
 export type ProjectPipeline = PromotionTopologyPipeline & {
   key: string;
   label: string;
+  projectContext?: Pick<PromotionPipeline, "cluster" | "integration" | "project">;
 };
 
 export function projectPipelines(stages: PromotionProjectStage[]) {
@@ -458,6 +461,7 @@ export function PipelineList({
   onExpandedKeysChange,
   pipelines,
   query,
+  showProject = false,
 }: Readonly<{
   canWrite: boolean;
   expandedKeys: string[];
@@ -466,6 +470,7 @@ export function PipelineList({
   onExpandedKeysChange: (keys: string[]) => void;
   pipelines: ProjectPipeline[];
   query: string;
+  showProject?: boolean;
 }>) {
   if (pipelines.length === 0) {
     return (
@@ -485,15 +490,41 @@ export function PipelineList({
       {pipelines.map((pipeline) => (
         <Accordion.Item key={pipeline.key} value={pipeline.key}>
           <Accordion.Control>
-            <Group justify="space-between" mr="sm" wrap="wrap">
-              <Stack gap={2}>
-                <Text fw={650}>{pipeline.label}</Text>
-                <Text c="dimmed" size="sm">
-                  {pipelinePath(pipeline)}
-                </Text>
-              </Stack>
-              <PipelineBadges pipeline={pipeline} />
-            </Group>
+            {showProject && pipeline.projectContext ? (
+              <Grid align="start" gap="xl" mr="sm">
+                <Grid.Col span={{ base: 12, sm: 6, md: 5 }}>
+                  <Stack gap={2}>
+                    <Text fw={650}>{pipeline.label}</Text>
+                    <Text c="dimmed" size="sm">
+                      {pipelinePath(pipeline)}
+                    </Text>
+                  </Stack>
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, sm: 6, md: 4 }} style={{ alignSelf: "center" }}>
+                  <Stack gap={2}>
+                    <Text fw={600} size="sm">
+                      {pipeline.projectContext.project}
+                    </Text>
+                    <Text c="dimmed" size="xs">
+                      {pipeline.projectContext.integration} · {pipeline.projectContext.cluster}
+                    </Text>
+                  </Stack>
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, md: 3 }} style={{ alignSelf: "center" }}>
+                  <PipelineBadges pipeline={pipeline} />
+                </Grid.Col>
+              </Grid>
+            ) : (
+              <Group justify="space-between" mr="sm" wrap="wrap">
+                <Stack gap={2}>
+                  <Text fw={650}>{pipeline.label}</Text>
+                  <Text c="dimmed" size="sm">
+                    {pipelinePath(pipeline)}
+                  </Text>
+                </Stack>
+                <PipelineBadges pipeline={pipeline} />
+              </Group>
+            )}
           </Accordion.Control>
           <Accordion.Panel>
             <PipelineTopology

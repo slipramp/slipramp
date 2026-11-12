@@ -16,15 +16,26 @@ import (
 )
 
 type recordingPromotionProjectService struct {
-	filter      projection.ProjectListFilter
-	result      projection.ProjectList
-	stageFilter projection.StageListFilter
-	stageResult projection.StageList
-	key         projection.ProjectKey
-	detail      projection.ProjectDetail
-	stageID     uuid.UUID
-	stage       projection.StageDetail
-	err         error
+	filter         projection.ProjectListFilter
+	result         projection.ProjectList
+	pipelineFilter projection.PipelineListFilter
+	pipelineResult projection.PipelineList
+	stageFilter    projection.StageListFilter
+	stageResult    projection.StageList
+	key            projection.ProjectKey
+	detail         projection.ProjectDetail
+	stageID        uuid.UUID
+	stage          projection.StageDetail
+	err            error
+}
+
+func (s *recordingPromotionProjectService) ListPipelines(
+	_ context.Context,
+	filter projection.PipelineListFilter,
+) (projection.PipelineList, error) {
+	s.pipelineFilter = filter
+
+	return s.pipelineResult, s.err
 }
 
 func (s *recordingPromotionProjectService) ListStages(
@@ -225,6 +236,85 @@ func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.
 		`"cluster":"colo"`,
 		`"project":"kargo-core"`,
 		`"stage":{"autoPromotionEnabled":false`,
+		`"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1931"`,
+		`"total":7`,
+		`"limit":10`,
+		`"offset":2`,
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
+		}
+	}
+}
+
+func TestListPromotionPipelinesUsesPipelineFiltersAndReturnsCompleteGraphs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1931")
+	projects := &recordingPromotionProjectService{
+		pipelineResult: projection.PipelineList{
+			Items: []projection.Pipeline{{
+				Integration: "prod",
+				ClusterName: "colo",
+				Project:     "kargo-core",
+				Name:        "api",
+				Stages: []projection.ProjectStage{{
+					Stage: promotion.Stage{
+						ID: stageID, Integration: "prod", ClusterName: "colo", Project: "kargo-core", Name: "prod",
+						KubernetesUID: "stage-uid", ResourceVersion: "42",
+						Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
+						FirstObservedAt: now.Add(-time.Hour), LastObservedAt: now,
+					},
+					Policy: promotion.PromotionPolicySnapshot{
+						ConfiguredMode: promotion.PolicyModeAutomatic,
+						EffectiveMode:  promotion.PolicyModeAutomatic,
+					},
+				}},
+			}},
+			Total: 7, Limit: 10, Offset: 2,
+		},
+	}
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionProjects: projects,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: productAuthentication(
+					productidentity.RoleViewer,
+					productidentity.AuthenticationMethodAPIKey,
+					[]productidentity.Scope{productidentity.ScopeRead},
+				),
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/promotion-pipelines?integration=prod&cluster=colo&project=kargo-core&"+
+			"freightAlignment=different&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer viewer-key")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	filter := projects.pipelineFilter
+	if filter.Integration != "prod" || filter.Cluster != "colo" || filter.Project != "kargo-core" ||
+		filter.FreightAlignment != projection.FreightAlignmentDifferent || !filter.Unhealthy || !filter.Stale ||
+		!filter.PendingReview || filter.Limit != 10 || filter.Offset != 2 {
+		t.Errorf("Pipeline filter = %#v", filter)
+	}
+	for _, expected := range []string{
+		`"integration":"prod"`,
+		`"cluster":"colo"`,
+		`"project":"kargo-core"`,
+		`"name":"api"`,
+		`"stages":[{"autoPromotionEnabled":false`,
 		`"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1931"`,
 		`"total":7`,
 		`"limit":10`,

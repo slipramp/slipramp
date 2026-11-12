@@ -83,6 +83,33 @@ type StageList struct {
 	Offset int
 }
 
+type PipelineListFilter struct {
+	Integration      string
+	Cluster          string
+	Project          string
+	FreightAlignment FreightAlignmentStatus
+	Unhealthy        bool
+	Stale            bool
+	PendingReview    bool
+	Limit            int
+	Offset           int
+}
+
+type Pipeline struct {
+	Integration string
+	ClusterName string
+	Project     string
+	Name        string
+	Stages      []ProjectStage
+}
+
+type PipelineList struct {
+	Items  []Pipeline
+	Total  int
+	Limit  int
+	Offset int
+}
+
 type ProjectDetail struct {
 	Integration string
 	ClusterName string
@@ -292,6 +319,55 @@ func (s *ProjectService) ListStages(ctx context.Context, filter StageListFilter)
 	}, nil
 }
 
+func (s *ProjectService) ListPipelines(ctx context.Context, filter PipelineListFilter) (PipelineList, error) {
+	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
+		return PipelineList{}, err
+	}
+	if !filter.FreightAlignment.Valid() {
+		return PipelineList{}, fmt.Errorf("%w: Freight alignment filter is invalid", promotion.ErrInvalid)
+	}
+
+	stages, err := s.store.ListPromotionStages(ctx)
+	if err != nil {
+		return PipelineList{}, err
+	}
+	keys := make(map[ProjectKey]struct{})
+	for _, stage := range stages {
+		if stage.ArchivedAt != nil || !stageMatchesPipelineScope(stage, filter) {
+			continue
+		}
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if !configured || integration.ClusterName != stage.ClusterName {
+			continue
+		}
+		keys[ProjectKey{
+			Integration: stage.Integration,
+			Cluster:     stage.ClusterName,
+			Project:     stage.Project,
+		}] = struct{}{}
+	}
+
+	items := make([]Pipeline, 0)
+	for key := range keys {
+		project, detailErr := s.projectDetail(ctx, key, stages)
+		if detailErr != nil {
+			return PipelineList{}, detailErr
+		}
+		for _, pipeline := range projectPipelines(project) {
+			if pipelineMatchesListFilter(pipeline, filter) {
+				items = append(items, pipeline)
+			}
+		}
+	}
+	slices.SortFunc(items, comparePipelines)
+	total := len(items)
+
+	return PipelineList{
+		Items: page(items, filter.Offset, filter.Limit), Total: total,
+		Limit: filter.Limit, Offset: filter.Offset,
+	}, nil
+}
+
 func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail, error) {
 	stages, err := s.store.ListPromotionStages(ctx)
 	if err != nil {
@@ -487,6 +563,31 @@ func compareStageDetails(left, right StageDetail) int {
 	return 0
 }
 
+func comparePipelines(left, right Pipeline) int {
+	for _, values := range [][2]string{
+		{left.Name, right.Name},
+		{left.Project, right.Project},
+		{left.Integration, right.Integration},
+		{left.ClusterName, right.ClusterName},
+		{pipelineIdentity(left), pipelineIdentity(right)},
+	} {
+		if value := cmp.Compare(values[0], values[1]); value != 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func pipelineIdentity(pipeline Pipeline) string {
+	ids := make([]string, 0, len(pipeline.Stages))
+	for _, stage := range pipeline.Stages {
+		ids = append(ids, stage.Stage.ID.String())
+	}
+	slices.Sort(ids)
+
+	return strings.Join(ids, ":")
+}
+
 func stageMatchesProjectFilter(stage promotion.Stage, filter ProjectListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
@@ -498,6 +599,12 @@ func stageMatchesStageScope(stage promotion.Stage, filter StageListFilter) bool 
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
 		(filter.Project == "" || stage.Project == filter.Project) &&
 		(filter.Application == "" || stage.Application == filter.Application)
+}
+
+func stageMatchesPipelineScope(stage promotion.Stage, filter PipelineListFilter) bool {
+	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
+		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
+		(filter.Project == "" || stage.Project == filter.Project)
 }
 
 func projectStageMatchesListFilter(stage ProjectStage, filter StageListFilter) bool {
@@ -518,4 +625,128 @@ func projectStageMatchesListFilter(stage ProjectStage, filter StageListFilter) b
 	}
 
 	return true
+}
+
+func pipelineMatchesListFilter(pipeline Pipeline, filter PipelineListFilter) bool {
+	if filter.Unhealthy && !slices.ContainsFunc(pipeline.Stages, func(stage ProjectStage) bool {
+		return !stage.ObservationStale && stageNonReady(stage.Stage)
+	}) {
+		return false
+	}
+	if filter.Stale && !slices.ContainsFunc(pipeline.Stages, func(stage ProjectStage) bool {
+		return stage.ObservationStale
+	}) {
+		return false
+	}
+	if filter.PendingReview && !slices.ContainsFunc(pipeline.Stages, func(stage ProjectStage) bool {
+		return stage.PendingPromotionCount > 0
+	}) {
+		return false
+	}
+	if filter.FreightAlignment != "" && !slices.ContainsFunc(pipeline.Stages, func(stage ProjectStage) bool {
+		return slices.ContainsFunc(stage.FreightAlignments, func(alignment FreightAlignment) bool {
+			return alignment.Status == filter.FreightAlignment
+		})
+	}) {
+		return false
+	}
+
+	return true
+}
+
+func projectPipelines(project ProjectDetail) []Pipeline {
+	byID := make(map[uuid.UUID]ProjectStage, len(project.Stages))
+	neighbors := make(map[uuid.UUID]map[uuid.UUID]struct{}, len(project.Stages))
+	for _, stage := range project.Stages {
+		byID[stage.Stage.ID] = stage
+		neighbors[stage.Stage.ID] = make(map[uuid.UUID]struct{})
+	}
+	for _, stage := range project.Stages {
+		for _, request := range stage.RequestedFreight {
+			for _, source := range request.Sources {
+				if source.StageID == nil {
+					continue
+				}
+				if _, ok := byID[*source.StageID]; !ok {
+					continue
+				}
+				neighbors[stage.Stage.ID][*source.StageID] = struct{}{}
+				neighbors[*source.StageID][stage.Stage.ID] = struct{}{}
+			}
+		}
+	}
+
+	remaining := make(map[uuid.UUID]struct{}, len(project.Stages))
+	for id := range byID {
+		remaining[id] = struct{}{}
+	}
+	ordered := slices.Clone(project.Stages)
+	slices.SortFunc(ordered, compareProjectStages)
+	pipelines := make([]Pipeline, 0)
+	for _, root := range ordered {
+		if _, ok := remaining[root.Stage.ID]; !ok {
+			continue
+		}
+		delete(remaining, root.Stage.ID)
+		component := make([]ProjectStage, 0)
+		pending := []uuid.UUID{root.Stage.ID}
+		for len(pending) > 0 {
+			id := pending[len(pending)-1]
+			pending = pending[:len(pending)-1]
+			component = append(component, byID[id])
+			for neighbor := range neighbors[id] {
+				if _, ok := remaining[neighbor]; ok {
+					delete(remaining, neighbor)
+					pending = append(pending, neighbor)
+				}
+			}
+		}
+		slices.SortFunc(component, compareProjectStages)
+		pipelines = append(pipelines, Pipeline{
+			Integration: project.Integration,
+			ClusterName: project.ClusterName,
+			Project:     project.Project,
+			Stages:      component,
+		})
+	}
+	for index := range pipelines {
+		pipelines[index].Name = pipelineName(pipelines[index].Stages, index)
+	}
+
+	return pipelines
+}
+
+func compareProjectStages(left, right ProjectStage) int {
+	if value := cmp.Compare(left.Stage.Name, right.Stage.Name); value != 0 {
+		return value
+	}
+
+	return cmp.Compare(left.Stage.ID.String(), right.Stage.ID.String())
+}
+
+func pipelineName(stages []ProjectStage, index int) string {
+	applications := make([]string, 0, len(stages))
+	seen := make(map[string]struct{}, len(stages))
+	for _, stage := range stages {
+		if stage.Stage.Application == "" {
+			continue
+		}
+		if _, ok := seen[stage.Stage.Application]; ok {
+			continue
+		}
+		seen[stage.Stage.Application] = struct{}{}
+		applications = append(applications, stage.Stage.Application)
+	}
+	slices.Sort(applications)
+	if len(applications) == 1 {
+		return applications[0]
+	}
+	if len(applications) > 1 {
+		return fmt.Sprintf("%s + %d more", applications[0], len(applications)-1)
+	}
+	if len(stages) == 1 {
+		return stages[0].Stage.Name
+	}
+
+	return fmt.Sprintf("Pipeline %d", index+1)
 }

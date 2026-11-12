@@ -1327,6 +1327,21 @@ export type PromotionProjectDetail = {
   stages: Array<PromotionProjectStage>;
 };
 
+export type PromotionPipeline = {
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  name: string;
+  stages: Array<PromotionProjectStage>;
+};
+
+export type PromotionPipelineList = {
+  items: Array<PromotionPipeline>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type PromotionStageList = {
   items: Array<PromotionStageDetail>;
   total: number;
@@ -5989,6 +6004,67 @@ export type ListPromotionProjectsResponses = {
 
 export type ListPromotionProjectsResponse =
   ListPromotionProjectsResponses[keyof ListPromotionProjectsResponses];
+
+export type ListPromotionPipelinesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    integration?: CatalogName;
+    project?: CatalogName;
+    cluster?: CatalogName;
+    /**
+     * Select pipelines containing at least one comparison in this Freight alignment state.
+     */
+    freightAlignment?: PromotionFreightAlignmentStatus;
+    /**
+     * Select pipelines containing at least one current non-ready Stage.
+     */
+    unhealthy?: boolean;
+    /**
+     * Select pipelines containing at least one stale Stage observation.
+     */
+    stale?: boolean;
+    /**
+     * Select pipelines containing at least one Promotion awaiting review.
+     */
+    pendingReview?: boolean;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotion-pipelines";
+};
+
+export type ListPromotionPipelinesErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionPipelinesError =
+  ListPromotionPipelinesErrors[keyof ListPromotionPipelinesErrors];
+
+export type ListPromotionPipelinesResponses = {
+  /**
+   * Complete observed Kargo pipelines.
+   */
+  200: PromotionPipelineList;
+};
+
+export type ListPromotionPipelinesResponse =
+  ListPromotionPipelinesResponses[keyof ListPromotionPipelinesResponses];
 
 export type GetPromotionProjectData = {
   body?: never;

@@ -504,6 +504,55 @@ PromotionProjectDetail:
       items:
         $ref: "#/PromotionProjectStage"
 
+PromotionPipeline:
+  type: object
+  additionalProperties: false
+  required:
+    - integration
+    - cluster
+    - project
+    - name
+    - stages
+  properties:
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    name:
+      type: string
+      minLength: 1
+      maxLength: 512
+    stages:
+      type: array
+      minItems: 1
+      items:
+        $ref: "#/PromotionProjectStage"
+
+PromotionPipelineList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/PromotionPipeline"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
 PromotionStageDetail:
   type: object
   additionalProperties: false

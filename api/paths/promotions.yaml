@@ -286,6 +286,69 @@ promotionProject:
       "500":
         $ref: "#/components/responses/InternalError"
 
+promotionPipelines:
+  get:
+    operationId: listPromotionPipelines
+    summary: List disconnected Kargo Stage graphs with their Project context
+    description: >-
+      Returns complete connected Stage graphs ordered by pipeline name, then Project,
+      integration, cluster, and stable Stage identity. Operational and Freight filters
+      select whole pipelines before pagination.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: freightAlignment
+        in: query
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionFreightAlignmentStatus
+        description: Select pipelines containing at least one comparison in this Freight alignment state.
+      - name: unhealthy
+        in: query
+        schema:
+          type: boolean
+        description: Select pipelines containing at least one current non-ready Stage.
+      - name: stale
+        in: query
+        schema:
+          type: boolean
+        description: Select pipelines containing at least one stale Stage observation.
+      - name: pendingReview
+        in: query
+        schema:
+          type: boolean
+        description: Select pipelines containing at least one Promotion awaiting review.
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Complete observed Kargo pipelines.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionPipelineList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
 promotionStages:
   get:
     operationId: listPromotionStages

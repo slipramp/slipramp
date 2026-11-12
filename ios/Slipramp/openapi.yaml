@@ -4160,6 +4160,66 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/promotion-pipelines:
+    get:
+      operationId: listPromotionPipelines
+      summary: List disconnected Kargo Stage graphs with their Project context
+      description: Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Promotions
+      parameters:
+        - name: integration
+          in: query
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: project
+          in: query
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: cluster
+          in: query
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: freightAlignment
+          in: query
+          schema:
+            $ref: '#/components/schemas/PromotionFreightAlignmentStatus'
+          description: Select pipelines containing at least one comparison in this Freight alignment state.
+        - name: unhealthy
+          in: query
+          schema:
+            type: boolean
+          description: Select pipelines containing at least one current non-ready Stage.
+        - name: stale
+          in: query
+          schema:
+            type: boolean
+          description: Select pipelines containing at least one stale Stage observation.
+        - name: pendingReview
+          in: query
+          schema:
+            type: boolean
+          description: Select pipelines containing at least one Promotion awaiting review.
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Complete observed Kargo pipelines.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionPipelineList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/promotion-projects/{integration}/{cluster}/{project}:
     get:
       operationId: getPromotionProject
@@ -7525,6 +7585,53 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionProjectStage'
+    PromotionPipeline:
+      type: object
+      additionalProperties: false
+      required:
+        - integration
+        - cluster
+        - project
+        - name
+        - stages
+      properties:
+        integration:
+          $ref: '#/components/schemas/CatalogName'
+        cluster:
+          $ref: '#/components/schemas/CatalogName'
+        project:
+          $ref: '#/components/schemas/CatalogName'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        stages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PromotionProjectStage'
+    PromotionPipelineList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionPipeline'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
     PromotionStageList:
       type: object
       additionalProperties: false

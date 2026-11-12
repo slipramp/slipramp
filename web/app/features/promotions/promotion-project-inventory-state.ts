@@ -3,6 +3,7 @@ import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { PromotionProjectDetail } from "~/api/generated";
 
 export const promotionProjectInventoryPageSize = 8;
+export const promotionPipelineInventoryPageSize = 12;
 export const promotionStageInventoryPageSize = 25;
 
 export function promotionProjectDetailPath(

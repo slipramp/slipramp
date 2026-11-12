@@ -128,6 +128,8 @@ paths:
     $ref: ./paths/promotions.yaml#/promotionDecision
   /api/v1/promotion-projects:
     $ref: ./paths/promotions.yaml#/promotionProjects
+  /api/v1/promotion-pipelines:
+    $ref: ./paths/promotions.yaml#/promotionPipelines
   /api/v1/promotion-projects/{integration}/{cluster}/{project}:
     $ref: ./paths/promotions.yaml#/promotionProject
   /api/v1/promotion-stages:
@@ -370,6 +372,10 @@ components:
       $ref: ./components/promotions.yaml#/PromotionProjectList
     PromotionProjectDetail:
       $ref: ./components/promotions.yaml#/PromotionProjectDetail
+    PromotionPipeline:
+      $ref: ./components/promotions.yaml#/PromotionPipeline
+    PromotionPipelineList:
+      $ref: ./components/promotions.yaml#/PromotionPipelineList
     PromotionStageList:
       $ref: ./components/promotions.yaml#/PromotionStageList
     PromotionStagePolicy:

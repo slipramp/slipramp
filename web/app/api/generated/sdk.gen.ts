@@ -151,6 +151,9 @@ import type {
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
+  ListPromotionPipelinesData,
+  ListPromotionPipelinesErrors,
+  ListPromotionPipelinesResponses,
   ListPromotionProjectsData,
   ListPromotionProjectsErrors,
   ListPromotionProjectsResponses,
@@ -2033,6 +2036,35 @@ export const listPromotionProjects = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/promotion-projects",
+    ...options,
+  });
+
+/**
+ * List disconnected Kargo Stage graphs with their Project context
+ *
+ * Returns complete connected Stage graphs ordered by pipeline name, then Project, integration, cluster, and stable Stage identity. Operational and Freight filters select whole pipelines before pagination.
+ */
+export const listPromotionPipelines = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionPipelinesData, ThrowOnError>,
+): RequestResult<ListPromotionPipelinesResponses, ListPromotionPipelinesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListPromotionPipelinesResponses,
+    ListPromotionPipelinesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-pipelines",
     ...options,
   });
 
