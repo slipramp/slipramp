@@ -12,7 +12,6 @@ import {
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
-import { KargoLink } from "~/features/promotions/kargo-link";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
@@ -20,6 +19,7 @@ import { promotionScopeFilters } from "~/features/promotions/promotion-scope-fil
 import { abbreviateMiddle } from "~/shared/display";
 import { promotionActivity } from "~/features/mascot/execution-activity";
 import { promotionOverallStatus } from "~/features/promotions/promotion-status";
+import { PromotionLink } from "~/features/promotions/promotion-link";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
@@ -246,25 +246,17 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
     <Table.Tr>
       <Table.Td>
         <Stack gap={0}>
-          <Anchor
-            component={Link}
-            fw={600}
+          <PromotionLink
+            label={abbreviateMiddle(promotion.externalPromotionId, 36)}
+            promotion={promotion}
             title={promotion.externalPromotionId}
-            to={`/promotions/${promotion.id}`}
-          >
-            {abbreviateMiddle(promotion.externalPromotionId, 36)}
-          </Anchor>
+          />
           <Group gap="xs" wrap="wrap">
             <PromotionStageLink
               label={`${stageName}${project ? ` · ${project}` : ""}`}
               size="xs"
               stage={{ id: promotion.stageId, name: stageName }}
             />
-            {promotion.kargoUrl ? (
-              <KargoLink size="xs" url={promotion.kargoUrl}>
-                Kargo
-              </KargoLink>
-            ) : null}
           </Group>
         </Stack>
       </Table.Td>

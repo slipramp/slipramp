@@ -14,6 +14,7 @@ import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/sh
 import { abbreviateMiddle, shortIdentifier } from "~/shared/display";
 import { promotionActivity, runActivity } from "~/features/mascot/execution-activity";
 import { promotionOverallStatus } from "~/features/promotions/promotion-status";
+import { PromotionLink } from "~/features/promotions/promotion-link";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
 import { runSourceLabel } from "~/features/runs/run-source";
@@ -279,9 +280,11 @@ function PromotionAssociations({
               <Table.Tr key={promotion.id}>
                 <Table.Td>
                   <Stack gap={0}>
-                    <Anchor component={Link} fw={600} to={`/promotions/${promotion.id}`}>
-                      {abbreviateMiddle(promotion.externalPromotionId, 30)}
-                    </Anchor>
+                    <PromotionLink
+                      label={abbreviateMiddle(promotion.externalPromotionId, 30)}
+                      promotion={promotion}
+                      title={promotion.externalPromotionId}
+                    />
                     <Text c="dimmed" size="xs">
                       {promotion.stageSnapshot.name}
                     </Text>

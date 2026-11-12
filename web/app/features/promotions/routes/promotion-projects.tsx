@@ -8,7 +8,7 @@ import {
   type PromotionProject,
 } from "~/api/generated";
 import { RelativeTime } from "~/shared/display-values";
-import { KargoLink } from "~/features/promotions/kargo-link";
+import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import {
   promotionProjectDetailPath,
   type PromotionProjectListContext,
@@ -250,14 +250,7 @@ function ProjectRow({
   return (
     <Table.Tr>
       <Table.Td>
-        <Anchor component={Link} fw={650} to={detailPath}>
-          {project.project}
-        </Anchor>
-        {project.kargoUrl ? (
-          <KargoLink size="xs" url={project.kargoUrl}>
-            Kargo
-          </KargoLink>
-        ) : null}
+        <PromotionProjectLink fw={650} project={project} to={detailPath} />
       </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="wrap">

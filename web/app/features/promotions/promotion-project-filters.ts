@@ -1,6 +1,7 @@
 import type { PromotionFreightAlignmentStatus } from "~/api/generated";
 
 export type PromotionProjectAttention = "all" | "unhealthy" | "stale" | "pending-review";
+export type PromotionInventoryStatus = Exclude<PromotionProjectAttention, "all">;
 
 export type PromotionProjectListContext = {
   freightAlignment?: PromotionFreightAlignmentStatus;
@@ -15,6 +16,13 @@ export function promotionProjectAttention(
   return value === "all" || value === "unhealthy" || value === "stale" || value === "pending-review"
     ? value
     : undefined;
+}
+
+export function promotionInventoryStatus(
+  value: string | null,
+): PromotionInventoryStatus | undefined {
+  const attention = promotionProjectAttention(value);
+  return attention === "all" ? undefined : attention;
 }
 
 export function promotionProjectDetailPath(basePath: string, context: PromotionProjectListContext) {

@@ -29,6 +29,6 @@ export function shouldRevalidatePromotionInventory({
 
 function dataSearchParams(searchParams: URLSearchParams) {
   const result = new URLSearchParams(searchParams);
-  for (const name of ["freight", "q", "pipeline", "pipelines", "policy"]) result.delete(name);
+  for (const name of ["freight", "pipeline", "pipelines", "policy"]) result.delete(name);
   return result.toString();
 }

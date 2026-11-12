@@ -1,25 +1,15 @@
-import { Alert, Checkbox, Stack } from "@mantine/core";
-import { redirect } from "react-router";
+import { Alert, Checkbox, Group, Stack } from "@mantine/core";
+import { redirect, useSearchParams } from "react-router";
 
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
-import {
-  PromotionInventoryScopeFilters,
-  usePromotionInventoryPresentation,
-} from "~/features/promotions/promotion-project-inventory";
+import { PromotionInventoryFilters } from "~/features/promotions/promotion-project-inventory";
 import {
   promotionStageInventoryPageSize,
   shouldRevalidatePromotionInventory,
 } from "~/features/promotions/promotion-project-inventory-state";
 import { loadPromotionStageInventory } from "~/features/promotions/promotion-stage-inventory.server";
-import {
-  ProjectFilter,
-  StageInventory,
-  StagePolicyDialog,
-  stageMatchesAlignment,
-  stageMatchesAttention,
-  stageMatchesQuery,
-} from "~/features/promotions/promotion-project-view";
+import { StageInventory, StagePolicyDialog } from "~/features/promotions/promotion-project-view";
 import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { ListPagination } from "~/shared/list-controls";
@@ -36,15 +26,32 @@ export const shouldRevalidate = shouldRevalidatePromotionInventory;
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const data = await loadPromotionStageInventory(request, context);
+  const url = new URL(request.url);
+  let redirectNeeded = false;
+
+  if (url.searchParams.has("q")) {
+    url.searchParams.delete("q");
+    redirectNeeded = true;
+  }
+  if (url.searchParams.has("attention") && !data.attention) {
+    url.searchParams.delete("attention");
+    redirectNeeded = true;
+  }
+  if (url.searchParams.has("alignment") && !data.alignment) {
+    url.searchParams.delete("alignment");
+    redirectNeeded = true;
+  }
+
   if (data.available) {
     const lastPage = Math.max(1, Math.ceil(data.total / promotionStageInventoryPageSize));
     if (data.page > lastPage) {
-      const url = new URL(request.url);
       if (lastPage === 1) url.searchParams.delete("page");
       else url.searchParams.set("page", String(lastPage));
-      return redirect(`${url.pathname}${url.search}`);
+      redirectNeeded = true;
     }
   }
+
+  if (redirectNeeded) return redirect(`${url.pathname}${url.search}`);
   return data;
 }
 
@@ -55,50 +62,42 @@ export async function action({ context, request }: Route.ActionArgs) {
 export default function PromotionStages({ actionData, loaderData }: Route.ComponentProps) {
   useActivityRefresh(true, 30_000);
 
-  const presentation = usePromotionInventoryPresentation();
-  const showFreight = presentation.searchParams.get("freight") === "visible";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showFreight = searchParams.get("freight") === "visible";
   const stages = loaderData.stages.map(({ cluster, integration, project, stage }) => ({
     ...stage,
     projectContext: { cluster, integration, project },
   }));
-  const visibleStages = stages.filter(
-    (stage) =>
-      stageMatchesQuery(stage, presentation.query) &&
-      stageMatchesAttention(stage, presentation.attention) &&
-      stageMatchesAlignment(stage, presentation.alignment),
-  );
   const policyStage = stages.find(
     (stage) =>
-      stage.id === presentation.searchParams.get("policy") &&
-      promotionStagePolicyPresentation(stage).editable,
+      stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
   );
   const canWrite = canWritePromotions(loaderData.principal);
   const filtered = Boolean(
     loaderData.cluster ||
     loaderData.integration ||
     loaderData.project ||
-    presentation.alignment ||
-    presentation.attention ||
-    presentation.query,
+    loaderData.alignment ||
+    loaderData.attention,
   );
 
   function editPolicy(stageId: string) {
-    const next = new URLSearchParams(presentation.searchParams);
+    const next = new URLSearchParams(searchParams);
     next.set("policy", stageId);
-    presentation.setSearchParams(next, { preventScrollReset: true });
+    setSearchParams(next, { preventScrollReset: true });
   }
 
   function closePolicy() {
-    const next = new URLSearchParams(presentation.searchParams);
+    const next = new URLSearchParams(searchParams);
     next.delete("policy");
-    presentation.setSearchParams(next, { preventScrollReset: true, replace: true });
+    setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
   function changeShowFreight(checked: boolean) {
-    const next = new URLSearchParams(presentation.searchParams);
+    const next = new URLSearchParams(searchParams);
     if (checked) next.set("freight", "visible");
     else next.delete("freight");
-    presentation.setSearchParams(next, { preventScrollReset: true, replace: true });
+    setSearchParams(next, { preventScrollReset: true, replace: true });
   }
 
   return (
@@ -108,29 +107,24 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
         title="Stages"
       />
 
-      <PromotionInventoryScopeFilters
+      <PromotionInventoryFilters
         cluster={loaderData.cluster}
         integration={loaderData.integration}
         path="/promotion-stages"
         project={loaderData.project}
+        inventoryState={{
+          alignment: loaderData.alignment,
+          status: loaderData.attention,
+        }}
       />
 
-      <ProjectFilter
-        alignment={presentation.alignment}
-        attention={presentation.attention}
-        count={visibleStages.length}
-        noun="Stage"
-        onAlignmentChange={presentation.changeAlignment}
-        onAttentionChange={presentation.changeAttention}
-        onChange={presentation.changeQuery}
-        query={presentation.query}
-      />
-
-      <Checkbox
-        checked={showFreight}
-        label="Show current Freight"
-        onChange={(event) => changeShowFreight(event.currentTarget.checked)}
-      />
+      <Group justify="flex-end">
+        <Checkbox
+          checked={showFreight}
+          label="Show current Freight"
+          onChange={(event) => changeShowFreight(event.currentTarget.checked)}
+        />
+      </Group>
 
       {!loaderData.available ? (
         <Alert color="red" title="Kargo Stages unavailable">
@@ -144,23 +138,14 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
               : "No active Kargo Stage observations are available yet."
           }
         />
-      ) : visibleStages.length === 0 ? (
-        <EmptyState
-          description={
-            presentation.query.trim()
-              ? `No Stages on this page match “${presentation.query.trim()}”.`
-              : "No Stages on this page match the active filters."
-          }
-          title="No matching Stages"
-        />
       ) : (
         <StageInventory
           canWrite={canWrite}
           onEditPolicy={(stage) => editPolicy(stage.id)}
-          query={presentation.query}
+          query=""
           showFreight={showFreight}
           showProject
-          stages={visibleStages}
+          stages={stages}
         />
       )}
 

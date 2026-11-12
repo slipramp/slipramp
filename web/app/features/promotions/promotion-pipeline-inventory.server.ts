@@ -3,7 +3,7 @@ import type { RouterContextProvider } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import { listPromotionPipelines, type PromotionFreightAlignmentStatus } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
-import { promotionProjectAttention } from "~/features/promotions/promotion-project-filters";
+import { promotionInventoryStatus } from "~/features/promotions/promotion-project-filters";
 import { promotionPipelineInventoryPageSize } from "~/features/promotions/promotion-project-inventory-state";
 import { problemDetail } from "~/shared/form-data";
 import { pageFromSearchParam } from "~/shared/search-params";
@@ -16,7 +16,7 @@ export async function loadPromotionPipelineInventory(
   const integration = optionalValue(url.searchParams.get("integration"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const project = optionalValue(url.searchParams.get("project"));
-  const attention = promotionProjectAttention(url.searchParams.get("attention"));
+  const attention = promotionInventoryStatus(url.searchParams.get("attention"));
   const alignment = optionalFreightAlignment(url.searchParams.get("alignment"));
   const page = pageFromSearchParam(
     url.searchParams.get("page"),

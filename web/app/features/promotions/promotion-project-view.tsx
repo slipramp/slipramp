@@ -58,6 +58,7 @@ import {
   promotionStagePolicyPresentation,
 } from "~/features/promotions/promotion-policy";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
+import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import {
   promotionProjectAttention,
   type PromotionProjectAttention,
@@ -68,7 +69,6 @@ import {
   type PromotionTopologyPipeline,
 } from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
-import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
 import { RelativeTime } from "~/shared/display-values";
 import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 
@@ -690,13 +690,7 @@ export function StageInventory({
                       <Table.Td>
                         {stage.projectContext ? (
                           <Stack gap={2}>
-                            <Anchor
-                              component={Link}
-                              fw={600}
-                              to={promotionProjectDetailPath(stage.projectContext)}
-                            >
-                              {stage.projectContext.project}
-                            </Anchor>
+                            <PromotionProjectLink project={stage.projectContext} />
                             <Text c="dimmed" size="xs">
                               {stage.projectContext.integration} · {stage.projectContext.cluster}
                             </Text>

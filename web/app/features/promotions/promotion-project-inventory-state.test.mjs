@@ -18,7 +18,6 @@ function shouldRevalidate(current, next, formMethod) {
 test("aggregate inventory presentation state does not reload Project data", () => {
   const base = "/promotion-pipelines?integration=prod&attention=stale";
 
-  assert.equal(shouldRevalidate(base, `${base}&q=api`), false);
   assert.equal(shouldRevalidate(base, `${base}&pipeline=stage-1%3Astage-2`), false);
   assert.equal(shouldRevalidate(base, `${base}&pipelines=collapsed`), false);
   assert.equal(shouldRevalidate(base, `${base}&policy=stage-1`), false);
@@ -28,6 +27,7 @@ test("aggregate inventory presentation state does not reload Project data", () =
 test("aggregate inventory scope and server filters reload Project data", () => {
   const base = "/promotion-stages?integration=prod";
 
+  assert.equal(shouldRevalidate(base, `${base}&q=api`), true);
   assert.equal(shouldRevalidate(base, `${base}&attention=unhealthy`), true);
   assert.equal(shouldRevalidate(base, `${base}&alignment=different`), true);
   assert.equal(shouldRevalidate(base, `${base}&page=2`), true);

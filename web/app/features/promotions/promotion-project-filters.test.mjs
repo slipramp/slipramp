@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  promotionInventoryStatus,
   promotionProjectAttention,
   promotionProjectDetailPath,
 } from "./promotion-project-filters.ts";
@@ -44,4 +45,10 @@ test("Project attention parsing accepts only detail filter states", () => {
   assert.equal(promotionProjectAttention("pending-review"), "pending-review");
   assert.equal(promotionProjectAttention("true"), undefined);
   assert.equal(promotionProjectAttention(null), undefined);
+});
+
+test("aggregate inventory status excludes the combined detail-only state", () => {
+  assert.equal(promotionInventoryStatus("unhealthy"), "unhealthy");
+  assert.equal(promotionInventoryStatus("all"), undefined);
+  assert.equal(promotionInventoryStatus("true"), undefined);
 });

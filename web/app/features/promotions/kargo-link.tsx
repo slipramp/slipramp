@@ -1,4 +1,4 @@
-import { Anchor, Button, Group, type MantineSize } from "@mantine/core";
+import { ActionIcon, Anchor, Button, Group, Tooltip, type MantineSize } from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
@@ -35,5 +35,29 @@ export function KargoButton({ url }: Readonly<{ url: string }>) {
     >
       Open in Kargo
     </Button>
+  );
+}
+
+export function KargoIconLink({
+  label,
+  url,
+}: Readonly<{
+  label: string;
+  url: string;
+}>) {
+  return (
+    <Tooltip label={label}>
+      <ActionIcon
+        aria-label={label}
+        color="gray"
+        component="a"
+        href={url}
+        size="xs"
+        variant="subtle"
+        {...externalLinkProps}
+      >
+        <IconExternalLink aria-hidden size={13} />
+      </ActionIcon>
+    </Tooltip>
   );
 }

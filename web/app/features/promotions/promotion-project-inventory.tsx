@@ -1,95 +1,88 @@
-import { Anchor, Badge, Group, Stack, Text, Title } from "@mantine/core";
-import { Link, useSearchParams } from "react-router";
+import { Anchor, Badge, Group, Stack, Text } from "@mantine/core";
+import { Link } from "react-router";
 
 import type { PromotionFreightAlignmentStatus, PromotionProjectDetail } from "~/api/generated";
-import { KargoLink } from "~/features/promotions/kargo-link";
-import {
-  promotionProjectAttention,
-  type PromotionProjectAttention,
-} from "~/features/promotions/promotion-project-filters";
-import { projectAlignment } from "~/features/promotions/promotion-project-view";
-import { SearchParamFilters } from "~/shared/list-controls";
+import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
+import type { PromotionInventoryStatus } from "~/features/promotions/promotion-project-filters";
+import { SearchParamFilters, type SearchParamFilter } from "~/shared/list-controls";
 import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
 
-export function usePromotionInventoryPresentation() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const attention = promotionProjectAttention(searchParams.get("attention"));
-  const alignment = projectAlignment(searchParams.get("alignment"));
-  const query = searchParams.get("q") ?? "";
-
-  function changeAttention(value?: PromotionProjectAttention) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("attention", value);
-    else next.delete("attention");
-    next.delete("page");
-    setSearchParams(next, { preventScrollReset: true, replace: true });
-  }
-
-  function changeAlignment(value?: PromotionFreightAlignmentStatus) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("alignment", value);
-    else next.delete("alignment");
-    next.delete("page");
-    setSearchParams(next, { preventScrollReset: true, replace: true });
-  }
-
-  function changeQuery(value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("q", value);
-    else next.delete("q");
-    setSearchParams(next, { preventScrollReset: true, replace: true });
-  }
-
-  return {
-    alignment,
-    attention,
-    changeAlignment,
-    changeAttention,
-    changeQuery,
-    query,
-    searchParams,
-    setSearchParams,
-  };
-}
-
-export function PromotionInventoryScopeFilters({
+export function PromotionInventoryFilters({
   cluster,
   integration,
+  inventoryState,
   path,
   project,
 }: Readonly<{
   cluster?: string;
   integration?: string;
+  inventoryState?: {
+    alignment?: PromotionFreightAlignmentStatus;
+    status?: PromotionInventoryStatus;
+  };
   path: string;
   project?: string;
 }>) {
+  const filters: SearchParamFilter[] = [
+    {
+      active: Boolean(integration),
+      kind: "text",
+      label: "Integration",
+      name: "integration",
+      value: integration,
+    },
+    {
+      active: Boolean(project),
+      kind: "text",
+      label: "Project",
+      name: "project",
+      value: project,
+    },
+    {
+      active: Boolean(cluster),
+      kind: "text",
+      label: "Cluster",
+      name: "cluster",
+      value: cluster,
+    },
+  ];
+
+  if (inventoryState) {
+    filters.push(
+      {
+        active: Boolean(inventoryState.status),
+        data: [
+          { label: "All statuses", value: "" },
+          { label: "Non-ready", value: "unhealthy" },
+          { label: "Stale", value: "stale" },
+          { label: "Pending review", value: "pending-review" },
+        ],
+        kind: "select",
+        label: "Status",
+        name: "attention",
+        value: inventoryState.status,
+      },
+      {
+        active: Boolean(inventoryState.alignment),
+        data: [
+          { label: "All alignment states", value: "" },
+          { label: "Different", value: "different" },
+          { label: "Unknown", value: "unknown" },
+          { label: "Aligned", value: "aligned" },
+        ],
+        kind: "select",
+        label: "Freight alignment",
+        name: "alignment",
+        value: inventoryState.alignment,
+      },
+    );
+  }
+
   return (
     <SearchParamFilters
       clearTo={path}
-      filters={[
-        {
-          active: Boolean(integration),
-          kind: "text",
-          label: "Integration",
-          name: "integration",
-          value: integration,
-        },
-        {
-          active: Boolean(project),
-          kind: "text",
-          label: "Project",
-          name: "project",
-          value: project,
-        },
-        {
-          active: Boolean(cluster),
-          kind: "text",
-          label: "Cluster",
-          name: "cluster",
-          value: cluster,
-        },
-      ]}
-      preserve={["q", "attention", "alignment", "freight"]}
+      filters={filters}
+      preserve={inventoryState ? ["freight"] : ["q", "attention", "alignment", "freight"]}
     />
   );
 }
@@ -102,26 +95,17 @@ export function PromotionProjectSectionHeader({
   const viewPath = view === "pipelines" ? detailPath : `${detailPath}?view=stages`;
 
   return (
-    <Group align="flex-end" justify="space-between" wrap="wrap">
-      <Stack gap={2}>
-        <Group gap="sm" wrap="wrap">
-          <Title order={2} size="h3">
-            <Anchor component={Link} inherit to={viewPath}>
-              {project.project}
-            </Anchor>
-          </Title>
-          <Badge variant="light">{project.integration}</Badge>
-        </Group>
-        <Text c="dimmed" size="sm">
-          Cluster{" "}
-          <Anchor component={Link} to={`/clusters/${encodeURIComponent(project.cluster)}`}>
-            {project.cluster}
-          </Anchor>
-        </Text>
-      </Stack>
-      {project.kargoUrl ? (
-        <KargoLink url={project.kargoUrl}>Open Project in Kargo</KargoLink>
-      ) : null}
-    </Group>
+    <Stack gap={2}>
+      <Group gap="sm" wrap="wrap">
+        <PromotionProjectLink heading project={project} to={viewPath} />
+        <Badge variant="light">{project.integration}</Badge>
+      </Group>
+      <Text c="dimmed" size="sm">
+        Cluster{" "}
+        <Anchor component={Link} to={`/clusters/${encodeURIComponent(project.cluster)}`}>
+          {project.cluster}
+        </Anchor>
+      </Text>
+    </Stack>
   );
 }

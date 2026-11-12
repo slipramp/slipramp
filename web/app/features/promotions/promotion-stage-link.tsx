@@ -1,8 +1,8 @@
-import { ActionIcon, Anchor, Group, Title, Tooltip } from "@mantine/core";
-import { IconExternalLink } from "@tabler/icons-react";
+import { Anchor, Group, Title } from "@mantine/core";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { KargoIconLink } from "~/features/promotions/kargo-link";
 import { promotionStagePath } from "~/features/promotions/promotion-stage";
 
 type StageLinkValue = {
@@ -48,20 +48,7 @@ export function PromotionStageLink({
         nameLink
       )}
       {showKargoLink && stage.kargoUrl ? (
-        <Tooltip label={`Open ${stage.name} in Kargo`}>
-          <ActionIcon
-            aria-label={`Open ${stage.name} in Kargo`}
-            color="gray"
-            component="a"
-            href={stage.kargoUrl}
-            rel="noreferrer"
-            size="xs"
-            target="_blank"
-            variant="subtle"
-          >
-            <IconExternalLink aria-hidden size={13} />
-          </ActionIcon>
-        </Tooltip>
+        <KargoIconLink label={`Open ${stage.name} in Kargo`} url={stage.kargoUrl} />
       ) : null}
     </Group>
   );
