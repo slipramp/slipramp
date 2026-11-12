@@ -66,6 +66,9 @@ test("overall Promotion status follows the operator-visible workflow", () => {
 });
 
 test("detail status keeps review, delivery, and Kargo execution distinct", () => {
+  const creating = { ...base, reviewRequired: true, status: "creating" };
+  assert.equal(promotionDeliveryStatus(creating).label, "Delivering");
+
   const pending = { ...base, reviewRequired: true, status: "pending" };
   assert.equal(promotionReviewStatus(pending).label, "Awaiting review");
   assert.equal(promotionDeliveryStatus(pending).label, "Not started");

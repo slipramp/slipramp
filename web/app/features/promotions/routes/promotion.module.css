@@ -1,7 +1,115 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+  align-items: start;
+  gap: var(--mantine-spacing-lg);
+}
+
+.reviewCard {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.reviewTabs {
+  gap: var(--mantine-spacing-xs);
+  padding-inline: var(--mantine-spacing-md);
+  flex-wrap: wrap;
+}
+
+.reviewPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+  padding: var(--mantine-spacing-lg);
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--mantine-spacing-md);
+}
+
+.gitDiff {
+  max-height: 640px;
+  overflow: auto;
+  white-space: pre;
+}
+
+.resourceQuery {
+  flex: 1 1 28rem;
+}
+
+.lifecycleSteps {
+  position: relative;
+}
+
+.lifecycleMascot {
+  display: none;
+}
+
+:global(:root[data-slipramp-theme="kawaii"]) .lifecycleMascot {
+  display: flex;
+}
+
+.lifecycleStep {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--mantine-spacing-sm);
+  padding: 0.5rem;
+  border-radius: var(--mantine-radius-md);
+  text-align: left;
+}
+
+.lifecycleStep:hover,
+.lifecycleStep[data-selected] {
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleStep time {
+  white-space: nowrap;
+}
+
+.lifecycleStep[data-selected] {
+  box-shadow: inset 3px 0 var(--mantine-primary-color-filled);
+}
+
+.lifecycleIcon {
+  display: grid;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--mantine-color-dimmed);
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleIcon[data-complete] {
+  color: var(--mantine-color-green-7);
+  background: var(--mantine-color-green-light);
+}
+
 :global(:root[data-slipramp-theme="kawaii"]) .creationNotice {
   display: none;
 }
 
-:global(:root[data-slipramp-theme="kawaii"]) .resultNotice {
-  display: none;
+@media (max-width: 62em) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mantine-spacing-md);
+  }
+
+  .sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 48em) {
+  .reviewTabs {
+    padding-inline: var(--mantine-spacing-xs);
+  }
+
+  .reviewPanel {
+    padding: var(--mantine-spacing-sm);
+  }
 }

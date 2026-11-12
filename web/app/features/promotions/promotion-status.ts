@@ -169,7 +169,7 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
       recordedAt: dispatch.deliveredAt,
     };
   }
-  if (promotion.status === "approved") {
+  if (promotion.status === "creating" || promotion.status === "approved") {
     return {
       color: "cyan",
       description: "Controller is creating the Kargo object",

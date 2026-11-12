@@ -2,6 +2,7 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Button,
   Checkbox,
   Code,
@@ -14,9 +15,21 @@ import {
   Textarea,
   TextInput,
   Title,
+  UnstyledButton,
 } from "@mantine/core";
-import { IconExternalLink } from "@tabler/icons-react";
-import { useMemo, type ReactNode } from "react";
+import {
+  IconDownload,
+  IconExternalLink,
+  IconGitCompare,
+  IconInfoCircle,
+  IconChecklist,
+  IconLoader2,
+  IconPlayerPlay,
+  IconStack2,
+  IconTruckDelivery,
+  type TablerIcon,
+} from "@tabler/icons-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
@@ -46,7 +59,7 @@ import {
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
-import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { formValue, optionalFormValue } from "~/shared/form-data";
 import {
   promotionDetailActivity,
@@ -59,7 +72,18 @@ import {
 } from "~/features/promotions/promotion-diff";
 import { pageTitle } from "~/shared/page-title";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
-import { runStatusLabel } from "~/features/runs/run-status";
+import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
+import {
+  defaultPromotionDetailView,
+  promotionDetailSearchParamNames,
+  promotionLifecycleStages,
+  selectedPromotionDetailView,
+  selectedPromotionLifecycleStage,
+  updatePromotionDetailSearchParams,
+  updatePromotionLifecycleSearchParams,
+  type PromotionDetailView,
+  type PromotionLifecycleStage,
+} from "~/features/promotions/promotion-detail-url-state";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import styles from "./promotion.module.css";
@@ -161,7 +185,6 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   const promotion = loaderData.promotion;
   const canWrite = canWritePromotions(loaderData.principal);
-  const detailActivity = promotionDetailActivity(promotion);
   const overallStatus = promotionOverallStatus(promotion);
 
   return (
@@ -216,20 +239,13 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         title={promotion.externalPromotionId}
       />
 
-      <KawaiiActivity activity={detailActivity} animationKey={promotion.id} />
-      <PromotionStatusDetails promotion={promotion} />
-
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">
           {actionData.error}
         </Alert>
       ) : null}
       {promotion.message ? (
-        <Alert
-          className={detailActivity ? styles.resultNotice : undefined}
-          color={promotion.status === "expired" ? "gray" : "red"}
-          title="Promotion result"
-        >
+        <Alert color={promotion.status === "expired" ? "gray" : "red"} title="Promotion result">
           {promotion.message}
         </Alert>
       ) : null}
@@ -241,15 +257,13 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <CreationDispatchNotice promotion={promotion} />
       <KargoOutcomeNotice promotion={promotion} />
 
-      <Preparation promotion={promotion} />
-      <Diffs
+      <PromotionWorkspace
         argoDiff={loaderData.argoDiff}
         argoResources={loaderData.argoResources}
+        canWrite={canWrite}
         gitDiff={loaderData.gitDiff}
         promotion={promotion}
       />
-      <DecisionPanel canWrite={canWrite} promotion={promotion} />
-      <PromotionContext promotion={promotion} />
     </Stack>
   );
 }
@@ -283,39 +297,347 @@ function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
   );
 }
 
-function PromotionStatusDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
+type PromotionLifecycleState = "active" | "complete" | "error" | "terminal" | "waiting";
+
+type PromotionLifecycleStatus = Omit<PromotionStatusPresentation, "color"> & {
+  color: string;
+};
+
+type PromotionLifecycleStep = {
+  detail: string;
+  icon: TablerIcon;
+  label: string;
+  stage: PromotionLifecycleStage;
+  state: PromotionLifecycleState;
+  status: PromotionLifecycleStatus;
+  value?: string;
+};
+
+function PromotionLifecycle({ promotion }: Readonly<{ promotion: Promotion }>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const preparation = promotionPreparationStep(promotion);
+  const reviewStatus = promotionReviewStatus(promotion);
+  const deliveryStatus = promotionDeliveryStatus(promotion);
+  const executionStatus = promotionExecutionStatus(promotion);
+  const reviewWaiting =
+    promotion.status === "creating" ||
+    promotion.status === "preparing" ||
+    preparation.state === "error";
+  const steps: PromotionLifecycleStep[] = [
+    {
+      detail: deliveryStatus.description,
+      icon: IconTruckDelivery,
+      label: "Kargo delivery",
+      stage: "delivery",
+      state: promotionLifecycleState(deliveryStatus),
+      status: deliveryStatus,
+      value: deliveryStatus.recordedAt,
+    },
+    preparation,
+    {
+      detail: reviewStatus.description,
+      icon: IconChecklist,
+      label: "Review",
+      stage: "review",
+      state: reviewWaiting ? "waiting" : promotionLifecycleState(reviewStatus),
+      status: reviewStatus,
+      value:
+        reviewStatus.recordedAt ??
+        promotion.preparationCompletedAt ??
+        (!promotion.reviewRequired ? promotion.createdAt : undefined),
+    },
+    {
+      detail: executionStatus.description,
+      icon: IconPlayerPlay,
+      label: "Kargo execution",
+      stage: "execution",
+      state: promotionLifecycleState(executionStatus),
+      status: executionStatus,
+      value: executionStatus.recordedAt,
+    },
+  ];
+  const activeStage = currentPromotionLifecycleStage(steps);
+  const selectedStage = selectedPromotionLifecycleStage(searchParams, activeStage);
+  const requestedStage = searchParams.get(promotionDetailSearchParamNames.stage);
+  const selectedStep = steps[promotionLifecycleStages.indexOf(selectedStage)] ?? preparation;
+
+  useEffect(() => {
+    if (requestedStage === null || requestedStage === selectedStage) return;
+    setSearchParams(updatePromotionLifecycleSearchParams(searchParams), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }, [requestedStage, searchParams, selectedStage, setSearchParams]);
+
+  function selectStage(stage: PromotionLifecycleStage) {
+    setSearchParams(updatePromotionLifecycleSearchParams(searchParams, stage), {
+      preventScrollReset: true,
+    });
+  }
+
   return (
     <Paper p="md" withBorder>
       <Stack gap="md">
-        <Title order={2}>Status details</Title>
-        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
-          <PromotionStatusFact label="Review" status={promotionReviewStatus(promotion)} />
-          <PromotionStatusFact label="Kargo delivery" status={promotionDeliveryStatus(promotion)} />
-          <PromotionStatusFact
-            label="Kargo execution"
-            status={promotionExecutionStatus(promotion)}
+        <Title order={2}>Lifecycle</Title>
+        <Group className={styles.lifecycleMascot} justify="center">
+          <KawaiiActivity
+            activity={promotionDetailActivity(promotion)}
+            animationKey={promotion.id}
+            mascotOnly
           />
-        </SimpleGrid>
+        </Group>
+        <Stack className={styles.lifecycleSteps} gap={3}>
+          {steps.map((step) => {
+            const Icon = step.icon;
+            const active = step.stage === activeStage && step.state === "active";
+            const complete = step.state === "complete";
+            const terminal = step.state === "error" || step.state === "terminal";
+            const stateLabel = terminal
+              ? step.status.label
+              : active
+                ? "Current"
+                : complete
+                  ? "Complete"
+                  : "Waiting";
+            const stateColor = terminal ? step.status.color : active ? "lilac" : "gray";
+            return (
+              <UnstyledButton
+                aria-current={selectedStage === step.stage ? "step" : undefined}
+                className={styles.lifecycleStep}
+                data-selected={selectedStage === step.stage || undefined}
+                key={step.stage}
+                onClick={() => selectStage(step.stage)}
+              >
+                <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
+                  <Icon aria-hidden size={15} stroke={2.2} />
+                </Box>
+                <Stack gap={0} style={{ flex: 1 }}>
+                  <Text fw={650} size="sm">
+                    {step.label}
+                  </Text>
+                  <Text c="dimmed" size="xs">
+                    {step.value ? (
+                      <Timestamp value={step.value} />
+                    ) : active ? (
+                      "In progress"
+                    ) : (
+                      "Not reached"
+                    )}
+                  </Text>
+                </Stack>
+                <Badge
+                  color={stateColor}
+                  size="xs"
+                  variant={active || terminal ? "light" : "outline"}
+                >
+                  {stateLabel}
+                </Badge>
+              </UnstyledButton>
+            );
+          })}
+        </Stack>
+        <PromotionLifecycleStageDetail
+          detail={selectedStep.detail}
+          promotion={promotion}
+          stage={selectedStep.stage}
+          status={selectedStep.status}
+          value={selectedStep.value}
+        />
       </Stack>
     </Paper>
   );
 }
 
-function PromotionStatusFact({
-  label,
+function currentPromotionLifecycleStage(
+  steps: Array<{ stage: PromotionLifecycleStage; state: PromotionLifecycleState }>,
+) {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index];
+    if (step && step.state !== "waiting" && step.state !== "complete") return step.stage;
+  }
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index];
+    if (step?.state === "complete") return step.stage;
+  }
+  return "delivery";
+}
+
+function PromotionLifecycleStageDetail({
+  detail,
+  promotion,
+  stage,
   status,
-}: Readonly<{ label: string; status: PromotionStatusPresentation }>) {
+  value,
+}: Readonly<{
+  detail: string;
+  promotion: Promotion;
+  stage: PromotionLifecycleStage;
+  status: PromotionLifecycleStatus;
+  value?: string;
+}>) {
   return (
-    <Stack gap={4}>
-      <Text c="dimmed" size="xs">
-        {label}
-      </Text>
-      <Group gap="xs" wrap="wrap">
-        <PromotionStatusBadge status={status} />
-        {status.recordedAt ? <Timestamp c="dimmed" size="xs" value={status.recordedAt} /> : null}
-      </Group>
-    </Stack>
+    <Paper bg="var(--mantine-color-default-hover)" p="sm" radius="md">
+      <Stack gap={5}>
+        <Group gap="xs" justify="space-between" wrap="wrap">
+          <Text fw={700} size="sm">
+            {promotionLifecycleStageLabel(stage)}
+          </Text>
+          <Badge color={status.color} variant="light">
+            {status.label}
+          </Badge>
+        </Group>
+        {value ? (
+          <Timestamp c="dimmed" size="xs" value={value} />
+        ) : (
+          <Text c="dimmed" size="xs">
+            No recorded time
+          </Text>
+        )}
+        <Text c="dimmed" size="xs">
+          {detail}
+        </Text>
+        <PromotionLifecycleRelevantDetail promotion={promotion} stage={stage} />
+      </Stack>
+    </Paper>
   );
+}
+
+function PromotionLifecycleRelevantDetail({
+  promotion,
+  stage,
+}: Readonly<{
+  promotion: Promotion;
+  stage: PromotionLifecycleStage;
+}>) {
+  if (stage === "preparation" && promotion.preparationRun) {
+    const run = promotion.preparationRun;
+    return (
+      <Stack gap={2}>
+        <Anchor component={Link} fw={600} size="xs" to={`/runs/${run.id}`}>
+          Run {run.id.slice(0, 8)}
+        </Anchor>
+        <Text c="dimmed" size="xs">
+          {run.target} · {run.action}
+        </Text>
+      </Stack>
+    );
+  }
+  if (stage === "review" && promotion.decision) {
+    return (
+      <Stack gap={4}>
+        <Group gap={4} wrap="wrap">
+          <Text c="dimmed" size="xs">
+            Decided by
+          </Text>
+          <Identity
+            avatarSize={18}
+            name={promotion.decision.decidedBy.displayName}
+            nameProps={{ size: "xs" }}
+          />
+        </Group>
+        {promotion.decision.comment ? (
+          <Text c="dimmed" size="xs">
+            {promotion.decision.comment}
+          </Text>
+        ) : null}
+      </Stack>
+    );
+  }
+  if (stage === "delivery" && promotion.creationDispatch.diagnostic) {
+    return (
+      <Text c="dimmed" size="xs">
+        {promotion.creationDispatch.diagnostic}
+      </Text>
+    );
+  }
+  if (stage === "execution" && promotion.kargoOutcome?.diagnostic) {
+    return (
+      <Text c="dimmed" size="xs">
+        {promotion.kargoOutcome.diagnostic}
+      </Text>
+    );
+  }
+  return null;
+}
+
+function promotionLifecycleStageLabel(stage: PromotionLifecycleStage) {
+  switch (stage) {
+    case "preparation":
+      return "Review preparation";
+    case "review":
+      return "Review";
+    case "delivery":
+      return "Kargo delivery";
+    case "execution":
+      return "Kargo execution";
+  }
+}
+
+function promotionPreparationStep(promotion: Promotion): PromotionLifecycleStep {
+  const run = promotion.preparationRun;
+  if (!run) {
+    const deliveryComplete =
+      promotion.source === "kargo" || promotion.creationDispatch.phase === "delivered";
+    const waiting =
+      deliveryComplete && (promotion.status === "creating" || promotion.status === "preparing");
+    return {
+      detail: waiting
+        ? "Waiting for the preparation Run to be created."
+        : promotion.status === "creating"
+          ? "The preparation Run starts after the Kargo Promotion callback."
+          : "This Promotion does not require a preparation Run.",
+      icon: IconLoader2,
+      label: "Review preparation",
+      stage: "preparation",
+      state: waiting ? "active" : promotion.status === "creating" ? "waiting" : "complete",
+      status: {
+        color: waiting ? "cyan" : "gray",
+        description: waiting
+          ? "Waiting for the preparation Run"
+          : promotion.status === "creating"
+            ? "Waiting for Kargo delivery and callback"
+            : "No preparation Run is required",
+        label: waiting
+          ? "Waiting"
+          : promotion.status === "creating"
+            ? "Not started"
+            : "Not required",
+      },
+      value: waiting ? (promotion.creationDispatch.deliveredAt ?? promotion.createdAt) : undefined,
+    };
+  }
+
+  const label = runStatusLabel(run);
+  const succeeded = run.phase === "finished" && run.outcome === "succeeded";
+  const failed = run.phase === "finished" && !succeeded;
+  return {
+    detail: succeeded
+      ? "The preparation Run produced and validated the review artifacts."
+      : failed
+        ? `The preparation Run finished with outcome ${run.outcome ?? "unknown"}.`
+        : `The preparation Run is ${label}.`,
+    icon: IconLoader2,
+    label: "Review preparation",
+    stage: "preparation",
+    state: succeeded ? "complete" : failed ? "error" : "active",
+    status: {
+      color: runStatusColor(run),
+      description: `Preparation Run ${label}`,
+      label,
+    },
+    value: run.finishedAt ?? run.startedAt ?? run.preparingAt ?? run.assignedAt ?? run.createdAt,
+  };
+}
+
+function promotionLifecycleState(status: PromotionStatusPresentation): PromotionLifecycleState {
+  if (status.color === "red") return "error";
+  if (status.label === "Expired") return "terminal";
+  if (status.label === "Not required") return "complete";
+  if (status.color === "green") return "complete";
+  if (status.color === "blue" || status.color === "cyan" || status.color === "yellow") {
+    return "active";
+  }
+  return "waiting";
 }
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
@@ -417,118 +739,160 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
   );
 }
 
-function Preparation({ promotion }: Readonly<{ promotion: Promotion }>) {
-  const run = promotion.preparationRun;
-  if (!run) return null;
-
-  return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <Title order={2}>Preparation Run</Title>
-        <Group justify="space-between">
-          <Stack gap={0}>
-            <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
-              Run {run.id.slice(0, 8)}
-            </Anchor>
-            <Text c="dimmed" size="sm">
-              {run.target} · {run.action}
-            </Text>
-          </Stack>
-          <Group>
-            <Anchor component={Link} to={`/runs/${run.id}`}>
-              View status and logs
-            </Anchor>
-            <Badge variant="light">{runStatusLabel(run)}</Badge>
-          </Group>
-        </Group>
-      </Stack>
-    </Paper>
-  );
-}
-
-function Diffs({
+function PromotionWorkspace({
   argoDiff,
   argoResources,
+  canWrite,
   gitDiff,
   promotion,
 }: Readonly<{
   argoDiff: ArtifactText;
   argoResources?: ArgoDiffResource[];
+  canWrite: boolean;
   gitDiff: ArtifactText;
   promotion: Promotion;
 }>) {
   const [searchParams, setSearchParams] = useSearchParams();
-  if (!promotion.gitDiffArtifactId && !promotion.argoDiffArtifactId) {
-    return null;
-  }
+  const automaticView = defaultPromotionDetailView(
+    promotion.gitDiffArtifactId,
+    promotion.argoDiffArtifactId,
+  );
+  const [initialAutomaticView] = useState(automaticView);
+  const activeView = selectedPromotionDetailView(searchParams, initialAutomaticView);
+  const requestedView = searchParams.get(promotionDetailSearchParamNames.view);
 
-  const activeDiff = searchParams.get("diff") === "argo" ? "argo" : "git";
+  useEffect(() => {
+    if (requestedView === null || requestedView === activeView) return;
 
-  function changeDiff(value: string | null) {
+    setSearchParams(
+      updatePromotionDetailSearchParams(searchParams, activeView, initialAutomaticView),
+      {
+        preventScrollReset: true,
+        replace: true,
+      },
+    );
+  }, [activeView, initialAutomaticView, requestedView, searchParams, setSearchParams]);
+
+  function changeView(value: string | null) {
     if (!value) return;
-
-    const next = new URLSearchParams(searchParams);
-    if (value === "git") next.delete("diff");
-    else next.set("diff", value);
-    setSearchParams(next, { preventScrollReset: true });
+    setSearchParams(
+      updatePromotionDetailSearchParams(
+        searchParams,
+        value as PromotionDetailView,
+        initialAutomaticView,
+      ),
+      { preventScrollReset: true },
+    );
   }
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Group justify="space-between">
-          <Title order={2}>Prepared diffs</Title>
-          <Group gap="md">
-            {promotion.gitDiffArtifactId ? (
-              <Anchor href={`/api/v1/artifacts/${promotion.gitDiffArtifactId}/download`}>
-                Download Git diff
-              </Anchor>
-            ) : null}
-            {promotion.argoDiffArtifactId ? (
-              <Anchor href={`/api/v1/artifacts/${promotion.argoDiffArtifactId}/download`}>
-                Download Argo CD diff
-              </Anchor>
-            ) : null}
-          </Group>
-        </Group>
-        {promotion.gitDiffArtifact?.description || promotion.argoDiffArtifact?.description ? (
-          <Stack gap={2}>
-            {promotion.gitDiffArtifact?.description ? (
-              <Text c="dimmed" size="sm">
-                <Code>git-diff</Code> — {promotion.gitDiffArtifact.description}
-              </Text>
-            ) : null}
-            {promotion.argoDiffArtifact?.description ? (
-              <Text c="dimmed" size="sm">
-                <Code>argo-diff</Code> — {promotion.argoDiffArtifact.description}
-              </Text>
-            ) : null}
-          </Stack>
-        ) : null}
-        <Tabs keepMounted={false} onChange={changeDiff} value={activeDiff}>
-          <Tabs.List>
-            <Tabs.Tab value="git">Git</Tabs.Tab>
-            <Tabs.Tab value="argo">Argo CD resources</Tabs.Tab>
+    <Box className={styles.workspace}>
+      <Paper className={styles.reviewCard} withBorder>
+        <Tabs keepMounted={false} onChange={changeView} value={activeView}>
+          <Tabs.List className={styles.reviewTabs}>
+            <Tabs.Tab leftSection={<IconGitCompare aria-hidden size={16} />} value="git">
+              Git diff
+            </Tabs.Tab>
+            <Tabs.Tab leftSection={<IconStack2 aria-hidden size={16} />} value="argo">
+              Argo CD
+            </Tabs.Tab>
+            <Tabs.Tab leftSection={<IconInfoCircle aria-hidden size={16} />} value="details">
+              Promotion details
+            </Tabs.Tab>
           </Tabs.List>
-          <Tabs.Panel pt="md" value="git">
+
+          <Tabs.Panel className={styles.reviewPanel} value="git">
+            <SectionHeader
+              actions={
+                promotion.gitDiffArtifactId ? (
+                  <Button
+                    component="a"
+                    href={`/api/v1/artifacts/${promotion.gitDiffArtifactId}/download`}
+                    leftSection={<IconDownload aria-hidden size={16} />}
+                    size="compact-md"
+                    variant="light"
+                  >
+                    Download diff
+                  </Button>
+                ) : undefined
+              }
+              description={
+                promotion.gitDiffArtifact?.description ??
+                "Exact base-to-candidate changes prepared for this Promotion."
+              }
+              title="Git diff"
+            />
             <ArtifactError error={gitDiff.error} />
             {gitDiff.contents !== undefined ? (
               gitDiff.contents.length === 0 ? (
                 <Text c="dimmed">No Git changes.</Text>
               ) : (
-                <Code block style={{ maxHeight: 640, overflow: "auto", whiteSpace: "pre" }}>
+                <Code block className={styles.gitDiff}>
                   {gitDiff.contents}
                 </Code>
               )
+            ) : !gitDiff.error ? (
+              <DiffPending kind="Git" promotion={promotion} />
             ) : null}
           </Tabs.Panel>
-          <Tabs.Panel pt="md" value="argo">
+
+          <Tabs.Panel className={styles.reviewPanel} value="argo">
+            <SectionHeader
+              actions={
+                promotion.argoDiffArtifactId ? (
+                  <Button
+                    component="a"
+                    href={`/api/v1/artifacts/${promotion.argoDiffArtifactId}/download`}
+                    leftSection={<IconDownload aria-hidden size={16} />}
+                    size="compact-md"
+                    variant="light"
+                  >
+                    Download diff
+                  </Button>
+                ) : undefined
+              }
+              description={
+                promotion.argoDiffArtifact?.description ??
+                "Rendered resource changes Argo CD would apply for this Promotion."
+              }
+              title="Argo CD resources"
+            />
             <ArtifactError error={argoDiff.error} />
-            {argoResources ? <ArgoDiff resources={argoResources} /> : null}
+            {argoResources ? (
+              <ArgoDiff resources={argoResources} />
+            ) : !argoDiff.error ? (
+              <DiffPending kind="Argo CD" promotion={promotion} />
+            ) : null}
+          </Tabs.Panel>
+
+          <Tabs.Panel className={styles.reviewPanel} value="details">
+            <Stack gap="lg">
+              <SectionHeader
+                description="Review source, policy, revisions, and preparation details captured for this Promotion."
+                title="Promotion details"
+              />
+              <PromotionContext promotion={promotion} />
+            </Stack>
           </Tabs.Panel>
         </Tabs>
+      </Paper>
+
+      <Stack className={styles.sidebar} gap="md">
+        <PromotionLifecycle promotion={promotion} />
+        <DecisionPanel canWrite={canWrite} promotion={promotion} />
       </Stack>
-    </Paper>
+    </Box>
+  );
+}
+
+function DiffPending({ kind, promotion }: Readonly<{ kind: string; promotion: Promotion }>) {
+  const preparing = promotion.status === "creating" || promotion.status === "preparing";
+  return (
+    <Text c="dimmed">
+      {preparing
+        ? `${kind} changes will appear when review preparation finishes.`
+        : `This Promotion does not include a prepared ${kind} diff.`}
+    </Text>
   );
 }
 
@@ -553,6 +917,7 @@ function ArgoDiff({ resources }: Readonly<{ resources: ArgoDiffResource[] }>) {
     <Stack gap="md">
       <Group align="flex-end">
         <TextInput
+          className={styles.resourceQuery}
           label="Filter by kind or name"
           onChange={(event) => updateFilter("resourceQuery", event.currentTarget.value)}
           placeholder="Deployment or external-dns"
