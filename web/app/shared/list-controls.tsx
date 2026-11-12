@@ -44,9 +44,11 @@ export type SearchParamFilter = SearchParamSelectFilter | SearchParamTextFilter;
 export function SearchParamFilters({
   clearTo,
   filters,
+  preserve = [],
 }: Readonly<{
   clearTo: string;
   filters: SearchParamFilter[];
+  preserve?: string[];
 }>) {
   const [searchParams] = useSearchParams();
   const submit = useSubmit();
@@ -129,6 +131,13 @@ export function SearchParamFilters({
   return (
     <Paper className="filter-panel" p="md" withBorder>
       <Form ref={formRef} method="get" onChange={handleChange} onSubmit={handleSubmit} replace>
+        {preserve.flatMap((name) =>
+          searchParams
+            .getAll(name)
+            .map((value, index) => (
+              <input key={`${name}:${index}`} name={name} type="hidden" value={value} />
+            )),
+        )}
         <Stack gap="md">
           <Group justify="space-between">
             <Group gap="xs">

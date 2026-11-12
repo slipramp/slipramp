@@ -30,12 +30,14 @@ import {
   IconKey,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconListDetails,
   IconLogout,
   IconMapPin,
   IconMoon,
   IconNotification,
   IconPalette,
   IconRocket,
+  IconRoute,
   IconServer2,
   IconSparkles,
   IconSun,
@@ -78,7 +80,9 @@ const navigationGroups: Array<{
   {
     feature: "kargo",
     items: [
-      { icon: IconFolder, label: "Kargo projects", to: "/promotion-projects" },
+      { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
+      { icon: IconListDetails, label: "Stages", to: "/promotion-stages" },
+      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
       {
         icon: IconArrowsDiff,

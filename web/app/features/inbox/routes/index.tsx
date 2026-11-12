@@ -435,28 +435,28 @@ function KargoStatus({
         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
           <KargoStatusCount
             color="orange"
-            href="/promotion-projects?unhealthy=true"
+            href="/promotion-stages?attention=unhealthy"
             icon={IconAlertTriangle}
             label="Unhealthy"
             value={summary?.unhealthy}
           />
           <KargoStatusCount
             color="orange"
-            href="/promotion-projects?stale=true"
+            href="/promotion-stages?attention=stale"
             icon={IconClock}
             label="Stale"
             value={summary?.stale}
           />
           <KargoStatusCount
             color="yellow"
-            href="/promotion-projects?pendingReview=true"
+            href="/promotion-stages?attention=pending-review"
             icon={IconChecklist}
             label="Reviews"
             value={summary?.pendingReviews}
           />
           <KargoStatusCount
             color="yellow"
-            href="/promotion-projects?freightAlignment=different"
+            href="/promotion-pipelines?alignment=different"
             icon={IconArrowsDiff}
             label="Freight differences"
             value={summary?.freightDifferences}
@@ -491,10 +491,10 @@ function KargoStatus({
           component={Link}
           fullWidth
           rightSection={<IconArrowRight aria-hidden size={14} />}
-          to="/promotion-projects"
+          to="/promotion-stages"
           variant="subtle"
         >
-          View Kargo Projects{summary ? ` · ${summary.stages} Stages` : ""}
+          View all Stages{summary ? ` · ${summary.stages}` : ""}
         </Button>
       </Stack>
     </Paper>

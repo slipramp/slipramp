@@ -24,7 +24,7 @@ import type { Route } from "./+types/promotion-projects";
 const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Kargo projects") }];
+  return [{ title: pageTitle("Projects") }];
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
@@ -94,7 +94,7 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
     <Stack gap="lg">
       <PageHeader
         description="Observed Kargo Projects with Stage health, freshness, Freight alignment, topology, and review activity."
-        title="Kargo projects"
+        title="Projects"
       />
 
       <SearchParamFilters

@@ -281,6 +281,10 @@ the same Stage observations. Stale Stages are not also counted as unhealthy.
 Server-side Project filters select Projects with current non-ready Stages,
 stale observations, pending reviews, or a requested Freight alignment state
 before pagination. Unpaginated summary totals drive operational Inbox counts.
+Top-level Stage and pipeline views page by this canonical Project boundary and
+reuse the same Project detail projection. Pipelines remain disconnected graphs
+within one Project; the aggregate view never joins Stages across Projects,
+integrations, or Clusters.
 
 Freight alignment is a read-time projection over active durable Stage
 observations. Slipramp creates one comparison for each exact
