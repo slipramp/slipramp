@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   filterPyinfraOperations,
+  isPyinfraNoOp,
   previewPyinfraHosts,
+  pyinfraHosts,
   pyinfraPlanBadges,
   pyinfraResultBadges,
 } from "./pyinfra-deploy-report.ts";
@@ -101,5 +103,92 @@ test("previews long pyinfra host lists without discarding the complete list", ()
   assert.deepEqual(previewPyinfraHosts(hosts, true), {
     hiddenCount: 0,
     visibleHosts: hosts,
+  });
+});
+
+test("keeps failures discoverable when an operation had no planned change", () => {
+  const failed = {
+    hostsWithChanges: [],
+    hostsWithConditionalChanges: [],
+    names: ["server.command"],
+    result: { changedHosts: [], failedHosts: ["web-2"], unchangedHosts: [] },
+  };
+
+  assert.equal(isPyinfraNoOp(failed), false);
+  assert.deepEqual(
+    filterPyinfraOperations([failed], {
+      host: "web-2",
+      keyword: "",
+      scope: "failed",
+      showNoOp: false,
+    }),
+    [failed],
+  );
+});
+
+test("aggregates hosts and filters planning independently from observed results", () => {
+  const operations = [
+    {
+      hostsWithChanges: ["web-1"],
+      hostsWithConditionalChanges: ["web-2"],
+      names: ["server.package"],
+      result: { changedHosts: [], failedHosts: [], unchangedHosts: ["web-1", "web-2"] },
+    },
+    {
+      hostsWithChanges: [],
+      hostsWithConditionalChanges: [],
+      names: ["server.service"],
+      result: { changedHosts: ["web-3"], failedHosts: ["web-4"], unchangedHosts: [] },
+    },
+  ];
+
+  assert.deepEqual(pyinfraHosts(operations), ["web-1", "web-2", "web-3", "web-4"]);
+  assert.deepEqual(
+    filterPyinfraOperations(operations, {
+      keyword: "",
+      scope: "planned",
+      showNoOp: true,
+    }).map((operation) => operation.names[0]),
+    ["server.package"],
+  );
+  assert.deepEqual(
+    filterPyinfraOperations(operations, {
+      keyword: "",
+      scope: "observed",
+      showNoOp: true,
+    }).map((operation) => operation.names[0]),
+    ["server.service"],
+  );
+});
+
+test("keeps 24-host operation results searchable without changing the row shape", () => {
+  const hosts = Array.from(
+    { length: 24 },
+    (_, index) => `worker-${String(index + 1).padStart(2, "0")}`,
+  );
+  const operation = {
+    hostsWithChanges: hosts.slice(0, 3),
+    hostsWithConditionalChanges: hosts.slice(3, 6),
+    names: ["server.package"],
+    result: {
+      changedHosts: hosts.slice(0, 2),
+      failedHosts: [hosts[23]],
+      unchangedHosts: hosts.slice(2, 23),
+    },
+  };
+
+  assert.deepEqual(pyinfraHosts([operation]), hosts);
+  assert.deepEqual(
+    filterPyinfraOperations([operation], {
+      host: hosts[23],
+      keyword: "",
+      scope: "failed",
+      showNoOp: false,
+    }),
+    [operation],
+  );
+  assert.deepEqual(previewPyinfraHosts(operation.result.unchangedHosts, false), {
+    hiddenCount: 16,
+    visibleHosts: operation.result.unchangedHosts.slice(0, 5),
   });
 });

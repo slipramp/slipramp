@@ -3,6 +3,7 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Button,
   Code,
   Group,
@@ -12,11 +13,12 @@ import {
   SimpleGrid,
   Stack,
   Table,
+  Tabs,
   Text,
   Textarea,
-  Timeline,
   Title,
   Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
 import {
   IconBan,
@@ -25,16 +27,19 @@ import {
   IconClock,
   IconClockExclamation,
   IconExternalLink,
+  IconFileAnalytics,
+  IconInfoCircle,
   IconLoader2,
   IconOctagon,
   IconPlayerPlay,
   IconRefresh,
   IconServer2,
+  IconTerminal2,
   IconX,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Form, Link, redirect, useNavigation, useSearchParams } from "react-router";
 
 import {
   actionRunPath,
@@ -86,6 +91,11 @@ import { runActivity, runResultActivity } from "~/features/mascot/execution-acti
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { reportDetailRequestState, type ReportLoad } from "~/features/runs/run-reports";
+import {
+  runDetailSearchParamNames,
+  selectedRunDetailValue,
+  updateRunDetailSearchParams,
+} from "~/features/runs/run-detail-url-state";
 import { targetFilterPath } from "~/features/targets/target-filter";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
@@ -110,13 +120,17 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     getProductPrincipal(context),
   ]);
   const artifacts = artifactResult.data?.items ?? [];
-  const applyArtifact = runResult.data
-    ? findArtifactConsumer(artifacts, runResult.data.artifactConsumers, "apply")?.artifact
-    : undefined;
-  const [consumerRunsResult, reportLoads, targetResult] = await Promise.all([
-    applyArtifact
-      ? listRuns({ client, query: { inputArtifactId: applyArtifact.id, limit: 100 } })
-      : undefined,
+  const lineageArtifacts = artifacts.filter((artifact) => artifact.kind === "output");
+  const [lineageResults, reportLoads, targetResult] = await Promise.all([
+    Promise.all(
+      lineageArtifacts.map(async (artifact) => ({
+        artifactId: artifact.id,
+        result: await listRuns({
+          client,
+          query: { inputArtifactId: artifact.id, limit: 100 },
+        }),
+      })),
+    ),
     Promise.all(
       artifacts
         .filter((artifact) => artifact.report !== undefined)
@@ -149,9 +163,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const activeTarget = targetResult?.data?.archivedAt ? undefined : targetResult?.data?.definition;
 
   return {
-    artifactRuns: consumerRunsResult?.data?.items ?? [],
-    artifactRunsAvailable:
-      consumerRunsResult === undefined || consumerRunsResult.data !== undefined,
+    artifactRuns: Object.fromEntries(
+      lineageResults.map(({ artifactId, result }) => [artifactId, result.data?.items ?? []]),
+    ),
+    artifactRunsAvailable: Object.fromEntries(
+      lineageResults.map(({ artifactId, result }) => [artifactId, result.data !== undefined]),
+    ),
     artifacts,
     otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
     principal,
@@ -268,7 +285,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   const { timeZone } = useTimeZone();
   useActivityRefresh(
     loaderData.run?.phase !== "finished" ||
-      loaderData.artifactRuns.some((run) => run.phase !== "finished"),
+      Object.values(loaderData.artifactRuns).some((runs) =>
+        runs.some((run) => run.phase !== "finished"),
+      ),
     runRevalidationIntervalMs,
   );
 
@@ -291,7 +310,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     applySelection?.artifact.state === "sealed" &&
     applySelection.artifact.retentionState === "retained";
   const resultActivity = runResultActivity(run);
-  const activity = resultActivity ?? runActivity(run);
   const actor =
     run.createdBy?.displayName ??
     (run.source.type === "git" || run.source.type === "schedule" ? "Automation" : "System");
@@ -438,6 +456,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
             <PageHeaderFact label="Created by">
               <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
             </PageHeaderFact>
+            <PageHeaderFact label="Revision">
+              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
+            </PageHeaderFact>
           </PageHeaderFacts>
         }
         title={
@@ -471,8 +492,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Paper>
       ) : null}
 
-      <KawaiiActivity activity={activity} animationKey={run.id} />
-
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
           <Stack gap={4}>
@@ -488,6 +507,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       <RunReviewPanel canReview={canReview} run={run} />
+
+      <RunQueueNotice run={run} />
 
       {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
@@ -529,9 +550,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       {run.phase === "finished" &&
+      run.outcome !== "succeeded" &&
       (run.outcomeReason || run.outcomeMessage || run.exitCode !== undefined) ? (
         <Alert
-          className={resultActivity ? styles.terminalNotice : undefined}
           color={runStatusColor(run)}
           title={run.outcomeReason ?? resultActivity?.title ?? "Run finished"}
         >
@@ -546,72 +567,300 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
-      {loaderData.artifacts
-        .filter((artifact) => artifact.report !== undefined)
-        .map((artifact) => {
-          const load = loaderData.reportLoads.find(
-            (candidate) => candidate.artifactId === artifact.id,
-          );
-          if (!load) return null;
-
-          if (
-            artifact.report?.kind === "terraform-plan" ||
-            artifact.report?.kind === "opentofu-plan"
-          ) {
-            return (
-              <InfrastructurePlanReportView
-                artifact={artifact}
-                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
-                key={artifact.id}
-                load={load}
-              />
-            );
-          }
-          if (artifact.report?.kind === "pyinfra-deploy") {
-            return (
-              <PyinfraDeployReportView
-                artifact={artifact}
-                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
-                key={artifact.id}
-                load={load}
-              />
-            );
-          }
-          if (artifact.report?.kind === "ansible-playbook") {
-            return (
-              <AnsiblePlaybookReportView
-                artifact={artifact}
-                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
-                key={artifact.id}
-                load={load}
-              />
-            );
-          }
-
-          return null;
-        })}
-      <RunLogViewer artifact={logArtifact} key={run.id} runId={run.id} />
-      <RunOverview repositoryName={loaderData.repositoryName} run={run} />
-      <ParameterTable parameters={run.parameters} />
-
-      <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
-      <ArtifactTable
+      <RunWorkspace
+        artifactRuns={loaderData.artifactRuns}
+        artifactRunsAvailable={loaderData.artifactRunsAvailable}
         artifacts={loaderData.artifacts}
         consumers={run.artifactConsumers}
+        logArtifact={logArtifact}
         principal={loaderData.principal}
-        producerSucceeded={run.outcome === "succeeded"}
+        reportLoads={loaderData.reportLoads}
+        repositoryName={loaderData.repositoryName}
+        run={run}
       />
-      {applySelection ? (
-        <ArtifactLineage
-          artifact={applySelection.artifact}
-          available={loaderData.artifactRunsAvailable}
-          canReadContents={canReadArtifactContents(applySelection.artifact, loaderData.principal)}
-          runs={loaderData.artifactRuns}
-        />
-      ) : null}
     </Stack>
   );
+}
+
+const lifecycleStages: Run["phase"][] = ["queued", "assigned", "preparing", "running", "finished"];
+
+function RunWorkspace({
+  artifactRuns,
+  artifactRunsAvailable,
+  artifacts,
+  consumers,
+  logArtifact,
+  principal,
+  reportLoads,
+  repositoryName,
+  run,
+}: Readonly<{
+  artifactRuns: Record<string, Run[]>;
+  artifactRunsAvailable: Record<string, boolean>;
+  artifacts: Artifact[];
+  consumers: Record<string, RunArtifactConsumer[]>;
+  logArtifact?: Artifact;
+  principal?: ProductPrincipal;
+  reportLoads: ReportLoad[];
+  repositoryName?: string;
+  run: Run;
+}>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reportArtifacts = useMemo(
+    () => artifacts.filter((artifact) => artifact.report !== undefined),
+    [artifacts],
+  );
+  const outputValues = useMemo(
+    () => [...reportArtifacts.map((artifact) => reportOutputValue(artifact.id)), "log", "details"],
+    [reportArtifacts],
+  );
+  const automaticOutput = defaultRunOutput(run, reportArtifacts, reportLoads, logArtifact);
+  const [initialAutomaticOutput] = useState(automaticOutput);
+  const fallbackOutput = outputValues.includes(initialAutomaticOutput)
+    ? initialAutomaticOutput
+    : automaticOutput;
+  const selectedOutput = selectedRunDetailValue(
+    searchParams,
+    runDetailSearchParamNames.output,
+    outputValues,
+    fallbackOutput,
+  );
+  const selectedStage = selectedRunDetailValue(
+    searchParams,
+    runDetailSearchParamNames.stage,
+    lifecycleStages,
+    run.phase,
+  ) as Run["phase"];
+  const requestedOutput = searchParams.get(runDetailSearchParamNames.output);
+  const requestedStage = searchParams.get(runDetailSearchParamNames.stage);
+
+  useEffect(() => {
+    const invalidOutput = requestedOutput !== null && !outputValues.includes(requestedOutput);
+    const invalidStage =
+      requestedStage !== null && !lifecycleStages.includes(requestedStage as Run["phase"]);
+    if (!invalidOutput && !invalidStage) return;
+
+    setSearchParams(
+      updateRunDetailSearchParams(searchParams, {
+        [runDetailSearchParamNames.output]: invalidOutput
+          ? undefined
+          : (requestedOutput ?? undefined),
+        [runDetailSearchParamNames.stage]: invalidStage ? undefined : (requestedStage ?? undefined),
+      }),
+      { preventScrollReset: true, replace: true },
+    );
+  }, [outputValues, requestedOutput, requestedStage, searchParams, setSearchParams]);
+
+  function selectOutput(output: string | null) {
+    if (!output) return;
+    setSearchParams(
+      updateRunDetailSearchParams(searchParams, {
+        [runDetailSearchParamNames.output]: output,
+      }),
+      { preventScrollReset: true },
+    );
+  }
+
+  function selectStage(stage: Run["phase"]) {
+    setSearchParams(
+      updateRunDetailSearchParams(searchParams, {
+        [runDetailSearchParamNames.stage]: stage,
+      }),
+      { preventScrollReset: true },
+    );
+  }
+
+  const lifecycle = (
+    <RunLifecycle onStageChange={selectStage} run={run} selectedStage={selectedStage} />
+  );
+
+  return (
+    <Box className={styles.workspace}>
+      <Accordion className={styles.mobileLifecycle} variant="contained">
+        <Accordion.Item value="lifecycle">
+          <Accordion.Control>
+            <Group justify="space-between" pr="sm" wrap="nowrap">
+              <Text fw={650}>Lifecycle</Text>
+              <Badge color={runStatusColor(run)} variant="light">
+                {lifecycleStageLabel(selectedStage)}
+              </Badge>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>{lifecycle}</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+
+      <Paper className={styles.outputCard} withBorder>
+        <Tabs keepMounted onChange={selectOutput} value={selectedOutput}>
+          <Tabs.List className={styles.outputTabs}>
+            {reportArtifacts.map((artifact) => (
+              <Tabs.Tab
+                key={artifact.id}
+                leftSection={<IconFileAnalytics aria-hidden size={16} />}
+                value={reportOutputValue(artifact.id)}
+              >
+                {artifact.name}
+              </Tabs.Tab>
+            ))}
+            <Tabs.Tab leftSection={<IconTerminal2 aria-hidden size={16} />} value="log">
+              Run log
+            </Tabs.Tab>
+            <Tabs.Tab leftSection={<IconInfoCircle aria-hidden size={16} />} value="details">
+              Run details
+            </Tabs.Tab>
+          </Tabs.List>
+
+          {reportArtifacts.map((artifact) => {
+            const load = reportLoads.find((candidate) => candidate.artifactId === artifact.id);
+            return (
+              <Tabs.Panel
+                className={styles.outputPanel}
+                key={artifact.id}
+                value={reportOutputValue(artifact.id)}
+              >
+                {load ? (
+                  <RunReportOutput artifact={artifact} load={load} principal={principal} />
+                ) : (
+                  <Alert color="red" title="Report could not be loaded">
+                    Slipramp did not return an availability record for this report Artifact.
+                  </Alert>
+                )}
+              </Tabs.Panel>
+            );
+          })}
+
+          <Tabs.Panel className={styles.outputPanel} value="log">
+            <RunLogViewer
+              artifact={logArtifact}
+              embedded
+              initialSearchQuery={searchParams.get(runDetailSearchParamNames.logQuery) ?? ""}
+              key={`${run.id}:${searchParams.get(runDetailSearchParamNames.logQuery) ?? ""}`}
+              runFinished={run.phase === "finished"}
+              runId={run.id}
+            />
+          </Tabs.Panel>
+
+          <Tabs.Panel className={styles.outputPanel} value="details">
+            <RunDetails
+              artifactRuns={artifactRuns}
+              artifactRunsAvailable={artifactRunsAvailable}
+              artifacts={artifacts}
+              consumers={consumers}
+              principal={principal}
+              repositoryName={repositoryName}
+              run={run}
+            />
+          </Tabs.Panel>
+        </Tabs>
+      </Paper>
+
+      <Paper className={styles.desktopLifecycle} p="md" withBorder>
+        {lifecycle}
+      </Paper>
+    </Box>
+  );
+}
+
+function RunReportOutput({
+  artifact,
+  load,
+  principal,
+}: Readonly<{ artifact: Artifact; load: ReportLoad; principal?: ProductPrincipal }>) {
+  const canReadContents = canReadArtifactContents(artifact, principal);
+  switch (artifact.report?.kind) {
+    case "terraform-plan":
+    case "opentofu-plan":
+      return (
+        <InfrastructurePlanReportView
+          artifact={artifact}
+          canReadContents={canReadContents}
+          embedded
+          load={load}
+        />
+      );
+    case "pyinfra-deploy":
+      return (
+        <PyinfraDeployReportView
+          artifact={artifact}
+          canReadContents={canReadContents}
+          embedded
+          load={load}
+        />
+      );
+    case "ansible-playbook":
+      return (
+        <AnsiblePlaybookReportView
+          artifact={artifact}
+          canReadContents={canReadContents}
+          embedded
+          load={load}
+        />
+      );
+    default:
+      return (
+        <Alert color="orange" title="Unsupported report">
+          This report kind does not have a Run detail renderer.
+        </Alert>
+      );
+  }
+}
+
+function RunDetails({
+  artifactRuns,
+  artifactRunsAvailable,
+  artifacts,
+  consumers,
+  principal,
+  repositoryName,
+  run,
+}: Readonly<{
+  artifactRuns: Record<string, Run[]>;
+  artifactRunsAvailable: Record<string, boolean>;
+  artifacts: Artifact[];
+  consumers: Record<string, RunArtifactConsumer[]>;
+  principal?: ProductPrincipal;
+  repositoryName?: string;
+  run: Run;
+}>) {
+  return (
+    <Stack gap="lg">
+      <SectionHeader
+        description="Source, execution context, parameters, inputs, and the complete Artifact inventory."
+        title="Run details"
+      />
+      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      <RunOverview repositoryName={repositoryName} run={run} />
+      <ParameterTable parameters={run.parameters} />
+      <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
+      <ArtifactTable
+        artifactRuns={artifactRuns}
+        artifactRunsAvailable={artifactRunsAvailable}
+        artifacts={artifacts}
+        consumers={consumers}
+        principal={principal}
+        producerSucceeded={run.outcome === "succeeded"}
+      />
+    </Stack>
+  );
+}
+
+function reportOutputValue(artifactId: string) {
+  return `report:${artifactId}`;
+}
+
+function defaultRunOutput(
+  run: Run,
+  reportArtifacts: Artifact[],
+  reportLoads: ReportLoad[],
+  logArtifact?: Artifact,
+) {
+  if (run.phase !== "finished") return "log";
+  const readableReport = reportArtifacts.find(
+    (artifact) =>
+      reportLoads.find((load) => load.artifactId === artifact.id)?.state === "available",
+  );
+  if (readableReport) return reportOutputValue(readableReport.id);
+  return logArtifact ? "log" : "details";
 }
 
 function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
@@ -629,34 +878,7 @@ function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
     );
   }
 
-  let explanation: ReactNode;
-  switch (run.schedulingState) {
-    case "awaiting-review":
-      explanation = "This Run must be approved before it can enter the eligible FIFO queue.";
-      break;
-    case "target-busy":
-      explanation = run.blockingRunId ? (
-        <>
-          The Target is serialized behind active Run{" "}
-          <Anchor component={Link} to={`/runs/${run.blockingRunId}`}>
-            {shortIdentifier(run.blockingRunId)}
-          </Anchor>
-          .
-        </>
-      ) : (
-        "Another active Run is serializing this Target."
-      );
-      break;
-    case "cluster-unreachable":
-      explanation = "The Cluster Controller is not currently reachable by the Server.";
-      break;
-    case "cluster-capacity":
-      explanation = "The Cluster or this Run's Placement has reached its active Run limit.";
-      break;
-    case "eligible":
-      explanation = "This Run satisfies the current review, Target, and capacity constraints.";
-      break;
-  }
+  const explanation = runQueueExplanation(run);
 
   return (
     <Popover position="bottom-start" shadow="md" width="min(380px, calc(100vw - 2rem))" withArrow>
@@ -679,26 +901,86 @@ function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
             Queue details
           </Text>
           <Text size="sm">{explanation}</Text>
-          <Group gap="xs" wrap="wrap">
-            <Text size="xs">
-              Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
-            </Text>
-            {run.eligiblePosition !== undefined ? (
-              <Text size="xs">· Eligible position {run.eligiblePosition}</Text>
-            ) : null}
-          </Group>
-          <Group gap={4} wrap="wrap">
-            <Text c="dimmed" size="xs">
-              Snapshot
-            </Text>
-            <Timestamp c="dimmed" size="xs" value={run.schedulingSnapshotAt} />
-            <Text c="dimmed" size="xs">
-              · Point-in-time state, not an ETA
-            </Text>
-          </Group>
+          <QueueSnapshot run={run} />
         </Stack>
       </Popover.Dropdown>
     </Popover>
+  );
+}
+
+function runQueueExplanation(run: Run): ReactNode {
+  switch (run.schedulingState) {
+    case "awaiting-review":
+      return "This Run must be approved before it can enter the eligible FIFO queue.";
+    case "target-busy":
+      return run.blockingRunId ? (
+        <>
+          The Target is serialized behind active Run{" "}
+          <Anchor component={Link} to={`/runs/${run.blockingRunId}`}>
+            {shortIdentifier(run.blockingRunId)}
+          </Anchor>
+          .
+        </>
+      ) : (
+        "Another active Run is serializing this Target."
+      );
+    case "cluster-unreachable":
+      return "The Cluster Controller is not currently reachable by the Server.";
+    case "cluster-capacity":
+      return "The Cluster or this Run's Placement has reached its active Run limit.";
+    case "eligible":
+      return "This Run satisfies the current review, Target, and capacity constraints.";
+    default:
+      return "Slipramp has not recorded a current queue scheduling reason.";
+  }
+}
+
+function RunQueueNotice({ run }: Readonly<{ run: Run }>) {
+  if (
+    run.phase !== "queued" ||
+    !run.schedulingState ||
+    run.queueAgeSeconds === undefined ||
+    !run.schedulingSnapshotAt
+  ) {
+    return null;
+  }
+
+  const blocked = run.schedulingState !== "eligible";
+  return (
+    <Alert
+      color={blocked ? "yellow" : "blue"}
+      title={blocked ? "Run is waiting in the queue" : "Run is eligible for assignment"}
+    >
+      <Stack gap="xs">
+        <Text size="sm">{runQueueExplanation(run)}</Text>
+        <QueueSnapshot run={run} />
+      </Stack>
+    </Alert>
+  );
+}
+
+function QueueSnapshot({ run }: Readonly<{ run: Run }>) {
+  if (run.queueAgeSeconds === undefined || !run.schedulingSnapshotAt) return null;
+  return (
+    <>
+      <Group gap="xs" wrap="wrap">
+        <Text size="xs">
+          Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
+        </Text>
+        {run.eligiblePosition !== undefined ? (
+          <Text size="xs">· Eligible position {run.eligiblePosition}</Text>
+        ) : null}
+      </Group>
+      <Group gap={4} wrap="wrap">
+        <Text c="dimmed" size="xs">
+          Snapshot
+        </Text>
+        <Timestamp c="dimmed" size="xs" value={run.schedulingSnapshotAt} />
+        <Text c="dimmed" size="xs">
+          · Point-in-time state, not an ETA
+        </Text>
+      </Group>
+    </>
   );
 }
 
@@ -864,171 +1146,102 @@ function OtherActionMenu({
   );
 }
 
-function ArtifactLineage({
-  artifact,
-  available,
-  canReadContents,
-  runs,
-}: Readonly<{
-  artifact: Artifact;
-  available: boolean;
-  canReadContents: boolean;
-  runs: Run[];
-}>) {
-  return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <SectionHeader
-          actions={
-            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-              <Badge variant="light">
-                {runs.length} {runs.length === 1 ? "run" : "runs"}
-              </Badge>
-              {canReadContents &&
-              artifact.state === "sealed" &&
-              artifact.retentionState === "retained" ? (
-                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                  Download Artifact
-                </Anchor>
-              ) : null}
-            </Group>
-          }
-          title="Artifact lineage"
-        />
-        {!available ? (
-          <Alert color="red" title="Artifact history unavailable">
-            Runs created from this Artifact could not be loaded.
-          </Alert>
-        ) : runs.length === 0 ? (
-          <Text c="dimmed" size="sm">
-            No Runs have been created from this Artifact.
-          </Text>
-        ) : (
-          <Table.ScrollContainer minWidth={540} type="native">
-            <Table verticalSpacing="xs">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Run</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>Created</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {runs.map((consumerRun) => (
-                  <Table.Tr key={consumerRun.id}>
-                    <Table.Td>
-                      <Anchor component={Link} fw={600} to={`/runs/${consumerRun.id}`}>
-                        {consumerRun.action} · {shortIdentifier(consumerRun.id)}
-                      </Anchor>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={runStatusColor(consumerRun)} variant="light">
-                        {runStatusLabel(consumerRun)}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <RelativeTime size="sm" value={consumerRun.createdAt} />
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Stack>
-    </Paper>
-  );
-}
-
 function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string; run: Run }>) {
   return (
-    <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
-      <Paper p="lg" withBorder>
-        <Stack gap="lg">
-          <Title order={2}>Execution context</Title>
-          <SimpleGrid cols={1} spacing="lg">
-            <Fact label="Repository">
-              <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
-                {repositoryName ?? shortIdentifier(run.repositoryId)}
+    <Paper p="lg" withBorder>
+      <Stack gap="lg">
+        <Title order={2}>Execution context</Title>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+          <Fact label="Repository">
+            <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
+              {repositoryName ?? shortIdentifier(run.repositoryId)}
+            </Anchor>
+          </Fact>
+          <Fact label="Runtime">
+            <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
+              {run.runtime}
+            </Anchor>
+          </Fact>
+          <Fact label="Cluster">
+            <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
+              {run.cluster}
+            </Anchor>
+          </Fact>
+          <Fact label="Placement">
+            <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
+              {run.placement}
+            </Anchor>
+          </Fact>
+          <Fact label="Catalog revision">
+            <Code>{run.catalogRevisionId}</Code>
+          </Fact>
+          {run.rerunOfRunId && run.rerunMode ? (
+            <Fact label="Run again">
+              <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
+                {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
+                {shortIdentifier(run.rerunOfRunId)}
               </Anchor>
             </Fact>
-            <Fact label="Runtime">
-              <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
-                {run.runtime}
-              </Anchor>
-            </Fact>
-            <Fact label="Cluster">
-              <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
-                {run.cluster}
-              </Anchor>
-            </Fact>
-            <Fact label="Placement">
-              <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
-                {run.placement}
-              </Anchor>
-            </Fact>
-            <Fact label="Catalog revision">
-              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
-            </Fact>
-            {run.rerunOfRunId && run.rerunMode ? (
-              <Fact label="Run again">
-                <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
-                  {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
-                  {shortIdentifier(run.rerunOfRunId)}
-                </Anchor>
-              </Fact>
-            ) : null}
-            <Accordion defaultValue={null} variant="contained">
-              <Accordion.Item value="job-details">
-                <Accordion.Control>
-                  <Text fw={600}>Job details</Text>
-                </Accordion.Control>
-                <Accordion.Panel>
-                  <SimpleGrid cols={1} spacing="lg">
-                    <Fact label="Job UID">
-                      {run.jobUid ? (
-                        <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
-                      ) : (
-                        <Text c="dimmed" size="sm">
-                          Not materialized
-                        </Text>
-                      )}
-                    </Fact>
-                    {run.images?.action ? (
-                      <Fact label="Action image ID">
-                        <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
-                      </Fact>
-                    ) : null}
-                    {run.images?.checkout ? (
-                      <Fact label="Checkout image ID">
-                        <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
-                      </Fact>
-                    ) : null}
-                    {run.images?.harness ? (
-                      <Fact label="Harness image ID">
-                        <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
-                      </Fact>
-                    ) : null}
-                  </SimpleGrid>
-                </Accordion.Panel>
-              </Accordion.Item>
-            </Accordion>
-          </SimpleGrid>
-          {run.lastObservedAt ? (
-            <Group gap={4}>
-              <Text c="dimmed" size="xs">
-                Controller observation {run.observationState ?? "current"} · last seen
-              </Text>
-              <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
-            </Group>
           ) : null}
-        </Stack>
-      </Paper>
-
-      <Paper p="md" withBorder>
-        <RunLifecycle run={run} />
-      </Paper>
-    </SimpleGrid>
+          <Fact label="Controller observation">
+            <Stack gap={2}>
+              <Text size="sm">{run.observationState ?? "Not active"}</Text>
+              {run.lastObservedAt ? (
+                <Group gap={4} wrap="wrap">
+                  <Text c="dimmed" size="xs">
+                    Last seen
+                  </Text>
+                  <Timestamp c="dimmed" size="xs" value={run.lastObservedAt} />
+                  <Text c="dimmed" size="xs">
+                    ·
+                  </Text>
+                  <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
+                </Group>
+              ) : (
+                <Text c="dimmed" size="xs">
+                  No Controller observation recorded
+                </Text>
+              )}
+            </Stack>
+          </Fact>
+        </SimpleGrid>
+        <Accordion defaultValue={null} variant="contained">
+          <Accordion.Item value="job-details">
+            <Accordion.Control>
+              <Text fw={600}>Job and image details</Text>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+                <Fact label="Job UID">
+                  {run.jobUid ? (
+                    <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
+                  ) : (
+                    <Text c="dimmed" size="sm">
+                      Not materialized
+                    </Text>
+                  )}
+                </Fact>
+                {run.images?.action ? (
+                  <Fact label="Action image ID">
+                    <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
+                  </Fact>
+                ) : null}
+                {run.images?.checkout ? (
+                  <Fact label="Checkout image ID">
+                    <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
+                  </Fact>
+                ) : null}
+                {run.images?.harness ? (
+                  <Fact label="Harness image ID">
+                    <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
+                  </Fact>
+                ) : null}
+              </SimpleGrid>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -1043,13 +1256,22 @@ function Fact({ children, label }: Readonly<{ children: ReactNode; label: string
   );
 }
 
-function RunLifecycle({ run }: Readonly<{ run: Run }>) {
-  const activeStep = lifecycleActiveStep(run);
+function RunLifecycle({
+  onStageChange,
+  run,
+  selectedStage,
+}: Readonly<{
+  onStageChange: (stage: Run["phase"]) => void;
+  run: Run;
+  selectedStage: Run["phase"];
+}>) {
+  const activeStep = lifecycleStages.indexOf(run.phase);
   const currentTime = useCurrentTime(run.phase !== "finished");
   const steps: Array<{
-    detail: ReactNode;
+    detail: string;
     icon: TablerIcon;
     label: string;
+    stage: Run["phase"];
     value?: string;
   }> = [
     {
@@ -1063,6 +1285,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
       ),
       icon: IconClock,
       label: "Queued",
+      stage: "queued",
       value: run.createdAt,
     },
     {
@@ -1076,6 +1299,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
       ),
       icon: IconServer2,
       label: "Assigned",
+      stage: "assigned",
       value: run.assignedAt,
     },
     {
@@ -1089,6 +1313,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
       ),
       icon: IconLoader2,
       label: "Preparing",
+      stage: "preparing",
       value: run.preparingAt,
     },
     {
@@ -1102,6 +1327,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
       ),
       icon: IconPlayerPlay,
       label: "Running",
+      stage: "running",
       value: run.startedAt,
     },
     {
@@ -1110,6 +1336,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
         : "Terminal outcome not recorded",
       icon: finishedIcon(run),
       label: "Finished",
+      stage: "finished",
       value: run.finishedAt,
     },
   ];
@@ -1123,92 +1350,137 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
 
   return (
     <Stack gap="md">
-      <SectionHeader
-        actions={
-          <Group gap="xs">
-            {summary.map((value) => (
-              <Badge key={value} size="sm" tt="none" variant="light">
-                {value}
+      <Stack gap="xs">
+        <Title order={2}>Lifecycle</Title>
+        <Group gap="xs">
+          {summary.map((value) => (
+            <Badge key={value} size="sm" tt="none" variant="light">
+              {value}
+            </Badge>
+          ))}
+        </Group>
+      </Stack>
+      <Group justify="center">
+        <KawaiiActivity
+          activity={runActivity(run) ?? runResultActivity(run)}
+          animationKey={run.id}
+          mascotOnly
+        />
+      </Group>
+      <Stack className={styles.lifecycleSteps} gap={3}>
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const active = activeStep === index && run.phase !== "finished";
+          const complete =
+            step.value !== undefined && (index < activeStep || run.phase === "finished");
+          const status = index === 4 && run.outcome ? run.outcome : undefined;
+          const state = status ?? (active ? "Current" : complete ? "Complete" : "Waiting");
+          const color = status ? runOutcomeColor(status) : active ? "lilac" : "gray";
+          return (
+            <UnstyledButton
+              aria-current={selectedStage === step.stage ? "step" : undefined}
+              className={styles.lifecycleStep}
+              data-selected={selectedStage === step.stage || undefined}
+              key={step.stage}
+              onClick={() => onStageChange(step.stage)}
+            >
+              <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
+                <Icon aria-hidden size={15} stroke={2.2} />
+              </Box>
+              <Stack gap={0} style={{ flex: 1 }}>
+                <Text fw={650} size="sm">
+                  {step.label}
+                </Text>
+                <Text c="dimmed" size="xs">
+                  {step.value ? <Timestamp value={step.value} /> : "Not reached"}
+                </Text>
+              </Stack>
+              <Badge color={color} size="xs" variant={active || status ? "light" : "outline"}>
+                {state}
               </Badge>
-            ))}
-          </Group>
+            </UnstyledButton>
+          );
+        })}
+      </Stack>
+      <LifecycleStageDetail
+        detail={
+          steps[lifecycleStages.indexOf(selectedStage)]?.detail ?? "No lifecycle detail recorded."
         }
-        title="Lifecycle"
+        run={run}
+        stage={selectedStage}
+        value={steps[lifecycleStages.indexOf(selectedStage)]?.value}
       />
-      <Timeline
-        active={activeStep}
-        bulletSize={28}
-        className="lifecycle-timeline"
-        color={run.phase === "finished" ? runStatusColor(run) : "lilac"}
-        lineWidth={2}
-      >
-        {steps.map((step, index) => (
-          <LifecycleStep
-            active={activeStep === index && run.phase !== "finished"}
-            complete={step.value !== undefined && (index < activeStep || run.phase === "finished")}
-            icon={step.icon}
-            key={step.label}
-            label={step.label}
-            status={index === 4 && run.outcome ? run.outcome : undefined}
-            value={step.value}
-          >
-            {step.detail}
-          </LifecycleStep>
-        ))}
-      </Timeline>
     </Stack>
   );
 }
 
-function LifecycleStep({
-  active,
-  children,
-  complete,
-  icon: Icon,
-  label,
-  status,
+function LifecycleStageDetail({
+  detail,
+  run,
+  stage,
   value,
 }: Readonly<{
-  active: boolean;
-  children: ReactNode;
-  complete: boolean;
-  icon: TablerIcon;
-  label: string;
-  status?: Run["outcome"];
+  detail: string;
+  run: Run;
+  stage: Run["phase"];
   value?: string;
 }>) {
-  const state = status ?? (active ? "Current" : complete ? "Complete" : "Waiting");
-  const color = status ? runOutcomeColor(status) : active ? "lilac" : "gray";
-
   return (
-    <Timeline.Item
-      bullet={<Icon aria-hidden size={15} stroke={2.2} />}
-      className="lifecycle-step"
-      title={
-        <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Text fw={650} size="sm">
-            {label}
-          </Text>
-          <Badge color={color} size="xs" variant={active || status ? "light" : "outline"}>
-            {state}
-          </Badge>
-        </Group>
-      }
-    >
-      {value ? (
-        <Group gap={6} wrap="wrap">
-          <Timestamp c="dimmed" size="xs" value={value} />
-          <Text c="dimmed" size="xs">
-            {children}
-          </Text>
-        </Group>
-      ) : (
-        <Text c="dimmed" size="xs">
-          Not reached
+    <Paper bg="var(--mantine-color-default-hover)" p="sm" radius="md">
+      <Stack gap={5}>
+        <Text fw={700} size="sm">
+          {lifecycleStageLabel(stage)}
         </Text>
-      )}
-    </Timeline.Item>
+        {value ? (
+          <Timestamp c="dimmed" size="xs" value={value} />
+        ) : (
+          <Text c="dimmed" size="xs">
+            No recorded time
+          </Text>
+        )}
+        <Text c="dimmed" size="xs">
+          {detail}
+        </Text>
+        <LifecycleRelevantDetail run={run} stage={stage} />
+      </Stack>
+    </Paper>
   );
+}
+
+function LifecycleRelevantDetail({ run, stage }: Readonly<{ run: Run; stage: Run["phase"] }>) {
+  switch (stage) {
+    case "queued":
+      return run.phase === "queued" && run.schedulingState ? (
+        <Text size="xs">{runQueueExplanation(run)}</Text>
+      ) : null;
+    case "assigned":
+      return (
+        <Text size="xs">
+          Controller in <Code>{run.cluster}</Code>
+          {run.jobUid ? ` accepted Job ${run.jobUid}` : " was selected for delivery"}.
+        </Text>
+      );
+    case "preparing":
+      return (
+        <Text size="xs">
+          {run.jobUid ? `Job ${run.jobUid}` : "The execution Job"} prepared checkout, inputs, and
+          the Action container.
+        </Text>
+      );
+    case "running":
+      return (
+        <Text size="xs">
+          Action <Code>{run.action}</Code> executed using Runtime <Code>{run.runtime}</Code>.
+        </Text>
+      );
+    case "finished":
+      return (
+        <Text size="xs">
+          {run.outcomeReason ?? `Run ${run.outcome ?? "finished"}`}
+          {run.exitCode === undefined ? "." : ` with process exit code ${run.exitCode}.`}
+        </Text>
+      );
+  }
 }
 
 function runOutcomeColor(outcome: NonNullable<Run["outcome"]>) {
@@ -1273,19 +1545,8 @@ function finishedIcon(run: Run): TablerIcon {
   }
 }
 
-function lifecycleActiveStep(run: Run) {
-  switch (run.phase) {
-    case "queued":
-      return 0;
-    case "assigned":
-      return 1;
-    case "preparing":
-      return 2;
-    case "running":
-      return 3;
-    case "finished":
-      return 4;
-  }
+function lifecycleStageLabel(stage: Run["phase"]) {
+  return `${stage.slice(0, 1).toLocaleUpperCase()}${stage.slice(1)}`;
 }
 
 function ParameterTable({ parameters }: Readonly<{ parameters: Run["parameters"] }>) {
@@ -1399,11 +1660,15 @@ function InputTable({
 }
 
 function ArtifactTable({
+  artifactRuns,
+  artifactRunsAvailable,
   artifacts,
   consumers,
   principal,
   producerSucceeded,
 }: Readonly<{
+  artifactRuns: Record<string, Run[]>;
+  artifactRunsAvailable: Record<string, boolean>;
   artifacts: Artifact[];
   consumers: Record<string, RunArtifactConsumer[]>;
   principal?: ProductPrincipal;
@@ -1431,89 +1696,134 @@ function ArtifactTable({
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {artifacts.map((artifact) => (
-                  <Table.Tr key={artifact.id}>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Text>{artifact.name}</Text>
-                        {artifact.sensitive ? <Badge color="orange">Sensitive</Badge> : null}
-                      </Group>
-                      <Text c="dimmed" size="xs">
-                        {artifact.mediaType}
-                      </Text>
-                      {artifact.description ? (
+                {artifacts.map((artifact) => {
+                  const downstreamRuns = artifactRuns[artifact.id] ?? [];
+                  return (
+                    <Table.Tr key={artifact.id}>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Text>{artifact.name}</Text>
+                          {artifact.sensitive ? <Badge color="orange">Sensitive</Badge> : null}
+                        </Group>
                         <Text c="dimmed" size="xs">
-                          {artifact.description}
+                          {artifact.mediaType}
                         </Text>
-                      ) : null}
-                    </Table.Td>
-                    <Table.Td>
-                      <Stack gap={0}>
-                        <Text>{artifact.state}</Text>
-                        <Text c="dimmed" size="xs">
-                          {artifact.retentionState}
-                        </Text>
-                      </Stack>
-                    </Table.Td>
-                    <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
-                    <Table.Td>
-                      <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
-                    </Table.Td>
-                    <Table.Td>
-                      <Stack gap={0}>
-                        <Text>
-                          {artifact.provenance.target} · {artifact.provenance.action}
-                        </Text>
-                        <Text c="dimmed" size="xs">
-                          <CommitReference
-                            commit={artifact.provenance.commit}
-                            repositoryId={artifact.provenance.repositoryId}
-                          />{" "}
-                          · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
-                        </Text>
-                      </Stack>
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="sm" wrap="nowrap">
-                        {artifact.state === "sealed" &&
-                        artifact.retentionState === "retained" &&
-                        canReadArtifactContents(artifact, principal) ? (
-                          <Anchor href={`/api/v1/artifacts/${artifact.id}/download`}>
-                            Download
-                          </Anchor>
-                        ) : artifact.state === "sealed" &&
-                          artifact.retentionState === "retained" &&
-                          artifact.sensitive ? (
-                          <Text c="dimmed">Restricted</Text>
-                        ) : (
-                          <Text c="dimmed">Unavailable</Text>
-                        )}
-                        {producerSucceeded &&
-                        artifact.state === "sealed" &&
-                        artifact.retentionState === "retained"
-                          ? (consumers[artifact.name] ?? []).map((consumer) => (
-                              <ArtifactAction
-                                artifact={artifact}
-                                consumer={consumer}
-                                key={`${artifact.id}-${consumer.action}`}
-                                submitting={
-                                  navigation.state === "submitting" &&
-                                  navigation.formData?.get("artifactId") === artifact.id &&
-                                  navigation.formData?.get("actionName") === consumer.action
-                                }
-                              />
-                            ))
-                          : null}
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
+                        {artifact.description ? (
+                          <Text c="dimmed" size="xs">
+                            {artifact.description}
+                          </Text>
+                        ) : null}
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap={0}>
+                          <Text>{artifact.state}</Text>
+                          <Text c="dimmed" size="xs">
+                            {artifact.retentionState}
+                          </Text>
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
+                      <Table.Td>
+                        <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap={0}>
+                          <Text>
+                            {artifact.provenance.target} · {artifact.provenance.action}
+                          </Text>
+                          <Text c="dimmed" size="xs">
+                            <CommitReference
+                              commit={artifact.provenance.commit}
+                              repositoryId={artifact.provenance.repositoryId}
+                            />{" "}
+                            · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
+                          </Text>
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack align="flex-start" gap="xs">
+                          <Group gap="sm" wrap="wrap">
+                            {artifact.state === "sealed" &&
+                            artifact.retentionState === "retained" &&
+                            canReadArtifactContents(artifact, principal) ? (
+                              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`}>
+                                Download
+                              </Anchor>
+                            ) : artifact.state === "sealed" &&
+                              artifact.retentionState === "retained" &&
+                              artifact.sensitive ? (
+                              <Text c="dimmed">Restricted</Text>
+                            ) : (
+                              <Text c="dimmed">Unavailable</Text>
+                            )}
+                            {producerSucceeded &&
+                            artifact.state === "sealed" &&
+                            artifact.retentionState === "retained"
+                              ? (consumers[artifact.name] ?? []).map((consumer) => (
+                                  <ArtifactAction
+                                    artifact={artifact}
+                                    consumer={consumer}
+                                    key={`${artifact.id}-${consumer.action}`}
+                                    submitting={
+                                      navigation.state === "submitting" &&
+                                      navigation.formData?.get("artifactId") === artifact.id &&
+                                      navigation.formData?.get("actionName") === consumer.action
+                                    }
+                                  />
+                                ))
+                              : null}
+                          </Group>
+                          {artifact.kind === "output" ? (
+                            <ArtifactLineageDetails
+                              available={artifactRunsAvailable[artifact.id] ?? false}
+                              runs={downstreamRuns}
+                            />
+                          ) : null}
+                        </Stack>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>
         )}
       </Stack>
     </Paper>
+  );
+}
+
+function ArtifactLineageDetails({
+  available,
+  runs,
+}: Readonly<{ available: boolean; runs: Run[] }>) {
+  return (
+    <Box className={styles.artifactLineage} component="details">
+      <Box component="summary">Downstream Runs · {runs.length.toLocaleString()}</Box>
+      <Stack gap="xs" mt="xs">
+        {!available ? (
+          <Text c="red" size="xs">
+            Artifact history could not be loaded.
+          </Text>
+        ) : runs.length === 0 ? (
+          <Text c="dimmed" size="xs">
+            No Runs have consumed this Artifact.
+          </Text>
+        ) : (
+          runs.map((consumerRun) => (
+            <Group gap="xs" key={consumerRun.id} wrap="wrap">
+              <Anchor component={Link} size="xs" to={`/runs/${consumerRun.id}`}>
+                {consumerRun.action} · {shortIdentifier(consumerRun.id)}
+              </Anchor>
+              <Badge color={runStatusColor(consumerRun)} size="xs" variant="light">
+                {runStatusLabel(consumerRun)}
+              </Badge>
+              <RelativeTime c="dimmed" size="xs" value={consumerRun.createdAt} />
+            </Group>
+          ))
+        )}
+      </Stack>
+    </Box>
   );
 }
 

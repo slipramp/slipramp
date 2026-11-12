@@ -1,8 +1,11 @@
 export const runReportSearchParamNames = {
   artifact: "report",
+  host: "reportHost",
+  operation: "reportOperation",
   outcome: "reportOutcome",
   page: "reportPage",
   query: "reportQuery",
+  scope: "reportScope",
   showNoOp: "reportShowNoOp",
   showUnchanged: "reportShowUnchanged",
   task: "reportTask",
@@ -14,9 +17,12 @@ export type RunReportSearchParam = Exclude<
 >;
 
 const reportStateParamNames: RunReportSearchParam[] = [
+  runReportSearchParamNames.host,
+  runReportSearchParamNames.operation,
   runReportSearchParamNames.outcome,
   runReportSearchParamNames.page,
   runReportSearchParamNames.query,
+  runReportSearchParamNames.scope,
   runReportSearchParamNames.showNoOp,
   runReportSearchParamNames.showUnchanged,
   runReportSearchParamNames.task,

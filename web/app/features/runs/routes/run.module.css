@@ -1,3 +1,109 @@
-:global(:root[data-slipramp-theme="kawaii"]) .terminalNotice {
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 23rem);
+  align-items: start;
+  gap: var(--mantine-spacing-lg);
+}
+
+.outputCard {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.outputTabs {
+  gap: var(--mantine-spacing-xs);
+  padding-inline: var(--mantine-spacing-md);
+  flex-wrap: wrap;
+}
+
+.outputPanel {
+  padding: var(--mantine-spacing-lg);
+}
+
+.desktopLifecycle {
+  position: sticky;
+  top: var(--mantine-spacing-md);
+}
+
+.mobileLifecycle {
   display: none;
+}
+
+.lifecycleSteps {
+  position: relative;
+}
+
+.lifecycleStep {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--mantine-spacing-sm);
+  padding: 0.5rem;
+  border-radius: var(--mantine-radius-md);
+  text-align: left;
+}
+
+.lifecycleStep:hover,
+.lifecycleStep[data-selected] {
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleStep time {
+  white-space: nowrap;
+}
+
+.lifecycleStep[data-selected] {
+  box-shadow: inset 3px 0 var(--mantine-primary-color-filled);
+}
+
+.lifecycleIcon {
+  display: grid;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--mantine-color-dimmed);
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleIcon[data-complete] {
+  color: var(--mantine-color-green-7);
+  background: var(--mantine-color-green-light);
+}
+
+.artifactLineage {
+  max-width: 22rem;
+}
+
+.artifactLineage summary {
+  color: var(--mantine-primary-color-filled);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@media (max-width: 62em) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mantine-spacing-sm);
+  }
+
+  .desktopLifecycle {
+    display: none;
+  }
+
+  .mobileLifecycle {
+    display: block;
+  }
+}
+
+@media (max-width: 48em) {
+  .outputTabs {
+    padding-inline: var(--mantine-spacing-xs);
+  }
+
+  .outputPanel {
+    padding: var(--mantine-spacing-sm);
+  }
 }

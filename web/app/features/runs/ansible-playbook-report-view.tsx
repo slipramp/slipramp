@@ -64,10 +64,12 @@ const ansibleOutcomeOptions: Array<{ label: string; value: AnsibleOutcome }> = [
 export function AnsiblePlaybookReportView({
   artifact,
   canReadContents,
+  embedded = false,
   load,
 }: Readonly<{
   artifact: Artifact;
   canReadContents: boolean;
+  embedded?: boolean;
   load: ReportLoad;
 }>) {
   const report = artifact.report;
@@ -77,62 +79,68 @@ export function AnsiblePlaybookReportView({
     load.state === "available" && load.detail.kind === "ansible-playbook" ? load.detail : undefined;
   const summaryBadges = ansibleSummaryBadges(report.summary);
 
-  return (
+  const content = (
+    <Stack gap="md">
+      <SectionHeader
+        actions={
+          <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
+            <Badge color={report.mode === "apply" ? "green" : "blue"} variant="light">
+              {report.mode === "apply" ? "Apply" : "Preview"}
+            </Badge>
+            <Badge color={report.summary.complete ? "green" : "orange"} variant="light">
+              {report.summary.complete ? "Complete" : "Partial"}
+            </Badge>
+            {detail ? <RunnerStatusBadge report={detail} /> : null}
+            <Badge color="gray" variant="light">
+              Ansible{report.toolVersion ? ` ${report.toolVersion}` : ""}
+            </Badge>
+            {canReadContents &&
+            artifact.state === "sealed" &&
+            artifact.retentionState === "retained" ? (
+              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+                Download source JSON
+              </Anchor>
+            ) : null}
+          </Group>
+        }
+        title="Ansible playbook report"
+      />
+
+      <Text c="dimmed" size="sm">
+        {report.summary.hosts.toLocaleString()} hosts · {report.summary.plays.toLocaleString()}{" "}
+        plays · {report.summary.tasks.toLocaleString()} tasks ·{" "}
+        {report.summary.results.total.toLocaleString()} host-task results
+      </Text>
+      <AnsibleBadges
+        badges={summaryBadges}
+        empty="Ansible reported no changes, failures, unreachable hosts, skips, rescues, or ignored failures."
+        label="Ansible result recap"
+      />
+
+      {report.mode === "preview" ? (
+        <Alert color="blue" title="Ansible preview">
+          Check-mode results describe predicted task outcomes. Some modules cannot predict changes,
+          so this report is not proof of the exact apply result.
+        </Alert>
+      ) : null}
+      {!report.summary.complete ? (
+        <Alert color="orange" title="Partial playbook report">
+          Ansible Runner did not produce a final play recap. The report shows only events observed
+          before execution stopped.
+        </Alert>
+      ) : null}
+
+      <AnsibleHostRecap totals={report.summary.hostTotals} />
+      <ReportDetailNotice state={load.state} />
+      {detail ? <AnsiblePlaybookDetail artifactId={artifact.id} report={detail} /> : null}
+    </Stack>
+  );
+
+  return embedded ? (
+    content
+  ) : (
     <Paper p="md" withBorder>
-      <Stack gap="md">
-        <SectionHeader
-          actions={
-            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-              <Badge color={report.mode === "apply" ? "green" : "blue"} variant="light">
-                {report.mode === "apply" ? "Apply" : "Preview"}
-              </Badge>
-              <Badge color={report.summary.complete ? "green" : "orange"} variant="light">
-                {report.summary.complete ? "Complete" : "Partial"}
-              </Badge>
-              {detail ? <RunnerStatusBadge report={detail} /> : null}
-              <Badge color="gray" variant="light">
-                Ansible{report.toolVersion ? ` ${report.toolVersion}` : ""}
-              </Badge>
-              {canReadContents &&
-              artifact.state === "sealed" &&
-              artifact.retentionState === "retained" ? (
-                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                  Download source JSON
-                </Anchor>
-              ) : null}
-            </Group>
-          }
-          title="Ansible playbook report"
-        />
-
-        <Text c="dimmed" size="sm">
-          {report.summary.hosts.toLocaleString()} hosts · {report.summary.plays.toLocaleString()}{" "}
-          plays · {report.summary.tasks.toLocaleString()} tasks ·{" "}
-          {report.summary.results.total.toLocaleString()} host-task results
-        </Text>
-        <AnsibleBadges
-          badges={summaryBadges}
-          empty="Ansible reported no changes, failures, unreachable hosts, skips, rescues, or ignored failures."
-          label="Ansible result recap"
-        />
-
-        {report.mode === "preview" ? (
-          <Alert color="blue" title="Ansible preview">
-            Check-mode results describe predicted task outcomes. Some modules cannot predict
-            changes, so this report is not proof of the exact apply result.
-          </Alert>
-        ) : null}
-        {!report.summary.complete ? (
-          <Alert color="orange" title="Partial playbook report">
-            Ansible Runner did not produce a final play recap. The report shows only events observed
-            before execution stopped.
-          </Alert>
-        ) : null}
-
-        <AnsibleHostRecap totals={report.summary.hostTotals} />
-        <ReportDetailNotice state={load.state} />
-        {detail ? <AnsiblePlaybookDetail artifactId={artifact.id} report={detail} /> : null}
-      </Stack>
+      {content}
     </Paper>
   );
 }

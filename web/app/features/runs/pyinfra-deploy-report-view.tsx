@@ -1,47 +1,73 @@
 import {
+  ActionIcon,
   Alert,
   Anchor,
   Badge,
-  Button,
   Code,
   Group,
   Paper,
+  Select,
+  Spoiler,
   Stack,
   Switch,
   Table,
   Text,
   TextInput,
+  Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
-import { IconSearch } from "@tabler/icons-react";
-import { useDeferredValue, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { IconChevronDown, IconChevronRight, IconSearch, IconTerminal2 } from "@tabler/icons-react";
+import { useDeferredValue, useMemo, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router";
 
 import type { Artifact, PyinfraDeployReport, PyinfraOperation } from "~/api/generated";
 import {
   filterPyinfraOperations,
   isPyinfraNoOp,
-  previewPyinfraHosts,
-  PYINFRA_HOST_PREVIEW_LIMIT,
+  pyinfraHosts,
   pyinfraPlanBadges,
   pyinfraResultBadges,
   type PyinfraCountBadge,
+  type PyinfraOperationScope,
 } from "~/features/runs/pyinfra-deploy-report";
+import {
+  runDetailSearchParamNames,
+  updateRunDetailSearchParams,
+} from "~/features/runs/run-detail-url-state";
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
 import type { ReportLoad } from "~/features/runs/run-reports";
-import { SectionHeader } from "~/shared/page";
 import {
   runReportSearchParam,
   runReportSearchParamNames,
   updateRunReportSearchParams,
 } from "~/features/runs/run-report-url-state";
+import { SectionHeader } from "~/shared/page";
+
+const pyinfraScopes: PyinfraOperationScope[] = [
+  "all",
+  "attention",
+  "planned",
+  "observed",
+  "failed",
+];
+
+const pyinfraScopeOptions = [
+  { label: "All operations", value: "all" },
+  { label: "Needs attention", value: "attention" },
+  { label: "Planned changes", value: "planned" },
+  { label: "Observed changes", value: "observed" },
+  { label: "Failures", value: "failed" },
+];
 
 export function PyinfraDeployReportView({
   artifact,
   canReadContents,
+  embedded = false,
   load,
 }: Readonly<{
   artifact: Artifact;
   canReadContents: boolean;
+  embedded?: boolean;
   load: ReportLoad;
 }>) {
   const report = artifact.report;
@@ -49,47 +75,76 @@ export function PyinfraDeployReportView({
 
   const detail =
     load.state === "available" && load.detail.kind === "pyinfra-deploy" ? load.detail : undefined;
-  const planBadges = pyinfraPlanBadges(report.summary.plan).filter(
-    (badge) => badge.label !== "unchanged operations",
+  const content = (
+    <Stack gap="md">
+      <SectionHeader
+        actions={
+          <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
+            <Badge color={report.mode === "apply" ? "green" : "blue"} variant="light">
+              {report.mode === "apply" ? "Apply" : "Preview"}
+            </Badge>
+            <Badge color="gray" variant="light">
+              {report.tool}
+              {report.toolVersion ? ` ${report.toolVersion}` : ""}
+            </Badge>
+            {canReadContents &&
+            artifact.state === "sealed" &&
+            artifact.retentionState === "retained" ? (
+              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+                Download source JSON
+              </Anchor>
+            ) : null}
+          </Group>
+        }
+        title="pyinfra deploy report"
+      />
+
+      <ReportSummary report={report} />
+      <ReportDetailNotice state={load.state} />
+      {detail ? <PyinfraDeployDetail artifactId={artifact.id} report={detail} /> : null}
+    </Stack>
   );
 
-  return (
+  return embedded ? (
+    content
+  ) : (
     <Paper p="md" withBorder>
-      <Stack gap="md">
-        <SectionHeader
-          actions={
-            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-              <Badge color={report.mode === "apply" ? "green" : "blue"} variant="light">
-                {report.mode === "apply" ? "Apply" : "Preview"}
-              </Badge>
-              <Badge color="gray" variant="light">
-                {report.tool}
-                {report.toolVersion ? ` ${report.toolVersion}` : ""}
-              </Badge>
-              {canReadContents &&
-              artifact.state === "sealed" &&
-              artifact.retentionState === "retained" ? (
-                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                  Download source JSON
-                </Anchor>
-              ) : null}
-            </Group>
-          }
-          title="pyinfra deploy report"
-        />
-
-        <SummaryBadges badges={planBadges} empty="No operation changes were planned." />
-        {report.summary.results ? (
-          <SummaryBadges
-            badges={pyinfraResultBadges(report.summary.results)}
-            empty="The apply completed without host changes or failures."
-          />
-        ) : null}
-
-        <ReportDetailNotice state={load.state} />
-        {detail ? <PyinfraDeployDetail artifactId={artifact.id} report={detail} /> : null}
-      </Stack>
+      {content}
     </Paper>
+  );
+}
+
+function ReportSummary({ report }: Readonly<{ report: NonNullable<Artifact["report"]> }>) {
+  if (report.kind !== "pyinfra-deploy") return null;
+  const planBadges = pyinfraPlanBadges(report.summary.plan);
+  const resultBadges = report.summary.results
+    ? pyinfraResultBadges(report.summary.results)
+    : undefined;
+  const entirelyUnchanged =
+    report.summary.plan.changedOperations === 0 &&
+    (report.summary.results?.changedHostOperations ?? 0) === 0 &&
+    (report.summary.results?.failedHostOperations ?? 0) === 0;
+
+  return (
+    <Stack gap="xs">
+      {entirelyUnchanged ? (
+        <Alert color="green" title="No changes across this Run">
+          Every reported operation was unchanged. All operations remain available for inspection.
+        </Alert>
+      ) : null}
+      <SummaryBadges badges={planBadges} empty="No operation changes were planned." label="Plan" />
+      {resultBadges ? (
+        <SummaryBadges
+          badges={resultBadges}
+          empty="The apply completed without host changes or failures."
+          label="Observed"
+        />
+      ) : (
+        <Text c="dimmed" size="sm">
+          Execution results are not available for a preview.
+        </Text>
+      )}
+    </Stack>
   );
 }
 
@@ -100,90 +155,199 @@ function PyinfraDeployDetail({
   const [searchParams, setSearchParams] = useSearchParams();
   const keyword =
     runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.query) ?? "";
-  const showNoOp =
+  const host = runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.host) ?? "";
+  const expandedOperation = Number(
+    runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.operation),
+  );
+  const allNoOp = report.operations.every((operation) => isPyinfraNoOp(operation));
+  const defaultScope: PyinfraOperationScope = allNoOp ? "all" : "attention";
+  const requestedScope = runReportSearchParam(
+    searchParams,
+    artifactId,
+    runReportSearchParamNames.scope,
+  );
+  const scope = pyinfraScopes.includes(requestedScope as PyinfraOperationScope)
+    ? (requestedScope as PyinfraOperationScope)
+    : defaultScope;
+  const requestedShowNoOp =
     runReportSearchParam(searchParams, artifactId, runReportSearchParamNames.showNoOp) === "true";
+  const showNoOp = allNoOp || requestedShowNoOp;
   const deferredKeyword = useDeferredValue(keyword);
-  const operations = useMemo(
-    () =>
+  const hosts = useMemo(() => pyinfraHosts(report.operations), [report.operations]);
+  const operations = useMemo(() => {
+    const filtered = new Set(
       filterPyinfraOperations(report.operations, {
+        host,
         keyword: deferredKeyword,
+        scope,
         showNoOp,
       }),
-    [deferredKeyword, report.operations, showNoOp],
-  );
-  const noOpRows = useMemo(
+    );
+    return report.operations
+      .map((operation, index) => ({ index, operation }))
+      .filter(({ operation }) => filtered.has(operation));
+  }, [deferredKeyword, host, report.operations, scope, showNoOp]);
+  const unchangedOperations = useMemo(
     () => report.operations.filter((operation) => isPyinfraNoOp(operation)).length,
     [report.operations],
   );
 
-  function updateFilter(name: "reportQuery" | "reportShowNoOp", value?: string) {
-    setSearchParams(updateRunReportSearchParams(searchParams, artifactId, { [name]: value }), {
+  function updateFilter(
+    updates: Parameters<typeof updateRunReportSearchParams>[2],
+    replace = true,
+  ) {
+    setSearchParams(updateRunReportSearchParams(searchParams, artifactId, updates), {
       preventScrollReset: true,
-      replace: true,
+      replace,
     });
   }
 
   return (
-    <Stack gap="lg">
+    <Stack gap="md">
       {report.failedHosts.length > 0 ? (
         <Alert color="red" title="Failed hosts">
-          <HostNames hosts={report.failedHosts} />
+          <HostTags
+            hosts={report.failedHosts}
+            onSelect={(selectedHost) =>
+              updateFilter(
+                {
+                  [runReportSearchParamNames.host]: selectedHost,
+                  [runReportSearchParamNames.operation]: undefined,
+                  [runReportSearchParamNames.scope]: "all",
+                },
+                false,
+              )
+            }
+          />
         </Alert>
       ) : null}
-      <Stack gap={6}>
-        <Group align="flex-end" gap="md" justify="space-between" wrap="wrap">
-          <TextInput
-            aria-label="Filter pyinfra operations by keyword"
-            label="Filter operations"
-            leftSection={<IconSearch aria-hidden size={15} />}
+
+      <Group align="flex-end" gap="sm" wrap="wrap">
+        <TextInput
+          aria-label="Filter pyinfra operations by keyword"
+          label="Filter operations"
+          leftSection={<IconSearch aria-hidden size={15} />}
+          onChange={(event) =>
+            updateFilter({
+              [runReportSearchParamNames.operation]: undefined,
+              [runReportSearchParamNames.query]: event.currentTarget.value,
+            })
+          }
+          placeholder="Operation or host"
+          style={{ flex: "1 1 18rem" }}
+          value={keyword}
+        />
+        <Select
+          allowDeselect={false}
+          data={pyinfraScopeOptions}
+          label="Outcome"
+          onChange={(value) =>
+            updateFilter(
+              {
+                [runReportSearchParamNames.operation]: undefined,
+                [runReportSearchParamNames.scope]:
+                  value === defaultScope ? undefined : (value ?? undefined),
+              },
+              false,
+            )
+          }
+          value={scope}
+          w={190}
+        />
+        <Select
+          aria-label="Follow one host across pyinfra operations"
+          clearable
+          data={hosts}
+          label="Host"
+          nothingFoundMessage="No matching hosts"
+          onChange={(value) =>
+            updateFilter(
+              {
+                [runReportSearchParamNames.host]: value ?? undefined,
+                [runReportSearchParamNames.operation]: undefined,
+                [runReportSearchParamNames.scope]: value ? "all" : undefined,
+              },
+              false,
+            )
+          }
+          placeholder={`All ${hosts.length.toLocaleString()} hosts`}
+          searchable
+          value={host || null}
+          w={280}
+        />
+        {unchangedOperations > 0 && !allNoOp ? (
+          <Switch
+            checked={showNoOp}
+            label={`Show unchanged (${unchangedOperations.toLocaleString()})`}
+            mb={7}
             onChange={(event) =>
-              updateFilter(runReportSearchParamNames.query, event.currentTarget.value)
+              updateFilter({
+                [runReportSearchParamNames.operation]: undefined,
+                [runReportSearchParamNames.showNoOp]: event.currentTarget.checked
+                  ? "true"
+                  : undefined,
+              })
             }
-            placeholder="Operation or host"
-            style={{ flex: "1 1 24rem" }}
-            value={keyword}
           />
-          {noOpRows > 0 ? (
-            <Switch
-              checked={showNoOp}
-              label={`Show no-op (${noOpRows.toLocaleString()})`}
-              onChange={(event) =>
-                updateFilter(
-                  runReportSearchParamNames.showNoOp,
-                  event.currentTarget.checked ? "true" : undefined,
-                )
-              }
-            />
-          ) : null}
-        </Group>
-        <Text c="dimmed" size="xs">
-          Showing {operations.length.toLocaleString()} of{" "}
-          {report.operations.length.toLocaleString()}
-          {deferredKeyword.trim() ? " operations matching the keyword filter." : " operations."}
-          {!showNoOp && noOpRows > 0 ? " No-op operations are hidden." : ""}
-        </Text>
-      </Stack>
+        ) : null}
+      </Group>
+
+      <Text c="dimmed" size="xs">
+        Showing {operations.length.toLocaleString()} of {report.operations.length.toLocaleString()}
+        {" operations"}
+        {host ? ` for ${host}` : ""}
+        {deferredKeyword.trim() ? " matching the keyword filter" : ""}.
+      </Text>
+
       {operations.length === 0 ? (
-        <Text c="dimmed" size="sm">
-          {report.operations.length === 0
-            ? "pyinfra reported no operations."
-            : "No operations match the current filter."}
-        </Text>
+        <Alert color="gray" title="No matching operations">
+          Adjust the operation, outcome, or host filters to inspect other results.
+        </Alert>
       ) : (
-        <Table.ScrollContainer minWidth={900} type="native">
+        <Table.ScrollContainer minWidth={640} type="native">
           <Table verticalSpacing="sm">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Operation</Table.Th>
-                <Table.Th>Planned changes</Table.Th>
-                <Table.Th>Conditional changes</Table.Th>
-                <Table.Th>{report.mode === "apply" ? "Result" : "Execution"}</Table.Th>
+                <Table.Th>Host results</Table.Th>
+                <Table.Th ta="center" w={56}>
+                  Log
+                </Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {operations.map((operation, index) => (
-                <OperationRow key={`${operation.names.join(":")}:${index}`} operation={operation} />
-              ))}
+              {operations.map(({ index, operation }) => {
+                const operationNumber = index + 1;
+                const expanded = expandedOperation === operationNumber;
+                return (
+                  <OperationRows
+                    expanded={expanded}
+                    host={host}
+                    key={`${operation.names.join(":")}:${index}`}
+                    onExpand={() =>
+                      updateFilter(
+                        {
+                          [runReportSearchParamNames.operation]: expanded
+                            ? undefined
+                            : String(operationNumber),
+                        },
+                        false,
+                      )
+                    }
+                    onHostSelect={(selectedHost) =>
+                      updateFilter(
+                        {
+                          [runReportSearchParamNames.host]: selectedHost,
+                          [runReportSearchParamNames.scope]: "all",
+                        },
+                        false,
+                      )
+                    }
+                    operation={operation}
+                    searchParams={searchParams}
+                  />
+                );
+              })}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
@@ -192,103 +356,230 @@ function PyinfraDeployDetail({
   );
 }
 
-function OperationRow({ operation }: Readonly<{ operation: PyinfraOperation }>) {
-  return (
-    <Table.Tr>
-      <Table.Td>
-        <Stack gap={4}>
-          {operation.names.map((name) => (
-            <Code key={name}>{name}</Code>
-          ))}
-        </Stack>
-      </Table.Td>
-      <Table.Td>
-        <HostOutcome color="yellow" hosts={operation.hostsWithChanges} label="planned" />
-      </Table.Td>
-      <Table.Td>
-        <HostOutcome
-          color="violet"
-          hosts={operation.hostsWithConditionalChanges}
-          label="conditional"
-        />
-      </Table.Td>
-      <Table.Td>
-        {operation.result ? (
-          <Stack gap="xs">
-            <HostOutcome color="green" hosts={operation.result.changedHosts} label="changed" />
-            <HostOutcome color="red" hosts={operation.result.failedHosts} label="failed" />
-            <HostOutcome color="gray" hosts={operation.result.unchangedHosts} label="unchanged" />
-          </Stack>
-        ) : (
-          <Text c="dimmed" size="sm">
-            Not executed in preview
-          </Text>
-        )}
-      </Table.Td>
-    </Table.Tr>
-  );
-}
-
-function HostOutcome({
-  color,
-  hosts,
-  label,
-}: Readonly<{ color: string; hosts: string[]; label: string }>) {
-  if (hosts.length === 0) return <Text c="dimmed">—</Text>;
+function OperationRows({
+  expanded,
+  host,
+  onExpand,
+  onHostSelect,
+  operation,
+  searchParams,
+}: Readonly<{
+  expanded: boolean;
+  host: string;
+  onExpand: () => void;
+  onHostSelect: (host: string) => void;
+  operation: PyinfraOperation;
+  searchParams: URLSearchParams;
+}>) {
+  const visible = host ? operationForHost(operation, host) : operation;
+  const logSearchParams = updateRunDetailSearchParams(searchParams, {
+    [runDetailSearchParamNames.logQuery]: operation.names[0],
+    [runDetailSearchParamNames.output]: "log",
+  });
 
   return (
-    <Stack gap={4}>
-      <Badge color={color} variant="light">
-        {hosts.length.toLocaleString()} {label}
-      </Badge>
-      <HostNames hosts={hosts} />
-    </Stack>
-  );
-}
-
-function HostNames({ hosts }: Readonly<{ hosts: string[] }>) {
-  const [expanded, setExpanded] = useState(false);
-  const { hiddenCount, visibleHosts } = previewPyinfraHosts(hosts, expanded);
-  const expandable = hosts.length > PYINFRA_HOST_PREVIEW_LIMIT;
-
-  return (
-    <Stack align="flex-start" gap={2}>
-      <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
-        {visibleHosts.join(", ")}
-      </Text>
-      {expandable ? (
-        <Button
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-          size="compact-xs"
-          variant="subtle"
-        >
-          {expanded ? "Show less" : `Show ${hiddenCount.toLocaleString()} more`}
-        </Button>
+    <>
+      <Table.Tr data-expanded={expanded || undefined}>
+        <Table.Td>
+          <UnstyledButton
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "Show"} host results for ${operation.names.join(", ")}`}
+            onClick={onExpand}
+            style={{ textAlign: "left", width: "100%" }}
+          >
+            <Group align="center" gap="xs" wrap="nowrap">
+              {expanded ? (
+                <IconChevronDown aria-hidden size={15} />
+              ) : (
+                <IconChevronRight aria-hidden size={15} />
+              )}
+              <Stack gap={3}>
+                {operation.names.map((name) => (
+                  <Code key={name}>{name}</Code>
+                ))}
+              </Stack>
+            </Group>
+          </UnstyledButton>
+        </Table.Td>
+        <Table.Td>
+          <OperationCounts operation={visible} />
+        </Table.Td>
+        <Table.Td ta="center">
+          <Tooltip label="Find in Run log">
+            <ActionIcon
+              aria-label="Find in Run log"
+              color="lilac"
+              component={Link}
+              preventScrollReset
+              to={`?${logSearchParams.toString()}`}
+              variant="subtle"
+            >
+              <IconTerminal2 aria-hidden size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Table.Td>
+      </Table.Tr>
+      {expanded ? (
+        <Table.Tr>
+          <Table.Td bg="var(--mantine-color-default-hover)" colSpan={3}>
+            <OperationHostBreakdown operation={visible} onHostSelect={onHostSelect} />
+          </Table.Td>
+        </Table.Tr>
       ) : null}
-    </Stack>
+    </>
   );
 }
 
-function SummaryBadges({
-  badges,
-  empty,
-}: Readonly<{ badges: PyinfraCountBadge[]; empty: string }>) {
-  if (badges.length === 0) {
+function OperationCounts({ operation }: Readonly<{ operation: PyinfraOperation }>) {
+  const counts = [
+    { color: "yellow", count: operation.hostsWithChanges.length, label: "planned" },
+    {
+      color: "violet",
+      count: operation.hostsWithConditionalChanges.length,
+      label: "conditional",
+    },
+    { color: "red", count: operation.result?.failedHosts.length ?? 0, label: "failed" },
+    { color: "green", count: operation.result?.changedHosts.length ?? 0, label: "changed" },
+    { color: "gray", count: operation.result?.unchangedHosts.length ?? 0, label: "unchanged" },
+  ].filter(({ count }) => count > 0);
+
+  if (counts.length === 0) {
     return (
       <Text c="dimmed" size="sm">
-        {empty}
+        {operation.result ? "No host results" : "Not executed in preview"}
       </Text>
     );
   }
 
   return (
-    <Group gap="xs" wrap="wrap">
-      {badges.map((badge) => (
-        <Badge color={badge.color} key={badge.label} variant="light">
-          {badge.count.toLocaleString()} {badge.label}
+    <Group gap={6} wrap="wrap">
+      {counts.map(({ color, count, label }) => (
+        <Badge color={color} key={label} size="sm" variant="light">
+          {count.toLocaleString()} {label}
         </Badge>
       ))}
+    </Group>
+  );
+}
+
+function OperationHostBreakdown({
+  onHostSelect,
+  operation,
+}: Readonly<{ onHostSelect: (host: string) => void; operation: PyinfraOperation }>) {
+  const groups = [
+    { color: "red", hosts: operation.result?.failedHosts ?? [], label: "Observed failed" },
+    { color: "green", hosts: operation.result?.changedHosts ?? [], label: "Observed changed" },
+    { color: "yellow", hosts: operation.hostsWithChanges, label: "Planned change" },
+    {
+      color: "violet",
+      hosts: operation.hostsWithConditionalChanges,
+      label: "Conditional change",
+    },
+    { color: "gray", hosts: operation.result?.unchangedHosts ?? [], label: "Observed unchanged" },
+  ].filter(({ hosts }) => hosts.length > 0);
+
+  if (groups.length === 0) {
+    return (
+      <Text c="dimmed" size="sm">
+        No host names were recorded for this operation.
+      </Text>
+    );
+  }
+
+  return (
+    <Stack gap="sm">
+      {groups.map(({ color, hosts, label }) => (
+        <Stack gap={5} key={label}>
+          <Text c={color} fw={650} size="xs">
+            {hosts.length.toLocaleString()} {label.toLocaleLowerCase()}{" "}
+            {hosts.length === 1 ? "host" : "hosts"}
+          </Text>
+          {label === "Observed unchanged" && hosts.length > 6 ? (
+            <Spoiler
+              hideLabel="Collapse unchanged hosts"
+              maxHeight={40}
+              showLabel={`Show all ${hosts.length.toLocaleString()} unchanged hosts`}
+            >
+              <HostTags hosts={hosts} onSelect={onHostSelect} />
+            </Spoiler>
+          ) : (
+            <HostTags hosts={hosts} onSelect={onHostSelect} />
+          )}
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function HostTags({
+  hosts,
+  onSelect,
+}: Readonly<{ hosts: string[]; onSelect: (host: string) => void }>) {
+  return (
+    <Group gap={6} wrap="wrap">
+      {hosts.map((host) => (
+        <Badge
+          aria-label={`Show operations for ${host}`}
+          component="button"
+          key={host}
+          onClick={() => onSelect(host)}
+          style={{ cursor: "pointer", overflowWrap: "anywhere" }}
+          type="button"
+          variant="outline"
+        >
+          {host}
+        </Badge>
+      ))}
+    </Group>
+  );
+}
+
+function operationForHost(operation: PyinfraOperation, host: string): PyinfraOperation {
+  const onlyHost = (hosts: string[]) => hosts.filter((candidate) => candidate === host);
+  return {
+    ...operation,
+    hostsWithChanges: onlyHost(operation.hostsWithChanges),
+    hostsWithConditionalChanges: onlyHost(operation.hostsWithConditionalChanges),
+    result: operation.result
+      ? {
+          changedHosts: onlyHost(operation.result.changedHosts),
+          failedHosts: onlyHost(operation.result.failedHosts),
+          unchangedHosts: onlyHost(operation.result.unchangedHosts),
+        }
+      : undefined,
+  };
+}
+
+function SummaryBadges({
+  badges,
+  empty,
+  label,
+}: Readonly<{ badges: PyinfraCountBadge[]; empty: string; label: string }>) {
+  let contents: ReactNode;
+  if (badges.length === 0) {
+    contents = (
+      <Text c="dimmed" size="sm">
+        {empty}
+      </Text>
+    );
+  } else {
+    contents = (
+      <Group gap="xs" wrap="wrap">
+        {badges.map((badge) => (
+          <Badge color={badge.color} key={badge.label} variant="light">
+            {badge.count.toLocaleString()} {badge.label}
+          </Badge>
+        ))}
+      </Group>
+    );
+  }
+
+  return (
+    <Group align="flex-start" gap="sm" wrap="wrap">
+      <Text c="dimmed" fw={700} size="xs" tt="uppercase" w={64}>
+        {label}
+      </Text>
+      {contents}
     </Group>
   );
 }

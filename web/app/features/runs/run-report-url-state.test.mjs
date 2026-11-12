@@ -49,3 +49,32 @@ test("clearing the last report option removes the artifact selector", () => {
 
   assert.equal(next.toString(), "");
 });
+
+test("host, expanded operation, and scope stay scoped to one report artifact", () => {
+  const current = new URLSearchParams(
+    "report=artifact-a&reportHost=web-2&reportOperation=3&reportScope=failed&output=report:artifact-a",
+  );
+
+  assert.equal(
+    runReportSearchParam(current, "artifact-a", runReportSearchParamNames.host),
+    "web-2",
+  );
+  assert.equal(
+    runReportSearchParam(current, "artifact-a", runReportSearchParamNames.operation),
+    "3",
+  );
+  assert.equal(
+    runReportSearchParam(current, "artifact-a", runReportSearchParamNames.scope),
+    "failed",
+  );
+  assert.equal(runReportSearchParam(current, "artifact-b", runReportSearchParamNames.host), null);
+
+  const next = updateRunReportSearchParams(current, "artifact-b", {
+    [runReportSearchParamNames.host]: "db-1",
+  });
+  assert.equal(next.get("output"), "report:artifact-a");
+  assert.equal(next.get("report"), "artifact-b");
+  assert.equal(next.get("reportHost"), "db-1");
+  assert.equal(next.get("reportOperation"), null);
+  assert.equal(next.get("reportScope"), null);
+});

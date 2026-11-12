@@ -47,10 +47,12 @@ type InfrastructurePlanSummaryReport = OpenTofuPlanReportSummary | TerraformPlan
 export function InfrastructurePlanReportView({
   artifact,
   canReadContents,
+  embedded = false,
   load,
 }: Readonly<{
   artifact: Artifact;
   canReadContents: boolean;
+  embedded?: boolean;
   load: ReportLoad;
 }>) {
   const report = artifact.report;
@@ -65,48 +67,54 @@ export function InfrastructurePlanReportView({
   );
   const toolName = infrastructureToolName(report.tool);
 
-  return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <SectionHeader
-          actions={
-            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-              <BooleanFact label="Applyable" value={report.summary.applyable} />
-              <BooleanFact label="Complete" value={report.summary.complete} />
-              <BooleanFact label="Errored" negative value={report.summary.errored} />
-              <Badge color="gray" variant="light">
-                {toolName}
-                {report.toolVersion ? ` ${report.toolVersion}` : ""}
-              </Badge>
-              {canReadContents &&
-              artifact.state === "sealed" &&
-              artifact.retentionState === "retained" ? (
-                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                  Download source JSON
-                </Anchor>
-              ) : null}
-            </Group>
-          }
-          title={`${toolName} plan report`}
-        />
-
-        {summaryBadges.length > 0 || report.summary.driftedResources > 0 ? (
-          <Group gap="xs" wrap="wrap">
-            {summaryBadges.map((badge) => (
-              <CountBadgeView badge={badge} key={badge.label} />
-            ))}
-            {report.summary.driftedResources > 0 ? (
-              <Badge color="grape" variant="light">
-                {report.summary.driftedResources} drifted
-              </Badge>
+  const content = (
+    <Stack gap="md">
+      <SectionHeader
+        actions={
+          <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
+            <BooleanFact label="Applyable" value={report.summary.applyable} />
+            <BooleanFact label="Complete" value={report.summary.complete} />
+            <BooleanFact label="Errored" negative value={report.summary.errored} />
+            <Badge color="gray" variant="light">
+              {toolName}
+              {report.toolVersion ? ` ${report.toolVersion}` : ""}
+            </Badge>
+            {canReadContents &&
+            artifact.state === "sealed" &&
+            artifact.retentionState === "retained" ? (
+              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+                Download source JSON
+              </Anchor>
             ) : null}
           </Group>
-        ) : null}
+        }
+        title={`${toolName} plan report`}
+      />
 
-        <ReportDetailNotice state={load.state} />
+      {summaryBadges.length > 0 || report.summary.driftedResources > 0 ? (
+        <Group gap="xs" wrap="wrap">
+          {summaryBadges.map((badge) => (
+            <CountBadgeView badge={badge} key={badge.label} />
+          ))}
+          {report.summary.driftedResources > 0 ? (
+            <Badge color="grape" variant="light">
+              {report.summary.driftedResources} drifted
+            </Badge>
+          ) : null}
+        </Group>
+      ) : null}
 
-        {detail ? <InfrastructurePlanDetail artifactId={artifact.id} report={detail} /> : null}
-      </Stack>
+      <ReportDetailNotice state={load.state} />
+
+      {detail ? <InfrastructurePlanDetail artifactId={artifact.id} report={detail} /> : null}
+    </Stack>
+  );
+
+  return embedded ? (
+    content
+  ) : (
+    <Paper p="md" withBorder>
+      {content}
     </Paper>
   );
 }

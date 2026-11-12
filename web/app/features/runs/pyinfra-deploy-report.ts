@@ -2,6 +2,8 @@ import type { PyinfraOperation, PyinfraPlanSummary, PyinfraResultSummary } from 
 
 export const PYINFRA_HOST_PREVIEW_LIMIT = 5;
 
+export type PyinfraOperationScope = "all" | "attention" | "planned" | "observed" | "failed";
+
 export type PyinfraCountBadge = {
   color: string;
   count: number;
@@ -33,11 +35,18 @@ export function pyinfraResultBadges(summary: PyinfraResultSummary): PyinfraCount
 
 export function filterPyinfraOperations(
   operations: PyinfraOperation[],
-  options: Readonly<{ keyword: string; showNoOp: boolean }>,
+  options: Readonly<{
+    host?: string;
+    keyword: string;
+    scope?: PyinfraOperationScope;
+    showNoOp: boolean;
+  }>,
 ) {
   const keywords = options.keyword.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   return operations.filter((operation) => {
     if (!options.showNoOp && isPyinfraNoOp(operation)) return false;
+    if (options.host && !pyinfraOperationHosts(operation).includes(options.host)) return false;
+    if (!matchesPyinfraScope(operation, options.scope ?? "all")) return false;
     if (keywords.length === 0) return true;
 
     const searchableText = [
@@ -57,8 +66,49 @@ export function filterPyinfraOperations(
 
 export function isPyinfraNoOp(operation: PyinfraOperation) {
   return (
-    operation.hostsWithChanges.length === 0 && operation.hostsWithConditionalChanges.length === 0
+    operation.hostsWithChanges.length === 0 &&
+    operation.hostsWithConditionalChanges.length === 0 &&
+    (operation.result?.changedHosts.length ?? 0) === 0 &&
+    (operation.result?.failedHosts.length ?? 0) === 0
   );
+}
+
+export function pyinfraHosts(operations: PyinfraOperation[]) {
+  return [...new Set(operations.flatMap((operation) => pyinfraOperationHosts(operation)))].toSorted(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
+export function pyinfraOperationHosts(operation: PyinfraOperation) {
+  return [
+    ...new Set([
+      ...operation.hostsWithChanges,
+      ...operation.hostsWithConditionalChanges,
+      ...(operation.result?.changedHosts ?? []),
+      ...(operation.result?.failedHosts ?? []),
+      ...(operation.result?.unchangedHosts ?? []),
+    ]),
+  ];
+}
+
+export function matchesPyinfraScope(operation: PyinfraOperation, scope: PyinfraOperationScope) {
+  const planned =
+    operation.hostsWithChanges.length > 0 || operation.hostsWithConditionalChanges.length > 0;
+  const observed =
+    (operation.result?.changedHosts.length ?? 0) > 0 ||
+    (operation.result?.failedHosts.length ?? 0) > 0;
+  switch (scope) {
+    case "all":
+      return true;
+    case "attention":
+      return planned || observed;
+    case "planned":
+      return planned;
+    case "observed":
+      return observed;
+    case "failed":
+      return (operation.result?.failedHosts.length ?? 0) > 0;
+  }
 }
 
 export function previewPyinfraHosts(hosts: string[], expanded: boolean) {

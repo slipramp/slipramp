@@ -71,8 +71,17 @@ const browserRunLogStreamEnvironment: RunLogStreamEnvironment = {
 
 export function RunLogViewer({
   artifact,
+  embedded = false,
+  initialSearchQuery = "",
+  runFinished = false,
   runId,
-}: Readonly<{ artifact?: Artifact; runId: string }>) {
+}: Readonly<{
+  artifact?: Artifact;
+  embedded?: boolean;
+  initialSearchQuery?: string;
+  runFinished?: boolean;
+  runId: string;
+}>) {
   const logAvailable = artifact !== undefined;
   const logAvailableRef = useRef(logAvailable);
   const initialOffsetBytes = Math.max(0, (artifact?.sizeBytes ?? 0) - LOG_TAIL_WINDOW_BYTES);
@@ -81,7 +90,7 @@ export function RunLogViewer({
   const [, setBufferVersion] = useState(0);
   const [fullscreenOpened, setFullscreenOpened] = useState(false);
   const [matchPosition, setMatchPosition] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [streamState, dispatchStream] = useReducer(
     reduceRunLogStream,
     logAvailable,
@@ -279,45 +288,59 @@ export function RunLogViewer({
     </>
   );
 
+  const inlineViewer = (
+    <Stack gap="sm">
+      <Group justify="space-between">
+        <Title order={2}>Run log</Title>
+        <Button
+          leftSection={<IconMaximize aria-hidden size={15} />}
+          onClick={() => setFullscreenOpened(true)}
+          size="compact-sm"
+          variant="subtle"
+        >
+          Full screen
+        </Button>
+      </Group>
+      {controls}
+      {!artifact && runFinished ? (
+        <Alert color="orange" title="Run log unavailable">
+          This Run finished without a retained log Artifact. Lifecycle and outcome details remain
+          available in Run details.
+        </Alert>
+      ) : null}
+      {diagnostic ? (
+        <Alert
+          color={status === "Incomplete" || status === "Reconnecting" ? "yellow" : "red"}
+          title={status}
+        >
+          {diagnostic}
+        </Alert>
+      ) : null}
+      <VirtualizedLogOutput
+        activeMatchLine={activeMatchLine}
+        buffer={buffer}
+        following={!paused}
+        key={`inline-${wrapLines}`}
+        searchQuery={searchQuery}
+        wrapLines={wrapLines}
+      />
+      <Text c="dimmed" size="xs">
+        The viewer keeps at most {formatBinarySize(LOG_TAIL_WINDOW_BYTES)} and{" "}
+        {LOG_TAIL_MAX_LINES.toLocaleString()} lines in memory. Raw download contains the complete
+        retained log.
+      </Text>
+    </Stack>
+  );
+
   return (
     <>
-      <Paper p="md" withBorder>
-        <Stack gap="sm">
-          <Group justify="space-between">
-            <Title order={2}>Logs</Title>
-            <Button
-              leftSection={<IconMaximize aria-hidden size={15} />}
-              onClick={() => setFullscreenOpened(true)}
-              size="compact-sm"
-              variant="subtle"
-            >
-              Full screen
-            </Button>
-          </Group>
-          {controls}
-          {diagnostic ? (
-            <Alert
-              color={status === "Incomplete" || status === "Reconnecting" ? "yellow" : "red"}
-              title={status}
-            >
-              {diagnostic}
-            </Alert>
-          ) : null}
-          <VirtualizedLogOutput
-            activeMatchLine={activeMatchLine}
-            buffer={buffer}
-            following={!paused}
-            key={`inline-${wrapLines}`}
-            searchQuery={searchQuery}
-            wrapLines={wrapLines}
-          />
-          <Text c="dimmed" size="xs">
-            The viewer keeps at most {formatBinarySize(LOG_TAIL_WINDOW_BYTES)} and{" "}
-            {LOG_TAIL_MAX_LINES.toLocaleString()} lines in memory. Raw download contains the
-            complete retained log.
-          </Text>
-        </Stack>
-      </Paper>
+      {embedded ? (
+        inlineViewer
+      ) : (
+        <Paper p="md" withBorder>
+          {inlineViewer}
+        </Paper>
+      )}
 
       <Modal
         classNames={{ body: "run-log-modal-body", content: "run-log-modal-content" }}
