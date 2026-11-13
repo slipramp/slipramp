@@ -28,6 +28,9 @@ placements:
       router-wireguard:
         secretRef:
           name: kcloud-ops-router
+      nas-rustfs:
+        secretRef:
+          name: kcloud-ops-nas-rustfs
       kcloud-ops-git:
         secretRef:
           name: kcloud-ops-git
