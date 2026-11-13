@@ -25,6 +25,9 @@ placements:
       homelab-known-hosts:
         secretRef:
           name: kcloud-ops-known-hosts
+      router-wireguard:
+        secretRef:
+          name: kcloud-ops-router
       kcloud-ops-git:
         secretRef:
           name: kcloud-ops-git
