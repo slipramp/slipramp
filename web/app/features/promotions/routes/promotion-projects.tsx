@@ -7,12 +7,12 @@ import {
   type PromotionFreightAlignmentStatus,
   type PromotionProject,
 } from "~/api/generated";
-import { RelativeTime } from "~/shared/display-values";
 import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import {
   promotionProjectDetailPath,
   type PromotionProjectListContext,
 } from "~/features/promotions/promotion-project-filters";
+import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { EmptyState, PageHeader } from "~/shared/page";
@@ -254,7 +254,7 @@ function ProjectRow({
       </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="wrap">
-          <Badge variant="light">{project.integration}</Badge>
+          {project.integration}
           <Anchor component={Link} to={`/clusters/${encodeURIComponent(project.cluster)}`}>
             {project.cluster}
           </Anchor>
@@ -297,7 +297,7 @@ function ProjectRow({
                 freightAlignment: "different",
               })}
             >
-              <Badge color="yellow">{project.freightDifferenceCount} Freight differences</Badge>
+              <Badge color="yellow">{project.freightDifferenceCount} Freight Diff</Badge>
             </Anchor>
           ) : null}
           {project.unknownFreightComparisonCount > 0 ? (
@@ -317,7 +317,7 @@ function ProjectRow({
         </Group>
       </Table.Td>
       <Table.Td>
-        <RelativeTime size="sm" value={project.latestObservedAt} />
+        <KargoObservationTime value={project.latestObservedAt} />
       </Table.Td>
       <Table.Td>
         <Anchor component={Link} to={`/promotions?${scope}`}>

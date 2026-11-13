@@ -670,9 +670,7 @@ function RunWorkspace({
     );
   }
 
-  const lifecycle = (
-    <RunLifecycle onStageChange={selectStage} run={run} selectedStage={selectedStage} />
-  );
+  const lifecycleProps = { onStageChange: selectStage, run, selectedStage };
 
   return (
     <Box className={styles.workspace}>
@@ -686,7 +684,9 @@ function RunWorkspace({
               </Badge>
             </Group>
           </Accordion.Control>
-          <Accordion.Panel>{lifecycle}</Accordion.Panel>
+          <Accordion.Panel>
+            <RunLifecycle {...lifecycleProps} showHeading={false} />
+          </Accordion.Panel>
         </Accordion.Item>
       </Accordion>
 
@@ -755,7 +755,7 @@ function RunWorkspace({
       </Paper>
 
       <Paper className={styles.desktopLifecycle} p="md" withBorder>
-        {lifecycle}
+        <RunLifecycle {...lifecycleProps} />
       </Paper>
     </Box>
   );
@@ -824,10 +824,7 @@ function RunDetails({
 }>) {
   return (
     <Stack gap="lg">
-      <SectionHeader
-        description="Source, execution context, parameters, inputs, and the complete Artifact inventory."
-        title="Run details"
-      />
+      <SectionHeader title="Run details" />
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
       <RunOverview repositoryName={repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
@@ -1148,100 +1145,98 @@ function OtherActionMenu({
 
 function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string; run: Run }>) {
   return (
-    <Paper p="lg" withBorder>
-      <Stack gap="lg">
-        <Title order={2}>Execution context</Title>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-          <Fact label="Repository">
-            <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
-              {repositoryName ?? shortIdentifier(run.repositoryId)}
+    <Stack gap="lg">
+      <Title order={2}>Execution context</Title>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+        <Fact label="Repository">
+          <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
+            {repositoryName ?? shortIdentifier(run.repositoryId)}
+          </Anchor>
+        </Fact>
+        <Fact label="Runtime">
+          <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
+            {run.runtime}
+          </Anchor>
+        </Fact>
+        <Fact label="Cluster">
+          <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
+            {run.cluster}
+          </Anchor>
+        </Fact>
+        <Fact label="Placement">
+          <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
+            {run.placement}
+          </Anchor>
+        </Fact>
+        <Fact label="Catalog revision">
+          <Code>{run.catalogRevisionId}</Code>
+        </Fact>
+        {run.rerunOfRunId && run.rerunMode ? (
+          <Fact label="Run again">
+            <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
+              {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
+              {shortIdentifier(run.rerunOfRunId)}
             </Anchor>
           </Fact>
-          <Fact label="Runtime">
-            <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
-              {run.runtime}
-            </Anchor>
-          </Fact>
-          <Fact label="Cluster">
-            <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
-              {run.cluster}
-            </Anchor>
-          </Fact>
-          <Fact label="Placement">
-            <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
-              {run.placement}
-            </Anchor>
-          </Fact>
-          <Fact label="Catalog revision">
-            <Code>{run.catalogRevisionId}</Code>
-          </Fact>
-          {run.rerunOfRunId && run.rerunMode ? (
-            <Fact label="Run again">
-              <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
-                {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
-                {shortIdentifier(run.rerunOfRunId)}
-              </Anchor>
-            </Fact>
-          ) : null}
-          <Fact label="Controller observation">
-            <Stack gap={2}>
-              <Text size="sm">{run.observationState ?? "Not active"}</Text>
-              {run.lastObservedAt ? (
-                <Group gap={4} wrap="wrap">
-                  <Text c="dimmed" size="xs">
-                    Last seen
-                  </Text>
-                  <Timestamp c="dimmed" size="xs" value={run.lastObservedAt} />
-                  <Text c="dimmed" size="xs">
-                    ·
-                  </Text>
-                  <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
-                </Group>
-              ) : (
+        ) : null}
+        <Fact label="Controller observation">
+          <Stack gap={2}>
+            <Text size="sm">{run.observationState ?? "Not active"}</Text>
+            {run.lastObservedAt ? (
+              <Group gap={4} wrap="wrap">
                 <Text c="dimmed" size="xs">
-                  No Controller observation recorded
+                  Last seen
                 </Text>
-              )}
-            </Stack>
-          </Fact>
-        </SimpleGrid>
-        <Accordion defaultValue={null} variant="contained">
-          <Accordion.Item value="job-details">
-            <Accordion.Control>
-              <Text fw={600}>Job and image details</Text>
-            </Accordion.Control>
-            <Accordion.Panel>
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-                <Fact label="Job UID">
-                  {run.jobUid ? (
-                    <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
-                  ) : (
-                    <Text c="dimmed" size="sm">
-                      Not materialized
-                    </Text>
-                  )}
+                <Timestamp c="dimmed" size="xs" value={run.lastObservedAt} />
+                <Text c="dimmed" size="xs">
+                  ·
+                </Text>
+                <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
+              </Group>
+            ) : (
+              <Text c="dimmed" size="xs">
+                No Controller observation recorded
+              </Text>
+            )}
+          </Stack>
+        </Fact>
+      </SimpleGrid>
+      <Accordion defaultValue={null} variant="contained">
+        <Accordion.Item value="job-details">
+          <Accordion.Control>
+            <Text fw={600}>Job and image details</Text>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+              <Fact label="Job UID">
+                {run.jobUid ? (
+                  <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
+                ) : (
+                  <Text c="dimmed" size="sm">
+                    Not materialized
+                  </Text>
+                )}
+              </Fact>
+              {run.images?.action ? (
+                <Fact label="Action image ID">
+                  <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
                 </Fact>
-                {run.images?.action ? (
-                  <Fact label="Action image ID">
-                    <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
-                  </Fact>
-                ) : null}
-                {run.images?.checkout ? (
-                  <Fact label="Checkout image ID">
-                    <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
-                  </Fact>
-                ) : null}
-                {run.images?.harness ? (
-                  <Fact label="Harness image ID">
-                    <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
-                  </Fact>
-                ) : null}
-              </SimpleGrid>
-            </Accordion.Panel>
-          </Accordion.Item>
-        </Accordion>
-      </Stack>
-    </Paper>
+              ) : null}
+              {run.images?.checkout ? (
+                <Fact label="Checkout image ID">
+                  <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
+                </Fact>
+              ) : null}
+              {run.images?.harness ? (
+                <Fact label="Harness image ID">
+                  <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
+                </Fact>
+              ) : null}
+            </SimpleGrid>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </Stack>
   );
 }
 
@@ -1260,10 +1255,12 @@ function RunLifecycle({
   onStageChange,
   run,
   selectedStage,
+  showHeading = true,
 }: Readonly<{
   onStageChange: (stage: Run["phase"]) => void;
   run: Run;
   selectedStage: Run["phase"];
+  showHeading?: boolean;
 }>) {
   const activeStep = lifecycleStages.indexOf(run.phase);
   const currentTime = useCurrentTime(run.phase !== "finished");
@@ -1351,10 +1348,10 @@ function RunLifecycle({
   return (
     <Stack gap="md">
       <Stack gap="xs">
-        <Title order={2}>Lifecycle</Title>
+        {showHeading ? <Title order={2}>Lifecycle</Title> : null}
         <Group gap="xs">
           {summary.map((value) => (
-            <Badge key={value} size="sm" tt="none" variant="light">
+            <Badge key={value} size="sm" variant="light">
               {value}
             </Badge>
           ))}
@@ -1677,119 +1674,117 @@ function ArtifactTable({
   const navigation = useNavigation();
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <Title order={2}>Artifacts</Title>
-        {artifacts.length === 0 ? (
-          <Text c="dimmed">No artifacts have been published.</Text>
-        ) : (
-          <Table.ScrollContainer minWidth={760} type="native">
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>State</Table.Th>
-                  <Table.Th>Size</Table.Th>
-                  <Table.Th>Digest</Table.Th>
-                  <Table.Th>Provenance</Table.Th>
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {artifacts.map((artifact) => {
-                  const downstreamRuns = artifactRuns[artifact.id] ?? [];
-                  return (
-                    <Table.Tr key={artifact.id}>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Text>{artifact.name}</Text>
-                          {artifact.sensitive ? <Badge color="orange">Sensitive</Badge> : null}
-                        </Group>
+    <Stack gap="sm">
+      <Title order={2}>Artifacts</Title>
+      {artifacts.length === 0 ? (
+        <Text c="dimmed">No artifacts have been published.</Text>
+      ) : (
+        <Table.ScrollContainer minWidth={760} type="native">
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>State</Table.Th>
+                <Table.Th>Size</Table.Th>
+                <Table.Th>Digest</Table.Th>
+                <Table.Th>Provenance</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {artifacts.map((artifact) => {
+                const downstreamRuns = artifactRuns[artifact.id] ?? [];
+                return (
+                  <Table.Tr key={artifact.id}>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Text>{artifact.name}</Text>
+                        {artifact.sensitive ? <Badge color="orange">Sensitive</Badge> : null}
+                      </Group>
+                      <Text c="dimmed" size="xs">
+                        {artifact.mediaType}
+                      </Text>
+                      {artifact.description ? (
                         <Text c="dimmed" size="xs">
-                          {artifact.mediaType}
+                          {artifact.description}
                         </Text>
-                        {artifact.description ? (
-                          <Text c="dimmed" size="xs">
-                            {artifact.description}
-                          </Text>
-                        ) : null}
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={0}>
-                          <Text>{artifact.state}</Text>
-                          <Text c="dimmed" size="xs">
-                            {artifact.retentionState}
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
-                      <Table.Td>
-                        <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={0}>
-                          <Text>
-                            {artifact.provenance.target} · {artifact.provenance.action}
-                          </Text>
-                          <Text c="dimmed" size="xs">
-                            <CommitReference
-                              commit={artifact.provenance.commit}
-                              repositoryId={artifact.provenance.repositoryId}
-                            />{" "}
-                            · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack align="flex-start" gap="xs">
-                          <Group gap="sm" wrap="wrap">
-                            {artifact.state === "sealed" &&
+                      ) : null}
+                    </Table.Td>
+                    <Table.Td>
+                      <Stack gap={0}>
+                        <Text>{artifact.state}</Text>
+                        <Text c="dimmed" size="xs">
+                          {artifact.retentionState}
+                        </Text>
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
+                    <Table.Td>
+                      <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Stack gap={0}>
+                        <Text>
+                          {artifact.provenance.target} · {artifact.provenance.action}
+                        </Text>
+                        <Text c="dimmed" size="xs">
+                          <CommitReference
+                            commit={artifact.provenance.commit}
+                            repositoryId={artifact.provenance.repositoryId}
+                          />{" "}
+                          · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
+                        </Text>
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>
+                      <Stack align="flex-start" gap="xs">
+                        <Group gap="sm" wrap="wrap">
+                          {artifact.state === "sealed" &&
+                          artifact.retentionState === "retained" &&
+                          canReadArtifactContents(artifact, principal) ? (
+                            <Anchor href={`/api/v1/artifacts/${artifact.id}/download`}>
+                              Download
+                            </Anchor>
+                          ) : artifact.state === "sealed" &&
                             artifact.retentionState === "retained" &&
-                            canReadArtifactContents(artifact, principal) ? (
-                              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`}>
-                                Download
-                              </Anchor>
-                            ) : artifact.state === "sealed" &&
-                              artifact.retentionState === "retained" &&
-                              artifact.sensitive ? (
-                              <Text c="dimmed">Restricted</Text>
-                            ) : (
-                              <Text c="dimmed">Unavailable</Text>
-                            )}
-                            {producerSucceeded &&
-                            artifact.state === "sealed" &&
-                            artifact.retentionState === "retained"
-                              ? (consumers[artifact.name] ?? []).map((consumer) => (
-                                  <ArtifactAction
-                                    artifact={artifact}
-                                    consumer={consumer}
-                                    key={`${artifact.id}-${consumer.action}`}
-                                    submitting={
-                                      navigation.state === "submitting" &&
-                                      navigation.formData?.get("artifactId") === artifact.id &&
-                                      navigation.formData?.get("actionName") === consumer.action
-                                    }
-                                  />
-                                ))
-                              : null}
-                          </Group>
-                          {artifact.kind === "output" ? (
-                            <ArtifactLineageDetails
-                              available={artifactRunsAvailable[artifact.id] ?? false}
-                              runs={downstreamRuns}
-                            />
-                          ) : null}
-                        </Stack>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Stack>
-    </Paper>
+                            artifact.sensitive ? (
+                            <Text c="dimmed">Restricted</Text>
+                          ) : (
+                            <Text c="dimmed">Unavailable</Text>
+                          )}
+                          {producerSucceeded &&
+                          artifact.state === "sealed" &&
+                          artifact.retentionState === "retained"
+                            ? (consumers[artifact.name] ?? []).map((consumer) => (
+                                <ArtifactAction
+                                  artifact={artifact}
+                                  consumer={consumer}
+                                  key={`${artifact.id}-${consumer.action}`}
+                                  submitting={
+                                    navigation.state === "submitting" &&
+                                    navigation.formData?.get("artifactId") === artifact.id &&
+                                    navigation.formData?.get("actionName") === consumer.action
+                                  }
+                                />
+                              ))
+                            : null}
+                        </Group>
+                        {artifact.kind === "output" ? (
+                          <ArtifactLineageDetails
+                            available={artifactRunsAvailable[artifact.id] ?? false}
+                            runs={downstreamRuns}
+                          />
+                        ) : null}
+                      </Stack>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Stack>
   );
 }
 

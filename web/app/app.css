@@ -615,6 +615,10 @@ a {
   .page-surface {
     max-width: 100%;
   }
+
+  .page-header-facts {
+    row-gap: var(--mantine-spacing-sm);
+  }
 }
 
 @media (width < 36em) {

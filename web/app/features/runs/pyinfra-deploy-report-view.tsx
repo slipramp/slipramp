@@ -79,22 +79,13 @@ export function PyinfraDeployReportView({
     <Stack gap="md">
       <SectionHeader
         actions={
-          <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-            <Badge color={report.mode === "apply" ? "green" : "blue"} variant="light">
-              {report.mode === "apply" ? "Apply" : "Preview"}
-            </Badge>
-            <Badge color="gray" variant="light">
-              {report.tool}
-              {report.toolVersion ? ` ${report.toolVersion}` : ""}
-            </Badge>
-            {canReadContents &&
-            artifact.state === "sealed" &&
-            artifact.retentionState === "retained" ? (
-              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                Download source JSON
-              </Anchor>
-            ) : null}
-          </Group>
+          canReadContents &&
+          artifact.state === "sealed" &&
+          artifact.retentionState === "retained" ? (
+            <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+              Download source JSON
+            </Anchor>
+          ) : null
         }
         title="pyinfra deploy report"
       />
@@ -524,6 +515,7 @@ function HostTags({
           key={host}
           onClick={() => onSelect(host)}
           style={{ cursor: "pointer", overflowWrap: "anywhere" }}
+          tt="none"
           type="button"
           variant="outline"
         >

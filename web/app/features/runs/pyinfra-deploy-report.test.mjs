@@ -21,11 +21,11 @@ test("presents nonzero pyinfra preview and apply counts", () => {
       unchangedOperations: 1,
     }).map(({ count, label }) => ({ count, label })),
     [
-      { count: 1, label: "changed operations" },
-      { count: 1, label: "unchanged operations" },
+      { count: 1, label: "changed" },
+      { count: 1, label: "unchanged" },
+      { count: 2, label: "planned" },
+      { count: 1, label: "conditional" },
       { count: 2, label: "affected hosts" },
-      { count: 2, label: "planned host operations" },
-      { count: 1, label: "conditional host operations" },
     ],
   );
   assert.deepEqual(

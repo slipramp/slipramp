@@ -20,7 +20,7 @@ import {
 } from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconListDetails, IconRoute, IconSearch } from "@tabler/icons-react";
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import {
@@ -63,7 +63,7 @@ import {
   type PromotionTopologyPipeline,
 } from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
-import { RelativeTime } from "~/shared/display-values";
+import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
 import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 
 export function ProjectDetail({
@@ -322,7 +322,7 @@ function ProjectSummary({
           {unhealthy > 0 ? <Badge color="red">{unhealthy} non-ready</Badge> : null}
           {stale > 0 ? <Badge color="gray">{stale} stale</Badge> : null}
           {pending > 0 ? <Badge color="yellow">{pending} pending</Badge> : null}
-          {differences > 0 ? <Badge color="yellow">{differences} Freight differences</Badge> : null}
+          {differences > 0 ? <Badge color="yellow">{differences} Freight Diff</Badge> : null}
           {unhealthy === 0 && stale === 0 && pending === 0 && differences === 0 ? (
             <Badge color="green" variant="light">
               No reported issues
@@ -524,15 +524,50 @@ function PipelineTopology({
   onEditPolicy: (stage: PromotionProjectStage) => void;
   pipeline: ProjectPipeline;
 }>) {
-  const stages = pipeline.lanes.flatMap((lane) => lane);
+  const columns = pipeline.lanes.flatMap((lane, laneIndex) =>
+    lane.map((stage) => ({
+      header: (
+        <PipelineStageColumnTitle
+          canWrite={canWrite}
+          laneIndex={laneIndex}
+          onEditPolicy={() => onEditPolicy(stage)}
+          stage={stage}
+        />
+      ),
+      stage,
+    })),
+  );
+
+  return (
+    <FreightSourceTable
+      borderTop
+      columns={columns}
+      emptyMessage="No Freight sources are requested by these Stages."
+      minWidth={Math.max(720, 300 + columns.length * 240)}
+    />
+  );
+}
+
+function FreightSourceTable({
+  borderTop = false,
+  columns,
+  emptyMessage,
+  minWidth,
+}: Readonly<{
+  borderTop?: boolean;
+  columns: Array<{ header: ReactNode; stage: PromotionProjectStage }>;
+  emptyMessage: string;
+  minWidth: number;
+}>) {
+  const stages = columns.map((column) => column.stage);
   const freightRows = buildPipelineFreightSourceRows(stages);
   const warehouseGroups = Map.groupBy(freightRows, (row) => row.origin);
   const freightSourceColumnStyle = { maxWidth: 300, minWidth: 300, width: 300 } as const;
 
   return (
     <Table.ScrollContainer
-      minWidth={Math.max(720, 300 + stages.length * 240)}
-      style={{ borderTop: "1px solid var(--slipramp-border)" }}
+      minWidth={minWidth}
+      style={borderTop ? { borderTop: "1px solid var(--slipramp-border)" } : undefined}
       type="native"
     >
       <Table styles={{ th: { textTransform: "none" } }} verticalSpacing="sm" withColumnBorders>
@@ -541,18 +576,11 @@ function PipelineTopology({
             <Table.Th style={{ ...freightSourceColumnStyle, verticalAlign: "top" }}>
               Freight source
             </Table.Th>
-            {pipeline.lanes.flatMap((lane, laneIndex) =>
-              lane.map((stage) => (
-                <Table.Th key={stage.id} miw={240} style={{ verticalAlign: "top" }}>
-                  <PipelineStageColumnTitle
-                    canWrite={canWrite}
-                    laneIndex={laneIndex}
-                    onEditPolicy={() => onEditPolicy(stage)}
-                    stage={stage}
-                  />
-                </Table.Th>
-              )),
-            )}
+            {columns.map((column) => (
+              <Table.Th key={column.stage.id} miw={240} style={{ verticalAlign: "top" }}>
+                {column.header}
+              </Table.Th>
+            ))}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -600,7 +628,7 @@ function PipelineTopology({
           {freightRows.length === 0 ? (
             <Table.Tr>
               <Table.Td c="dimmed" colSpan={stages.length + 1}>
-                No Freight sources are requested by these Stages.
+                {emptyMessage}
               </Table.Td>
             </Table.Tr>
           ) : null}
@@ -627,44 +655,47 @@ function PipelineStageColumnTitle({
   return (
     <Stack gap={6}>
       <Group align="center" justify="space-between" wrap="nowrap">
-        <PromotionStageLink stage={stage} />
+        <Group gap={5} wrap="nowrap">
+          <PromotionStageLink stage={stage} />
+          <KargoObservationTime value={stage.lastObservedAt} />
+        </Group>
         <StageHealthBadge stage={stage} />
       </Group>
       <Group gap={5} wrap="wrap">
         <Text c="dimmed" fw={600} size="xs">
           {stage.enrichment?.environment ?? (laneIndex === 0 ? "Entry" : `Downstream ${laneIndex}`)}
         </Text>
-        <Text c="dimmed" size="xs">
-          ·
-        </Text>
-        <RelativeTime c="dimmed" size="xs" value={stage.lastObservedAt} />
         {stage.controlFlow ? (
-          <Badge color="gray" size="xs" tt="none" variant="light">
+          <Badge color="gray" size="xs" variant="light">
             Control flow
           </Badge>
         ) : null}
         {warnings.length > 0 ? (
-          <Badge color="orange" size="xs" tt="none" variant="light">
+          <Badge color="orange" size="xs" variant="light">
             {warnings.length} warning{warnings.length === 1 ? "" : "s"}
           </Badge>
         ) : null}
       </Group>
-      <Group gap={6} wrap="wrap">
-        <StagePolicyBadge
-          canEdit={canWrite && policy.editable}
-          editable={policy.editable}
-          label={policy.label}
-          mode={stage.policy.effectiveMode}
-          onEdit={onEditPolicy}
-          stageName={stage.name}
-        />
-        {stage.pendingPromotionCount > 0 ? (
-          <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
-            {stage.pendingPromotionCount} pending
-          </Anchor>
-        ) : null}
-        <StageFreightDetailsDialog compact includeWarnings canWrite={canWrite} stage={stage} />
-        {canWrite ? <StagePromotionActions stage={stage} /> : null}
+      <Group gap={6} justify="space-between" wrap="wrap">
+        <Group gap={6} wrap="wrap">
+          <StagePolicyBadge
+            canEdit={canWrite && policy.editable}
+            editable={policy.editable}
+            label={policy.label}
+            mode={stage.policy.effectiveMode}
+            onEdit={onEditPolicy}
+            stageName={stage.name}
+          />
+          {stage.pendingPromotionCount > 0 ? (
+            <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
+              {stage.pendingPromotionCount} pending
+            </Anchor>
+          ) : null}
+        </Group>
+        <Group gap={6} ml="auto" wrap="wrap">
+          <StageFreightDetailsDialog compact includeWarnings canWrite={canWrite} stage={stage} />
+          {canWrite ? <StagePromotionActions stage={stage} /> : null}
+        </Group>
       </Group>
     </Stack>
   );
@@ -832,7 +863,7 @@ export function StageInventory({
                       </Table.Td>
                     ) : null}
                     <Table.Td>
-                      <RelativeTime size="sm" value={stage.lastObservedAt} />
+                      <KargoObservationTime value={stage.lastObservedAt} />
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={4}>
@@ -1009,7 +1040,6 @@ export function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectSt
         rel="noreferrer"
         style={{ cursor: "pointer" }}
         target="_blank"
-        tt="none"
         variant="light"
       >
         {presentation.label}
@@ -1018,7 +1048,7 @@ export function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectSt
   }
 
   return (
-    <Badge color={presentation.color} tt="none" variant="light">
+    <Badge color={presentation.color} variant="light">
       {presentation.label}
     </Badge>
   );
@@ -1042,7 +1072,7 @@ function StagePolicyBadge({
   const color = editable ? promotionStagePolicyColor(mode) : "gray";
   if (!canEdit) {
     return (
-      <Badge color={color} tt="none" variant="light">
+      <Badge color={color} variant="light">
         {label}
       </Badge>
     );
@@ -1055,7 +1085,6 @@ function StagePolicyBadge({
       component="button"
       onClick={onEdit}
       style={{ cursor: "pointer" }}
-      tt="none"
       type="button"
       variant="light"
     >
@@ -1081,59 +1110,62 @@ export function StageCard({
   const capabilityWarnings = stageCapabilityWarnings(stage);
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Group align="flex-start" justify="space-between" wrap="nowrap">
-          <Stack gap={3}>
-            <Group gap="xs">
-              {linkName ? (
-                <PromotionStageLink heading showKargoLink={showKargoLink} stage={stage} />
-              ) : (
-                <Title order={3} size="h4">
-                  {stage.name}
-                </Title>
-              )}
-              {stage.controlFlow ? <Badge variant="light">Control flow</Badge> : null}
-            </Group>
-          </Stack>
-          <Stack align="flex-end" gap={5}>
-            <StageHealthBadge stage={stage} />
-            <RelativeTime size="xs" value={stage.lastObservedAt} />
-          </Stack>
-        </Group>
-
-        <StageFreight canWrite={canWrite} stage={stage} />
-
-        <Group justify="space-between" wrap="wrap">
-          <Group gap="xs">
-            <StagePolicyBadge
-              canEdit={canWrite && policyPresentation.editable}
-              editable={policyPresentation.editable}
-              label={policyPresentation.label}
-              mode={stage.policy.effectiveMode}
-              onEdit={onEditPolicy}
-              stageName={stage.name}
-            />
-            {stage.pendingPromotionCount > 0 ? (
-              <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
-                {stage.pendingPromotionCount} pending
-              </Anchor>
-            ) : null}
-          </Group>
-          <Group gap="xs">{canWrite ? <StagePromotionActions stage={stage} /> : null}</Group>
-        </Group>
-
-        {capabilityWarnings.length > 0 ? (
-          <Alert color="orange" title="Slipramp enrichment needs attention">
-            <Stack gap={4}>
-              {capabilityWarnings.map((warning) => (
-                <Text key={warning} size="sm">
-                  {warning}
-                </Text>
-              ))}
+    <Paper style={{ overflow: "hidden" }} withBorder>
+      <Stack gap={0}>
+        <Stack gap="md" p="md">
+          <Group align="flex-start" justify="space-between" wrap="nowrap">
+            <Stack gap={3}>
+              <Group gap="xs">
+                {linkName ? (
+                  <PromotionStageLink heading showKargoLink={showKargoLink} stage={stage} />
+                ) : (
+                  <Title order={3} size="h4">
+                    {stage.name}
+                  </Title>
+                )}
+                <KargoObservationTime value={stage.lastObservedAt} />
+                {stage.controlFlow ? <Badge variant="light">Control flow</Badge> : null}
+              </Group>
             </Stack>
-          </Alert>
-        ) : null}
+            <StageHealthBadge stage={stage} />
+          </Group>
+
+          <Group justify="space-between" wrap="wrap">
+            <Group gap="xs">
+              <StagePolicyBadge
+                canEdit={canWrite && policyPresentation.editable}
+                editable={policyPresentation.editable}
+                label={policyPresentation.label}
+                mode={stage.policy.effectiveMode}
+                onEdit={onEditPolicy}
+                stageName={stage.name}
+              />
+              {stage.pendingPromotionCount > 0 ? (
+                <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
+                  {stage.pendingPromotionCount} pending
+                </Anchor>
+              ) : null}
+            </Group>
+            <Group gap="xs">
+              <StageFreightDetailsDialog compact canWrite={canWrite} stage={stage} />
+              {canWrite ? <StagePromotionActions stage={stage} /> : null}
+            </Group>
+          </Group>
+
+          {capabilityWarnings.length > 0 ? (
+            <Alert color="orange" title="Slipramp enrichment needs attention">
+              <Stack gap={4}>
+                {capabilityWarnings.map((warning) => (
+                  <Text key={warning} size="sm">
+                    {warning}
+                  </Text>
+                ))}
+              </Stack>
+            </Alert>
+          ) : null}
+        </Stack>
+
+        <StageFreight stage={stage} />
       </Stack>
     </Paper>
   );
@@ -1150,30 +1182,23 @@ function StagePromotionActions({ stage }: Readonly<{ stage: PromotionProjectStag
   );
 }
 
-function StageFreight({
-  canWrite,
-  stage,
-}: Readonly<{
-  canWrite: boolean;
-  stage: PromotionProjectStage;
-}>) {
-  const activeFreight = stage.freight.items;
-
+function StageFreight({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
   return (
-    <Stack gap="xs">
-      {activeFreight.length > 0 ? (
-        <Stack gap="xs">
-          {activeFreight.map((freight) => (
-            <FreightSummary freight={freight} key={`${freight.origin}:${freight.name}`} />
-          ))}
-        </Stack>
-      ) : (
-        <Text c="dimmed" size="sm">
-          No active Freight is currently observed.
-        </Text>
-      )}
-      <StageFreightDetailsDialog canWrite={canWrite} stage={stage} />
-    </Stack>
+    <FreightSourceTable
+      borderTop
+      columns={[
+        {
+          header: (
+            <Text fw={650} size="sm">
+              Current Freight
+            </Text>
+          ),
+          stage,
+        },
+      ]}
+      emptyMessage="This Stage does not request or report Freight."
+      minWidth={540}
+    />
   );
 }
 
@@ -1259,7 +1284,7 @@ function StageFreightDetailsDialog({
               Current Freight, requested sources, and observed alternatives by Warehouse.
             </Text>
             {otherCount > 0 ? (
-              <Badge color="gray" tt="none" variant="light">
+              <Badge color="gray" variant="light">
                 {otherCount} other option{otherCount === 1 ? "" : "s"}
               </Badge>
             ) : null}
@@ -1321,16 +1346,12 @@ function StageFreightDetailsDialog({
                                 </Text>
                                 {warehouse.requests.map(({ request }, requestIndex) => (
                                   <Fragment key={`${request.origin}:${requestIndex}`}>
-                                    {request.direct ? (
-                                      <Badge size="xs" tt="none">
-                                        Direct
-                                      </Badge>
-                                    ) : null}
-                                    <Badge size="xs" tt="none" variant="outline">
+                                    {request.direct ? <Badge size="xs">Direct</Badge> : null}
+                                    <Badge size="xs" variant="outline">
                                       {request.availabilityStrategy}
                                     </Badge>
                                     {request.requiredSoakTime ? (
-                                      <Badge size="xs" tt="none" variant="outline">
+                                      <Badge size="xs" variant="outline">
                                         Soak {request.requiredSoakTime}
                                       </Badge>
                                     ) : null}
@@ -1500,7 +1521,7 @@ function FreightTableValue({ freight }: Readonly<{ freight: PromotionFreightItem
             key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
             wrap="wrap"
           >
-            <Badge size="xs" tt="none" variant="light">
+            <Badge size="xs" variant="light">
               {freightSourceKindLabel(artifact.kind)}
             </Badge>
             <Text size="xs" style={{ overflowWrap: "anywhere" }}>
@@ -1518,24 +1539,6 @@ function FreightTableValue({ freight }: Readonly<{ freight: PromotionFreightItem
         Kargo Freight <Code>{freight.name}</Code>
       </Text>
     </Stack>
-  );
-}
-
-function FreightSummary({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
-  return (
-    <Paper p="sm" withBorder>
-      <Stack gap="xs">
-        <Group gap="xs" wrap="wrap">
-          <Badge color="green" size="xs" tt="none">
-            Active
-          </Badge>
-          <Text c="dimmed" size="xs">
-            {freightOriginLabel(freight.origin)}
-          </Text>
-        </Group>
-        <FreightTableValue freight={freight} />
-      </Stack>
-    </Paper>
   );
 }
 
@@ -1570,7 +1573,7 @@ function FreightStatusBadge({
   variant?: "light";
 }>) {
   const badge = (
-    <Badge color={color} size={size} tt="none" variant={variant}>
+    <Badge color={color} size={size} variant={variant}>
       {label}
     </Badge>
   );

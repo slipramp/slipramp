@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -18,13 +18,14 @@ import { Identity } from "~/shared/identity";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
-import { formatDuration, shortIdentifier } from "~/shared/display";
+import { formatDuration, formatTimestamp, shortIdentifier } from "~/shared/display";
 import { runActivity } from "~/features/mascot/execution-activity";
 import { pageTitle } from "~/shared/page-title";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { pageFromSearchParam } from "~/shared/search-params";
 import { targetFilterPath } from "~/features/targets/target-filter";
+import { useTimeZone } from "~/shared/time-zone-preference";
 
 import type { Route } from "./+types/runs";
 
@@ -303,6 +304,8 @@ function HistoryTable({
   repositoryNames,
   runs,
 }: Readonly<{ repositoryNames: Map<string, string>; runs: Run[] }>) {
+  const { timeZone } = useTimeZone();
+
   if (runs.length === 0) {
     return (
       <Paper p="md" withBorder>
@@ -385,7 +388,24 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
-                    {run.source.type === "promotion" && run.source.promotion ? (
+                    {run.source.type === "schedule" && run.source.schedule ? (
+                      <Tooltip
+                        label={`Trigger: ${run.source.schedule.triggerName} · Instance: ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}`}
+                        openDelay={350}
+                        withArrow
+                      >
+                        <Text
+                          aria-label={`Schedule. Trigger ${run.source.schedule.triggerName}. Instance ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}.`}
+                          component="span"
+                          display="inline-block"
+                          size="sm"
+                          style={{ alignSelf: "flex-start" }}
+                          tabIndex={0}
+                        >
+                          Schedule
+                        </Text>
+                      </Tooltip>
+                    ) : run.source.type === "promotion" && run.source.promotion ? (
                       <Anchor
                         component={Link}
                         size="sm"

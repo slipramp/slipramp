@@ -12,15 +12,15 @@ export type PyinfraCountBadge = {
 
 export function pyinfraPlanBadges(summary: PyinfraPlanSummary): PyinfraCountBadge[] {
   return [
-    { color: "yellow", count: summary.changedOperations, label: "changed operations" },
-    { color: "gray", count: summary.unchangedOperations, label: "unchanged operations" },
-    { color: "blue", count: summary.affectedHosts, label: "affected hosts" },
-    { color: "cyan", count: summary.plannedHostOperations, label: "planned host operations" },
+    { color: "yellow", count: summary.changedOperations, label: "changed" },
+    { color: "gray", count: summary.unchangedOperations, label: "unchanged" },
+    { color: "cyan", count: summary.plannedHostOperations, label: "planned" },
     {
       color: "violet",
       count: summary.conditionalHostOperations,
-      label: "conditional host operations",
+      label: "conditional",
     },
+    { color: "blue", count: summary.affectedHosts, label: "affected hosts" },
   ].filter((badge) => badge.count > 0);
 }
 

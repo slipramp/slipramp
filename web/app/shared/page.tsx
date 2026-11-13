@@ -44,7 +44,7 @@ export function PageHeader({
 
 export function PageHeaderFacts({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <Group align="flex-start" gap="xl" mt="xs" wrap="wrap">
+    <Group align="flex-start" className="page-header-facts" gap="xl" mt="xs" wrap="wrap">
       {children}
     </Group>
   );

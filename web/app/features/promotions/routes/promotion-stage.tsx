@@ -23,6 +23,7 @@ import {
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
+import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
 import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
@@ -32,7 +33,7 @@ import {
   StagePolicyDialog,
 } from "~/features/promotions/promotion-project-view";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
-import { RelativeTime, Timestamp } from "~/shared/display-values";
+import { Timestamp } from "~/shared/display-values";
 import { problemDetail } from "~/shared/form-data";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
@@ -206,10 +207,7 @@ function ObservationDetails({ stage }: Readonly<{ stage: PromotionProjectStage }
             <Timestamp value={stage.firstObservedAt} />
           </DetailFact>
           <DetailFact label="Last observed">
-            <Stack gap={0}>
-              <Timestamp value={stage.lastObservedAt} />
-              <RelativeTime c="dimmed" size="xs" value={stage.lastObservedAt} />
-            </Stack>
+            <KargoObservationTime value={stage.lastObservedAt} />
           </DetailFact>
           <DetailFact label="Native auto-promotion">
             <Badge color={stage.autoPromotionEnabled ? "green" : "gray"} variant="light">

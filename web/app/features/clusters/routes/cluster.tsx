@@ -31,6 +31,7 @@ import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { formatDuration } from "~/shared/display";
 import { pageTitle } from "~/shared/page-title";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { promotionStagePolicyColor } from "~/features/promotions/promotion-policy";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
@@ -387,7 +388,7 @@ function PromotionStages({
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <RelativeTime size="sm" value={item.stage.lastObservedAt} />
+                      <KargoObservationTime value={item.stage.lastObservedAt} />
                     </Table.Td>
                   </Table.Tr>
                 ))}

@@ -1,4 +1,5 @@
 import {
+  Accordion,
   Alert,
   Anchor,
   Badge,
@@ -313,8 +314,94 @@ type PromotionLifecycleStep = {
   value?: string;
 };
 
-function PromotionLifecycle({ promotion }: Readonly<{ promotion: Promotion }>) {
-  const [searchParams, setSearchParams] = useSearchParams();
+function PromotionLifecycle({
+  onStageChange,
+  promotion,
+  selectedStage,
+  showHeading = true,
+  steps,
+}: Readonly<{
+  onStageChange: (stage: PromotionLifecycleStage) => void;
+  promotion: Promotion;
+  selectedStage: PromotionLifecycleStage;
+  showHeading?: boolean;
+  steps: PromotionLifecycleStep[];
+}>) {
+  const activeStage = currentPromotionLifecycleStage(steps);
+  const selectedStep = steps[promotionLifecycleStages.indexOf(selectedStage)] ?? steps[0]!;
+
+  return (
+    <Stack gap="md">
+      {showHeading ? <Title order={2}>Lifecycle</Title> : null}
+      <Group className={styles.lifecycleMascot} justify="center">
+        <KawaiiActivity
+          activity={promotionDetailActivity(promotion)}
+          animationKey={promotion.id}
+          mascotOnly
+        />
+      </Group>
+      <Stack className={styles.lifecycleSteps} gap={3}>
+        {steps.map((step) => {
+          const Icon = step.icon;
+          const active = step.stage === activeStage && step.state === "active";
+          const complete = step.state === "complete";
+          const terminal = step.state === "error" || step.state === "terminal";
+          const stateLabel = terminal
+            ? step.status.label
+            : active
+              ? "Current"
+              : complete
+                ? "Complete"
+                : "Waiting";
+          const stateColor = terminal ? step.status.color : active ? "lilac" : "gray";
+          return (
+            <UnstyledButton
+              aria-current={selectedStage === step.stage ? "step" : undefined}
+              className={styles.lifecycleStep}
+              data-selected={selectedStage === step.stage || undefined}
+              key={step.stage}
+              onClick={() => onStageChange(step.stage)}
+            >
+              <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
+                <Icon aria-hidden size={15} stroke={2.2} />
+              </Box>
+              <Stack gap={0} style={{ flex: 1 }}>
+                <Text fw={650} size="sm">
+                  {step.label}
+                </Text>
+                <Text c="dimmed" size="xs">
+                  {step.value ? (
+                    <Timestamp value={step.value} />
+                  ) : active ? (
+                    "In progress"
+                  ) : (
+                    "Not reached"
+                  )}
+                </Text>
+              </Stack>
+              <Badge
+                color={stateColor}
+                size="xs"
+                variant={active || terminal ? "light" : "outline"}
+              >
+                {stateLabel}
+              </Badge>
+            </UnstyledButton>
+          );
+        })}
+      </Stack>
+      <PromotionLifecycleStageDetail
+        detail={selectedStep.detail}
+        promotion={promotion}
+        stage={selectedStep.stage}
+        status={selectedStep.status}
+        value={selectedStep.value}
+      />
+    </Stack>
+  );
+}
+
+function promotionLifecycleSteps(promotion: Promotion): PromotionLifecycleStep[] {
   const preparation = promotionPreparationStep(promotion);
   const reviewStatus = promotionReviewStatus(promotion);
   const deliveryStatus = promotionDeliveryStatus(promotion);
@@ -323,7 +410,8 @@ function PromotionLifecycle({ promotion }: Readonly<{ promotion: Promotion }>) {
     promotion.status === "creating" ||
     promotion.status === "preparing" ||
     preparation.state === "error";
-  const steps: PromotionLifecycleStep[] = [
+
+  return [
     {
       detail: deliveryStatus.description,
       icon: IconTruckDelivery,
@@ -356,96 +444,6 @@ function PromotionLifecycle({ promotion }: Readonly<{ promotion: Promotion }>) {
       value: executionStatus.recordedAt,
     },
   ];
-  const activeStage = currentPromotionLifecycleStage(steps);
-  const selectedStage = selectedPromotionLifecycleStage(searchParams, activeStage);
-  const requestedStage = searchParams.get(promotionDetailSearchParamNames.stage);
-  const selectedStep = steps[promotionLifecycleStages.indexOf(selectedStage)] ?? preparation;
-
-  useEffect(() => {
-    if (requestedStage === null || requestedStage === selectedStage) return;
-    setSearchParams(updatePromotionLifecycleSearchParams(searchParams), {
-      preventScrollReset: true,
-      replace: true,
-    });
-  }, [requestedStage, searchParams, selectedStage, setSearchParams]);
-
-  function selectStage(stage: PromotionLifecycleStage) {
-    setSearchParams(updatePromotionLifecycleSearchParams(searchParams, stage), {
-      preventScrollReset: true,
-    });
-  }
-
-  return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Title order={2}>Lifecycle</Title>
-        <Group className={styles.lifecycleMascot} justify="center">
-          <KawaiiActivity
-            activity={promotionDetailActivity(promotion)}
-            animationKey={promotion.id}
-            mascotOnly
-          />
-        </Group>
-        <Stack className={styles.lifecycleSteps} gap={3}>
-          {steps.map((step) => {
-            const Icon = step.icon;
-            const active = step.stage === activeStage && step.state === "active";
-            const complete = step.state === "complete";
-            const terminal = step.state === "error" || step.state === "terminal";
-            const stateLabel = terminal
-              ? step.status.label
-              : active
-                ? "Current"
-                : complete
-                  ? "Complete"
-                  : "Waiting";
-            const stateColor = terminal ? step.status.color : active ? "lilac" : "gray";
-            return (
-              <UnstyledButton
-                aria-current={selectedStage === step.stage ? "step" : undefined}
-                className={styles.lifecycleStep}
-                data-selected={selectedStage === step.stage || undefined}
-                key={step.stage}
-                onClick={() => selectStage(step.stage)}
-              >
-                <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
-                  <Icon aria-hidden size={15} stroke={2.2} />
-                </Box>
-                <Stack gap={0} style={{ flex: 1 }}>
-                  <Text fw={650} size="sm">
-                    {step.label}
-                  </Text>
-                  <Text c="dimmed" size="xs">
-                    {step.value ? (
-                      <Timestamp value={step.value} />
-                    ) : active ? (
-                      "In progress"
-                    ) : (
-                      "Not reached"
-                    )}
-                  </Text>
-                </Stack>
-                <Badge
-                  color={stateColor}
-                  size="xs"
-                  variant={active || terminal ? "light" : "outline"}
-                >
-                  {stateLabel}
-                </Badge>
-              </UnstyledButton>
-            );
-          })}
-        </Stack>
-        <PromotionLifecycleStageDetail
-          detail={selectedStep.detail}
-          promotion={promotion}
-          stage={selectedStep.stage}
-          status={selectedStep.status}
-          value={selectedStep.value}
-        />
-      </Stack>
-    </Paper>
-  );
 }
 
 function currentPromotionLifecycleStage(
@@ -706,10 +704,12 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
               }
             />
             <Fact label="Target branch" value={review.targetBranch} />
-            <Fact
-              label="Candidate branch"
-              value={review.git?.candidateBranch ?? "Waiting for Kargo"}
-            />
+            <Box style={{ gridColumn: "1 / -1" }}>
+              <Fact
+                label="Candidate branch"
+                value={review.git?.candidateBranch ?? "Waiting for Kargo"}
+              />
+            </Box>
           </SimpleGrid>
           {review.git ? (
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
@@ -756,6 +756,15 @@ function PromotionWorkspace({
   );
   const activeView = selectedPromotionDetailView(searchParams, automaticView);
   const requestedView = searchParams.get(promotionDetailSearchParamNames.view);
+  const lifecycleSteps = promotionLifecycleSteps(promotion);
+  const activeLifecycleStage = currentPromotionLifecycleStage(lifecycleSteps);
+  const selectedLifecycleStage = selectedPromotionLifecycleStage(
+    searchParams,
+    activeLifecycleStage,
+  );
+  const requestedLifecycleStage = searchParams.get(promotionDetailSearchParamNames.stage);
+  const selectedLifecycleStep =
+    lifecycleSteps[promotionLifecycleStages.indexOf(selectedLifecycleStage)] ?? lifecycleSteps[0]!;
 
   useEffect(() => {
     if (requestedView === null || requestedView === activeView) return;
@@ -766,6 +775,16 @@ function PromotionWorkspace({
     });
   }, [activeView, automaticView, requestedView, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (requestedLifecycleStage === null || requestedLifecycleStage === selectedLifecycleStage) {
+      return;
+    }
+    setSearchParams(updatePromotionLifecycleSearchParams(searchParams), {
+      preventScrollReset: true,
+      replace: true,
+    });
+  }, [requestedLifecycleStage, searchParams, selectedLifecycleStage, setSearchParams]);
+
   function changeView(value: string | null) {
     if (!value) return;
     setSearchParams(
@@ -774,8 +793,37 @@ function PromotionWorkspace({
     );
   }
 
+  function changeLifecycleStage(stage: PromotionLifecycleStage) {
+    setSearchParams(updatePromotionLifecycleSearchParams(searchParams, stage), {
+      preventScrollReset: true,
+    });
+  }
+
+  const lifecycleProps = {
+    onStageChange: changeLifecycleStage,
+    promotion,
+    selectedStage: selectedLifecycleStage,
+    steps: lifecycleSteps,
+  };
+
   return (
     <Box className={styles.workspace}>
+      <Accordion className={styles.mobileLifecycle} variant="contained">
+        <Accordion.Item value="lifecycle">
+          <Accordion.Control>
+            <Group justify="space-between" pr="sm" wrap="nowrap">
+              <Text fw={650}>Lifecycle</Text>
+              <Badge color={selectedLifecycleStep.status.color} variant="light">
+                {promotionLifecycleStageLabel(selectedLifecycleStage)}
+              </Badge>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <PromotionLifecycle {...lifecycleProps} showHeading={false} />
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+
       <Paper className={styles.reviewCard} withBorder>
         <Tabs keepMounted={false} onChange={changeView} value={activeView}>
           <Tabs.List className={styles.reviewTabs}>
@@ -856,7 +904,9 @@ function PromotionWorkspace({
       </Paper>
 
       <Stack className={styles.sidebar} gap="md">
-        <PromotionLifecycle promotion={promotion} />
+        <Paper className={styles.desktopLifecycle} p="md" withBorder>
+          <PromotionLifecycle {...lifecycleProps} />
+        </Paper>
         <DecisionPanel canWrite={canWrite} promotion={promotion} />
       </Stack>
     </Box>

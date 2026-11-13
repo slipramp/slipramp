@@ -66,7 +66,7 @@ export const sliprampTheme = createTheme({
   primaryShade: { dark: 4, light: 6 },
   components: {
     Anchor: { defaultProps: { size: "sm" } },
-    Badge: { defaultProps: { radius: "sm" } },
+    Badge: { defaultProps: { radius: "sm", tt: "capitalize" } },
     Button: { defaultProps: { radius: "md", size: "sm" } },
     Paper: { defaultProps: { radius: "lg" } },
   },

@@ -28,6 +28,10 @@
   top: var(--mantine-spacing-md);
 }
 
+.mobileLifecycle {
+  display: none;
+}
+
 .gitDiff {
   max-height: 640px;
   overflow: auto;
@@ -101,6 +105,14 @@
 
   .sidebar {
     position: static;
+  }
+
+  .desktopLifecycle {
+    display: none;
+  }
+
+  .mobileLifecycle {
+    display: block;
   }
 }
 

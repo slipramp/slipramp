@@ -64,21 +64,12 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   const target = record.definition;
   const targetPath = `/targets/${record.id}`;
   const activeTab = targetDetailTab(location.pathname, targetPath);
-  const actionCount = Object.keys(target.spec.actions).length;
-
   return (
     <Stack gap="lg">
       <PageHeader
         actions={<RunHistoryButton to={`/runs?targetId=${record.id}`} />}
         back={<PageBackLink label="Back to targets" to="/targets" />}
-        badges={
-          <>
-            {record.archivedAt ? <Badge color="gray">Archived</Badge> : null}
-            <Badge variant="outline">
-              {actionCount} action{actionCount === 1 ? "" : "s"}
-            </Badge>
-          </>
-        }
+        badges={record.archivedAt ? <Badge color="gray">Archived</Badge> : null}
         description="Operational target"
         details={
           <PageHeaderFacts>
