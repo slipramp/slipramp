@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   Code,
-  Divider,
   Group,
   Paper,
   SimpleGrid,
@@ -13,7 +12,6 @@ import {
   Switch,
   Table,
   Text,
-  Title,
 } from "@mantine/core";
 import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
@@ -44,7 +42,7 @@ import { CommitReference } from "~/features/commits/git-commit";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import {
-  CommandBlock,
+  CodeList,
   MappingTable,
   ResourceRequirementsTable,
   TechnicalValue,
@@ -238,9 +236,7 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
             target={target}
             targetURL={targetURL}
           />
-          <Divider />
           <ActionContext explanation={loaderData.explanation} />
-          <Divider />
           <ArtifactSection explanation={loaderData.explanation} />
         </>
       ) : (
@@ -264,28 +260,31 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
 
   return (
     <ProvenanceVisibilityContext.Provider value={showProvenance}>
-      <Stack component="section" gap="lg">
-        <SectionHeader
-          actions={
-            <Switch
-              checked={showProvenance}
-              label="Show provenance"
-              onChange={(event) => setShowProvenance(event.currentTarget.checked)}
-              size="sm"
+      <Paper component="section" style={{ overflow: "hidden" }} withBorder>
+        <Stack gap={0}>
+          <Stack gap="lg" p="lg">
+            <SectionHeader
+              actions={
+                <Switch
+                  checked={showProvenance}
+                  label="Show provenance"
+                  onChange={(event) => setShowProvenance(event.currentTarget.checked)}
+                  size="sm"
+                />
+              }
+              title="Execution context"
             />
-          }
-          description="Review the resolved process, destination, resources, and access before creating the Run."
-          title="Execution context"
-        />
-        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl" verticalSpacing="xl">
-          <Stack gap="lg">
-            <Title order={3}>Process</Title>
             <Stack gap={4}>
-              <CommandBlock command={explanation.process.command.value} />
+              <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                Command
+              </Text>
+              <Code block className="technical-code-block technical-code-list">
+                {explanation.process.command.value.join(" ")}
+              </Code>
               <SourceLabel value={explanation.process.command} />
             </Stack>
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
+            <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
               <TechnicalValue
                 description={
                   showProvenance ? provenanceSummary(explanation.runtime.name) : undefined
@@ -300,51 +299,6 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
                   </Anchor>
                 }
               />
-            </SimpleGrid>
-            <Accordion defaultValue={null}>
-              <Accordion.Item value="execution-details">
-                <Accordion.Control>
-                  <Text fw={600}>Execution details</Text>
-                </Accordion.Control>
-                <Accordion.Panel>
-                  <Stack gap="lg">
-                    <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                      <ExplainedTechnicalValue
-                        explained={explanation.process.workingDirectory}
-                        label="Process directory"
-                      />
-                      <ExplainedTechnicalValue
-                        explained={explanation.process.repositoryMount}
-                        label="Repository mount"
-                      />
-                      <ExplainedTechnicalValue
-                        explained={explanation.process.targetPath}
-                        label="Target path"
-                      />
-                      <ExplainedTechnicalValue
-                        explained={explanation.timeout}
-                        label="Timeout"
-                        render={(value) => value || "No timeout"}
-                      />
-                    </SimpleGrid>
-                    <MappingTable
-                      empty="No runtime environment values"
-                      entries={environment.map(([name, value]) => [
-                        name,
-                        String(explainedValue(value)),
-                      ])}
-                      label="Command environment before parameters"
-                    />
-                    <MappingSourceLabels entries={environment} />
-                  </Stack>
-                </Accordion.Panel>
-              </Accordion.Item>
-            </Accordion>
-          </Stack>
-
-          <Stack gap="lg">
-            <Title order={3}>Placement and access</Title>
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <TechnicalValue
                 description={
                   showProvenance ? provenanceSummary(explanation.placement.name) : undefined
@@ -353,20 +307,20 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
                 value={
                   <Anchor
                     component={Link}
-                    to={targetFilterPath("placement", explanation.placement.name.value)}
+                    to={`/placements/${encodeURIComponent(explanation.placement.name.value)}`}
                   >
                     {explanation.placement.name.value}
                   </Anchor>
                 }
               />
-              <ExplainedTechnicalValue explained={explanation.placement.cluster} label="Cluster" />
               <ExplainedTechnicalValue
-                explained={explanation.placement.namespace}
-                label="Namespace"
-              />
-              <ExplainedTechnicalValue
-                explained={explanation.placement.serviceAccount}
-                label="Service account"
+                explained={explanation.placement.cluster}
+                label="Cluster"
+                render={(cluster) => (
+                  <Anchor component={Link} to={`/clusters/${encodeURIComponent(cluster)}`}>
+                    {cluster}
+                  </Anchor>
+                )}
               />
               {!explanation.placement.podExtensions.resolved ||
               explanation.placement.podExtensions.value ? (
@@ -393,46 +347,93 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
               </>
             ) : null}
           </Stack>
-        </SimpleGrid>
-        <Accordion defaultValue={[]} multiple>
-          <Accordion.Item value="resources">
-            <Accordion.Control>
-              <DisclosureLabel count={resourceCount} label="Resources" />
-            </Accordion.Control>
-            <Accordion.Panel>
-              <Stack gap="sm">
-                <ResourceRequirementsTable
-                  label="Requests and limits"
-                  limits={limits}
-                  requests={requests}
-                />
-                <ResourceSourceLabels explanation={explanation} />
-              </Stack>
-            </Accordion.Panel>
-          </Accordion.Item>
-          <Accordion.Item value="credentials">
-            <Accordion.Control>
-              <DisclosureLabel count={explanation.credentials.length} label="Credentials" />
-            </Accordion.Control>
-            <Accordion.Panel>
-              <Credentials credentials={explanation.credentials} />
-            </Accordion.Panel>
-          </Accordion.Item>
-        </Accordion>
-      </Stack>
+          <Accordion
+            defaultValue={[]}
+            multiple
+            style={{ borderTop: "1px solid var(--slipramp-border)" }}
+          >
+            <Accordion.Item value="execution-details">
+              <Accordion.Control>
+                <Text fw={600}>Execution details</Text>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Stack gap="lg">
+                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    <ExplainedTechnicalValue
+                      explained={explanation.placement.namespace}
+                      label="Namespace"
+                    />
+                    <ExplainedTechnicalValue
+                      explained={explanation.placement.serviceAccount}
+                      label="Service account"
+                    />
+                    <ExplainedTechnicalValue
+                      explained={explanation.process.workingDirectory}
+                      label="Process directory"
+                    />
+                    <ExplainedTechnicalValue
+                      explained={explanation.process.repositoryMount}
+                      label="Repository mount"
+                    />
+                    <ExplainedTechnicalValue
+                      explained={explanation.process.targetPath}
+                      label="Target path"
+                    />
+                    <ExplainedTechnicalValue
+                      explained={explanation.timeout}
+                      label="Timeout"
+                      render={(value) => value || "No timeout"}
+                    />
+                  </SimpleGrid>
+                  <CodeList
+                    empty="No runtime environment values"
+                    label="Command environment before parameters"
+                    values={environment.map(
+                      ([name, value]) => `${name}=${String(explainedValue(value))}`,
+                    )}
+                  />
+                  <MappingSourceLabels entries={environment} />
+                </Stack>
+              </Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="resources">
+              <Accordion.Control>
+                <DisclosureLabel count={resourceCount} label="Resources" />
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Stack gap="sm">
+                  <ResourceRequirementsTable
+                    label="Requests and limits"
+                    limits={limits}
+                    requests={requests}
+                  />
+                  <ResourceSourceLabels explanation={explanation} />
+                </Stack>
+              </Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item style={{ borderBottom: 0 }} value="credentials">
+              <Accordion.Control>
+                <DisclosureLabel count={explanation.credentials.length} label="Credentials" />
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Credentials credentials={explanation.credentials} />
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </Stack>
+      </Paper>
     </ProvenanceVisibilityContext.Provider>
   );
 }
 
 function ArtifactSection({ explanation }: Readonly<{ explanation: CatalogExplanation }>) {
   return (
-    <Stack component="section" gap="lg">
-      <SectionHeader
-        description="Declared outputs and compatible inputs pinned by this catalog revision."
-        title="Artifacts"
-      />
-      <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
-    </Stack>
+    <Paper component="section" p="lg" withBorder>
+      <Stack gap="lg">
+        <SectionHeader title="Artifacts" />
+        <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
+      </Stack>
+    </Paper>
   );
 }
 
@@ -541,7 +542,9 @@ function Credentials({ credentials }: Readonly<{ credentials: CredentialExplanat
         <Table horizontalSpacing="sm" verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w="1%">Requirement</Table.Th>
+              <Table.Th style={{ whiteSpace: "nowrap" }} w="1%">
+                Requirement
+              </Table.Th>
               <Table.Th w="1%">Binding</Table.Th>
               <Table.Th w="1%">Secret reference</Table.Th>
               <Table.Th>Runtime injection</Table.Th>
@@ -550,8 +553,8 @@ function Credentials({ credentials }: Readonly<{ credentials: CredentialExplanat
           <Table.Tbody>
             {credentials.map((credential) => (
               <Table.Tr key={credential.requirement}>
-                <Table.Td>
-                  <Code>{credential.requirement}</Code>
+                <Table.Td style={{ whiteSpace: "nowrap" }}>
+                  <Code style={{ whiteSpace: "nowrap" }}>{credential.requirement}</Code>
                 </Table.Td>
                 <Table.Td>
                   <TableValue
@@ -610,11 +613,9 @@ function CredentialInjection({
           No injection convention
         </Text>
       ) : (
-        <Stack gap={2}>
+        <Stack gap="sm">
           {values.map((value) => (
-            <Text key={value} size="sm">
-              <Code className="technical-inline-value">{value}</Code>
-            </Text>
+            <CredentialInjectionLine key={value} value={value} />
           ))}
         </Stack>
       )}
@@ -624,6 +625,21 @@ function CredentialInjection({
         </Text>
       ) : null}
     </Stack>
+  );
+}
+
+function CredentialInjectionLine({ value }: Readonly<{ value: string }>) {
+  const separator = " ← ";
+  const separatorIndex = value.indexOf(separator);
+  const content =
+    separatorIndex === -1
+      ? value
+      : `${value.slice(0, separatorIndex)}\n← ${value.slice(separatorIndex + separator.length)}`;
+
+  return (
+    <Code block className="technical-code-block technical-code-list">
+      {content}
+    </Code>
   );
 }
 
@@ -675,46 +691,49 @@ function RunForm({
   }
 
   return (
-    <Form method="post">
-      <Stack component="section" gap="lg">
-        <SectionHeader
-          actions={
-            parameters.length > 0 ? (
-              <Switch
-                checked={showTechnicalDetails}
-                label="Show technical details"
-                onChange={(event) => setShowTechnicalDetails(event.currentTarget.checked)}
-                size="sm"
-              />
-            ) : null
-          }
-          description="Provide values for this immutable execution."
-          title="Parameters"
-        />
-        {error ? (
-          <Alert color="red" title="Run not created">
-            {error}
-          </Alert>
-        ) : null}
-        <RunParameterFields
-          declarations={actionDefinition.parameters}
-          showTechnicalDetails={showTechnicalDetails}
-          submittedValues={submittedValues}
-        />
-        <Group justify="flex-end">
-          <Button component={Link} to={targetURL} variant="default">
-            Cancel
-          </Button>
-          <Button
-            leftSection={<IconPlayerPlay aria-hidden size={16} />}
-            loading={navigation.state === "submitting"}
-            type="submit"
-          >
-            Create Run
-          </Button>
-        </Group>
-      </Stack>
-    </Form>
+    <Paper component="section" p="lg" withBorder>
+      <Form method="post">
+        <Stack gap="lg">
+          <Stack gap="md">
+            <SectionHeader
+              actions={
+                parameters.length > 0 ? (
+                  <Switch
+                    checked={showTechnicalDetails}
+                    label="Show technical details"
+                    onChange={(event) => setShowTechnicalDetails(event.currentTarget.checked)}
+                    size="sm"
+                  />
+                ) : null
+              }
+              title="Parameters"
+            />
+            {error ? (
+              <Alert color="red" title="Run not created">
+                {error}
+              </Alert>
+            ) : null}
+            <RunParameterFields
+              declarations={actionDefinition.parameters}
+              showTechnicalDetails={showTechnicalDetails}
+              submittedValues={submittedValues}
+            />
+          </Stack>
+          <Group justify="flex-end">
+            <Button component={Link} to={targetURL} variant="default">
+              Cancel
+            </Button>
+            <Button
+              leftSection={<IconPlayerPlay aria-hidden size={16} />}
+              loading={navigation.state === "submitting"}
+              type="submit"
+            >
+              Create Run
+            </Button>
+          </Group>
+        </Stack>
+      </Form>
+    </Paper>
   );
 }
 
@@ -746,14 +765,12 @@ function ArtifactOutputs({ outputs }: Readonly<{ outputs: OutputExplanation[] }>
         </Text>
       ) : (
         <Paper className="technical-data-table" withBorder>
-          <Table.ScrollContainer minWidth={840} type="native">
+          <Table.ScrollContainer minWidth={680} type="native">
             <Table horizontalSpacing="sm" verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Artifact</Table.Th>
-                  <Table.Th>Description</Table.Th>
-                  <Table.Th>Path</Table.Th>
-                  <Table.Th>Media type</Table.Th>
+                  <Table.Th>Output</Table.Th>
                   <Table.Th>Compatible consumers</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -773,14 +790,20 @@ function ArtifactOutputs({ outputs }: Readonly<{ outputs: OutputExplanation[] }>
                             ) : null}
                           </Group>
                           <SourceLabel value={output.artifact} />
+                          <Text c={artifact.description ? undefined : "dimmed"} size="sm">
+                            {artifact.description ?? "No description"}
+                          </Text>
                         </Stack>
                       </Table.Td>
-                      <Table.Td>{artifact.description ?? <Text c="dimmed">—</Text>}</Table.Td>
                       <Table.Td>
-                        <Code style={{ whiteSpace: "nowrap" }}>{artifact.path}</Code>
-                      </Table.Td>
-                      <Table.Td>
-                        {artifact.mediaType ?? <Text c="dimmed">Unspecified</Text>}
+                        <Stack gap="sm">
+                          <ArtifactTableField label="Path">
+                            <Code style={{ whiteSpace: "nowrap" }}>{artifact.path}</Code>
+                          </ArtifactTableField>
+                          <ArtifactTableField label="Media type">
+                            {artifact.mediaType ?? <Text c="dimmed">Unspecified</Text>}
+                          </ArtifactTableField>
+                        </Stack>
                       </Table.Td>
                       <Table.Td>
                         {output.consumers.length > 0 ? (
@@ -819,16 +842,13 @@ function ArtifactInputs({ inputs }: Readonly<{ inputs: InputExplanation[] }>) {
         </Text>
       ) : (
         <Paper className="technical-data-table" withBorder>
-          <Table.ScrollContainer minWidth={900} type="native">
+          <Table.ScrollContainer minWidth={680} type="native">
             <Table horizontalSpacing="sm" verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Input</Table.Th>
-                  <Table.Th>Description</Table.Th>
-                  <Table.Th>Producer action</Table.Th>
-                  <Table.Th>Producer path</Table.Th>
-                  <Table.Th>Mount path</Table.Th>
-                  <Table.Th>Compatibility</Table.Th>
+                  <Table.Th>Producer</Table.Th>
+                  <Table.Th>Consumption</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -840,29 +860,38 @@ function ArtifactInputs({ inputs }: Readonly<{ inputs: InputExplanation[] }>) {
                         <Stack gap={2}>
                           <Code>{item.name}</Code>
                           <SourceLabel value={item.input} />
+                          <Text
+                            c={item.producer.value.description ? undefined : "dimmed"}
+                            size="sm"
+                          >
+                            {item.producer.value.description ?? "No description"}
+                          </Text>
                         </Stack>
                       </Table.Td>
                       <Table.Td>
-                        {item.producer.value.description ?? <Text c="dimmed">—</Text>}
-                      </Table.Td>
-                      <Table.Td>
-                        <Code>{input.artifact.fromAction}</Code>
-                      </Table.Td>
-                      <Table.Td>
-                        <Code style={{ whiteSpace: "nowrap" }}>{item.producer.value.path}</Code>
-                      </Table.Td>
-                      <Table.Td>
-                        <Code style={{ whiteSpace: "nowrap" }}>{input.mountPath}</Code>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text size="sm">
-                            {item.compatibility.resolved
-                              ? item.compatibility.value
-                              : (item.compatibility.unresolvedReason ?? "Unresolved")}
-                          </Text>
-                          <SourceLabel value={item.compatibility} />
+                        <Stack gap="sm">
+                          <ArtifactTableField label="Action">
+                            <Code>{input.artifact.fromAction}</Code>
+                          </ArtifactTableField>
+                          <ArtifactTableField label="Path">
+                            <Code style={{ whiteSpace: "nowrap" }}>{item.producer.value.path}</Code>
+                          </ArtifactTableField>
                           <SourceLabel value={item.producer} />
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap="sm">
+                          <ArtifactTableField label="Mount path">
+                            <Code style={{ whiteSpace: "nowrap" }}>{input.mountPath}</Code>
+                          </ArtifactTableField>
+                          <ArtifactTableField label="Compatibility">
+                            <Text size="sm">
+                              {item.compatibility.resolved
+                                ? item.compatibility.value
+                                : (item.compatibility.unresolvedReason ?? "Unresolved")}
+                            </Text>
+                          </ArtifactTableField>
+                          <SourceLabel value={item.compatibility} />
                         </Stack>
                       </Table.Td>
                     </Table.Tr>
@@ -873,6 +902,17 @@ function ArtifactInputs({ inputs }: Readonly<{ inputs: InputExplanation[] }>) {
           </Table.ScrollContainer>
         </Paper>
       )}
+    </Stack>
+  );
+}
+
+function ArtifactTableField({ children, label }: Readonly<{ children: ReactNode; label: string }>) {
+  return (
+    <Stack gap={2}>
+      <Text c="dimmed" fw={600} size="xs">
+        {label}
+      </Text>
+      {children}
     </Stack>
   );
 }

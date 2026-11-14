@@ -86,8 +86,18 @@ function RunCreateDialog({
       centered
       onClose={onClose}
       opened
-      size="lg"
-      title={`Run ${loadedAction?.title ?? actionTitle ?? actionName}`}
+      size="xl"
+      styles={{ title: { flex: 1 } }}
+      title={
+        <Group gap="sm" justify="space-between" pr="sm" w="100%" wrap="wrap">
+          <Text component="span" inherit>
+            Run {loadedAction?.title ?? actionTitle ?? actionName}
+          </Text>
+          <Anchor component={Link} to={fullViewPath}>
+            Full view
+          </Anchor>
+        </Group>
+      }
     >
       {definition === undefined || definitionFetcher.state === "loading" ? (
         <Center mih={180}>
@@ -98,14 +108,14 @@ function RunCreateDialog({
           <Alert color="red" title="Action unavailable">
             {definition.error ?? "This action is no longer available."}
           </Alert>
-          <DialogNavigation fullViewPath={fullViewPath} onClose={onClose} />
+          <DialogCancelButton onClose={onClose} />
         </Stack>
       ) : inputs.length > 0 ? (
         <Stack gap="md">
           <Alert color="blue" title="Artifact input required">
             Start this action from a compatible artifact on its producing Run.
           </Alert>
-          <DialogNavigation fullViewPath={fullViewPath} onClose={onClose} />
+          <DialogCancelButton onClose={onClose} />
         </Stack>
       ) : (
         <creationFetcher.Form action={fullViewPath} method="post">
@@ -116,6 +126,22 @@ function RunCreateDialog({
               </Alert>
             ) : null}
 
+            {loadedAction?.description || loadedAction?.documentationUrl ? (
+              <Stack gap="xs">
+                {loadedAction.description ? (
+                  <Text c="dimmed">{loadedAction.description}</Text>
+                ) : null}
+                {loadedAction.documentationUrl ? (
+                  <Anchor href={loadedAction.documentationUrl} rel="noreferrer" target="_blank">
+                    <Group gap={4} wrap="nowrap">
+                      <span>Documentation</span>
+                      <IconExternalLink aria-hidden size={14} />
+                    </Group>
+                  </Anchor>
+                ) : null}
+              </Stack>
+            ) : null}
+
             <RunParameterFields declarations={loadedAction?.parameters} />
 
             <Group justify="space-between" wrap="wrap">
@@ -123,9 +149,6 @@ function RunCreateDialog({
                 Cancel
               </Button>
               <Group gap="sm">
-                <Button component={Link} to={fullViewPath} variant="subtle">
-                  Full view
-                </Button>
                 <Button
                   loading={creationFetcher.state !== "idle" && submittingMode === "background"}
                   name="mode"
@@ -153,19 +176,11 @@ function RunCreateDialog({
   );
 }
 
-function DialogNavigation({
-  fullViewPath,
-  onClose,
-}: Readonly<{ fullViewPath: string; onClose: () => void }>) {
+function DialogCancelButton({ onClose }: Readonly<{ onClose: () => void }>) {
   return (
-    <Group justify="space-between" wrap="wrap">
-      <Button onClick={onClose} type="button" variant="default">
-        Cancel
-      </Button>
-      <Button component={Link} to={fullViewPath} variant="subtle">
-        Full view
-      </Button>
-    </Group>
+    <Button onClick={onClose} type="button" variant="default">
+      Cancel
+    </Button>
   );
 }
 
