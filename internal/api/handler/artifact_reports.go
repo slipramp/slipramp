@@ -12,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
+	"github.com/slipramp/slipramp/internal/runreport/steps"
 )
 
 func (h *Handler) GetArtifactReport(
@@ -55,6 +56,8 @@ func reportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error
 		return pyinfraDeployReportSummaryResponse(record)
 	case ansible.PlaybookKind:
 		return ansiblePlaybookReportSummaryResponse(record)
+	case steps.ReportKind:
+		return stepReportSummaryResponse(record)
 	default:
 		return nil, fmt.Errorf("run report kind %q is not supported", record.Report.Kind)
 	}
@@ -68,6 +71,8 @@ func runReportResponse(content artifact.ReportContent) (api.RunReport, error) {
 		return pyinfraDeployReportResponse(content, report)
 	case *ansible.AnsiblePlaybookReport:
 		return ansiblePlaybookReportResponse(content, report)
+	case *steps.StepReport:
+		return stepReportResponse(content, report)
 	default:
 		return api.RunReport{}, fmt.Errorf("run report kind %q is not supported", content.Metadata.Kind)
 	}
@@ -428,6 +433,104 @@ func ansibleTaskResponses(tasks []ansible.AnsibleTask) []api.AnsibleTask {
 			Redacted:   task.Redacted,
 			Results:    results,
 		})
+	}
+
+	return result
+}
+
+func stepReportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error) {
+	summary, err := stepReportAggregateResponse(record.Report.Summary)
+	if err != nil {
+		return nil, err
+	}
+	body := api.StepReportSummary{
+		ArtifactID:     record.ID,
+		RunID:          record.RunID,
+		Kind:           api.StepReportSummaryKind(record.Report.Kind),
+		SchemaVersion:  record.Report.SchemaVersion,
+		AdapterVersion: record.Report.AdapterVersion,
+		Tool:           record.Report.Tool,
+		ToolVersion:    optionalString(record.Report.ToolVersion),
+		Mode:           api.StepReportSummaryMode(record.Report.Mode),
+		CreatedAt:      record.Report.CreatedAt,
+		Summary:        summary,
+	}
+	response := &api.RunReportSummary{}
+	if err := response.FromStepReportSummary(body); err != nil {
+		return nil, fmt.Errorf("encode step report summary response: %w", err)
+	}
+
+	return response, nil
+}
+
+func stepReportResponse(content artifact.ReportContent, report *steps.StepReport) (api.RunReport, error) {
+	if report == nil {
+		return api.RunReport{}, errors.New("step report is missing")
+	}
+	summary, err := stepReportAggregateResponse(&report.Summary)
+	if err != nil {
+		return api.RunReport{}, err
+	}
+	body := api.StepReport{
+		ArtifactID:     content.Artifact.ID,
+		RunID:          content.Artifact.RunID,
+		Kind:           api.StepReportKind(report.Kind),
+		SchemaVersion:  report.SchemaVersion,
+		AdapterVersion: report.AdapterVersion,
+		Tool:           report.Tool,
+		ToolVersion:    optionalString(report.ToolVersion),
+		Mode:           api.StepReportMode(report.Mode),
+		CreatedAt:      content.Metadata.CreatedAt,
+		Title:          optionalString(report.Title),
+		Summary:        summary,
+		Steps:          stepResponses(report.Steps),
+	}
+	response := api.RunReport{}
+	if err := response.FromStepReport(body); err != nil {
+		return api.RunReport{}, fmt.Errorf("encode step report response: %w", err)
+	}
+
+	return response, nil
+}
+
+func stepReportAggregateResponse(value model.Summary) (api.StepReportAggregate, error) {
+	summary, ok := value.(*steps.StepReportSummary)
+	if !ok {
+		return api.StepReportAggregate{}, fmt.Errorf("run report summary type %T is not supported", value)
+	}
+	if summary == nil {
+		return api.StepReportAggregate{}, errors.New("step report summary is missing")
+	}
+
+	return api.StepReportAggregate{
+		Outcome:    api.StepReportOutcome(summary.Outcome),
+		DurationMs: summary.DurationMS,
+		Steps: api.StepOutcomeCounts{
+			Total:     summary.Steps.Total,
+			Succeeded: summary.Steps.Succeeded,
+			Warning:   summary.Steps.Warning,
+			Failed:    summary.Steps.Failed,
+			Skipped:   summary.Steps.Skipped,
+			Canceled:  summary.Steps.Canceled,
+			NotRun:    summary.Steps.NotRun,
+		},
+	}, nil
+}
+
+func stepResponses(values []steps.Step) []api.StepReportStep {
+	result := make([]api.StepReportStep, 0, len(values))
+	for _, value := range values {
+		response := api.StepReportStep{
+			ID:         value.ID,
+			Name:       value.Name,
+			Outcome:    api.StepReportOutcome(value.Outcome),
+			DurationMs: value.DurationMS,
+		}
+		if len(value.Steps) > 0 {
+			children := stepResponses(value.Steps)
+			response.Steps = &children
+		}
+		result = append(result, response)
 	}
 
 	return result

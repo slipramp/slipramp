@@ -304,6 +304,18 @@ components:
       $ref: ./components/run-reports.yaml#/RunReportEnvelope
     RunReport:
       $ref: ./components/run-reports.yaml#/RunReport
+    StepReportSummary:
+      $ref: ./components/run-reports.yaml#/StepReportSummary
+    StepReport:
+      $ref: ./components/run-reports.yaml#/StepReport
+    StepReportAggregate:
+      $ref: ./components/run-reports.yaml#/StepReportAggregate
+    StepReportOutcome:
+      $ref: ./components/run-reports.yaml#/StepReportOutcome
+    StepOutcomeCounts:
+      $ref: ./components/run-reports.yaml#/StepOutcomeCounts
+    StepReportStep:
+      $ref: ./components/run-reports.yaml#/StepReportStep
     TerraformPlanReportSummary:
       $ref: ./components/run-reports.yaml#/TerraformPlanReportSummary
     TerraformPlanReport:

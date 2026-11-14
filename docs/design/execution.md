@@ -105,6 +105,11 @@ failures and retryable Server responses with bounded exponential backoff; they
 never rerun the Action command. Runtime images and tools require no Slipramp
 libraries or protocol support.
 
+Repository scripts may optionally write a declared generic step-report Artifact
+for structured outcomes and elapsed durations. This uses the ordinary output
+Artifact upload after the process exits and does not require a Harness library
+or incremental execution protocol.
+
 ## Optional tool adapters
 
 Tool-specific Runtime images and commands remain optional conventions layered

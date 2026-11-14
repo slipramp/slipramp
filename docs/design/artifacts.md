@@ -61,13 +61,19 @@ adapter validates the source and produces a bounded, versioned, value-free
 projection for product summaries and structured detail.
 
 Current adapters cover Terraform plan JSON, OpenTofu plan JSON, pyinfra deploy
-output, and Ansible playbook event reports. Terraform and OpenTofu remain
-distinct tools and media types even when they share a compatible projection
-model. Projections retain tool identity, version, mode, aggregate counts, and
-normalized changes while excluding provider values and other unnecessary
-source data. The Ansible projection retains bounded play, task, host, and
-outcome structure, excludes arbitrary module result values, and hard-redacts
-tasks whose results indicate `no_log`.
+output, Ansible playbook event reports, and a generic step report for repository
+scripts. Terraform and OpenTofu remain distinct tools and media types even when
+they share a compatible projection model. Projections retain tool identity,
+version, mode, aggregate counts, and normalized changes while excluding
+provider values and other unnecessary source data. The Ansible projection
+retains bounded play, task, host, and outcome structure, excludes arbitrary
+module result values, and hard-redacts tasks whose results indicate `no_log`.
+
+The generic step report is a final, descriptive hierarchy with at most one
+level of child steps. It records bounded identifiers, display names, outcomes,
+and elapsed durations without arbitrary result payloads. Array order preserves
+the script's reported execution order; step relationships do not create a
+Slipramp workflow, retry, dependency, or live progress protocol.
 
 The Ansible runtime helper records the checkout's repository directory in its
 version 2 source envelope. The adapter uses that directory to make task paths

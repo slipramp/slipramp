@@ -73,6 +73,7 @@ import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/sh
 import { AnsiblePlaybookReportView } from "~/features/runs/ansible-playbook-report-view";
 import { RunLogViewer } from "~/features/runs/run-log-viewer";
 import { PyinfraDeployReportView } from "~/features/runs/pyinfra-deploy-report-view";
+import { StepReportView } from "~/features/runs/step-report-view";
 import { InfrastructurePlanReportView } from "~/features/runs/terraform-plan-report-view";
 import {
   formatBinarySize,
@@ -787,6 +788,15 @@ function RunReportOutput({
     case "ansible-playbook":
       return (
         <AnsiblePlaybookReportView
+          artifact={artifact}
+          canReadContents={canReadContents}
+          embedded
+          load={load}
+        />
+      );
+    case "step-report":
+      return (
+        <StepReportView
           artifact={artifact}
           canReadContents={canReadContents}
           embedded

@@ -13,6 +13,7 @@ import (
 	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
+	"github.com/slipramp/slipramp/internal/runreport/steps"
 )
 
 type registration struct {
@@ -25,6 +26,7 @@ var registry = [...]registration{
 	{mediaType: infrastructure.OpenTofuPlanMediaType, format: infrastructure.OpenTofuPlanFormat()},
 	{mediaType: pyinfra.DeployMediaType, format: pyinfra.DeployFormat()},
 	{mediaType: ansible.PlaybookMediaType, format: ansible.PlaybookFormat()},
+	{mediaType: steps.ReportMediaType, format: steps.ReportFormat()},
 }
 
 func AdapterForMediaType(value string) (model.Adapter, bool) {

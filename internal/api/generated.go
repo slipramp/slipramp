@@ -1527,6 +1527,7 @@ const (
 	RunReportEnvelopeKindAnsiblePlaybook RunReportEnvelopeKind = "ansible-playbook"
 	RunReportEnvelopeKindOpentofuPlan    RunReportEnvelopeKind = "opentofu-plan"
 	RunReportEnvelopeKindPyinfraDeploy   RunReportEnvelopeKind = "pyinfra-deploy"
+	RunReportEnvelopeKindStepReport      RunReportEnvelopeKind = "step-report"
 	RunReportEnvelopeKindTerraformPlan   RunReportEnvelopeKind = "terraform-plan"
 )
 
@@ -1538,6 +1539,8 @@ func (e RunReportEnvelopeKind) Valid() bool {
 	case RunReportEnvelopeKindOpentofuPlan:
 		return true
 	case RunReportEnvelopeKindPyinfraDeploy:
+		return true
+	case RunReportEnvelopeKindStepReport:
 		return true
 	case RunReportEnvelopeKindTerraformPlan:
 		return true
@@ -1678,6 +1681,102 @@ const (
 func (e RuntimeKind) Valid() bool {
 	switch e {
 	case RuntimeKindRuntime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepReportKind.
+const (
+	StepReportKindStepReport StepReportKind = "step-report"
+)
+
+// Valid indicates whether the value is a known member of the StepReportKind enum.
+func (e StepReportKind) Valid() bool {
+	switch e {
+	case StepReportKindStepReport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepReportMode.
+const (
+	StepReportModeApply   StepReportMode = "apply"
+	StepReportModePreview StepReportMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the StepReportMode enum.
+func (e StepReportMode) Valid() bool {
+	switch e {
+	case StepReportModeApply:
+		return true
+	case StepReportModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepReportOutcome.
+const (
+	StepReportOutcomeCanceled  StepReportOutcome = "canceled"
+	StepReportOutcomeFailed    StepReportOutcome = "failed"
+	StepReportOutcomeNotRun    StepReportOutcome = "not-run"
+	StepReportOutcomeSkipped   StepReportOutcome = "skipped"
+	StepReportOutcomeSucceeded StepReportOutcome = "succeeded"
+	StepReportOutcomeWarning   StepReportOutcome = "warning"
+)
+
+// Valid indicates whether the value is a known member of the StepReportOutcome enum.
+func (e StepReportOutcome) Valid() bool {
+	switch e {
+	case StepReportOutcomeCanceled:
+		return true
+	case StepReportOutcomeFailed:
+		return true
+	case StepReportOutcomeNotRun:
+		return true
+	case StepReportOutcomeSkipped:
+		return true
+	case StepReportOutcomeSucceeded:
+		return true
+	case StepReportOutcomeWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepReportSummaryKind.
+const (
+	StepReportSummaryKindStepReport StepReportSummaryKind = "step-report"
+)
+
+// Valid indicates whether the value is a known member of the StepReportSummaryKind enum.
+func (e StepReportSummaryKind) Valid() bool {
+	switch e {
+	case StepReportSummaryKindStepReport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StepReportSummaryMode.
+const (
+	StepReportSummaryModeApply   StepReportSummaryMode = "apply"
+	StepReportSummaryModePreview StepReportSummaryMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the StepReportSummaryMode enum.
+func (e StepReportSummaryMode) Valid() bool {
+	switch e {
+	case StepReportSummaryModeApply:
+		return true
+	case StepReportSummaryModePreview:
 		return true
 	default:
 		return false
@@ -4485,6 +4584,78 @@ type ServiceAccountCreate struct {
 	Role        string `json:"role"`
 }
 
+// StepOutcomeCounts defines model for StepOutcomeCounts.
+type StepOutcomeCounts struct {
+	Canceled  int `json:"canceled"`
+	Failed    int `json:"failed"`
+	NotRun    int `json:"notRun"`
+	Skipped   int `json:"skipped"`
+	Succeeded int `json:"succeeded"`
+	Total     int `json:"total"`
+	Warning   int `json:"warning"`
+}
+
+// StepReport defines model for StepReport.
+type StepReport struct {
+	AdapterVersion int                 `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID  `json:"artifactId"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	Kind           StepReportKind      `json:"kind"`
+	Mode           StepReportMode      `json:"mode"`
+	RunID          openapi_types.UUID  `json:"runId"`
+	SchemaVersion  int                 `json:"schemaVersion"`
+	Steps          []StepReportStep    `json:"steps"`
+	Summary        StepReportAggregate `json:"summary"`
+	Title          *string             `json:"title,omitempty"`
+	Tool           string              `json:"tool"`
+	ToolVersion    *string             `json:"toolVersion,omitempty"`
+}
+
+// StepReportKind defines model for StepReport.Kind.
+type StepReportKind string
+
+// StepReportMode defines model for StepReport.Mode.
+type StepReportMode string
+
+// StepReportAggregate defines model for StepReportAggregate.
+type StepReportAggregate struct {
+	DurationMs int64             `json:"durationMs"`
+	Outcome    StepReportOutcome `json:"outcome"`
+	Steps      StepOutcomeCounts `json:"steps"`
+}
+
+// StepReportOutcome defines model for StepReportOutcome.
+type StepReportOutcome string
+
+// StepReportStep defines model for StepReportStep.
+type StepReportStep struct {
+	DurationMs int64             `json:"durationMs"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Outcome    StepReportOutcome `json:"outcome"`
+	Steps      *[]StepReportStep `json:"steps,omitempty"`
+}
+
+// StepReportSummary defines model for StepReportSummary.
+type StepReportSummary struct {
+	AdapterVersion int                   `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID    `json:"artifactId"`
+	CreatedAt      time.Time             `json:"createdAt"`
+	Kind           StepReportSummaryKind `json:"kind"`
+	Mode           StepReportSummaryMode `json:"mode"`
+	RunID          openapi_types.UUID    `json:"runId"`
+	SchemaVersion  int                   `json:"schemaVersion"`
+	Summary        StepReportAggregate   `json:"summary"`
+	Tool           string                `json:"tool"`
+	ToolVersion    *string               `json:"toolVersion,omitempty"`
+}
+
+// StepReportSummaryKind defines model for StepReportSummary.Kind.
+type StepReportSummaryKind string
+
+// StepReportSummaryMode defines model for StepReportSummary.Mode.
+type StepReportSummaryMode string
+
 // SuccessfulRenderAcknowledgement defines model for SuccessfulRenderAcknowledgement.
 type SuccessfulRenderAcknowledgement struct {
 	ResultRevision *string `json:"resultRevision,omitempty"`
@@ -5301,6 +5472,40 @@ func (t *RunReport) MergeAnsiblePlaybookReport(v AnsiblePlaybookReport) error {
 	return err
 }
 
+// AsStepReport returns the union data inside the RunReport as a StepReport
+func (t RunReport) AsStepReport() (StepReport, error) {
+	var body StepReport
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStepReport overwrites any union data inside the RunReport as the provided StepReport
+func (t *RunReport) FromStepReport(v StepReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"step-report"}`))
+	t.union = b
+	return err
+}
+
+// MergeStepReport performs a merge with any union data inside the RunReport, using the provided StepReport
+func (t *RunReport) MergeStepReport(v StepReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"step-report"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReport) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -5321,6 +5526,8 @@ func (t RunReport) ValueByDiscriminator() (interface{}, error) {
 		return t.AsOpenTofuPlanReport()
 	case "pyinfra-deploy":
 		return t.AsPyinfraDeployReport()
+	case "step-report":
+		return t.AsStepReport()
 	case "terraform-plan":
 		return t.AsTerraformPlanReport()
 	default:
@@ -5474,6 +5681,40 @@ func (t *RunReportSummary) MergeAnsiblePlaybookReportSummary(v AnsiblePlaybookRe
 	return err
 }
 
+// AsStepReportSummary returns the union data inside the RunReportSummary as a StepReportSummary
+func (t RunReportSummary) AsStepReportSummary() (StepReportSummary, error) {
+	var body StepReportSummary
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStepReportSummary overwrites any union data inside the RunReportSummary as the provided StepReportSummary
+func (t *RunReportSummary) FromStepReportSummary(v StepReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"step-report"}`))
+	t.union = b
+	return err
+}
+
+// MergeStepReportSummary performs a merge with any union data inside the RunReportSummary, using the provided StepReportSummary
+func (t *RunReportSummary) MergeStepReportSummary(v StepReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"step-report"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReportSummary) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -5494,6 +5735,8 @@ func (t RunReportSummary) ValueByDiscriminator() (interface{}, error) {
 		return t.AsOpenTofuPlanReportSummary()
 	case "pyinfra-deploy":
 		return t.AsPyinfraDeployReportSummary()
+	case "step-report":
+		return t.AsStepReportSummary()
 	case "terraform-plan":
 		return t.AsTerraformPlanReportSummary()
 	default:

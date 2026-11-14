@@ -6554,6 +6554,7 @@ components:
         - $ref: '#/components/schemas/OpenTofuPlanReportSummary'
         - $ref: '#/components/schemas/PyinfraDeployReportSummary'
         - $ref: '#/components/schemas/AnsiblePlaybookReportSummary'
+        - $ref: '#/components/schemas/StepReportSummary'
       discriminator:
         propertyName: kind
         mapping:
@@ -6561,6 +6562,7 @@ components:
           opentofu-plan: '#/components/schemas/OpenTofuPlanReportSummary'
           pyinfra-deploy: '#/components/schemas/PyinfraDeployReportSummary'
           ansible-playbook: '#/components/schemas/AnsiblePlaybookReportSummary'
+          step-report: '#/components/schemas/StepReportSummary'
     RunReportEnvelope:
       type: object
       required:
@@ -6586,6 +6588,7 @@ components:
             - opentofu-plan
             - pyinfra-deploy
             - ansible-playbook
+            - step-report
         schemaVersion:
           type: integer
           minimum: 1
@@ -6614,6 +6617,7 @@ components:
         - $ref: '#/components/schemas/OpenTofuPlanReport'
         - $ref: '#/components/schemas/PyinfraDeployReport'
         - $ref: '#/components/schemas/AnsiblePlaybookReport'
+        - $ref: '#/components/schemas/StepReport'
       discriminator:
         propertyName: kind
         mapping:
@@ -6621,6 +6625,147 @@ components:
           opentofu-plan: '#/components/schemas/OpenTofuPlanReport'
           pyinfra-deploy: '#/components/schemas/PyinfraDeployReport'
           ansible-playbook: '#/components/schemas/AnsiblePlaybookReport'
+          step-report: '#/components/schemas/StepReport'
+    StepReportSummary:
+      allOf:
+        - $ref: '#/components/schemas/RunReportEnvelope'
+        - type: object
+          required:
+            - kind
+            - mode
+            - summary
+          properties:
+            kind:
+              type: string
+              enum:
+                - step-report
+            mode:
+              type: string
+              enum:
+                - preview
+                - apply
+            summary:
+              $ref: '#/components/schemas/StepReportAggregate'
+    StepReport:
+      allOf:
+        - $ref: '#/components/schemas/RunReportEnvelope'
+        - type: object
+          required:
+            - kind
+            - mode
+            - summary
+            - steps
+          properties:
+            kind:
+              type: string
+              enum:
+                - step-report
+            mode:
+              type: string
+              enum:
+                - preview
+                - apply
+            title:
+              type: string
+              minLength: 1
+              maxLength: 256
+            summary:
+              $ref: '#/components/schemas/StepReportAggregate'
+            steps:
+              type: array
+              maxItems: 10000
+              items:
+                $ref: '#/components/schemas/StepReportStep'
+    StepReportAggregate:
+      type: object
+      required:
+        - outcome
+        - durationMs
+        - steps
+      properties:
+        outcome:
+          $ref: '#/components/schemas/StepReportOutcome'
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        steps:
+          $ref: '#/components/schemas/StepOutcomeCounts'
+    StepReportOutcome:
+      type: string
+      enum:
+        - succeeded
+        - warning
+        - failed
+        - skipped
+        - canceled
+        - not-run
+    StepOutcomeCounts:
+      type: object
+      required:
+        - total
+        - succeeded
+        - warning
+        - failed
+        - skipped
+        - canceled
+        - notRun
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        succeeded:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        warning:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        failed:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        skipped:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        canceled:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        notRun:
+          type: integer
+          minimum: 0
+          maximum: 10000
+    StepReportStep:
+      type: object
+      required:
+        - id
+        - name
+        - outcome
+        - durationMs
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        outcome:
+          $ref: '#/components/schemas/StepReportOutcome'
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        steps:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/StepReportStep'
     TerraformPlanReportSummary:
       allOf:
         - $ref: '#/components/schemas/RunReportEnvelope'

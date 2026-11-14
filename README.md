@@ -22,8 +22,9 @@ commits across one or more Kubernetes Clusters.
 - **Durable logs and Artifacts.** Live logs and declared outputs share the same
   retained Artifact path. Plan and preview outputs can be selected explicitly
   by later Runs, pinning consumers to the producing commit and catalog
-  revision. Optional bounded native reports cover Terraform/OpenTofu, pyinfra,
-  and Ansible without making their helpers or workflows mandatory.
+  revision. Optional bounded reports cover Terraform/OpenTofu, pyinfra,
+  Ansible, and generic script steps without making their helpers or workflows
+  mandatory.
 - **Catalog validation and explanation.** The CLI and Server share strict YAML
   decoding and validation. Local tooling provides source-addressed
   diagnostics, JSON and SARIF output, editor schema support, and resolved

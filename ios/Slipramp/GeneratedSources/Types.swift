@@ -1839,6 +1839,8 @@ internal enum Components {
             case opentofuPlan(Components.Schemas.OpenTofuPlanReportSummary)
             /// - Remark: Generated from `#/components/schemas/RunReportSummary/PyinfraDeployReportSummary`.
             case pyinfraDeploy(Components.Schemas.PyinfraDeployReportSummary)
+            /// - Remark: Generated from `#/components/schemas/RunReportSummary/StepReportSummary`.
+            case stepReport(Components.Schemas.StepReportSummary)
             /// - Remark: Generated from `#/components/schemas/RunReportSummary/TerraformPlanReportSummary`.
             case terraformPlan(Components.Schemas.TerraformPlanReportSummary)
             internal enum CodingKeys: String, CodingKey {
@@ -1857,6 +1859,8 @@ internal enum Components {
                     self = .opentofuPlan(try .init(from: decoder))
                 case "pyinfra-deploy":
                     self = .pyinfraDeploy(try .init(from: decoder))
+                case "step-report":
+                    self = .stepReport(try .init(from: decoder))
                 case "terraform-plan":
                     self = .terraformPlan(try .init(from: decoder))
                 default:
@@ -1875,6 +1879,8 @@ internal enum Components {
                     try value.encode(to: encoder)
                 case let .pyinfraDeploy(value):
                     try value.encode(to: encoder)
+                case let .stepReport(value):
+                    try value.encode(to: encoder)
                 case let .terraformPlan(value):
                     try value.encode(to: encoder)
                 }
@@ -1892,6 +1898,7 @@ internal enum Components {
                 case opentofuPlan = "opentofu-plan"
                 case pyinfraDeploy = "pyinfra-deploy"
                 case ansiblePlaybook = "ansible-playbook"
+                case stepReport = "step-report"
             }
             /// - Remark: Generated from `#/components/schemas/RunReportEnvelope/kind`.
             internal var kind: Components.Schemas.RunReportEnvelope.KindPayload
@@ -1955,6 +1962,162 @@ internal enum Components {
                 case toolVersion
                 case mode
                 case createdAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StepReportSummary`.
+        internal struct StepReportSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StepReportSummary/value1`.
+            internal var value1: Components.Schemas.RunReportEnvelope
+            /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2`.
+            internal struct Value2Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2/kind`.
+                internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case stepReport = "step-report"
+                }
+                /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2/kind`.
+                internal var kind: Components.Schemas.StepReportSummary.Value2Payload.KindPayload
+                /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2/mode`.
+                internal enum ModePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case preview = "preview"
+                    case apply = "apply"
+                }
+                /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2/mode`.
+                internal var mode: Components.Schemas.StepReportSummary.Value2Payload.ModePayload
+                /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2/summary`.
+                internal var summary: Components.Schemas.StepReportAggregate
+                /// Creates a new `Value2Payload`.
+                ///
+                /// - Parameters:
+                ///   - kind:
+                ///   - mode:
+                ///   - summary:
+                internal init(
+                    kind: Components.Schemas.StepReportSummary.Value2Payload.KindPayload,
+                    mode: Components.Schemas.StepReportSummary.Value2Payload.ModePayload,
+                    summary: Components.Schemas.StepReportAggregate
+                ) {
+                    self.kind = kind
+                    self.mode = mode
+                    self.summary = summary
+                }
+                internal enum CodingKeys: String, CodingKey {
+                    case kind
+                    case mode
+                    case summary
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/StepReportSummary/value2`.
+            internal var value2: Components.Schemas.StepReportSummary.Value2Payload
+            /// Creates a new `StepReportSummary`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            internal init(
+                value1: Components.Schemas.RunReportEnvelope,
+                value2: Components.Schemas.StepReportSummary.Value2Payload
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                self.value1 = try .init(from: decoder)
+                self.value2 = try .init(from: decoder)
+            }
+            internal func encode(to encoder: any Swift.Encoder) throws {
+                try self.value1.encode(to: encoder)
+                try self.value2.encode(to: encoder)
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StepReportAggregate`.
+        internal struct StepReportAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StepReportAggregate/outcome`.
+            internal var outcome: Components.Schemas.StepReportOutcome
+            /// - Remark: Generated from `#/components/schemas/StepReportAggregate/durationMs`.
+            internal var durationMs: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/StepReportAggregate/steps`.
+            internal var steps: Components.Schemas.StepOutcomeCounts
+            /// Creates a new `StepReportAggregate`.
+            ///
+            /// - Parameters:
+            ///   - outcome:
+            ///   - durationMs:
+            ///   - steps:
+            internal init(
+                outcome: Components.Schemas.StepReportOutcome,
+                durationMs: Swift.Int64,
+                steps: Components.Schemas.StepOutcomeCounts
+            ) {
+                self.outcome = outcome
+                self.durationMs = durationMs
+                self.steps = steps
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case outcome
+                case durationMs
+                case steps
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StepReportOutcome`.
+        internal enum StepReportOutcome: String, Codable, Hashable, Sendable, CaseIterable {
+            case succeeded = "succeeded"
+            case warning = "warning"
+            case failed = "failed"
+            case skipped = "skipped"
+            case canceled = "canceled"
+            case notRun = "not-run"
+        }
+        /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts`.
+        internal struct StepOutcomeCounts: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/total`.
+            internal var total: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/succeeded`.
+            internal var succeeded: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/warning`.
+            internal var warning: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/failed`.
+            internal var failed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/skipped`.
+            internal var skipped: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/canceled`.
+            internal var canceled: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StepOutcomeCounts/notRun`.
+            internal var notRun: Swift.Int
+            /// Creates a new `StepOutcomeCounts`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - succeeded:
+            ///   - warning:
+            ///   - failed:
+            ///   - skipped:
+            ///   - canceled:
+            ///   - notRun:
+            internal init(
+                total: Swift.Int,
+                succeeded: Swift.Int,
+                warning: Swift.Int,
+                failed: Swift.Int,
+                skipped: Swift.Int,
+                canceled: Swift.Int,
+                notRun: Swift.Int
+            ) {
+                self.total = total
+                self.succeeded = succeeded
+                self.warning = warning
+                self.failed = failed
+                self.skipped = skipped
+                self.canceled = canceled
+                self.notRun = notRun
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case total
+                case succeeded
+                case warning
+                case failed
+                case skipped
+                case canceled
+                case notRun
             }
         }
         /// - Remark: Generated from `#/components/schemas/TerraformPlanReportSummary`.

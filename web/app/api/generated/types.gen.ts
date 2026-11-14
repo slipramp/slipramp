@@ -976,12 +976,15 @@ export type RunReportSummary =
     } & PyinfraDeployReportSummary)
   | ({
       kind: "ansible-playbook";
-    } & AnsiblePlaybookReportSummary);
+    } & AnsiblePlaybookReportSummary)
+  | ({
+      kind: "step-report";
+    } & StepReportSummary);
 
 export type RunReportEnvelope = {
   artifactId: string;
   runId: string;
-  kind: "terraform-plan" | "opentofu-plan" | "pyinfra-deploy" | "ansible-playbook";
+  kind: "terraform-plan" | "opentofu-plan" | "pyinfra-deploy" | "ansible-playbook" | "step-report";
   schemaVersion: number;
   adapterVersion: number;
   tool: string;
@@ -1002,7 +1005,56 @@ export type RunReport =
     } & PyinfraDeployReport)
   | ({
       kind: "ansible-playbook";
-    } & AnsiblePlaybookReport);
+    } & AnsiblePlaybookReport)
+  | ({
+      kind: "step-report";
+    } & StepReport);
+
+export type StepReportSummary = RunReportEnvelope & {
+  kind: "step-report";
+  mode: "preview" | "apply";
+  summary: StepReportAggregate;
+};
+
+export type StepReport = RunReportEnvelope & {
+  kind: "step-report";
+  mode: "preview" | "apply";
+  title?: string;
+  summary: StepReportAggregate;
+  steps: Array<StepReportStep>;
+};
+
+export type StepReportAggregate = {
+  outcome: StepReportOutcome;
+  durationMs: number;
+  steps: StepOutcomeCounts;
+};
+
+export type StepReportOutcome =
+  | "succeeded"
+  | "warning"
+  | "failed"
+  | "skipped"
+  | "canceled"
+  | "not-run";
+
+export type StepOutcomeCounts = {
+  total: number;
+  succeeded: number;
+  warning: number;
+  failed: number;
+  skipped: number;
+  canceled: number;
+  notRun: number;
+};
+
+export type StepReportStep = {
+  id: string;
+  name: string;
+  outcome: StepReportOutcome;
+  durationMs: number;
+  steps?: Array<StepReportStep>;
+};
 
 export type TerraformPlanReportSummary = RunReportEnvelope & {
   kind: "terraform-plan";

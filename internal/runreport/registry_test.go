@@ -10,6 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
+	"github.com/slipramp/slipramp/internal/runreport/steps"
 )
 
 func TestReportAdapterRegistryUsesCanonicalMediaType(t *testing.T) {
@@ -32,6 +33,7 @@ func TestReportAdapterRegistryUsesCanonicalMediaType(t *testing.T) {
 		},
 		{mediaType: pyinfra.DeployMediaType, kind: pyinfra.DeployKind, maximum: pyinfra.MaximumSourceSizeBytes},
 		{mediaType: ansible.PlaybookMediaType, kind: ansible.PlaybookKind, maximum: ansiblesource.MaximumSourceSize},
+		{mediaType: steps.ReportMediaType, kind: steps.ReportKind, maximum: steps.MaximumSourceSizeBytes},
 	}
 	for _, test := range tests {
 		adapter, found := AdapterForMediaType(test.mediaType + "; charset=utf-8")

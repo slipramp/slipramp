@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
+	"github.com/slipramp/slipramp/internal/runreport/steps"
 )
 
 func TestGetArtifactReportEnforcesSensitiveContentAuthorization(t *testing.T) {
@@ -272,6 +273,42 @@ func TestAnsiblePlaybookReportResponses(t *testing.T) {
 	}
 }
 
+func TestStepReportResponses(t *testing.T) {
+	t.Parallel()
+
+	content := handlerStepReportContent(t)
+	response, err := runReportResponse(content)
+	if err != nil {
+		t.Fatalf("runReportResponse() error = %v", err)
+	}
+	report, err := response.AsStepReport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Mode != api.StepReportModeApply || report.Title == nil || *report.Title != "Kubernetes upgrade" ||
+		report.Summary.Outcome != api.StepReportOutcomeWarning || report.Summary.Steps.Total != 2 ||
+		report.Summary.Steps.Succeeded != 1 || report.Summary.Steps.Warning != 1 ||
+		len(report.Steps) != 1 || report.Steps[0].Steps == nil || len(*report.Steps[0].Steps) != 2 {
+		t.Fatalf("runReportResponse() report = %#v", report)
+	}
+
+	artifactResponse, err := artifactResponse(artifact.Record{
+		Artifact: content.Artifact,
+		Report:   &content.Metadata,
+	}, api.GitCommit{})
+	if err != nil {
+		t.Fatalf("artifactResponse() error = %v", err)
+	}
+	summary, err := artifactResponse.Report.AsStepReportSummary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Tool != "upgrade_k8s.py" || summary.Summary.DurationMs != 12500 ||
+		summary.Summary.Steps.Total != 2 {
+		t.Errorf("artifactResponse() summary = %#v", summary)
+	}
+}
+
 func handlerReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
@@ -400,6 +437,41 @@ func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
 		ansible.PlaybookMediaType,
 		"runs/report/artifacts/ansible-report/reports/ansible-playbook-v1.json",
 		time.Date(2026, time.November, 2, 16, 0, 0, 0, time.UTC),
+	)
+}
+
+func handlerStepReportContent(t *testing.T) artifact.ReportContent {
+	t.Helper()
+
+	report, err := steps.DecodeStepReport(strings.NewReader(`{
+		"schemaVersion":1,
+		"tool":"upgrade_k8s.py",
+		"title":"Kubernetes upgrade",
+		"mode":"apply",
+		"outcome":"warning",
+		"durationMs":12500,
+		"steps":[{
+			"id":"controlplane100",
+			"name":"controlplane100",
+			"outcome":"warning",
+			"durationMs":12000,
+			"steps":[
+				{"id":"preflight","name":"Preflight","outcome":"succeeded","durationMs":1500},
+				{"id":"postflight","name":"Postflight","outcome":"warning","durationMs":500}
+			]
+		}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return newHandlerReportContent(
+		t,
+		&report,
+		"step-report",
+		steps.ReportMediaType,
+		"runs/report/artifacts/step-report/reports/step-report-v1.json",
+		time.Date(2026, time.November, 13, 16, 0, 0, 0, time.UTC),
 	)
 }
 
