@@ -25,6 +25,7 @@ import (
 	"github.com/slipramp/slipramp/internal/runreport/infrastructure"
 	"github.com/slipramp/slipramp/internal/runreport/model"
 	"github.com/slipramp/slipramp/internal/runreport/pyinfra"
+	"github.com/slipramp/slipramp/internal/runreport/steps"
 )
 
 func TestArtifactTransferIntegration(t *testing.T) {
@@ -552,6 +553,74 @@ func TestAnsibleArtifactReportPersistenceIntegration(t *testing.T) {
 	summary, ok := loaded.Summary.(*ansible.AnsiblePlaybookSummary)
 	if !ok || loaded.Kind != ansible.PlaybookKind || loaded.Mode != model.ApplyMode ||
 		!summary.Complete || summary.Results.OK != 1 || summary.HostTotals[0].Host != "web-1" {
+		t.Errorf("GetArtifactReport() = %#v", loaded)
+	}
+}
+
+func TestStepArtifactReportPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.November, 14, 5, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	report, err := steps.DecodeStepReport(strings.NewReader(`{
+		"schemaVersion":1,
+		"tool":"upgrade_k8s.py",
+		"mode":"preview",
+		"outcome":"succeeded",
+		"durationMs":1400,
+		"steps":[{
+			"id":"preflight",
+			"name":"Preflight",
+			"outcome":"succeeded",
+			"durationMs":1400
+		}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := model.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("d", 64)
+	objectKey := "runs/report/artifacts/step-report/content-a"
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "step-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      steps.ReportMediaType,
+		SizeBytes:      256,
+		SHA256:         &digest,
+		Sensitive:      true,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt,
+		SealedAt:       &createdAt,
+	}
+	metadata, err := runreport.NewArtifactReport(
+		record.ID,
+		report,
+		"runs/report/artifacts/step-report/reports/step-report-v1-a.json",
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateArtifactWithReport(ctx, record, metadata); err != nil {
+		t.Fatalf("CreateArtifactWithReport() error = %v", err)
+	}
+
+	loaded, err := database.GetArtifactReport(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactReport() error = %v", err)
+	}
+	summary, ok := loaded.Summary.(*steps.StepReportSummary)
+	if !ok || loaded.Kind != steps.ReportKind || loaded.Mode != model.PreviewMode ||
+		summary.Outcome != steps.OutcomeSucceeded || summary.Steps.Succeeded != 1 {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
 	}
 }

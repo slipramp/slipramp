@@ -85,6 +85,7 @@ Use the established names consistently:
 - Use strict TypeScript, Oxlint, and Oxfmt. Do not add ESLint, Prettier, or Stylelint.
 - Pin tool and dependency versions. Treat warnings as failures.
 - Keep generated output reproducible and include proportionate unit and integration tests with changes.
+- When adding a persisted report kind or other constrained value, include the forward database migration and integration coverage that writes the new value.
 - Prefer explicit argument arrays over an implicit shell. Shell behavior must be requested explicitly by the definition.
 
 ## Go Package Layout
