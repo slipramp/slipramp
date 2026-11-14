@@ -110,7 +110,7 @@ export function APIKeyTable({
               <Table.Td>
                 <Stack gap={0}>
                   <Text>{apiKey.name}</Text>
-                  <Code>{apiKey.tokenPrefix}</Code>
+                  <Code style={{ alignSelf: "flex-start" }}>{apiKey.tokenPrefix}</Code>
                 </Stack>
               </Table.Td>
               <Table.Td>

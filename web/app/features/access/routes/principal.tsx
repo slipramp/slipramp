@@ -16,7 +16,7 @@ import {
 import { APIKeyForm, APIKeyTable, CreatedToken } from "~/features/access/access";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActionSuccessToast } from "~/shared/action-notifications";
-import { Datestamp } from "~/shared/display-values";
+import { RelativeTime } from "~/shared/display-values";
 import { ListPagination } from "~/shared/list-controls";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
@@ -180,10 +180,10 @@ export default function Principal({ actionData, loaderData }: Route.ComponentPro
           <PageHeaderFacts>
             <PageHeaderFact label="Principal ID">{principal.principalId}</PageHeaderFact>
             <PageHeaderFact label="Created">
-              <Datestamp value={principal.createdAt} />
+              <RelativeTime value={principal.createdAt} />
             </PageHeaderFact>
             <PageHeaderFact label="Updated">
-              <Datestamp value={principal.updatedAt} />
+              <RelativeTime value={principal.updatedAt} />
             </PageHeaderFact>
           </PageHeaderFacts>
         }
@@ -201,92 +201,84 @@ export default function Principal({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      <Paper p="lg" withBorder>
-        <Stack gap="lg">
-          <SectionHeader
-            description="These independent operations take effect immediately and are safe to repeat."
-            title="Emergency access control"
-          />
-          <SimpleGrid cols={{ base: 1, md: 3 }}>
-            <EmergencyControl
-              description={
-                disabled
-                  ? "Allow still-valid, unrevoked sessions and API keys to authenticate again."
-                  : "Block every existing session and API key without revoking or deleting them."
-              }
-              title={disabled ? "Enable Principal" : "Disable Principal"}
-            >
-              <Form method="post">
-                <input name="intent" type="hidden" value="set-principal-disabled" />
-                <input name="disabled" type="hidden" value={String(!disabled)} />
-                <Button
-                  color={disabled ? "green" : "red"}
-                  loading={submittingIntent === "set-principal-disabled"}
-                  type="submit"
-                >
-                  {disabled ? "Enable Principal" : "Disable Principal"}
-                </Button>
-              </Form>
-            </EmergencyControl>
-            <EmergencyControl
-              description="Permanently revoke every current API key while retaining credential history."
-              title="Revoke all API keys"
-            >
-              <Form method="post">
-                <input name="intent" type="hidden" value="revoke-principal-api-keys" />
-                <Button
-                  color="red"
-                  loading={submittingIntent === "revoke-principal-api-keys"}
-                  type="submit"
-                >
-                  Revoke all API keys
-                </Button>
-              </Form>
-            </EmergencyControl>
-            <EmergencyControl
-              description="End every local browser session. Removing an OIDC mapping alone does not do this."
-              title="Revoke all sessions"
-            >
-              <Form method="post">
-                <input name="intent" type="hidden" value="revoke-principal-sessions" />
-                <Button
-                  color="red"
-                  loading={submittingIntent === "revoke-principal-sessions"}
-                  type="submit"
-                >
-                  Revoke all sessions
-                </Button>
-              </Form>
-            </EmergencyControl>
-          </SimpleGrid>
-        </Stack>
-      </Paper>
+      <Stack gap="lg">
+        <SectionHeader title="Emergency access control" />
+        <SimpleGrid cols={{ base: 1, md: 3 }}>
+          <EmergencyControl
+            description={
+              disabled
+                ? "Allow still-valid, unrevoked sessions and API keys to authenticate again."
+                : "Block every existing session and API key without revoking or deleting them."
+            }
+            title={disabled ? "Enable Principal" : "Disable Principal"}
+          >
+            <Form method="post">
+              <input name="intent" type="hidden" value="set-principal-disabled" />
+              <input name="disabled" type="hidden" value={String(!disabled)} />
+              <Button
+                color={disabled ? "green" : "red"}
+                loading={submittingIntent === "set-principal-disabled"}
+                type="submit"
+              >
+                {disabled ? "Enable Principal" : "Disable Principal"}
+              </Button>
+            </Form>
+          </EmergencyControl>
+          <EmergencyControl
+            description="Permanently revoke every current API key while retaining credential history."
+            title="Revoke all API keys"
+          >
+            <Form method="post">
+              <input name="intent" type="hidden" value="revoke-principal-api-keys" />
+              <Button
+                color="red"
+                loading={submittingIntent === "revoke-principal-api-keys"}
+                type="submit"
+              >
+                Revoke all API keys
+              </Button>
+            </Form>
+          </EmergencyControl>
+          <EmergencyControl
+            description="End every local browser session. Removing an OIDC mapping alone does not do this."
+            title="Revoke all sessions"
+          >
+            <Form method="post">
+              <input name="intent" type="hidden" value="revoke-principal-sessions" />
+              <Button
+                color="red"
+                loading={submittingIntent === "revoke-principal-sessions"}
+                type="submit"
+              >
+                Revoke all sessions
+              </Button>
+            </Form>
+          </EmergencyControl>
+        </SimpleGrid>
+      </Stack>
 
-      <Paper p="lg" withBorder>
-        <Stack gap="lg">
-          <SectionHeader
-            description="Scopes can restrict, but never expand, this Principal's role."
-            title="API keys"
-          />
-          {principal.kind === "service-account" ? (
+      <Stack gap="lg">
+        <SectionHeader title="API keys" />
+        {principal.kind === "service-account" ? (
+          <Paper p="md" withBorder>
             <APIKeyForm intent="create-principal-api-key" principalId={principal.principalId} />
-          ) : null}
-          <APIKeyTable
-            apiKeys={loaderData.apiKeys}
-            available={loaderData.apiKeysAvailable}
-            loadedAt={loaderData.loadedAt}
+          </Paper>
+        ) : null}
+        <APIKeyTable
+          apiKeys={loaderData.apiKeys}
+          available={loaderData.apiKeysAvailable}
+          loadedAt={loaderData.loadedAt}
+        />
+        {loaderData.apiKeysAvailable && loaderData.total > 0 ? (
+          <ListPagination
+            itemCount={loaderData.apiKeys.length}
+            noun="API keys"
+            page={loaderData.page}
+            pageSize={pageSize}
+            total={loaderData.total}
           />
-          {loaderData.apiKeysAvailable && loaderData.total > 0 ? (
-            <ListPagination
-              itemCount={loaderData.apiKeys.length}
-              noun="API keys"
-              page={loaderData.page}
-              pageSize={pageSize}
-              total={loaderData.total}
-            />
-          ) : null}
-        </Stack>
-      </Paper>
+        ) : null}
+      </Stack>
     </Stack>
   );
 }

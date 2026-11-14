@@ -1,13 +1,12 @@
-import { Alert, Paper, Stack, Text, Title } from "@mantine/core";
+import { Alert, Paper, Stack } from "@mantine/core";
 import { redirect } from "react-router";
 
 import { apiKeyCreateBody } from "~/features/access/api-key-form";
 import { createServerAPIClient } from "~/api/client.server";
 import { createApiKey, listApiKeys, revokeApiKey } from "~/api/generated";
 import { APIKeyForm, APIKeyTable, CreatedToken } from "~/features/access/access";
-import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActionSuccessToast } from "~/shared/action-notifications";
-import { PageHeader } from "~/shared/page";
+import { PageHeader, SectionHeader } from "~/shared/page";
 import { ListPagination } from "~/shared/list-controls";
 import { formValue, problemDetail } from "~/shared/form-data";
 import { pageTitle } from "~/shared/page-title";
@@ -25,10 +24,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [principal, apiKeysResult] = await Promise.all([
-    getProductPrincipal(context),
-    listApiKeys({ client, query: { limit: pageSize, offset: (page - 1) * pageSize } }),
-  ]);
+  const apiKeysResult = await listApiKeys({
+    client,
+    query: { limit: pageSize, offset: (page - 1) * pageSize },
+  });
 
   if (apiKeysResult.data) {
     const lastPage = Math.max(1, Math.ceil(apiKeysResult.data.total / pageSize));
@@ -44,7 +43,6 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     apiKeysAvailable: apiKeysResult.data !== undefined,
     loadedAt: Date.now(),
     page,
-    principal,
     total: apiKeysResult.data?.total ?? 0,
   };
 }
@@ -95,32 +93,26 @@ export default function PersonalAccess({ actionData, loaderData }: Route.Compone
       ) : null}
       {actionData?.token ? <CreatedToken token={actionData.token} /> : null}
 
-      <Paper p="lg" withBorder>
-        <Stack gap="lg">
-          <Stack gap={2}>
-            <Title order={2}>Your keys</Title>
-            <Text c="dimmed" size="sm">
-              Scopes can restrict, but never expand, your {loaderData.principal?.role ?? "current"}
-              role.
-            </Text>
-          </Stack>
+      <Stack gap="lg">
+        <SectionHeader title="Your keys" />
+        <Paper p="md" withBorder>
           <APIKeyForm intent="create-api-key" />
-          <APIKeyTable
-            apiKeys={loaderData.apiKeys}
-            available={loaderData.apiKeysAvailable}
-            loadedAt={loaderData.loadedAt}
+        </Paper>
+        <APIKeyTable
+          apiKeys={loaderData.apiKeys}
+          available={loaderData.apiKeysAvailable}
+          loadedAt={loaderData.loadedAt}
+        />
+        {loaderData.apiKeysAvailable && loaderData.total > 0 ? (
+          <ListPagination
+            itemCount={loaderData.apiKeys.length}
+            noun="API keys"
+            page={loaderData.page}
+            pageSize={pageSize}
+            total={loaderData.total}
           />
-          {loaderData.apiKeysAvailable && loaderData.total > 0 ? (
-            <ListPagination
-              itemCount={loaderData.apiKeys.length}
-              noun="API keys"
-              page={loaderData.page}
-              pageSize={pageSize}
-              total={loaderData.total}
-            />
-          ) : null}
-        </Stack>
-      </Paper>
+        ) : null}
+      </Stack>
     </Stack>
   );
 }

@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Group, Stack, Table, Text } from "@mantine/core";
 import { IconActivityHeartbeat } from "@tabler/icons-react";
 import { useFetcher, useOutletContext } from "react-router";
 
@@ -59,95 +59,90 @@ export default function PlacementPreflight({ actionData, loaderData }: Route.Com
   const latest = loaderData.preflights[0];
 
   return (
-    <Stack gap="md">
+    <Stack gap="lg">
       {operationData?.error ? (
         <Alert color="red" title="Preflight could not start">
           {operationData.error}
         </Alert>
       ) : null}
 
-      <Paper p="lg" withBorder>
-        <Stack gap="lg">
-          <SectionHeader
-            actions={
-              canStartPreflight ? (
-                <preflightFetcher.Form method="post">
-                  <Button
-                    disabled={
-                      detail.placement.controllerConnectionState !== "connected" ||
-                      !!activePreflight
-                    }
-                    leftSection={<IconActivityHeartbeat size={16} />}
-                    loading={preflightSubmitting}
-                    size="compact-md"
-                    type="submit"
-                    variant="light"
-                  >
-                    {activePreflight ? "Preflight active" : "Start preflight"}
-                  </Button>
-                </preflightFetcher.Form>
-              ) : null
-            }
-            description="Active probe Jobs verify that this Placement can launch, observe, and clean up a workload. They do not run repository Actions or validate Action credentials."
-            title="Placement preflight"
-          />
+      <SectionHeader
+        actions={
+          canStartPreflight ? (
+            <preflightFetcher.Form method="post">
+              <Button
+                disabled={
+                  detail.placement.controllerConnectionState !== "connected" || !!activePreflight
+                }
+                leftSection={<IconActivityHeartbeat size={16} />}
+                loading={preflightSubmitting}
+                size="compact-md"
+                type="submit"
+                variant="light"
+              >
+                {activePreflight ? "Preflight active" : "Start preflight"}
+              </Button>
+            </preflightFetcher.Form>
+          ) : null
+        }
+        description="Active probe Jobs verify that this Placement can launch, observe, and clean up a workload."
+        title="Placement preflight"
+      />
 
-          {!loaderData.available ? (
-            <Alert color="red" title="Preflight history unavailable">
-              The Server could not load preflight history.
-            </Alert>
-          ) : loaderData.preflights.length === 0 ? (
-            <Text c="dimmed" size="sm">
-              No preflight has been requested for this Placement.
-            </Text>
-          ) : (
-            <Stack gap="md">
-              {latest ? <LatestPreflight preflight={latest} /> : null}
-              <Table.ScrollContainer minWidth={680} type="native">
-                <Table verticalSpacing="sm">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Result</Table.Th>
-                      <Table.Th>Requested</Table.Th>
-                      <Table.Th>Requested by</Table.Th>
-                      <Table.Th>Cleanup</Table.Th>
-                      <Table.Th>Reason</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {loaderData.preflights.map((preflight) => (
-                      <Table.Tr key={preflight.id}>
-                        <Table.Td>
-                          <PreflightBadge state={preflight.state} />
-                        </Table.Td>
-                        <Table.Td>
-                          <Timestamp size="sm" value={preflight.createdAt} />
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="sm">{preflight.requestedBy.displayName}</Text>
-                        </Table.Td>
-                        <Table.Td>
-                          <Badge
-                            color={preflight.cleanupState === "failed" ? "red" : "gray"}
-                            variant="default"
-                          >
-                            {preflight.cleanupState}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          <Text c={preflight.reason ? undefined : "dimmed"} size="sm">
-                            {preflight.reason ?? "—"}
-                          </Text>
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </Table.ScrollContainer>
-            </Stack>
-          )}
+      {!loaderData.available ? (
+        <Alert color="red" title="Preflight history unavailable">
+          The Server could not load preflight history.
+        </Alert>
+      ) : loaderData.preflights.length === 0 ? (
+        <Text c="dimmed" size="sm">
+          No preflight has been requested for this Placement.
+        </Text>
+      ) : (
+        <Stack gap="md">
+          {latest ? <LatestPreflight preflight={latest} /> : null}
+          <Table.ScrollContainer minWidth={680} type="native">
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Result</Table.Th>
+                  <Table.Th>Requested</Table.Th>
+                  <Table.Th>Requested by</Table.Th>
+                  <Table.Th>Cleanup</Table.Th>
+                  <Table.Th>Reason</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {loaderData.preflights.map((preflight) => (
+                  <Table.Tr key={preflight.id}>
+                    <Table.Td>
+                      <PreflightBadge state={preflight.state} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Timestamp size="sm" value={preflight.createdAt} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{preflight.requestedBy.displayName}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={preflight.cleanupState === "failed" ? "red" : "gray"}
+                        variant="default"
+                      >
+                        {preflight.cleanupState}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text c={preflight.reason ? undefined : "dimmed"} size="sm">
+                        {preflight.reason ?? "—"}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         </Stack>
-      </Paper>
+      )}
     </Stack>
   );
 }
@@ -160,7 +155,6 @@ function LatestPreflight({ preflight }: Readonly<{ preflight: PlacementPreflight
       }
       title={
         <Group gap="xs">
-          <PreflightBadge state={preflight.state} />
           <Text fw={700}>Latest preflight</Text>
           <RelativeTime c="dimmed" size="sm" value={preflight.finishedAt ?? preflight.createdAt} />
         </Group>

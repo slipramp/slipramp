@@ -5,12 +5,10 @@ import {
   Button,
   Code,
   Group,
-  Paper,
   SimpleGrid,
   Stack,
   Tabs,
   Text,
-  Title,
 } from "@mantine/core";
 import {
   IconExternalLink,
@@ -331,9 +329,7 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
               stageId={stage.id}
             />
             <Stack gap="md">
-              <Title order={2} size="h3">
-                Current Freight
-              </Title>
+              <SectionHeader title="Current Freight" />
               <StageCard
                 canWrite={canWrite}
                 onEditPolicy={editPolicy}
@@ -343,9 +339,7 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
               />
             </Stack>
             <Stack gap="md">
-              <Title order={2} size="h3">
-                All Freight
-              </Title>
+              <SectionHeader title="All Freight" />
               <StageFreightDetails
                 canWrite={canWrite}
                 page={freightPage}
@@ -433,12 +427,9 @@ function BranchDriftDetails({
   const presentation = branchDriftPresentation(status);
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Group justify="space-between" wrap="wrap">
-          <Title order={2} size="h3">
-            Branch drift
-          </Title>
+    <Stack gap="md">
+      <SectionHeader
+        actions={
           <Group gap="xs" wrap="wrap">
             <Badge color={presentation.color} variant="light">
               {presentation.label}
@@ -452,53 +443,54 @@ function BranchDriftDetails({
               />
             ) : null}
           </Group>
-        </Group>
+        }
+        title="Branch drift"
+      />
 
-        {error ? (
-          <Alert color="red" title="Branch drift unavailable">
-            {error}
-          </Alert>
-        ) : capability.status !== "ready" ? (
-          <Text c="dimmed" size="sm">
-            {capability.reason ?? "Branch drift is not available for this Stage."}
-          </Text>
-        ) : !summary ? (
-          <Text c="dimmed" size="sm">
-            No cached branch drift result is available for this Stage.
-          </Text>
-        ) : (
-          <>
-            {summary.stage.message ? <Text size="sm">{summary.stage.message}</Text> : null}
-            <Stack gap="md">
-              <DetailFact label="Repository">{summary.repository.repository}</DetailFact>
-              <DetailFact label="Last scanned">
-                <RelativeTime value={summary.repository.scannedAt} />
-              </DetailFact>
-              <DetailFact label="Source updated">
-                <BranchDriftCommit
-                  branch={summary.repository.sourceBranch}
-                  commit={summary.stage.sourceBranchCommit}
-                />
-              </DetailFact>
-              <DetailFact label="Last rendered">
-                <BranchDriftCommit
-                  branch={summary.stage.targetBranch}
-                  commit={summary.stage.acknowledgedRenderCommit}
-                />
-              </DetailFact>
+      {error ? (
+        <Alert color="red" title="Branch drift unavailable">
+          {error}
+        </Alert>
+      ) : capability.status !== "ready" ? (
+        <Text c="dimmed" size="sm">
+          {capability.reason ?? "Branch drift is not available for this Stage."}
+        </Text>
+      ) : !summary ? (
+        <Text c="dimmed" size="sm">
+          No cached branch drift result is available for this Stage.
+        </Text>
+      ) : (
+        <>
+          {summary.stage.message ? <Text size="sm">{summary.stage.message}</Text> : null}
+          <Stack gap="md">
+            <DetailFact label="Repository">{summary.repository.repository}</DetailFact>
+            <DetailFact label="Last scanned">
+              <RelativeTime value={summary.repository.scannedAt} />
+            </DetailFact>
+            <DetailFact label="Source updated">
+              <BranchDriftCommit
+                branch={summary.repository.sourceBranch}
+                commit={summary.stage.sourceBranchCommit}
+              />
+            </DetailFact>
+            <DetailFact label="Last rendered">
+              <BranchDriftCommit
+                branch={summary.stage.targetBranch}
+                commit={summary.stage.acknowledgedRenderCommit}
+              />
+            </DetailFact>
+          </Stack>
+          {summary.stage.sourcePaths.length > 0 ? (
+            <Stack gap={6}>
+              <Text c="dimmed" size="xs" tt="uppercase">
+                Source paths
+              </Text>
+              <Code block>{summary.stage.sourcePaths.join("\n")}</Code>
             </Stack>
-            {summary.stage.sourcePaths.length > 0 ? (
-              <Stack gap={6}>
-                <Text c="dimmed" size="xs" tt="uppercase">
-                  Source paths
-                </Text>
-                <Code block>{summary.stage.sourcePaths.join("\n")}</Code>
-              </Stack>
-            ) : null}
-          </>
-        )}
-      </Stack>
-    </Paper>
+          ) : null}
+        </>
+      )}
+    </Stack>
   );
 }
 
@@ -515,57 +507,49 @@ function branchDriftPresentation(status?: PromotionBranchDriftStage["status"]) {
 
 function ObservationDetails({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Title order={2} size="h3">
-          Observation
-        </Title>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-          <DetailFact label="First observed">
-            <Timestamp value={stage.firstObservedAt} />
+    <Stack gap="md">
+      <SectionHeader title="Observation" />
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+        <DetailFact label="First observed">
+          <Timestamp value={stage.firstObservedAt} />
+        </DetailFact>
+        <DetailFact label="Native auto-promotion">
+          <Badge color={stage.autoPromotionEnabled ? "green" : "gray"} variant="light">
+            {stage.autoPromotionEnabled ? "Enabled" : "Disabled"}
+          </Badge>
+        </DetailFact>
+        <DetailFact label="Stage kind">
+          {stage.controlFlow ? "Control flow" : "Promotion Stage"}
+        </DetailFact>
+        {stage.currentPromotion ? (
+          <DetailFact label="Current Kargo Promotion">
+            {promotionReference(stage.currentPromotion)}
           </DetailFact>
-          <DetailFact label="Native auto-promotion">
-            <Badge color={stage.autoPromotionEnabled ? "green" : "gray"} variant="light">
-              {stage.autoPromotionEnabled ? "Enabled" : "Disabled"}
-            </Badge>
+        ) : null}
+        {stage.lastPromotion ? (
+          <DetailFact label="Last Kargo Promotion">
+            {promotionReference(stage.lastPromotion)}
           </DetailFact>
-          <DetailFact label="Stage kind">
-            {stage.controlFlow ? "Control flow" : "Promotion Stage"}
-          </DetailFact>
-          {stage.currentPromotion ? (
-            <DetailFact label="Current Kargo Promotion">
-              {promotionReference(stage.currentPromotion)}
-            </DetailFact>
-          ) : null}
-          {stage.lastPromotion ? (
-            <DetailFact label="Last Kargo Promotion">
-              {promotionReference(stage.lastPromotion)}
-            </DetailFact>
-          ) : null}
-          <DetailFact label="Kubernetes UID">
-            <Code>{stage.kubernetesUid}</Code>
-          </DetailFact>
-          <DetailFact label="Resource version">
-            <Code>{stage.resourceVersion}</Code>
-          </DetailFact>
-        </SimpleGrid>
-      </Stack>
-    </Paper>
+        ) : null}
+        <DetailFact label="Kubernetes UID">
+          <Code>{stage.kubernetesUid}</Code>
+        </DetailFact>
+        <DetailFact label="Resource version">
+          <Code>{stage.resourceVersion}</Code>
+        </DetailFact>
+      </SimpleGrid>
+    </Stack>
   );
 }
 
 function CapabilityDetails({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
-        <Title order={2} size="h3">
-          Slipramp capabilities
-        </Title>
-        <Capability label="Promotion" value={stage.capabilities.promotion} />
-        <Capability label="Review" value={stage.capabilities.review} />
-        <Capability label="Branch drift" value={stage.capabilities.branchDrift} />
-      </Stack>
-    </Paper>
+    <Stack gap="md">
+      <SectionHeader title="Slipramp capabilities" />
+      <Capability label="Promotion" value={stage.capabilities.promotion} />
+      <Capability label="Review" value={stage.capabilities.review} />
+      <Capability label="Branch drift" value={stage.capabilities.branchDrift} />
+    </Stack>
   );
 }
 

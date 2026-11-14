@@ -5,13 +5,12 @@ import {
   Button,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Table,
   Tabs,
   Text,
 } from "@mantine/core";
-import { IconListDetails } from "@tabler/icons-react";
+import { IconListDetails, IconRoute } from "@tabler/icons-react";
 import { Link, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -26,9 +25,8 @@ import {
 } from "~/api/generated";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { PageBackLink } from "~/shared/page-back-link";
-import { PageHeader, SectionHeader } from "~/shared/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
-import { formatDuration } from "~/shared/display";
 import { pageTitle } from "~/shared/page-title";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
@@ -101,7 +99,6 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
   }
 
   const cluster = loaderData.cluster;
-  const activeRuns = loaderData.recentRuns.filter((run) => run.phase !== "finished").length;
   const activeView =
     searchParams.get("view") === "kargo" && cluster.kargoIntegrations.length > 0
       ? "kargo"
@@ -125,7 +122,16 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
             {cluster.connectionState}
           </Badge>
         }
-        description="Controller-backed Kubernetes execution destination."
+        details={
+          <PageHeaderFacts>
+            <PageHeaderFact label="Registered">
+              <RelativeTime value={cluster.firstSeenAt} />
+            </PageHeaderFact>
+            <PageHeaderFact label="Last observed">
+              <RelativeTime value={cluster.lastSeenAt} />
+            </PageHeaderFact>
+          </PageHeaderFacts>
+        }
         title={cluster.name}
       />
 
@@ -136,14 +142,27 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : null}
 
-      <Tabs keepMounted={false} onChange={changeView} value={activeView}>
-        <Tabs.List>
-          <Tabs.Tab value="overview">Overview</Tabs.Tab>
-          {cluster.kargoIntegrations.length > 0 ? <Tabs.Tab value="kargo">Kargo</Tabs.Tab> : null}
+      <Tabs keepMounted={false} onChange={changeView} value={activeView} variant="outline">
+        <Tabs.List aria-label="Cluster views" style={{ flexWrap: "nowrap", overflowX: "auto" }}>
+          <Tabs.Tab
+            leftSection={<IconListDetails aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            value="overview"
+          >
+            Overview
+          </Tabs.Tab>
+          {cluster.kargoIntegrations.length > 0 ? (
+            <Tabs.Tab
+              leftSection={<IconRoute aria-hidden size={16} />}
+              style={{ flexShrink: 0 }}
+              value="kargo"
+            >
+              Kargo
+            </Tabs.Tab>
+          ) : null}
         </Tabs.List>
         <Tabs.Panel pt="lg" value="overview">
           <ClusterOverview
-            activeRuns={activeRuns}
             cluster={cluster}
             recentRuns={loaderData.recentRuns}
             runsAvailable={loaderData.runsAvailable}
@@ -167,62 +186,22 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
 }
 
 function ClusterOverview({
-  activeRuns,
   cluster,
   recentRuns,
   runsAvailable,
 }: Readonly<{
-  activeRuns: number;
   cluster: Cluster;
   recentRuns: Run[];
   runsAvailable: boolean;
 }>) {
   return (
-    <Stack gap="lg">
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <Paper p="md" withBorder>
-          <Stack gap={2}>
-            <Text c="dimmed" size="xs" tt="uppercase">
-              Last check-in
-            </Text>
-            <RelativeTime fw={700} size="lg" value={cluster.lastSeenAt} />
-            <Timestamp c="dimmed" size="xs" value={cluster.lastSeenAt} />
-          </Stack>
-        </Paper>
-        <Paper p="md" withBorder>
-          <Stack gap={2}>
-            <Text c="dimmed" size="xs" tt="uppercase">
-              First observed
-            </Text>
-            <Timestamp fw={700} size="lg" value={cluster.firstSeenAt} />
-            <Text c="dimmed" size="xs">
-              {formatDuration(cluster.firstSeenAt, cluster.lastSeenAt)} observed
-            </Text>
-          </Stack>
-        </Paper>
-        <Paper p="md" withBorder>
-          <Stack gap={2}>
-            <Text c="dimmed" size="xs" tt="uppercase">
-              Recent execution
-            </Text>
-            <Text fw={700} size="lg">
-              {recentRuns.length} runs
-            </Text>
-            <Text c="dimmed" size="xs">
-              {activeRuns} active in the latest {recentRunLimit} cluster Runs
-            </Text>
-          </Stack>
-        </Paper>
-      </SimpleGrid>
-
-      <RecentRuns
-        available={runsAvailable}
-        description={`The latest ${recentRunLimit} executions assigned to this cluster.`}
-        emptyMessage="No recent Runs were assigned to this cluster."
-        runs={recentRuns}
-        viewAllTo={`/runs?cluster=${encodeURIComponent(cluster.name)}`}
-      />
-    </Stack>
+    <RecentRuns
+      available={runsAvailable}
+      description={`The latest ${recentRunLimit} executions assigned to this cluster.`}
+      emptyMessage="No recent Runs were assigned to this cluster."
+      runs={recentRuns}
+      viewAllTo={`/runs?cluster=${encodeURIComponent(cluster.name)}`}
+    />
   );
 }
 

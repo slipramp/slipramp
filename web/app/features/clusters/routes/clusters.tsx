@@ -116,7 +116,7 @@ export default function Clusters({ loaderData }: Route.ComponentProps) {
                 <Table.Tr>
                   <Table.Th>Cluster</Table.Th>
                   <Table.Th>Connection</Table.Th>
-                  <Table.Th>Last check-in</Table.Th>
+                  <Table.Th>Last observed</Table.Th>
                   <Table.Th>Registered</Table.Th>
                 </Table.Tr>
               </Table.Thead>

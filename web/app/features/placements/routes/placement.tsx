@@ -5,6 +5,7 @@ import { Link, Outlet, useLocation } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import { getPlacement, type PlacementDetail } from "~/api/generated";
 import { placementDetailTab } from "~/features/placements/placement-detail";
+import { RelativeTime } from "~/shared/display-values";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
 import { pageTitle } from "~/shared/page-title";
@@ -94,6 +95,13 @@ export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
                 </Anchor>
               ) : (
                 "None"
+              )}
+            </PageHeaderFact>
+            <PageHeaderFact label="Last observed">
+              {placement.controllerLastSeenAt ? (
+                <RelativeTime value={placement.controllerLastSeenAt} />
+              ) : (
+                "Never"
               )}
             </PageHeaderFact>
           </PageHeaderFacts>
