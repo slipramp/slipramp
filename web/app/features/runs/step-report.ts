@@ -1,4 +1,4 @@
-import type { StepOutcomeCounts, StepReportOutcome } from "~/api/generated";
+import type { StepOutcomeCounts, StepReportOutcome, StepReportStep } from "~/api/generated";
 
 export const stepReportOutcomes = [
   "succeeded",
@@ -19,6 +19,23 @@ export type StepReportCountBadge = {
   label: string;
   outcome: StepReportOutcomeValue;
 };
+
+export type FlatStepReportRow = {
+  depth: number;
+  key: string;
+  step: StepReportStep;
+};
+
+export function flattenStepReportSteps(
+  steps: StepReportStep[],
+  depth = 0,
+  parentKey = "",
+): FlatStepReportRow[] {
+  return steps.flatMap((step, index) => {
+    const key = parentKey ? `${parentKey}.${index}` : String(index);
+    return [{ depth, key, step }, ...flattenStepReportSteps(step.steps ?? [], depth + 1, key)];
+  });
+}
 
 export function stepReportOutcomeColor(outcome: StepReportOutcomeValue) {
   const colors: Record<StepReportOutcomeValue, string> = {

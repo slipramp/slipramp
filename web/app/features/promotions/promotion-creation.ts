@@ -50,6 +50,14 @@ export function initialPromotionFreightName(
   return freight.length === 1 ? (freight[0]?.name ?? "") : "";
 }
 
+export function currentFreightForPromotion(
+  currentFreight: PromotionFreightItem[],
+  selectedFreight?: PromotionFreightItem,
+) {
+  if (!selectedFreight) return undefined;
+  return currentFreight.find((item) => item.origin === selectedFreight.origin);
+}
+
 export function visiblePromotionFreight(
   freight: PromotionFreightItem[],
   selectedName: string,

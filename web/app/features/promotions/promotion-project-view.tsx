@@ -1492,6 +1492,7 @@ function StageFreightDetailTableRow({
         <Table.Td>
           {canPromote ? (
             <PromotionCreateButton
+              currentFreight={stage.freight.items}
               freight={[sourceFreight]}
               initialFreightName={sourceFreight.name}
               sourceStageId={sourceStageId}
@@ -1524,6 +1525,7 @@ function StageFreightDetailTableRow({
         <Table.Td>
           {canWrite && row.request.direct && row.candidate.readiness === "ready" ? (
             <PromotionCreateButton
+              currentFreight={stage.freight.items}
               freight={eligibleFreight}
               initialFreightName={row.candidate.freight.name}
               stage={stage}

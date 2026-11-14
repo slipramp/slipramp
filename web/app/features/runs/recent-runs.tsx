@@ -1,4 +1,15 @@
-import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import { IconListDetails } from "@tabler/icons-react";
 import { Link } from "react-router";
 
@@ -7,10 +18,12 @@ import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime } from "~/shared/display-values";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { SectionHeader } from "~/shared/page";
-import { formatDuration, shortIdentifier } from "~/shared/display";
+import { formatDuration, formatTimestamp, shortIdentifier } from "~/shared/display";
 import { runActivity } from "~/features/mascot/execution-activity";
+import { runSourceLabel } from "~/features/runs/run-source";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
-import { targetFilterPath } from "~/features/targets/target-filter";
+import { Identity } from "~/shared/identity";
+import { useTimeZone } from "~/shared/time-zone-preference";
 
 export const recentRunLimit = 10;
 
@@ -18,19 +31,26 @@ export function RecentRuns({
   available,
   description,
   emptyMessage,
-  linkPlacement = false,
+  linkExecution = false,
+  plainEmpty = false,
   runs,
+  showSource = false,
   showTarget = true,
+  title = "Recent runs",
   viewAllTo,
 }: Readonly<{
   available: boolean;
-  description: string;
+  description?: string;
   emptyMessage: string;
-  linkPlacement?: boolean;
+  linkExecution?: boolean;
+  plainEmpty?: boolean;
   runs: Run[];
+  showSource?: boolean;
   showTarget?: boolean;
+  title?: string;
   viewAllTo: string;
 }>) {
+  const { timeZone } = useTimeZone();
   useActivityRefresh(runs.some((run) => run.phase !== "finished"));
 
   return (
@@ -48,26 +68,33 @@ export function RecentRuns({
           </Button>
         }
         description={description}
-        title="Recent runs"
+        title={title}
       />
       {!available ? (
         <Alert color="red" title="Run history unavailable">
-          Recent execution history could not be loaded.
+          Run history could not be loaded.
         </Alert>
       ) : runs.length === 0 ? (
-        <Paper p="md" withBorder>
+        plainEmpty ? (
           <Text c="dimmed">{emptyMessage}</Text>
-        </Paper>
+        ) : (
+          <Paper p="md" withBorder>
+            <Text c="dimmed">{emptyMessage}</Text>
+          </Paper>
+        )
       ) : (
         <Paper withBorder>
-          <Table.ScrollContainer minWidth={900} type="native">
+          <Table.ScrollContainer minWidth={showSource ? 1000 : 900} type="native">
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Run</Table.Th>
                   <Table.Th>{showTarget ? "Workload" : "Action"}</Table.Th>
-                  <Table.Th>Status</Table.Th>
+                  <Table.Th miw={180} w={180}>
+                    Status
+                  </Table.Th>
                   <Table.Th>Execution</Table.Th>
+                  {showSource ? <Table.Th>Source</Table.Th> : null}
                   <Table.Th>Created</Table.Th>
                   <Table.Th>Runtime</Table.Th>
                 </Table.Tr>
@@ -94,7 +121,7 @@ export function RecentRuns({
                         </Text>
                       )}
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td miw={180} w={180}>
                       <Group gap="xs" justify="space-between" wrap="nowrap">
                         <Badge color={runStatusColor(run)} variant="light">
                           {runStatusLabel(run)}
@@ -104,13 +131,23 @@ export function RecentRuns({
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={0}>
-                        <Text size="sm">{run.cluster}</Text>
-                        {linkPlacement ? (
+                        {linkExecution ? (
+                          <Anchor
+                            component={Link}
+                            size="sm"
+                            to={`/clusters/${encodeURIComponent(run.cluster)}`}
+                          >
+                            {run.cluster}
+                          </Anchor>
+                        ) : (
+                          <Text size="sm">{run.cluster}</Text>
+                        )}
+                        {linkExecution ? (
                           <Anchor
                             c="dimmed"
                             component={Link}
                             size="xs"
-                            to={targetFilterPath("placement", run.placement)}
+                            to={`/placements/${encodeURIComponent(run.placement)}`}
                           >
                             {run.placement}
                           </Anchor>
@@ -121,6 +158,11 @@ export function RecentRuns({
                         )}
                       </Stack>
                     </Table.Td>
+                    {showSource ? (
+                      <Table.Td>
+                        <RunSourceSummary run={run} timeZone={timeZone} />
+                      </Table.Td>
+                    ) : null}
                     <Table.Td>
                       <RelativeTime size="sm" value={run.createdAt} />
                     </Table.Td>
@@ -138,6 +180,42 @@ export function RecentRuns({
           </Table.ScrollContainer>
         </Paper>
       )}
+    </Stack>
+  );
+}
+
+function RunSourceSummary({ run, timeZone }: Readonly<{ run: Run; timeZone: string }>) {
+  const principal =
+    run.createdBy?.displayName ??
+    (run.source.type === "git" || run.source.type === "schedule" ? "Automation" : "System");
+
+  return (
+    <Stack gap={4}>
+      {run.source.type === "schedule" && run.source.schedule ? (
+        <Tooltip
+          label={`Trigger: ${run.source.schedule.triggerName} · Instance: ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}`}
+          openDelay={350}
+          withArrow
+        >
+          <Text
+            aria-label={`Schedule. Trigger ${run.source.schedule.triggerName}. Instance ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}.`}
+            component="span"
+            display="inline-block"
+            size="sm"
+            style={{ alignSelf: "flex-start" }}
+            tabIndex={0}
+          >
+            Schedule
+          </Text>
+        </Tooltip>
+      ) : run.source.type === "promotion" && run.source.promotion ? (
+        <Anchor component={Link} size="sm" to={`/promotions/${run.source.promotion.promotionId}`}>
+          {runSourceLabel(run.source)}
+        </Anchor>
+      ) : (
+        <Text size="sm">{runSourceLabel(run.source)}</Text>
+      )}
+      <Identity avatarSize={22} name={principal} nameProps={{ fw: 500, size: "xs" }} />
     </Stack>
   );
 }

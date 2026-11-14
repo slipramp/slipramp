@@ -20,6 +20,7 @@ import { Link, useFetcher, useSearchParams } from "react-router";
 
 import type { PromotionCreationActionResult } from "~/features/promotions/promotion-creation";
 import {
+  currentFreightForPromotion,
   initialPromotionFreightName,
   promotionCreationContext,
   promotionCreationURLSelection,
@@ -34,6 +35,7 @@ import type { PromotionFreightItem, PromotionProjectStage } from "~/api/generate
 type PromotionCreateProps = Readonly<{
   stage: Pick<PromotionProjectStage, "id" | "name" | "policy" | "capabilities">;
   freight: PromotionFreightItem[];
+  currentFreight?: PromotionFreightItem[];
   inPlace?: boolean;
   initialFreightName?: string;
   sourceStageId?: string;
@@ -49,6 +51,7 @@ type PromotionCreateMenuProps = Readonly<{
 function PromotionCreateDialog({
   stage,
   freight,
+  currentFreight,
   inPlace,
   sourceStageId,
   sourceStageName,
@@ -64,6 +67,7 @@ function PromotionCreateDialog({
   const [searchParams, setSearchParams] = useSearchParams();
   const handledPromotionID = useRef<string | undefined>(undefined);
   const selected = freight.find((item) => item.name === selectedName);
+  const current = currentFreightForPromotion(currentFreight ?? [], selected);
   const submittingMode = fetcher.formData?.get("mode");
   const actionLabel = inPlace ? "Re-promote" : "Promote";
 
@@ -118,9 +122,13 @@ function PromotionCreateDialog({
             </Alert>
           ) : null}
 
-          <SelectedFreight freight={selected} />
+          {currentFreight ? (
+            <FreightComparison current={current} selected={selected} />
+          ) : (
+            <SelectedFreight freight={selected} />
+          )}
 
-          {freight.length > 1 || !selected ? (
+          {!currentFreight && (freight.length > 1 || !selected) ? (
             <AvailableFreight
               freight={freight}
               onChange={onSelectedNameChange}
@@ -351,6 +359,51 @@ function SelectedFreight({ freight }: Readonly<{ freight?: PromotionFreightItem 
         )}
       </Stack>
     </Paper>
+  );
+}
+
+function FreightComparison({
+  current,
+  selected,
+}: Readonly<{
+  current?: PromotionFreightItem;
+  selected?: PromotionFreightItem;
+}>) {
+  return (
+    <Stack gap="lg">
+      <FreightComparisonItem
+        emptyMessage="No current Freight is observed for this Warehouse."
+        freight={current}
+      >
+        Current Freight
+      </FreightComparisonItem>
+      <FreightComparisonItem emptyMessage="Choose the Freight to promote." freight={selected}>
+        Selected Freight
+      </FreightComparisonItem>
+    </Stack>
+  );
+}
+
+function FreightComparisonItem({
+  children,
+  emptyMessage,
+  freight,
+}: Readonly<{
+  children: ReactNode;
+  emptyMessage: string;
+  freight?: PromotionFreightItem;
+}>) {
+  return (
+    <Stack gap="sm">
+      <Text fw={600}>{children}</Text>
+      {freight ? (
+        <FreightSummary freight={freight} />
+      ) : (
+        <Text c="dimmed" size="sm">
+          {emptyMessage}
+        </Text>
+      )}
+    </Stack>
   );
 }
 

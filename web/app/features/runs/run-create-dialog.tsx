@@ -188,9 +188,16 @@ export function RunCreateButton({
   actionName,
   actionTitle,
   className,
+  label = "Run action",
   style,
   targetId,
-}: RunCreateOption & { className?: string; style?: CSSProperties }) {
+  variant,
+}: RunCreateOption & {
+  className?: string;
+  label?: string;
+  style?: CSSProperties;
+  variant?: "filled" | "light";
+}) {
   const option = { actionName, actionTitle, targetId };
   const dialog = useRunCreateDialogState([option]);
 
@@ -201,8 +208,9 @@ export function RunCreateButton({
         leftSection={<IconPlayerPlay aria-hidden size={16} />}
         onClick={() => dialog.open(option)}
         style={style}
+        variant={variant}
       >
-        Run action
+        {label}
       </Button>
       {dialog.option ? (
         <RunCreateDialog key={dialog.key} {...dialog.option} onClose={dialog.close} />

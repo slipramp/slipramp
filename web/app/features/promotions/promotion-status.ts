@@ -12,6 +12,21 @@ export type PromotionStatusPresentation = {
   recordedAt?: string;
 };
 
+export function promotionIsActive(promotion: PromotionState) {
+  switch (promotion.status) {
+    case "creating":
+    case "preparing":
+    case "pending":
+      return true;
+    case "approved":
+      return !promotion.kargoOutcome && promotion.creationDispatch.phase !== "failed";
+    case "rejected":
+    case "expired":
+    case "error":
+      return false;
+  }
+}
+
 export function promotionOverallStatus(promotion: PromotionState): PromotionStatusPresentation {
   if (promotion.creationDispatch.phase === "failed") {
     return {

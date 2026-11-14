@@ -2,12 +2,67 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  flattenStepReportSteps,
   formatStepDuration,
   stepDurationPercentage,
   stepReportCountBadges,
   stepReportOutcomeColor,
   stepReportOutcomeLabel,
 } from "./step-report.ts";
+
+test("flattens nested steps into table order while retaining depth", () => {
+  const steps = [
+    {
+      durationMs: 1_000,
+      id: "upgrade",
+      name: "Upgrade",
+      outcome: "succeeded",
+      steps: [
+        {
+          durationMs: 400,
+          id: "control-plane",
+          name: "Control plane",
+          outcome: "succeeded",
+        },
+        {
+          durationMs: 600,
+          id: "workers",
+          name: "Workers",
+          outcome: "warning",
+          steps: [
+            {
+              durationMs: 300,
+              id: "worker-1",
+              name: "Worker 1",
+              outcome: "succeeded",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      durationMs: 200,
+      id: "verify",
+      name: "Verify",
+      outcome: "succeeded",
+    },
+  ];
+
+  assert.deepEqual(
+    flattenStepReportSteps(steps).map(({ depth, key, step }) => ({
+      depth,
+      key,
+      name: step.name,
+    })),
+    [
+      { depth: 0, key: "0", name: "Upgrade" },
+      { depth: 1, key: "0.0", name: "Control plane" },
+      { depth: 1, key: "0.1", name: "Workers" },
+      { depth: 2, key: "0.1.0", name: "Worker 1" },
+      { depth: 0, key: "1", name: "Verify" },
+    ],
+  );
+});
 
 test("presents nonzero step outcomes in a stable order", () => {
   assert.deepEqual(

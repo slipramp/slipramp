@@ -1,35 +1,30 @@
 import {
-  Accordion,
   Alert,
   Anchor,
   Badge,
+  Button,
   Code,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Table,
   Text,
-  Title,
 } from "@mantine/core";
-import { IconExternalLink } from "@tabler/icons-react";
-import type { ReactNode } from "react";
-import { Link, useOutletContext, useSearchParams } from "react-router";
+import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
+import { Link, useOutletContext } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getTarget,
   listRuns,
   type Action,
-  type ArtifactDeclaration,
-  type ArtifactInput,
-  type Parameter,
-  type TargetDefinition,
+  type Run,
   type TargetReconciliationStatus,
   type TargetSyncRunCheckpoint,
 } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
-import { effectiveAction, parameterDelivery, sortedEntries } from "~/features/runs/action-run";
+import { actionRunPath, sortedEntries } from "~/features/runs/action-run";
+import { RecentRuns } from "~/features/runs/recent-runs";
 import { RunCreateButton } from "~/features/runs/run-create-dialog";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import {
@@ -40,7 +35,6 @@ import {
   scheduledRunPresentation,
   type ScheduledActionRun,
 } from "~/features/targets/scheduled-actions";
-import { targetFilterPath } from "~/features/targets/target-filter";
 import {
   reconciliationPresentation,
   showLastAttemptedSync,
@@ -48,62 +42,85 @@ import {
   syncCheckpointResult,
 } from "~/features/targets/target-reconciliation";
 import { shortIdentifier } from "~/shared/display";
-import { Timestamp } from "~/shared/display-values";
+import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { SectionHeader } from "~/shared/page";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
-import {
-  CommandBlock,
-  MappingTable,
-  ResourceRequirementsTable,
-  TechnicalValue,
-} from "~/shared/technical-definition";
 
 import type { Route } from "./+types/target-overview";
 import type { TargetOutletContext } from "./target";
 
 export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
+const activeRunPhases = ["queued", "assigned", "preparing", "running"] as const;
+const activeRunPageSize = 100;
+
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
   const targetResult = await getTarget({ client, path: { targetId: params.targetId } });
-  if (!targetResult.data) return { scheduledRuns: [] };
+  if (!targetResult.data) {
+    return { activeRuns: [], activeRunsAvailable: false, scheduledRuns: [] };
+  }
 
   const definitions = scheduledActionDefinitions(targetResult.data.definition);
-  const scheduledRuns = await loadLatestScheduledRuns(definitions, async (definition) => {
-    const result = await listRuns({
-      client,
-      query: {
-        action: definition.actionName,
-        limit: 1,
-        source: "schedule",
-        targetId: params.targetId,
-        triggerName: definition.triggerName,
-      },
-    });
-    if (!result.data) throw new Error("scheduled Run history unavailable");
+  const [scheduledRuns, activeRunsByPhase] = await Promise.all([
+    loadLatestScheduledRuns(definitions, async (definition) => {
+      const result = await listRuns({
+        client,
+        query: {
+          action: definition.actionName,
+          limit: 1,
+          source: "schedule",
+          targetId: params.targetId,
+          triggerName: definition.triggerName,
+        },
+      });
+      if (!result.data) throw new Error("scheduled Run history unavailable");
 
-    return result.data.items[0];
-  });
+      return result.data.items[0];
+    }),
+    Promise.all(
+      activeRunPhases.map(async (phase) => {
+        const runs: Run[] = [];
+        let offset = 0;
 
-  return { scheduledRuns };
+        while (true) {
+          const result = await listRuns({
+            client,
+            query: {
+              limit: activeRunPageSize,
+              offset,
+              phase,
+              targetId: params.targetId,
+            },
+          });
+          if (!result.data) return undefined;
+
+          runs.push(...result.data.items);
+          offset += result.data.items.length;
+          if (offset >= result.data.total || result.data.items.length === 0) return runs;
+        }
+      }),
+    ),
+  ]);
+  const activeRunsAvailable = activeRunsByPhase.every((runs) => runs !== undefined);
+  const activeRunsByID = new Map<string, Run>();
+  for (const runs of activeRunsByPhase) {
+    for (const run of runs ?? []) activeRunsByID.set(run.id, run);
+  }
+  const activeRuns = [...activeRunsByID.values()]
+    .filter((run) => run.phase !== "finished")
+    .toSorted(
+      (left, right) =>
+        right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id),
+    );
+
+  return { activeRuns, activeRunsAvailable, scheduledRuns };
 }
 
 export default function TargetOverview({ loaderData }: Route.ComponentProps) {
   const { target: record } = useOutletContext<TargetOutletContext>();
-  const [searchParams, setSearchParams] = useSearchParams();
   const target = record.definition;
   const actions = sortedEntries(target.spec.actions);
-  const requestedAction = searchParams.get("action");
-  const expandedAction = actions.some(([name]) => name === requestedAction)
-    ? requestedAction
-    : null;
-
-  function changeExpandedAction(name: string | null) {
-    const next = new URLSearchParams(searchParams);
-    if (name) next.set("action", name);
-    else next.delete("action");
-    setSearchParams(next, { preventScrollReset: true });
-  }
 
   return (
     <Stack gap="lg">
@@ -115,6 +132,18 @@ export default function TargetOverview({ loaderData }: Route.ComponentProps) {
         />
       ) : null}
 
+      <RecentRuns
+        available={loaderData.activeRunsAvailable}
+        emptyMessage="No active Runs for this Target."
+        linkExecution
+        plainEmpty
+        runs={loaderData.activeRuns}
+        showSource
+        showTarget={false}
+        title="Active runs"
+        viewAllTo={`/runs?targetId=${record.id}`}
+      />
+
       {loaderData.scheduledRuns.length > 0 ? (
         <ScheduledActions
           archived={record.archivedAt !== undefined}
@@ -124,28 +153,18 @@ export default function TargetOverview({ loaderData }: Route.ComponentProps) {
       ) : null}
 
       <Stack gap="md">
-        <SectionHeader
-          description="Each action resolves the Target defaults into an immutable execution."
-          title="Actions"
-        />
-        <Accordion
-          chevronPosition="left"
-          className="target-actions"
-          onChange={changeExpandedAction}
-          value={expandedAction}
-          variant="separated"
-        >
+        <SectionHeader title="Actions" />
+        <Stack gap="sm">
           {actions.map(([name, actionDefinition]) => (
-            <ActionAccordionItem
+            <ActionCard
               actionDefinition={actionDefinition}
               archived={record.archivedAt !== undefined}
               key={name}
               name={name}
-              target={target}
               targetId={record.id}
             />
           ))}
-        </Accordion>
+        </Stack>
       </Stack>
     </Stack>
   );
@@ -346,6 +365,11 @@ function SyncCheckpoint({
       </Text>
       {checkpoint ? (
         <Group gap="sm" justify="flex-end" wrap="wrap">
+          {timestampValue ? (
+            <Text c="dimmed" size="xs">
+              {timestampLabel} <RelativeTime inherit value={timestampValue} />
+            </Text>
+          ) : null}
           <Badge color={syncCheckpointColor(checkpoint)} variant="light">
             {syncCheckpointResult(checkpoint)}
           </Badge>
@@ -356,11 +380,6 @@ function SyncCheckpoint({
               Unknown commit
             </Text>
           )}
-          {timestampValue ? (
-            <Text c="dimmed" size="xs">
-              {timestampLabel} <Timestamp inherit value={timestampValue} />
-            </Text>
-          ) : null}
           <Anchor component={Link} fw={650} size="sm" to={`/runs/${checkpoint.runId}`}>
             View Run
           </Anchor>
@@ -374,260 +393,78 @@ function SyncCheckpoint({
   );
 }
 
-function ActionAccordionItem({
+function ActionCard({
   actionDefinition,
   archived,
   name,
   targetId,
-  target,
 }: Readonly<{
   actionDefinition: Action;
   archived: boolean;
   name: string;
   targetId: string;
-  target: TargetDefinition;
 }>) {
   const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
 
   return (
-    <Accordion.Item className="target-action-card" id={`action-${name}`} value={name}>
-      <Group align="center" className="target-action-row" gap="sm" wrap="wrap">
-        <Accordion.Control style={{ flex: "1 1 24rem", minWidth: 0 }}>
-          <Stack gap="xs">
-            <Group gap="sm" wrap="wrap">
-              <Text fw={700} size="lg">
-                {actionDefinition.title ?? name}
-              </Text>
-              {actionDefinition.title ? <Code>{name}</Code> : null}
-              {actionDefinition.intent ? (
-                <Badge variant="outline">{actionDefinition.intent}</Badge>
-              ) : null}
-              {inputCount > 0 ? (
-                <Text c="dimmed" size="sm">
-                  {inputCount} input{inputCount === 1 ? "" : "s"}
-                </Text>
-              ) : null}
-            </Group>
-            {actionDefinition.description ? (
+    <Paper className="target-action-card" id={`action-${name}`} p="md" withBorder>
+      <Group align="center" gap="md" justify="space-between" wrap="wrap">
+        <Stack gap="xs" style={{ flex: "1 1 24rem", minWidth: 0 }}>
+          <Group gap="sm" wrap="wrap">
+            <Text fw={700} size="lg">
+              {actionDefinition.title ?? name}
+            </Text>
+            {actionDefinition.title ? <Code>{name}</Code> : null}
+            {actionDefinition.intent ? (
+              <Badge variant="outline">{actionDefinition.intent}</Badge>
+            ) : null}
+            {inputCount > 0 ? (
               <Text c="dimmed" size="sm">
-                {actionDefinition.description}
+                {inputCount} input{inputCount === 1 ? "" : "s"}
               </Text>
             ) : null}
-            <Text c="dimmed" ff="monospace" lineClamp={1} size="sm">
-              {actionDefinition.command.join(" ")}
+          </Group>
+          {actionDefinition.description || actionDefinition.documentationUrl ? (
+            <Text c="dimmed" size="sm">
+              {actionDefinition.description}
+              {actionDefinition.documentationUrl ? (
+                <Anchor
+                  aria-label="Open action documentation"
+                  display="inline-flex"
+                  href={actionDefinition.documentationUrl}
+                  ml={6}
+                  rel="noreferrer"
+                  target="_blank"
+                  title="Open action documentation"
+                >
+                  <IconExternalLink aria-hidden size={14} />
+                </Anchor>
+              ) : null}
             </Text>
-          </Stack>
-        </Accordion.Control>
+          ) : null}
+          <Text c="dimmed" ff="monospace" lineClamp={1} size="sm">
+            {actionDefinition.command.join(" ")}
+          </Text>
+        </Stack>
         {!archived ? (
-          <RunCreateButton
-            actionName={name}
-            actionTitle={actionDefinition.title}
-            className="target-action-button"
-            style={{ flexShrink: 0 }}
-            targetId={targetId}
-          />
+          <Group className="target-action-buttons" gap="xs" wrap="nowrap">
+            <Button
+              component={Link}
+              leftSection={<IconPlayerPlay aria-hidden size={16} />}
+              to={actionRunPath(targetId, name)}
+            >
+              Run action
+            </Button>
+            <RunCreateButton
+              actionName={name}
+              actionTitle={actionDefinition.title}
+              label="Quick run"
+              targetId={targetId}
+              variant="light"
+            />
+          </Group>
         ) : null}
       </Group>
-      <Accordion.Panel>
-        <ActionDetail actionDefinition={actionDefinition} target={target} />
-      </Accordion.Panel>
-    </Accordion.Item>
+    </Paper>
   );
-}
-
-function ActionDetail({
-  actionDefinition,
-  target,
-}: Readonly<{
-  actionDefinition: Action;
-  target: TargetDefinition;
-}>) {
-  const effective = effectiveAction(target, actionDefinition);
-  const parameters = sortedEntries(actionDefinition.parameters);
-  const artifacts = sortedEntries(actionDefinition.artifacts);
-  const inputs = sortedEntries(actionDefinition.inputs);
-  const triggers = actionDefinition.triggers ?? [];
-
-  return (
-    <Stack gap="lg">
-      {actionDefinition.documentationUrl ? (
-        <Anchor href={actionDefinition.documentationUrl} rel="noreferrer" target="_blank">
-          <Group gap={4} wrap="nowrap">
-            <span>Action documentation</span>
-            <IconExternalLink aria-hidden size={14} />
-          </Group>
-        </Anchor>
-      ) : null}
-      <CommandBlock command={actionDefinition.command} />
-
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <EffectiveValue
-          inherited={!actionDefinition.runtime}
-          label="Runtime"
-          value={
-            effective.runtime ? (
-              <Anchor component={Link} to={targetFilterPath("runtime", effective.runtime)}>
-                {effective.runtime}
-              </Anchor>
-            ) : (
-              "Not configured"
-            )
-          }
-        />
-        <EffectiveValue
-          inherited={!actionDefinition.placement}
-          label="Placement"
-          value={
-            effective.placement ? (
-              <Anchor component={Link} to={targetFilterPath("placement", effective.placement)}>
-                {effective.placement}
-              </Anchor>
-            ) : (
-              "Not configured"
-            )
-          }
-        />
-        <EffectiveValue
-          inherited={!actionDefinition.timeout}
-          label="Timeout"
-          value={effective.timeout ?? "Placement default"}
-        />
-      </SimpleGrid>
-
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-        <MappingTable
-          empty="No credential bindings"
-          entries={sortedEntries(effective.credentials)}
-          label="Effective credential bindings"
-        />
-        <ResourceRequirementsTable
-          limits={effective.resources.limits}
-          requests={effective.resources.requests}
-        />
-      </SimpleGrid>
-
-      {inputs.length > 0 ? (
-        <Alert color="blue" title="Artifact input required">
-          Start this action from a compatible artifact on its producing Run.
-        </Alert>
-      ) : null}
-
-      {parameters.length > 0 ? (
-        <DefinitionTable
-          columns={["Parameter", "Description", "Type", "Required", "Delivery", "Allowed values"]}
-          rows={parameters.map(([parameterName, parameter]) =>
-            parameterRow(parameterName, parameter),
-          )}
-          title="Parameters"
-        />
-      ) : null}
-      {artifacts.length > 0 ? (
-        <DefinitionTable
-          columns={["Artifact", "Description", "Path", "Media type", "Sensitive"]}
-          rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
-          title="Artifacts"
-        />
-      ) : null}
-      {inputs.length > 0 ? (
-        <DefinitionTable
-          columns={["Input", "Description", "Source action", "Mount path", "Compatibility"]}
-          rows={inputs.map(([inputName, input]) => inputRow(inputName, input, target))}
-          title="Inputs"
-        />
-      ) : null}
-      {triggers.length > 0 ? (
-        <DefinitionTable
-          columns={["Trigger", "Event", "Static parameters"]}
-          rows={triggers.map((trigger) => [
-            trigger.name,
-            trigger.schedule ? `UTC cron · ${trigger.schedule.cron}` : "Git change",
-            trigger.parameters ? JSON.stringify(trigger.parameters) : "—",
-          ])}
-          title="Triggers"
-        />
-      ) : null}
-    </Stack>
-  );
-}
-
-function EffectiveValue({
-  inherited,
-  label,
-  value,
-}: Readonly<{ inherited: boolean; label: string; value: ReactNode }>) {
-  return (
-    <TechnicalValue
-      description={inherited ? "Inherited from target" : "Action override"}
-      label={label}
-      value={value}
-    />
-  );
-}
-
-function DefinitionTable({
-  columns,
-  rows,
-  title,
-}: Readonly<{ columns: string[]; rows: string[][]; title: string }>) {
-  return (
-    <Stack gap="xs">
-      <Title order={4}>{title}</Title>
-      <Paper className="technical-data-table" withBorder>
-        <Table.ScrollContainer minWidth={640} type="native">
-          <Table verticalSpacing="xs">
-            <Table.Thead>
-              <Table.Tr>
-                {columns.map((column) => (
-                  <Table.Th key={column}>{column}</Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.map((row) => (
-                <Table.Tr key={row[0]}>
-                  {row.map((value, index) => (
-                    <Table.Td key={`${columns[index]}:${value}`}>{value}</Table.Td>
-                  ))}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </Paper>
-    </Stack>
-  );
-}
-
-function parameterRow(name: string, parameter: Parameter) {
-  return [
-    parameter.title ? `${parameter.title} (${name})` : name,
-    parameter.description ?? "—",
-    parameter.type,
-    parameter.required ? "Yes" : "No",
-    parameterDelivery(parameter),
-    parameter.values?.join(", ") ?? "—",
-  ];
-}
-
-function artifactRow(name: string, artifact: ArtifactDeclaration) {
-  return [
-    name,
-    artifact.description ?? "—",
-    artifact.path,
-    artifact.mediaType ?? "Unspecified",
-    artifact.sensitive ? "Yes" : "No",
-  ];
-}
-
-function inputRow(name: string, input: ArtifactInput, target: TargetDefinition) {
-  const description =
-    target.spec.actions[input.artifact.fromAction]?.artifacts?.[name]?.description ?? "—";
-
-  return [
-    name,
-    description,
-    input.artifact.fromAction,
-    input.mountPath,
-    input.artifact.compatibility ?? "exact-catalog-revision",
-  ];
 }

@@ -1,16 +1,10 @@
 import { Alert, Anchor, Badge, Code, Stack, Tabs } from "@mantine/core";
-import {
-  IconAdjustmentsHorizontal,
-  IconFileCode,
-  IconHistory,
-  IconListDetails,
-} from "@tabler/icons-react";
+import { IconAdjustmentsHorizontal, IconFileCode, IconListDetails } from "@tabler/icons-react";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getTarget, type Target } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
-import { RunHistoryButton } from "~/features/runs/run-history-button";
 import { targetDetailTab } from "~/features/targets/target-detail";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
@@ -67,7 +61,6 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="lg">
       <PageHeader
-        actions={<RunHistoryButton to={`/runs?targetId=${record.id}`} />}
         back={<PageBackLink label="Back to targets" to="/targets" />}
         badges={record.archivedAt ? <Badge color="gray">Archived</Badge> : null}
         description="Operational target"
@@ -116,14 +109,6 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
             value="overview"
           >
             Overview
-          </Tabs.Tab>
-          <Tabs.Tab
-            leftSection={<IconHistory aria-hidden size={16} />}
-            renderRoot={(props) => <Link {...props} to={`${targetPath}/runs`} />}
-            style={{ flexShrink: 0 }}
-            value="runs"
-          >
-            Recent runs
           </Tabs.Tab>
           <Tabs.Tab
             leftSection={<IconAdjustmentsHorizontal aria-hidden size={16} />}

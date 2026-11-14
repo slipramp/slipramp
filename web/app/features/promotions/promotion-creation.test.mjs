@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  currentFreightForPromotion,
   eligibleStageFreight,
   initialPromotionFreightName,
   promotionCreationContext,
@@ -44,6 +45,16 @@ test("promotion Freight preselection honors a valid requested Freight", () => {
   assert.equal(initialPromotionFreightName([app, config], "freight-43"), "freight-43");
   assert.equal(initialPromotionFreightName([app, config], "missing"), "");
   assert.equal(initialPromotionFreightName([app]), "freight-42");
+});
+
+test("promotion comparison selects current Freight from the same Warehouse", () => {
+  const currentApp = freight("Warehouse/app", "freight-41", "1.2.2");
+  const currentConfig = freight("Warehouse/config", "freight-42", "abc122");
+  const selected = freight("Warehouse/config", "freight-43", "abc123");
+
+  assert.equal(currentFreightForPromotion([currentApp, currentConfig], selected), currentConfig);
+  assert.equal(currentFreightForPromotion([currentApp], selected), undefined);
+  assert.equal(currentFreightForPromotion([currentApp], undefined), undefined);
 });
 
 test("promotion Freight choices are capped while retaining the selection", () => {

@@ -39,6 +39,35 @@ test("selects valid output and lifecycle values with a safe fallback", () => {
   );
 });
 
+test("an unselected output follows a newly available automatic report", () => {
+  const unselected = new URLSearchParams();
+  const explicitLog = new URLSearchParams("output=log");
+  const values = ["report:artifact-a", "log", "details"];
+
+  assert.equal(
+    selectedRunDetailValue(unselected, runDetailSearchParamNames.output, values, "log"),
+    "log",
+  );
+  assert.equal(
+    selectedRunDetailValue(
+      unselected,
+      runDetailSearchParamNames.output,
+      values,
+      "report:artifact-a",
+    ),
+    "report:artifact-a",
+  );
+  assert.equal(
+    selectedRunDetailValue(
+      explicitLog,
+      runDetailSearchParamNames.output,
+      values,
+      "report:artifact-a",
+    ),
+    "log",
+  );
+});
+
 test("output and lifecycle transitions preserve unrelated and report state", () => {
   const current = new URLSearchParams(
     "output=report:artifact-a&stage=running&report=artifact-a&reportHost=web-1&source=manual",

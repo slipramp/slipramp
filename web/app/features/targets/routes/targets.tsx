@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect, type ShouldRevalidateFunctionArgs } from "react-router";
 
 import { updateRunCreationSearchParams } from "~/features/runs/action-run";
@@ -77,7 +77,6 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       runtime,
       placement,
       targets: [],
-      totalTargetCount: 0,
     };
   }
   const pageCount = Math.ceil(initialTargetsResult.data.total / pageSize);
@@ -103,7 +102,6 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     runtime,
     placement,
     targets: initialTargetsResult.data.items,
-    totalTargetCount: initialTargetsResult.data.total,
   };
 }
 
@@ -115,19 +113,6 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="lg">
       <PageHeader
-        actions={
-          loaderData.available ? (
-            <Group gap="xs">
-              <Badge size="lg" variant="light">
-                {loaderData.totalTargetCount}{" "}
-                {filtered ? "matching" : targetNoun(loaderData.totalTargetCount)}
-              </Badge>
-              <Badge size="lg" variant="outline">
-                {loaderData.repositories.length} {repositoryNoun(loaderData.repositories.length)}
-              </Badge>
-            </Group>
-          ) : null
-        }
         description="Browse actions across every active repository catalog."
         title="Targets"
       />
@@ -380,12 +365,4 @@ function targetFilterPath(
   searchParams.set(name, value);
 
   return `/targets?${searchParams.toString()}`;
-}
-
-function repositoryNoun(count: number) {
-  return count === 1 ? "repository" : "repositories";
-}
-
-function targetNoun(count: number) {
-  return count === 1 ? "target" : "targets";
 }

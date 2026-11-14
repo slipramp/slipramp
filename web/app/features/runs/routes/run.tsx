@@ -9,7 +9,6 @@ import {
   Group,
   Menu,
   Paper,
-  Popover,
   SimpleGrid,
   Stack,
   Table,
@@ -307,7 +306,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     run.outcome === "succeeded" &&
     applySelection?.artifact.state === "sealed" &&
     applySelection.artifact.retentionState === "retained";
-  const resultActivity = runResultActivity(run);
   const actor =
     run.createdBy?.displayName ??
     (run.source.type === "git" || run.source.type === "schedule" ? "Automation" : "System");
@@ -320,8 +318,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     (navigation.formData?.get("intent") === "rerun-exact" ||
       navigation.formData?.get("intent") === "rerun-latest");
   const hasArtifactInputs = Object.keys(run.inputs).length > 0;
-  const canReview =
-    loaderData.principal?.role === "operator" || loaderData.principal?.role === "admin";
   const actionConflict =
     actionData !== undefined && "conflict" in actionData && actionData.conflict === true;
   return (
@@ -413,15 +409,26 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
           ) : null
         }
         back={<PageBackLink label="Back to run history" to="/runs" />}
-        badges={
-          <>
-            <RunStatusBadge run={run} />
-            {run.cancellationState === "requested" ? (
-              <Badge color="yellow" variant="outline">
-                Cancellation requested
-              </Badge>
-            ) : null}
-          </>
+        badges={<RunStatusBadge run={run} />}
+        description={
+          run.actionDescription || run.actionDocumentationUrl ? (
+            <Text c="dimmed">
+              {run.actionDescription}
+              {run.actionDocumentationUrl ? (
+                <Anchor
+                  aria-label="Open action documentation"
+                  display="inline-flex"
+                  href={run.actionDocumentationUrl}
+                  ml={6}
+                  rel="noreferrer"
+                  target="_blank"
+                  title="Open action documentation"
+                >
+                  <IconExternalLink aria-hidden size={14} />
+                </Anchor>
+              ) : null}
+            </Text>
+          ) : undefined
         }
         details={
           <PageHeaderFacts>
@@ -474,22 +481,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
       />
 
-      {run.actionDescription || run.actionDocumentationUrl ? (
-        <Paper p="md" withBorder>
-          <Stack align="flex-start" gap="xs">
-            {run.actionDescription ? <Text>{run.actionDescription}</Text> : null}
-            {run.actionDocumentationUrl ? (
-              <Anchor href={run.actionDocumentationUrl} rel="noreferrer" target="_blank">
-                <Group gap={4} wrap="nowrap">
-                  <span>Action documentation</span>
-                  <IconExternalLink aria-hidden size={14} />
-                </Group>
-              </Anchor>
-            ) : null}
-          </Stack>
-        </Paper>
-      ) : null}
-
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
           <Stack gap={4}>
@@ -498,67 +489,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
               <Text size="sm">
                 The Run changed before the decision could be recorded. Its refreshed state is shown
                 on this page.
-              </Text>
-            ) : null}
-          </Stack>
-        </Alert>
-      ) : null}
-
-      <RunReviewPanel canReview={canReview} run={run} />
-
-      <RunQueueNotice run={run} />
-
-      {run.phase !== "finished" && run.observationState === "unknown" ? (
-        <Alert color="yellow" title="Execution observation unavailable">
-          The cluster controller is unreachable or has not reported this Run recently. Its durable
-          phase remains {run.phase} until observations resume.
-        </Alert>
-      ) : null}
-
-      {run.cancellationRequestedAt ? (
-        <Alert
-          color={run.cancellationState === "completed" ? "green" : "yellow"}
-          title={
-            run.cancellationState === "completed"
-              ? "Cancellation completed"
-              : run.cancellationState === "overtaken"
-                ? "Cancellation overtaken"
-                : "Cancellation requested"
-          }
-        >
-          <Group gap="xs" wrap="wrap">
-            <Text span>
-              {run.cancellationState === "overtaken"
-                ? "This Run finished before the cancellation request completed. It was asked to stop"
-                : "This Run was asked to stop"}
-            </Text>
-            <RelativeTime span value={run.cancellationRequestedAt} />
-            {run.canceledBy ? (
-              <>
-                <Text span>by</Text>
-                <Identity
-                  avatarSize={22}
-                  name={run.canceledBy.displayName}
-                  nameProps={{ fw: 500, size: "sm" }}
-                />
-              </>
-            ) : null}
-          </Group>
-        </Alert>
-      ) : null}
-
-      {run.phase === "finished" &&
-      run.outcome !== "succeeded" &&
-      (run.outcomeReason || run.outcomeMessage || run.exitCode !== undefined) ? (
-        <Alert
-          color={runStatusColor(run)}
-          title={run.outcomeReason ?? resultActivity?.title ?? "Run finished"}
-        >
-          <Stack gap={4}>
-            {run.outcomeMessage ? <Text>{run.outcomeMessage}</Text> : null}
-            {run.exitCode !== undefined ? (
-              <Text size="sm">
-                Process exit code <Code>{run.exitCode}</Code>
               </Text>
             ) : null}
           </Stack>
@@ -613,15 +543,11 @@ function RunWorkspace({
     [reportArtifacts],
   );
   const automaticOutput = defaultRunOutput(run, reportArtifacts, reportLoads, logArtifact);
-  const [initialAutomaticOutput] = useState(automaticOutput);
-  const fallbackOutput = outputValues.includes(initialAutomaticOutput)
-    ? initialAutomaticOutput
-    : automaticOutput;
   const selectedOutput = selectedRunDetailValue(
     searchParams,
     runDetailSearchParamNames.output,
     outputValues,
-    fallbackOutput,
+    automaticOutput,
   );
   const selectedStage = selectedRunDetailValue(
     searchParams,
@@ -668,7 +594,8 @@ function RunWorkspace({
     );
   }
 
-  const lifecycleProps = { onStageChange: selectStage, run, selectedStage };
+  const canReview = principal?.role === "operator" || principal?.role === "admin";
+  const lifecycleProps = { canReview, onStageChange: selectStage, run, selectedStage };
 
   return (
     <Box className={styles.workspace}>
@@ -833,8 +760,8 @@ function RunDetails({
     <Stack gap="lg">
       <SectionHeader title="Run details" />
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
-      <RunOverview repositoryName={repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
+      <RunOverview repositoryName={repositoryName} run={run} />
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
       <ArtifactTable
         artifactRuns={artifactRuns}
@@ -868,47 +795,10 @@ function defaultRunOutput(
 }
 
 function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
-  const label = runStatusLabel(run);
-  if (
-    run.phase !== "queued" ||
-    !run.schedulingState ||
-    run.queueAgeSeconds === undefined ||
-    !run.schedulingSnapshotAt
-  ) {
-    return (
-      <Badge color={runStatusColor(run)} variant="light">
-        {label}
-      </Badge>
-    );
-  }
-
-  const explanation = runQueueExplanation(run);
-
   return (
-    <Popover position="bottom-start" shadow="md" width="min(380px, calc(100vw - 2rem))" withArrow>
-      <Popover.Target>
-        <Badge
-          aria-label={`${label}. Show queue details`}
-          color={runStatusColor(run)}
-          component="button"
-          rightSection={<IconChevronDown aria-hidden size={12} />}
-          style={{ cursor: "pointer" }}
-          type="button"
-          variant="light"
-        >
-          {label}
-        </Badge>
-      </Popover.Target>
-      <Popover.Dropdown>
-        <Stack gap="xs">
-          <Text fw={700} size="sm">
-            Queue details
-          </Text>
-          <Text size="sm">{explanation}</Text>
-          <QueueSnapshot run={run} />
-        </Stack>
-      </Popover.Dropdown>
-    </Popover>
+    <Badge color={runStatusColor(run)} variant="light">
+      {runStatusLabel(run)}
+    </Badge>
   );
 }
 
@@ -939,30 +829,6 @@ function runQueueExplanation(run: Run): ReactNode {
   }
 }
 
-function RunQueueNotice({ run }: Readonly<{ run: Run }>) {
-  if (
-    run.phase !== "queued" ||
-    !run.schedulingState ||
-    run.queueAgeSeconds === undefined ||
-    !run.schedulingSnapshotAt
-  ) {
-    return null;
-  }
-
-  const blocked = run.schedulingState !== "eligible";
-  return (
-    <Alert
-      color={blocked ? "yellow" : "blue"}
-      title={blocked ? "Run is waiting in the queue" : "Run is eligible for assignment"}
-    >
-      <Stack gap="xs">
-        <Text size="sm">{runQueueExplanation(run)}</Text>
-        <QueueSnapshot run={run} />
-      </Stack>
-    </Alert>
-  );
-}
-
 function QueueSnapshot({ run }: Readonly<{ run: Run }>) {
   if (run.queueAgeSeconds === undefined || !run.schedulingSnapshotAt) return null;
   return (
@@ -988,7 +854,7 @@ function QueueSnapshot({ run }: Readonly<{ run: Run }>) {
   );
 }
 
-function RunReviewPanel({ canReview, run }: Readonly<{ canReview: boolean; run: Run }>) {
+function RunReviewDetails({ canReview, run }: Readonly<{ canReview: boolean; run: Run }>) {
   const navigation = useNavigation();
   if (run.review.state === "not-required") return null;
 
@@ -1005,103 +871,101 @@ function RunReviewPanel({ canReview, run }: Readonly<{ canReview: boolean; run: 
       : "Rejected";
 
   return (
-    <Alert
-      color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
-      title={pending ? "Review required" : "Run review"}
-    >
-      <Stack align="flex-start" gap="sm">
-        <Group gap="xs" wrap="wrap">
-          <Badge
-            color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
-            variant="light"
-          >
-            {reviewLabel}
-          </Badge>
-          {decision ? (
-            <>
-              <Text size="sm">
-                {reviewLabel} by {decision.by.displayName}
-              </Text>
-              <Text c="dimmed">·</Text>
-              <Timestamp size="sm" value={decision.at} />
-            </>
-          ) : null}
-        </Group>
-
-        {pending && run.phase === "queued" ? (
-          <Text size="sm">
-            This Git-triggered Run will stay queued and cannot be assigned to a Controller until an
-            operator approves it.
-          </Text>
-        ) : pending ? (
-          <Text size="sm">
-            No review decision was recorded before this Run left the queued state.
-          </Text>
-        ) : run.review.state === "approved" ? (
-          <Text size="sm">
-            Approval made this Run eligible for ordinary assignment. It does not indicate that
-            execution succeeded.
-          </Text>
-        ) : (
-          <Text size="sm">Rejection canceled this Run before it was assigned.</Text>
-        )}
-
-        {run.review.comment ? (
-          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-            {run.review.comment}
-          </Text>
+    <Stack align="flex-start" gap="sm">
+      <Group gap="xs" wrap="wrap">
+        <Text fw={650} size="xs">
+          Review
+        </Text>
+        <Badge
+          color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
+          variant="light"
+        >
+          {reviewLabel}
+        </Badge>
+        {decision ? (
+          <>
+            <Text size="sm">
+              {reviewLabel} by {decision.by.displayName}
+            </Text>
+            <Text c="dimmed">·</Text>
+            <Timestamp size="sm" value={decision.at} />
+          </>
         ) : null}
+      </Group>
 
-        {canDecide ? (
-          <Form method="post" style={{ width: "100%" }}>
-            <Stack gap="sm">
-              <Textarea
-                label="Comment"
-                maxLength={4096}
-                minRows={3}
-                name="comment"
-                placeholder="Optional context for the immutable decision"
-              />
-              <Group gap="sm" justify="flex-end">
-                <Button
-                  color="red"
-                  leftSection={<IconX aria-hidden size={16} />}
-                  loading={
-                    navigation.state === "submitting" &&
-                    navigation.formData?.get("intent") === "reject-review"
-                  }
-                  name="intent"
-                  size="compact-md"
-                  type="submit"
-                  value="reject-review"
-                  variant="light"
-                >
-                  Reject
-                </Button>
-                <Button
-                  color="green"
-                  leftSection={<IconCheck aria-hidden size={16} />}
-                  loading={
-                    navigation.state === "submitting" &&
-                    navigation.formData?.get("intent") === "approve-review"
-                  }
-                  name="intent"
-                  size="compact-md"
-                  type="submit"
-                  value="approve-review"
-                >
-                  Approve
-                </Button>
-              </Group>
-            </Stack>
-          </Form>
-        ) : pending && run.phase === "queued" && !canReview ? (
-          <Text c="dimmed" size="sm">
-            Run review permission is required to decide this review.
-          </Text>
-        ) : null}
-      </Stack>
-    </Alert>
+      {pending && run.phase === "queued" ? (
+        <Text size="sm">
+          This Git-triggered Run will stay queued and cannot be assigned to a Controller until an
+          operator approves it.
+        </Text>
+      ) : pending ? (
+        <Text size="sm">
+          No review decision was recorded before this Run left the queued state.
+        </Text>
+      ) : run.review.state === "approved" ? (
+        <Text size="sm">
+          Approval made this Run eligible for ordinary assignment. It does not indicate that
+          execution succeeded.
+        </Text>
+      ) : (
+        <Text size="sm">Rejection canceled this Run before it was assigned.</Text>
+      )}
+
+      {run.review.comment ? (
+        <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+          {run.review.comment}
+        </Text>
+      ) : null}
+
+      {canDecide ? (
+        <Form method="post" style={{ width: "100%" }}>
+          <Stack gap="sm">
+            <Textarea
+              label="Comment"
+              maxLength={4096}
+              minRows={3}
+              name="comment"
+              placeholder="Optional context for the immutable decision"
+            />
+            <Group gap="sm" justify="flex-end">
+              <Button
+                color="red"
+                leftSection={<IconX aria-hidden size={16} />}
+                loading={
+                  navigation.state === "submitting" &&
+                  navigation.formData?.get("intent") === "reject-review"
+                }
+                name="intent"
+                size="compact-md"
+                type="submit"
+                value="reject-review"
+                variant="light"
+              >
+                Reject
+              </Button>
+              <Button
+                color="green"
+                leftSection={<IconCheck aria-hidden size={16} />}
+                loading={
+                  navigation.state === "submitting" &&
+                  navigation.formData?.get("intent") === "approve-review"
+                }
+                name="intent"
+                size="compact-md"
+                type="submit"
+                value="approve-review"
+              >
+                Approve
+              </Button>
+            </Group>
+          </Stack>
+        </Form>
+      ) : pending && run.phase === "queued" && !canReview ? (
+        <Text c="dimmed" size="sm">
+          Run review permission is required to decide this review.
+        </Text>
+      ) : null}
+    </Stack>
   );
 }
 
@@ -1169,10 +1033,6 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
                 <Text c="dimmed" size="xs">
                   Last seen
                 </Text>
-                <Timestamp c="dimmed" size="xs" value={run.lastObservedAt} />
-                <Text c="dimmed" size="xs">
-                  ·
-                </Text>
                 <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
               </Group>
             ) : (
@@ -1234,11 +1094,13 @@ function Fact({ children, label }: Readonly<{ children: ReactNode; label: string
 }
 
 function RunLifecycle({
+  canReview,
   onStageChange,
   run,
   selectedStage,
   showHeading = true,
 }: Readonly<{
+  canReview: boolean;
   onStageChange: (stage: Run["phase"]) => void;
   run: Run;
   selectedStage: Run["phase"];
@@ -1382,6 +1244,7 @@ function RunLifecycle({
         })}
       </Stack>
       <LifecycleStageDetail
+        canReview={canReview}
         detail={
           steps[lifecycleStages.indexOf(selectedStage)]?.detail ?? "No lifecycle detail recorded."
         }
@@ -1394,11 +1257,13 @@ function RunLifecycle({
 }
 
 function LifecycleStageDetail({
+  canReview,
   detail,
   run,
   stage,
   value,
 }: Readonly<{
+  canReview: boolean;
   detail: string;
   run: Run;
   stage: Run["phase"];
@@ -1420,18 +1285,42 @@ function LifecycleStageDetail({
         <Text c="dimmed" size="xs">
           {detail}
         </Text>
-        <LifecycleRelevantDetail run={run} stage={stage} />
+        <LifecycleRelevantDetail canReview={canReview} run={run} stage={stage} />
+        <LifecycleObservationDetail run={run} stage={stage} />
+        <LifecycleCancellationDetail run={run} stage={stage} />
       </Stack>
     </Paper>
   );
 }
 
-function LifecycleRelevantDetail({ run, stage }: Readonly<{ run: Run; stage: Run["phase"] }>) {
+function QueuedLifecycleDetails({ canReview, run }: Readonly<{ canReview: boolean; run: Run }>) {
+  const showQueue = run.phase === "queued" && run.schedulingState !== undefined;
+  const showReview = run.review.state !== "not-required";
+  if (!showQueue && !showReview) return null;
+
+  return (
+    <Stack gap="sm">
+      {showQueue ? (
+        <Stack gap={4}>
+          {run.schedulingState === "awaiting-review" && showReview ? null : (
+            <Text size="xs">{runQueueExplanation(run)}</Text>
+          )}
+          <QueueSnapshot run={run} />
+        </Stack>
+      ) : null}
+      {showReview ? <RunReviewDetails canReview={canReview} run={run} /> : null}
+    </Stack>
+  );
+}
+
+function LifecycleRelevantDetail({
+  canReview,
+  run,
+  stage,
+}: Readonly<{ canReview: boolean; run: Run; stage: Run["phase"] }>) {
   switch (stage) {
     case "queued":
-      return run.phase === "queued" && run.schedulingState ? (
-        <Text size="xs">{runQueueExplanation(run)}</Text>
-      ) : null;
+      return <QueuedLifecycleDetails canReview={canReview} run={run} />;
     case "assigned":
       return (
         <Text size="xs">
@@ -1453,13 +1342,76 @@ function LifecycleRelevantDetail({ run, stage }: Readonly<{ run: Run; stage: Run
         </Text>
       );
     case "finished":
-      return (
-        <Text size="xs">
-          {run.outcomeReason ?? `Run ${run.outcome ?? "finished"}`}
-          {run.exitCode === undefined ? "." : ` with process exit code ${run.exitCode}.`}
-        </Text>
-      );
+      return run.outcomeReason || run.outcomeMessage ? (
+        <Stack gap={4}>
+          {run.outcomeReason ? <Text size="xs">{run.outcomeReason}</Text> : null}
+          {run.outcomeMessage ? <Text size="xs">{run.outcomeMessage}</Text> : null}
+        </Stack>
+      ) : null;
   }
+}
+
+function LifecycleObservationDetail({ run, stage }: Readonly<{ run: Run; stage: Run["phase"] }>) {
+  if (run.phase === "finished" || run.observationState !== "unknown" || stage !== run.phase) {
+    return null;
+  }
+
+  return (
+    <Stack gap={4}>
+      <Group gap="xs">
+        <Badge color="yellow" size="xs" variant="light">
+          Observation unavailable
+        </Badge>
+      </Group>
+      <Text size="xs">
+        The cluster Controller is unreachable or has not reported this Run recently. Its durable
+        phase remains {run.phase} until observations resume.
+      </Text>
+    </Stack>
+  );
+}
+
+function LifecycleCancellationDetail({ run, stage }: Readonly<{ run: Run; stage: Run["phase"] }>) {
+  if (!run.cancellationRequestedAt) return null;
+
+  const relevantStage = run.phase === "finished" ? "finished" : run.phase;
+  if (stage !== relevantStage) return null;
+
+  const completed = run.cancellationState === "completed";
+  const overtaken = run.cancellationState === "overtaken";
+  const label = completed
+    ? "Cancellation completed"
+    : overtaken
+      ? "Cancellation overtaken"
+      : "Cancellation requested";
+
+  return (
+    <Stack gap={4}>
+      <Group gap="xs">
+        <Badge color={completed ? "green" : "yellow"} size="xs" variant="light">
+          {label}
+        </Badge>
+      </Group>
+      <Group gap={4} wrap="wrap">
+        <Text size="xs">
+          {overtaken
+            ? "This Run finished before the cancellation request completed. It was asked to stop"
+            : "This Run was asked to stop"}
+        </Text>
+        <RelativeTime size="xs" value={run.cancellationRequestedAt} />
+        {run.canceledBy ? (
+          <>
+            <Text size="xs">by</Text>
+            <Identity
+              avatarSize={20}
+              name={run.canceledBy.displayName}
+              nameProps={{ fw: 500, size: "xs" }}
+            />
+          </>
+        ) : null}
+      </Group>
+    </Stack>
+  );
 }
 
 function runOutcomeColor(outcome: NonNullable<Run["outcome"]>) {
@@ -1535,40 +1487,29 @@ function ParameterTable({ parameters }: Readonly<{ parameters: Run["parameters"]
   if (entries.length === 0) return null;
 
   return (
-    <Accordion className="run-parameters" defaultValue={null} order={2} variant="contained">
-      <Accordion.Item value="parameters">
-        <Accordion.Control>
-          <Group gap="sm">
-            <Text fw={650} size="lg">
-              Parameters
-            </Text>
-            <Badge variant="light">{entries.length}</Badge>
-          </Group>
-        </Accordion.Control>
-        <Accordion.Panel>
-          <Table.ScrollContainer minWidth={520} type="native">
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>Value</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {entries.map(([name, value]) => (
-                  <Table.Tr key={name}>
-                    <Table.Td>{name}</Table.Td>
-                    <Table.Td>
-                      <Code>{String(value)}</Code>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion>
+    <Stack gap="sm">
+      <Title order={2}>Parameters</Title>
+      <Table.ScrollContainer minWidth={520} type="native">
+        <Table>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Value</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {entries.map(([name, value]) => (
+              <Table.Tr key={name}>
+                <Table.Td>{name}</Table.Td>
+                <Table.Td>
+                  <Code>{String(value)}</Code>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Stack>
   );
 }
 
@@ -1661,15 +1602,13 @@ function ArtifactTable({
       {artifacts.length === 0 ? (
         <Text c="dimmed">No artifacts have been published.</Text>
       ) : (
-        <Table.ScrollContainer minWidth={760} type="native">
+        <Table.ScrollContainer minWidth={560} type="native">
           <Table>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Name</Table.Th>
                 <Table.Th>State</Table.Th>
                 <Table.Th>Size</Table.Th>
-                <Table.Th>Digest</Table.Th>
-                <Table.Th>Provenance</Table.Th>
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
@@ -1700,21 +1639,11 @@ function ArtifactTable({
                         </Text>
                       </Stack>
                     </Table.Td>
-                    <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
-                    <Table.Td>
-                      <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
-                    </Table.Td>
                     <Table.Td>
                       <Stack gap={0}>
-                        <Text>
-                          {artifact.provenance.target} · {artifact.provenance.action}
-                        </Text>
-                        <Text c="dimmed" size="xs">
-                          <CommitReference
-                            commit={artifact.provenance.commit}
-                            repositoryId={artifact.provenance.repositoryId}
-                          />{" "}
-                          · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
+                        <Text>{formatBinarySize(artifact.sizeBytes)}</Text>
+                        <Text c="dimmed" ff="monospace" size="xs">
+                          SHA-256 {artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}
                         </Text>
                       </Stack>
                     </Table.Td>

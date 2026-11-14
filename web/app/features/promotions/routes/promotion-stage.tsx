@@ -12,7 +12,13 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconExternalLink, IconGitBranch, IconInfoCircle, IconPackage } from "@tabler/icons-react";
+import {
+  IconExternalLink,
+  IconGitBranch,
+  IconInfoCircle,
+  IconListDetails,
+  IconPackage,
+} from "@tabler/icons-react";
 import { useEffect, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -20,10 +26,13 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   getPromotionStage,
   listPromotionBranchDrift,
+  listPromotions,
+  type Promotion,
   type PromotionBranchDriftRepository,
   type PromotionBranchDriftStage,
   type PromotionProjectStage,
   type PromotionStageCapability,
+  type PromotionStatus,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
@@ -33,6 +42,8 @@ import { buildStageFreightDetailRows } from "~/features/promotions/promotion-fre
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
 import { promotionProjectDetailPath } from "~/features/promotions/promotion-project-inventory-state";
+import { promotionIsActive } from "~/features/promotions/promotion-status";
+import { PromotionTable } from "~/features/promotions/promotion-table";
 import {
   StageCard,
   StageFreightDetails,
@@ -50,12 +61,20 @@ import {
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { problemDetail } from "~/shared/form-data";
-import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
 import { pageTitle } from "~/shared/page-title";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/promotion-stage";
+
+const activePromotionStatuses = [
+  "creating",
+  "preparing",
+  "pending",
+  "approved",
+] as const satisfies readonly PromotionStatus[];
+const activePromotionPageSize = 100;
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.detail?.stage.name ?? "Stage") }];
@@ -65,10 +84,48 @@ export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [result, principal] = await Promise.all([
+  const [result, principal, activePromotionsByStatus] = await Promise.all([
     getPromotionStage({ client, path: { stageId: params.stageId } }),
     getProductPrincipal(context),
+    Promise.all(
+      activePromotionStatuses.map(async (status) => {
+        const promotions: Promotion[] = [];
+        let offset = 0;
+
+        while (true) {
+          const promotionsResult = await listPromotions({
+            client,
+            query: {
+              limit: activePromotionPageSize,
+              offset,
+              stageId: params.stageId,
+              status,
+            },
+          });
+          if (!promotionsResult.data) return undefined;
+
+          promotions.push(...promotionsResult.data.items);
+          offset += promotionsResult.data.items.length;
+          if (offset >= promotionsResult.data.total || promotionsResult.data.items.length === 0) {
+            return promotions;
+          }
+        }
+      }),
+    ),
   ]);
+  const activePromotionsAvailable = activePromotionsByStatus.every(
+    (promotions) => promotions !== undefined,
+  );
+  const activePromotionsByID = new Map<string, Promotion>();
+  for (const promotions of activePromotionsByStatus) {
+    for (const promotion of promotions ?? []) activePromotionsByID.set(promotion.id, promotion);
+  }
+  const activePromotions = [...activePromotionsByID.values()]
+    .filter(promotionIsActive)
+    .toSorted(
+      (left, right) =>
+        right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id),
+    );
   let branchDrift: BranchDriftSummary | undefined;
   let branchDriftError: string | undefined;
 
@@ -102,6 +159,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   }
 
   return {
+    activePromotions,
+    activePromotionsAvailable,
     branchDrift,
     branchDriftError,
     detail: result.data,
@@ -117,7 +176,7 @@ export async function action({ context, request }: Route.ActionArgs) {
 }
 
 export default function PromotionStage({ actionData, loaderData }: Route.ComponentProps) {
-  useActivityRefresh(true, 30_000);
+  useActivityRefresh(true, loaderData.activePromotions.length > 0 ? 3_000 : 30_000);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const detail = loaderData.detail;
@@ -182,29 +241,24 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
     <Stack gap="lg">
       <PageHeader
         actions={
-          <Group gap="sm">
-            <Button
-              component={Link}
-              size="compact-md"
-              to={`/promotions?stageId=${encodeURIComponent(stage.id)}`}
-            >
-              View Promotions
-            </Button>
-            {stage.kargoUrl ? <KargoButton url={stage.kargoUrl} /> : null}
-            {stage.argoCdUrl ? (
-              <Button
-                component="a"
-                href={stage.argoCdUrl}
-                leftSection={<IconExternalLink aria-hidden size={16} />}
-                rel="noreferrer"
-                size="compact-md"
-                target="_blank"
-                variant="light"
-              >
-                Open in Argo CD
-              </Button>
-            ) : null}
-          </Group>
+          stage.kargoUrl || stage.argoCdUrl ? (
+            <Group gap="sm">
+              {stage.kargoUrl ? <KargoButton url={stage.kargoUrl} /> : null}
+              {stage.argoCdUrl ? (
+                <Button
+                  component="a"
+                  href={stage.argoCdUrl}
+                  leftSection={<IconExternalLink aria-hidden size={16} />}
+                  rel="noreferrer"
+                  size="compact-md"
+                  target="_blank"
+                  variant="light"
+                >
+                  Open in Argo CD
+                </Button>
+              ) : null}
+            </Group>
+          ) : undefined
         }
         back={<PageBackLink label="Back to Stages" to="/promotion-stages" />}
         badges={<StageHealthBadge stage={stage} />}
@@ -271,13 +325,23 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
 
         <Tabs.Panel pt="lg" value="freight">
           <Stack gap="lg">
-            <StageCard
-              canWrite={canWrite}
-              onEditPolicy={editPolicy}
-              showFreightDetails={false}
-              showStageHeader={false}
-              stage={stage}
+            <ActivePromotions
+              available={loaderData.activePromotionsAvailable}
+              promotions={loaderData.activePromotions}
+              stageId={stage.id}
             />
+            <Stack gap="md">
+              <Title order={2} size="h3">
+                Current Freight
+              </Title>
+              <StageCard
+                canWrite={canWrite}
+                onEditPolicy={editPolicy}
+                showFreightDetails={false}
+                showStageHeader={false}
+                stage={stage}
+              />
+            </Stack>
             <Stack gap="md">
               <Title order={2} size="h3">
                 All Freight
@@ -318,6 +382,40 @@ type BranchDriftSummary = {
   repository: PromotionBranchDriftRepository;
   stage: PromotionBranchDriftStage;
 };
+
+function ActivePromotions({
+  available,
+  promotions,
+  stageId,
+}: Readonly<{ available: boolean; promotions: Promotion[]; stageId: string }>) {
+  return (
+    <Stack gap="md">
+      <SectionHeader
+        actions={
+          <Button
+            component={Link}
+            leftSection={<IconListDetails aria-hidden size={16} />}
+            size="compact-md"
+            to={`/promotions?stageId=${encodeURIComponent(stageId)}`}
+            variant="light"
+          >
+            View all promotions
+          </Button>
+        }
+        title="Active promotions"
+      />
+      {!available ? (
+        <Alert color="red" title="Promotions unavailable">
+          Active Promotions could not be loaded.
+        </Alert>
+      ) : promotions.length === 0 ? (
+        <Text c="dimmed">No active Promotions for this Stage.</Text>
+      ) : (
+        <PromotionTable promotions={promotions} />
+      )}
+    </Stack>
+  );
+}
 
 function BranchDriftDetails({
   canWrite,

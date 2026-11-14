@@ -428,18 +428,6 @@ a {
   box-shadow: 0 1px 2px var(--slipramp-shadow);
 }
 
-.target-action-row {
-  padding-inline-end: var(--mantine-spacing-md);
-}
-
-.target-actions .mantine-Accordion-control {
-  padding-block: var(--mantine-spacing-md);
-}
-
-.target-actions .mantine-Accordion-panel {
-  padding: 0 var(--mantine-spacing-lg) var(--mantine-spacing-lg);
-}
-
 .context-value {
   overflow-wrap: anywhere;
 }
@@ -548,12 +536,6 @@ a {
   max-height: none;
 }
 
-.run-parameters .mantine-Accordion-item {
-  overflow: hidden;
-  border: 1px solid var(--slipramp-border);
-  box-shadow: 0 1px 2px var(--slipramp-shadow);
-}
-
 .lifecycle-timeline .mantine-Timeline-itemBody {
   padding: 0.45rem 0.65rem;
   margin-bottom: 0.25rem;
@@ -585,13 +567,12 @@ a {
     display: none;
   }
 
-  .target-action-row {
-    padding-inline-end: 0;
+  .target-action-buttons {
+    width: 100%;
   }
 
-  .target-action-button {
-    width: calc(100% - var(--mantine-spacing-md) - var(--mantine-spacing-md));
-    margin: 0 var(--mantine-spacing-md) var(--mantine-spacing-md);
+  .target-action-buttons > * {
+    flex: 1;
   }
 }
 

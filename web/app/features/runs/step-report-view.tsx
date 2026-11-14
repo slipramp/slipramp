@@ -1,12 +1,12 @@
-import { Anchor, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { Anchor, Badge, Box, Group, Paper, Stack, Table, Text } from "@mantine/core";
 
-import type { Artifact, StepReport, StepReportStep } from "~/api/generated";
+import type { Artifact, StepReport } from "~/api/generated";
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
 import type { ReportLoad } from "~/features/runs/run-reports";
 import {
   formatStepDuration,
+  flattenStepReportSteps,
   stepDurationPercentage,
-  stepReportCountBadges,
   stepReportOutcomeColor,
   stepReportOutcomeLabel,
   type StepReportOutcomeValue,
@@ -29,45 +29,26 @@ export function StepReportView({
 
   const detail =
     load.state === "available" && load.detail.kind === "step-report" ? load.detail : undefined;
-  const badges = stepReportCountBadges(report.summary.steps);
   const content = (
     <Stack gap="md">
       <SectionHeader
         actions={
-          <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
-            <Badge color="gray" variant="light">
-              {report.tool} · {report.mode}
-            </Badge>
-            {canReadContents &&
-            artifact.state === "sealed" &&
-            artifact.retentionState === "retained" ? (
-              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                Download source JSON
-              </Anchor>
-            ) : null}
-          </Group>
+          canReadContents &&
+          artifact.state === "sealed" &&
+          artifact.retentionState === "retained" ? (
+            <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+              Download source JSON
+            </Anchor>
+          ) : null
         }
         title={detail?.title ?? "Step report"}
       />
 
-      <Stack gap="xs">
-        <Group aria-label="Step report summary" component="section" gap="xs" wrap="wrap">
-          <OutcomeBadge outcome={report.summary.outcome} />
-          <Badge color="blue" variant="light">
-            {formatStepDuration(report.summary.durationMs)} total
-          </Badge>
-          {badges.map((badge) => (
-            <Badge color={badge.color} key={badge.outcome} variant="light">
-              {badge.count.toLocaleString()} {badge.label.toLocaleLowerCase()}
-            </Badge>
-          ))}
-        </Group>
-        {report.summary.steps.total === 0 ? (
-          <Text c="dimmed" size="sm">
-            No leaf steps were reported.
-          </Text>
-        ) : null}
-      </Stack>
+      {report.summary.steps.total === 0 ? (
+        <Text c="dimmed" size="sm">
+          No leaf steps were reported.
+        </Text>
+      ) : null}
 
       <ReportDetailNotice state={load.state} />
       {detail ? <StepReportDetail report={detail} /> : null}
@@ -92,53 +73,53 @@ function StepReportDetail({ report }: Readonly<{ report: StepReport }>) {
     );
   }
 
-  return <StepList steps={report.steps} />;
+  return <StepTable report={report} />;
 }
 
-function StepList({
-  steps,
-  nested = false,
-}: Readonly<{ steps: StepReportStep[]; nested?: boolean }>) {
-  const maximumDurationMs = Math.max(...steps.map((step) => step.durationMs));
+function StepTable({ report }: Readonly<{ report: StepReport }>) {
+  const rows = flattenStepReportSteps(report.steps);
+  const maximumDurationMs = Math.max(...rows.map(({ step }) => step.durationMs));
 
   return (
-    <Stack
-      component="ol"
-      gap={nested ? "xs" : "sm"}
-      m={0}
-      pl={nested ? "md" : 0}
-      style={{ listStyle: "none" }}
-    >
-      {steps.map((step) => (
-        <Box component="li" key={step.id}>
-          <Paper p={nested ? "xs" : "sm"} withBorder>
-            <Group align="flex-start" justify="space-between" wrap="nowrap">
-              <Group gap="xs" wrap="wrap">
-                <Text fw={nested ? 550 : 650} size={nested ? "sm" : undefined}>
+    <Table.ScrollContainer minWidth={620} type="native">
+      <Table aria-label="Step report" highlightOnHover striped withRowBorders>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Step</Table.Th>
+            <Table.Th miw={120}>Outcome</Table.Th>
+            <Table.Th miw={190} ta="right">
+              Duration
+            </Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rows.map(({ depth, key, step }) => (
+            <Table.Tr key={key}>
+              <Table.Th scope="row">
+                <Text fw={depth === 0 ? 650 : 500} pl={depth * 20} size="sm" tt="none">
                   {step.name}
                 </Text>
+              </Table.Th>
+              <Table.Td>
                 <OutcomeBadge outcome={step.outcome} />
-              </Group>
-              <Text c="dimmed" ff="monospace" size="sm">
-                {formatStepDuration(step.durationMs)}
-              </Text>
-            </Group>
-
-            <DurationBar
-              durationMs={step.durationMs}
-              maximumDurationMs={maximumDurationMs}
-              outcome={step.outcome}
-            />
-
-            {step.steps && step.steps.length > 0 ? (
-              <Box mt="sm">
-                <StepList nested steps={step.steps} />
-              </Box>
-            ) : null}
-          </Paper>
-        </Box>
-      ))}
-    </Stack>
+              </Table.Td>
+              <Table.Td>
+                <Group gap="sm" justify="flex-end" wrap="nowrap">
+                  <DurationBar
+                    durationMs={step.durationMs}
+                    maximumDurationMs={maximumDurationMs}
+                    outcome={step.outcome}
+                  />
+                  <Text c="dimmed" ff="monospace" miw={64} size="sm" ta="right">
+                    {formatStepDuration(step.durationMs)}
+                  </Text>
+                </Group>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 
@@ -167,8 +148,8 @@ function DurationBar({
       aria-hidden
       bg="var(--mantine-color-default-hover)"
       h={4}
-      mt={8}
-      style={{ borderRadius: 2 }}
+      miw={72}
+      style={{ borderRadius: 2, flex: 1 }}
     >
       <Box
         bg={`var(--mantine-color-${stepReportOutcomeColor(outcome)}-6)`}

@@ -34,7 +34,6 @@ export default [
   ]),
   route("targets/:targetId", "features/targets/routes/target.tsx", [
     index("features/targets/routes/target-overview.tsx"),
-    route("runs", "features/targets/routes/target-runs.tsx"),
     route("defaults", "features/targets/routes/target-defaults.tsx"),
     route("definition", "features/targets/routes/target-definition.tsx"),
   ]),

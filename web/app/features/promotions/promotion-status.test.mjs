@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
+  promotionIsActive,
   promotionOverallStatus,
   promotionReviewStatus,
 } from "./promotion-status.ts";
@@ -14,6 +15,31 @@ const base = {
   source: "slipramp",
   status: "approved",
 };
+
+test("active Promotions exclude terminal review, delivery, and Kargo outcomes", () => {
+  assert.equal(promotionIsActive({ ...base, status: "creating" }), true);
+  assert.equal(promotionIsActive({ ...base, status: "preparing" }), true);
+  assert.equal(promotionIsActive({ ...base, status: "pending" }), true);
+  assert.equal(promotionIsActive(base), true);
+  assert.equal(
+    promotionIsActive({
+      ...base,
+      creationDispatch: { attemptCount: 1, phase: "failed" },
+    }),
+    false,
+  );
+  assert.equal(
+    promotionIsActive({
+      ...base,
+      creationDispatch: { attemptCount: 1, phase: "delivered" },
+      kargoOutcome: { observedAt: "2026-11-11T12:00:00Z", phase: "Succeeded" },
+    }),
+    false,
+  );
+  assert.equal(promotionIsActive({ ...base, status: "rejected" }), false);
+  assert.equal(promotionIsActive({ ...base, status: "expired" }), false);
+  assert.equal(promotionIsActive({ ...base, status: "error" }), false);
+});
 
 test("overall Promotion status follows the operator-visible workflow", () => {
   const cases = [
