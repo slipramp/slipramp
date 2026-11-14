@@ -336,6 +336,67 @@ func TestProjectServiceListsCompletePipelinesByName(t *testing.T) {
 	}
 }
 
+func TestProjectServiceFiltersStagesAndCompletePipelinesByNewerFreight(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, time.November, 12, 12, 0, 0, 0, time.UTC)
+	currentAt := observedAt.Add(-2 * time.Hour)
+	olderAt := currentAt.Add(-time.Hour)
+	newerAt := currentAt.Add(time.Hour)
+
+	available := projectTestStage("prod", "colo", "core", "app-dev", observedAt)
+	available.Application = "app"
+	available.RequestedFreight = []promotion.FreightRequest{{Origin: "Warehouse/app", Direct: true}}
+	available.Freight.Items = []promotion.FreightItem{{
+		Origin: "Warehouse/app", Name: "current", DiscoveredAt: &currentAt,
+	}}
+	available.CandidateFreight.Items = []promotion.FreightItem{
+		{Origin: "Warehouse/app", Name: "rollback", DiscoveredAt: &olderAt},
+		{Origin: "Warehouse/app", Name: "release", DiscoveredAt: &newerAt},
+	}
+
+	downstream := projectTestStage("prod", "colo", "core", "app-prod", observedAt)
+	downstream.Application = "app"
+	downstream.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/app", SourceStages: []string{available.Name},
+	}}
+
+	rollbackOnly := projectTestStage("prod", "colo", "core", "legacy", observedAt)
+	rollbackOnly.Application = "legacy"
+	rollbackOnly.RequestedFreight = []promotion.FreightRequest{{Origin: "Warehouse/legacy", Direct: true}}
+	rollbackOnly.Freight.Items = []promotion.FreightItem{{
+		Origin: "Warehouse/legacy", Name: "current", DiscoveredAt: &currentAt,
+	}}
+	rollbackOnly.CandidateFreight.Items = []promotion.FreightItem{{
+		Origin: "Warehouse/legacy", Name: "rollback", DiscoveredAt: &olderAt,
+	}}
+
+	service := NewProjectService(
+		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		&projectionTestStore{stages: []promotion.Stage{rollbackOnly, downstream, available}},
+	)
+	service.now = func() time.Time { return observedAt }
+
+	stages, err := service.ListStages(t.Context(), StageListFilter{
+		NewerFreight: true, Limit: promotion.DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("ListStages() error = %v", err)
+	}
+	if stages.Total != 1 || len(stages.Items) != 1 || stages.Items[0].Stage.Stage.ID != available.ID {
+		t.Errorf("Stages with newer Freight = %#v", stages)
+	}
+
+	pipelines, err := service.ListPipelines(t.Context(), PipelineListFilter{NewerFreight: true, Limit: 1})
+	if err != nil {
+		t.Fatalf("ListPipelines() error = %v", err)
+	}
+	if pipelines.Total != 1 || len(pipelines.Items) != 1 || pipelines.Items[0].Name != "app" ||
+		len(pipelines.Items[0].Stages) != 2 {
+		t.Errorf("complete pipelines with newer Freight = %#v", pipelines)
+	}
+}
+
 func TestProjectServiceSummarizesAndFiltersFreightAlignmentBeforePagination(t *testing.T) {
 	t.Parallel()
 

@@ -11,6 +11,7 @@ import {
   freightNames,
   freightOriginLabel,
   otherFreightCandidates,
+  stageHasNewerFreight,
 } from "./promotion-freight.ts";
 
 const stage = (id, name, environment, version) => ({
@@ -142,6 +143,37 @@ test("other Freight excludes every active item from a multi-Freight Stage", () =
     otherFreightCandidates([activeApp, activeConfig], candidates).map(({ freight }) => freight),
     [nextApp],
   );
+});
+
+test("newer Freight uses ready Kargo discovery order instead of version strings", () => {
+  const current = {
+    artifacts: [{ kind: "image", version: "1.2.0" }],
+    discoveredAt: "2026-10-21T10:00:00Z",
+    name: "current",
+    origin: "Warehouse/app",
+  };
+  const candidate = {
+    artifacts: [{ kind: "image", version: "release" }],
+    discoveredAt: "2026-10-21T11:00:00Z",
+    name: "candidate",
+    origin: "Warehouse/app",
+  };
+  const value = {
+    capabilities: { promotion: { status: "ready" } },
+    freight: { items: [current] },
+    requestedFreight: [{ candidates: [{ freight: candidate, readiness: "ready" }] }],
+  };
+
+  assert.equal(stageHasNewerFreight(value), true);
+  candidate.discoveredAt = "2026-10-21T09:00:00Z";
+  assert.equal(stageHasNewerFreight(value), false);
+  candidate.discoveredAt = undefined;
+  assert.equal(stageHasNewerFreight(value), false);
+
+  value.freight.items = [];
+  assert.equal(stageHasNewerFreight(value), true);
+  value.capabilities.promotion.status = "unavailable";
+  assert.equal(stageHasNewerFreight(value), false);
 });
 
 test("Freight alignment presentation uses the exact relationship", () => {

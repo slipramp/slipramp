@@ -31,6 +31,7 @@ export async function loadPromotionPipelineInventory(
         freightAlignment: alignment,
         integration,
         limit: promotionPipelineInventoryPageSize,
+        newerFreight: attention === "newer-freight" || undefined,
         offset: (page - 1) * promotionPipelineInventoryPageSize,
         pendingReview: attention === "pending-review" || undefined,
         project,

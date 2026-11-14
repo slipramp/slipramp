@@ -58,6 +58,23 @@ export function otherFreightCandidates(
   );
 }
 
+export function stageHasNewerFreight(stage: PromotionProjectStage) {
+  if (stage.capabilities.promotion.status !== "ready") return false;
+
+  const currentByOrigin = new Map(stage.freight.items.map((item) => [item.origin, item]));
+  return stage.requestedFreight.some((request) =>
+    request.candidates.some((candidate) => {
+      if (candidate.readiness !== "ready") return false;
+
+      const current = currentByOrigin.get(candidate.freight.origin);
+      if (!current) return true;
+      if (!current.discoveredAt || !candidate.freight.discoveredAt) return false;
+
+      return Date.parse(candidate.freight.discoveredAt) > Date.parse(current.discoveredAt);
+    }),
+  );
+}
+
 export function freightAlignmentForSource(
   stage: PromotionProjectStage,
   origin: string,

@@ -48,6 +48,10 @@ PromotionFreightItem:
       type: string
       minLength: 1
       maxLength: 253
+    discoveredAt:
+      type: string
+      format: date-time
+      description: Kargo discovery time when the Freight resource remains observable.
     artifacts:
       type: array
       items:
@@ -277,7 +281,9 @@ PromotionStageObservation:
       $ref: "#/PromotionFreight"
     candidateFreight:
       $ref: "#/PromotionFreight"
-      description: Latest observed Freight for each requested origin, including Kargo eligibility evidence.
+      description: >-
+        Observed Freight for each requested origin ordered newest-first by Kargo discovery time,
+        including Kargo eligibility evidence.
     autoPromotionEnabled:
       type: boolean
       description: Effective Kargo auto-promotion state for this Stage.

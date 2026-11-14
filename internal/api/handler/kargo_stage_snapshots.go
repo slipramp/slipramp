@@ -182,7 +182,7 @@ func promotionFreightFromRequest(value api.PromotionFreight) (promotion.Freight,
 			}
 		}
 		items = append(items, promotion.FreightItem{
-			Origin: item.Origin, Name: item.Name, Artifacts: artifacts,
+			Origin: item.Origin, Name: item.Name, DiscoveredAt: item.DiscoveredAt, Artifacts: artifacts,
 			ApprovedFor: approvedFor, VerifiedIn: verifiedIn, CurrentlyIn: currentlyIn,
 			EvidenceObserved: item.ApprovedFor != nil && item.VerifiedIn != nil && item.CurrentlyIn != nil,
 		})

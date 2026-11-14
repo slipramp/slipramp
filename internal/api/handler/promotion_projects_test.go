@@ -214,7 +214,7 @@ func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotion-stages?integration=prod&cluster=colo&project=kargo-core&application=api&"+
-			"freightAlignment=different&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
+			"freightAlignment=different&newerFreight=true&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -228,7 +228,8 @@ func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.
 	filter := projects.stageFilter
 	if filter.Integration != "prod" || filter.Cluster != "colo" || filter.Project != "kargo-core" ||
 		filter.Application != "api" || filter.FreightAlignment != projection.FreightAlignmentDifferent ||
-		!filter.Unhealthy || !filter.Stale || !filter.PendingReview || filter.Limit != 10 || filter.Offset != 2 {
+		!filter.NewerFreight || !filter.Unhealthy || !filter.Stale || !filter.PendingReview ||
+		filter.Limit != 10 || filter.Offset != 2 {
 		t.Errorf("Stage filter = %#v", filter)
 	}
 	for _, expected := range []string{
@@ -292,7 +293,7 @@ func TestListPromotionPipelinesUsesPipelineFiltersAndReturnsCompleteGraphs(t *te
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotion-pipelines?integration=prod&cluster=colo&project=kargo-core&"+
-			"freightAlignment=different&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
+			"freightAlignment=different&newerFreight=true&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -306,7 +307,7 @@ func TestListPromotionPipelinesUsesPipelineFiltersAndReturnsCompleteGraphs(t *te
 	filter := projects.pipelineFilter
 	if filter.Integration != "prod" || filter.Cluster != "colo" || filter.Project != "kargo-core" ||
 		filter.FreightAlignment != projection.FreightAlignmentDifferent || !filter.Unhealthy || !filter.Stale ||
-		!filter.PendingReview || filter.Limit != 10 || filter.Offset != 2 {
+		!filter.NewerFreight || !filter.PendingReview || filter.Limit != 10 || filter.Offset != 2 {
 		t.Errorf("Pipeline filter = %#v", filter)
 	}
 	for _, expected := range []string{

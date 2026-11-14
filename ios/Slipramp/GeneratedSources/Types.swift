@@ -4970,6 +4970,10 @@ internal enum Components {
             internal var origin: Swift.String
             /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/name`.
             internal var name: Swift.String
+            /// Kargo discovery time when the Freight resource remains observable.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/discoveredAt`.
+            internal var discoveredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/artifacts`.
             internal var artifacts: [Components.Schemas.PromotionFreightArtifact]
             /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/approvedFor`.
@@ -4983,6 +4987,7 @@ internal enum Components {
             /// - Parameters:
             ///   - origin:
             ///   - name:
+            ///   - discoveredAt: Kargo discovery time when the Freight resource remains observable.
             ///   - artifacts:
             ///   - approvedFor:
             ///   - verifiedIn:
@@ -4990,6 +4995,7 @@ internal enum Components {
             internal init(
                 origin: Swift.String,
                 name: Swift.String,
+                discoveredAt: Foundation.Date? = nil,
                 artifacts: [Components.Schemas.PromotionFreightArtifact],
                 approvedFor: [Swift.String]? = nil,
                 verifiedIn: [Components.Schemas.PromotionFreightVerification]? = nil,
@@ -4997,6 +5003,7 @@ internal enum Components {
             ) {
                 self.origin = origin
                 self.name = name
+                self.discoveredAt = discoveredAt
                 self.artifacts = artifacts
                 self.approvedFor = approvedFor
                 self.verifiedIn = verifiedIn
@@ -5005,6 +5012,7 @@ internal enum Components {
             internal enum CodingKeys: String, CodingKey {
                 case origin
                 case name
+                case discoveredAt
                 case artifacts
                 case approvedFor
                 case verifiedIn
@@ -5019,6 +5027,10 @@ internal enum Components {
                 self.name = try container.decode(
                     Swift.String.self,
                     forKey: .name
+                )
+                self.discoveredAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .discoveredAt
                 )
                 self.artifacts = try container.decode(
                     [Components.Schemas.PromotionFreightArtifact].self,
@@ -5039,6 +5051,7 @@ internal enum Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "origin",
                     "name",
+                    "discoveredAt",
                     "artifacts",
                     "approvedFor",
                     "verifiedIn",

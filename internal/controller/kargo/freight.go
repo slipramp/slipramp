@@ -120,6 +120,7 @@ func normalizeKargoFreight(item *unstructured.Unstructured) (observedKargoFreigh
 	}
 
 	freight := raw.item(kind+"/"+name, item.GetName())
+	freight.DiscoveredAt = new(discoveredAt)
 	approvedFor := make([]string, 0, len(raw.Status.ApprovedFor))
 	for stage := range raw.Status.ApprovedFor {
 		approvedFor = append(approvedFor, stage)
@@ -154,14 +155,24 @@ func normalizeKargoFreight(item *unstructured.Unstructured) (observedKargoFreigh
 	}, nil
 }
 
-func currentKargoFreight(stage kargoStage) api.PromotionFreight {
+func currentKargoFreight(
+	stage kargoStage,
+	candidateFreight map[string][]api.PromotionFreightItem,
+) api.PromotionFreight {
 	summary := api.PromotionFreight{Items: []api.PromotionFreightItem{}}
 	if len(stage.Status.FreightHistory) == 0 {
 		return summary
 	}
 
 	for origin, reference := range stage.Status.FreightHistory[0].Items {
-		summary.Items = append(summary.Items, reference.item(origin, reference.Name))
+		freight := reference.item(origin, reference.Name)
+		for _, candidate := range candidateFreight[origin] {
+			if candidate.Name == reference.Name {
+				freight.DiscoveredAt = candidate.DiscoveredAt
+				break
+			}
+		}
+		summary.Items = append(summary.Items, freight)
 	}
 	sort.Slice(summary.Items, func(i, j int) bool { return summary.Items[i].Origin < summary.Items[j].Origin })
 

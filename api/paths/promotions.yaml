@@ -316,6 +316,13 @@ promotionPipelines:
         schema:
           $ref: ../components/promotions.yaml#/PromotionFreightAlignmentStatus
         description: Select pipelines containing at least one comparison in this Freight alignment state.
+      - name: newerFreight
+        in: query
+        schema:
+          type: boolean
+        description: >-
+          Select pipelines containing at least one Stage with newer eligible Freight, or eligible
+          initial Freight when the Stage has none current.
       - name: unhealthy
         in: query
         schema:
@@ -385,6 +392,13 @@ promotionStages:
         schema:
           $ref: ../components/promotions.yaml#/PromotionFreightAlignmentStatus
         description: Select Stages containing at least one comparison in this Freight alignment state.
+      - name: newerFreight
+        in: query
+        schema:
+          type: boolean
+        description: >-
+          Select Stages with eligible Freight discovered after their current Freight, or eligible
+          initial Freight when none is current.
       - name: unhealthy
         in: query
         schema:

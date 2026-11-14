@@ -43,7 +43,8 @@ func TestReplaceKargoStageSnapshot(t *testing.T) {
 			    "autoPromotionEnabled":false,"controlFlow":false,
 			    "requestedFreight":[{"origin":"Warehouse/app","direct":false,"sourceStages":["test"],
 			       "availabilityStrategy":"OneOf","requiredSoakTime":%q}],
-			    "candidateFreight":{"items":[{"origin":"Warehouse/app","name":"candidate","artifacts":[],
+			    "candidateFreight":{"items":[{"origin":"Warehouse/app","name":"candidate",
+			       "discoveredAt":"2026-10-21T11:00:00Z","artifacts":[],
 			       "verifiedIn":[{"stage":"test","longestCompletedSoak":%q}]}]}
 			  }]
 			}`, test.required, test.completed)
@@ -71,6 +72,10 @@ func TestReplaceKargoStageSnapshot(t *testing.T) {
 			}
 			if evidence := stage.CandidateFreight.Items[0].VerifiedIn; len(evidence) != 1 || evidence[0].LongestCompletedSoak != 45*time.Minute {
 				t.Errorf("Freight verification = %#v", evidence)
+			}
+			if discoveredAt := stage.CandidateFreight.Items[0].DiscoveredAt; discoveredAt == nil ||
+				!discoveredAt.Equal(time.Date(2026, time.October, 21, 11, 0, 0, 0, time.UTC)) {
+				t.Errorf("Freight discovery time = %v", discoveredAt)
 			}
 		})
 	}

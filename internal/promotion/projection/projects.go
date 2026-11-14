@@ -69,6 +69,7 @@ type StageListFilter struct {
 	Project          string
 	Application      string
 	FreightAlignment FreightAlignmentStatus
+	NewerFreight     bool
 	Unhealthy        bool
 	Stale            bool
 	PendingReview    bool
@@ -88,6 +89,7 @@ type PipelineListFilter struct {
 	Cluster          string
 	Project          string
 	FreightAlignment FreightAlignmentStatus
+	NewerFreight     bool
 	Unhealthy        bool
 	Stale            bool
 	PendingReview    bool
@@ -608,6 +610,9 @@ func stageMatchesPipelineScope(stage promotion.Stage, filter PipelineListFilter)
 }
 
 func projectStageMatchesListFilter(stage ProjectStage, filter StageListFilter) bool {
+	if filter.NewerFreight && !stageHasNewerFreight(stage) {
+		return false
+	}
 	if filter.Unhealthy && (stage.ObservationStale || !stageNonReady(stage.Stage)) {
 		return false
 	}
@@ -628,6 +633,9 @@ func projectStageMatchesListFilter(stage ProjectStage, filter StageListFilter) b
 }
 
 func pipelineMatchesListFilter(pipeline Pipeline, filter PipelineListFilter) bool {
+	if filter.NewerFreight && !slices.ContainsFunc(pipeline.Stages, stageHasNewerFreight) {
+		return false
+	}
 	if filter.Unhealthy && !slices.ContainsFunc(pipeline.Stages, func(stage ProjectStage) bool {
 		return !stage.ObservationStale && stageNonReady(stage.Stage)
 	}) {

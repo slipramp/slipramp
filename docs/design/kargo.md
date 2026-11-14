@@ -320,6 +320,15 @@ no Slipramp annotations. A stale Stage remains visible but non-promotable until
 a current complete snapshot arrives. Control-flow Stages remain visible but
 non-promotable.
 
+Top-level Stage and pipeline views can select newer eligible Freight. A fresh,
+promotable Stage matches when eligible Freight exists for an origin with no
+current Freight, or when Kargo discovered the eligible Freight after the current
+Freight for that origin. Slipramp preserves Kargo discovery time and does not
+infer ordering from image tags, chart versions, Git revisions, or Freight names.
+Missing discovery evidence does not match. A pipeline matches when any Stage
+matches and remains a complete graph in the response. Kargo auto-promotion does
+not affect this read-time signal.
+
 Project and Promotion reads do not query Kargo or Argo CD. Branch drift uses
 cached read-only Git evidence. Project and branch-drift responses report the
 same Stage capabilities. Both views evaluate review and branch drift against

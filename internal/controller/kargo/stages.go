@@ -118,7 +118,7 @@ func normalizeKargoStage(
 		TargetBranch:         optionalNonemptyString(strings.TrimSpace(annotations[promotionTargetBranchAnnotation])),
 		SourcePaths:          sourcePaths,
 		RequestedFreight:     requestedFreight,
-		Freight:              currentKargoFreight(raw),
+		Freight:              currentKargoFreight(raw, candidateFreight),
 		CandidateFreight:     candidates,
 		AutoPromotionEnabled: raw.Status.AutoPromotionEnabled,
 		ControlFlow:          raw.Spec.PromotionTemplate == nil || len(raw.Spec.PromotionTemplate.Spec.Steps) == 0,

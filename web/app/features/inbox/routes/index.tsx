@@ -22,6 +22,7 @@ import {
   IconArrowsDiff,
   IconGitBranch,
   IconGitPullRequest,
+  IconPackageImport,
   IconServerOff,
   IconTargetArrow,
   type TablerIcon,
@@ -36,6 +37,7 @@ import {
   getReadiness,
   listPromotionBranchDrift,
   listPromotionProjects,
+  listPromotionStages,
   type Inbox as InboxProjection,
   type InboxItem,
   type ReadinessResponse,
@@ -58,12 +60,14 @@ export function meta() {
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [inboxResult, projectResult, branchDriftResult, readinessResult] = await Promise.all([
-    getInbox({ client }),
-    listPromotionProjects({ client, query: { limit: 1 } }),
-    listPromotionBranchDrift({ client, query: { limit: 1, status: "drifted" } }),
-    getReadiness({ client }),
-  ]);
+  const [inboxResult, projectResult, branchDriftResult, newerFreightResult, readinessResult] =
+    await Promise.all([
+      getInbox({ client }),
+      listPromotionProjects({ client, query: { limit: 1 } }),
+      listPromotionBranchDrift({ client, query: { limit: 1, status: "drifted" } }),
+      listPromotionStages({ client, query: { limit: 1, newerFreight: true } }),
+      getReadiness({ client }),
+    ]);
 
   return {
     inbox: inboxResult.data,
@@ -82,11 +86,14 @@ export async function loader({ context, request }: Route.LoaderArgs) {
           unhealthy: projectResult.data.summary.unhealthyStageCount,
         }
       : undefined,
-    projectTotal: projectResult.data?.total,
     branchDriftError: branchDriftResult.error
       ? problemDetail(branchDriftResult.error, "Kargo Stage branch drift could not be loaded.")
       : undefined,
     branchDriftTotal: branchDriftResult.data?.total,
+    newerFreightError: newerFreightResult.error
+      ? problemDetail(newerFreightResult.error, "Newer Kargo Freight could not be loaded.")
+      : undefined,
+    newerFreightTotal: newerFreightResult.data?.total,
     readiness: asReadinessResponse(readinessResult.data ?? readinessResult.error),
   };
 }
@@ -169,8 +176,9 @@ export default function Inbox({ loaderData }: Route.ComponentProps) {
               branchDriftError={loaderData.branchDriftError}
               branchDriftTotal={loaderData.branchDriftTotal}
               error={loaderData.projectError}
+              newerFreightError={loaderData.newerFreightError}
+              newerFreightTotal={loaderData.newerFreightTotal}
               summary={loaderData.projectSummary}
-              total={loaderData.projectTotal}
             />
           </Stack>
         </Grid.Col>
@@ -403,12 +411,15 @@ function KargoStatus({
   branchDriftError,
   branchDriftTotal,
   error,
+  newerFreightError,
+  newerFreightTotal,
   summary,
-  total,
 }: Readonly<{
   branchDriftError?: string;
   branchDriftTotal?: number;
   error?: string;
+  newerFreightError?: string;
+  newerFreightTotal?: number;
   summary?: {
     freightDifferences: number;
     pendingReviews: number;
@@ -416,67 +427,74 @@ function KargoStatus({
     stale: number;
     unhealthy: number;
   };
-  total?: number;
 }>) {
+  const indicators = (
+    [
+      {
+        color: "orange",
+        href: "/promotion-stages?attention=unhealthy",
+        icon: IconAlertTriangle,
+        label: "Non-ready Stages",
+        value: summary?.unhealthy,
+      },
+      {
+        color: "orange",
+        href: "/promotion-stages?attention=stale",
+        icon: IconClock,
+        label: "Stale Stages",
+        value: summary?.stale,
+      },
+      {
+        color: "yellow",
+        href: "/promotion-stages?attention=pending-review",
+        icon: IconChecklist,
+        label: "Pending reviews",
+        value: summary?.pendingReviews,
+      },
+      {
+        color: "yellow",
+        href: "/promotion-pipelines?alignment=different",
+        icon: IconArrowsDiff,
+        label: "Freight differences",
+        value: summary?.freightDifferences,
+      },
+      {
+        color: "green",
+        href: "/promotion-stages?attention=newer-freight",
+        icon: IconPackageImport,
+        label: "Newer Freight available",
+        value: newerFreightTotal,
+      },
+      {
+        color: "orange",
+        href: "/promotion-branch-drift?status=drifted",
+        icon: IconGitBranch,
+        label: "Stage branches behind",
+        value: branchDriftTotal,
+      },
+    ] satisfies KargoStatusIndicator[]
+  ).filter((indicator) => indicator.value !== 0);
+
   return (
     <Paper p="md" withBorder>
       <Stack gap="md">
-        <Group justify="space-between">
-          <Group gap="xs">
-            <ThemeIcon color="lilac" size="md" variant="light">
-              <IconGitBranch aria-hidden size={17} />
-            </ThemeIcon>
-            <Text fw={650}>Kargo Projects</Text>
-          </Group>
-          <Badge color="gray" variant="light">
-            {total ?? "—"}
-          </Badge>
+        <Group gap="xs">
+          <ThemeIcon color="lilac" size="md" variant="light">
+            <IconGitBranch aria-hidden size={17} />
+          </ThemeIcon>
+          <Text fw={650}>Kargo Projects</Text>
         </Group>
-        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
-          <KargoStatusCount
-            color="orange"
-            href="/promotion-stages?attention=unhealthy"
-            icon={IconAlertTriangle}
-            label="Unhealthy"
-            value={summary?.unhealthy}
-          />
-          <KargoStatusCount
-            color="orange"
-            href="/promotion-stages?attention=stale"
-            icon={IconClock}
-            label="Stale"
-            value={summary?.stale}
-          />
-          <KargoStatusCount
-            color="yellow"
-            href="/promotion-stages?attention=pending-review"
-            icon={IconChecklist}
-            label="Reviews"
-            value={summary?.pendingReviews}
-          />
-          <KargoStatusCount
-            color="yellow"
-            href="/promotion-pipelines?alignment=different"
-            icon={IconArrowsDiff}
-            label="Freight differences"
-            value={summary?.freightDifferences}
-          />
-        </SimpleGrid>
-        <Button
-          component={Link}
-          fullWidth
-          justify="space-between"
-          leftSection={<IconGitBranch aria-hidden size={16} />}
-          rightSection={
-            <Badge color="gray" size="sm" variant="light">
-              {branchDriftTotal ?? "—"}
-            </Badge>
-          }
-          to="/promotion-branch-drift?status=drifted"
-          variant="default"
-        >
-          Stages behind
-        </Button>
+        {indicators.length > 0 ? (
+          <Stack gap="xs">
+            {indicators.map((indicator) => (
+              <KargoStatusLink indicator={indicator} key={indicator.label} />
+            ))}
+          </Stack>
+        ) : (
+          <Text c="dimmed" size="sm">
+            No Kargo conditions need attention.
+          </Text>
+        )}
         {error ? (
           <Text c="red" size="xs">
             {error}
@@ -485,6 +503,11 @@ function KargoStatus({
         {branchDriftError ? (
           <Text c="red" size="xs">
             {branchDriftError}
+          </Text>
+        ) : null}
+        {newerFreightError ? (
+          <Text c="red" size="xs">
+            {newerFreightError}
           </Text>
         ) : null}
         <Button
@@ -501,38 +524,34 @@ function KargoStatus({
   );
 }
 
-function KargoStatusCount({
-  color,
-  href,
-  icon: StatusIcon,
-  label,
-  value,
-}: Readonly<{
+type KargoStatusIndicator = {
   color: "green" | "orange" | "yellow";
   href: string;
   icon: TablerIcon;
   label: string;
   value?: number;
-}>) {
+};
+
+function KargoStatusLink({ indicator }: Readonly<{ indicator: KargoStatusIndicator }>) {
+  const StatusIcon = indicator.icon;
+
   return (
-    <Paper
-      className="inbox-stat inbox-stat-link"
+    <Button
       component={Link}
-      data-color={color}
-      data-muted={value === undefined || value === 0 || undefined}
-      p="sm"
-      to={href}
+      fullWidth
+      justify="space-between"
+      leftSection={<StatusIcon aria-hidden size={16} />}
+      rightSection={
+        <Badge color={indicator.color} size="lg" variant="light">
+          {indicator.value ?? "—"}
+        </Badge>
+      }
+      size="md"
+      to={indicator.href}
+      variant="default"
     >
-      <Stack align="center" gap={2}>
-        <StatusIcon aria-hidden className="inbox-stat-icon" size={17} />
-        <Text className="inbox-stat-value" fw={700} size="xl">
-          {value ?? "—"}
-        </Text>
-        <Text c="dimmed" size="xs" ta="center">
-          {label}
-        </Text>
-      </Stack>
-    </Paper>
+      {indicator.label}
+    </Button>
   );
 }
 

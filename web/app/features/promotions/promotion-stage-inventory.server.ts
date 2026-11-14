@@ -28,6 +28,7 @@ export async function loadPromotionStageInventory(
         freightAlignment: alignment,
         integration,
         limit: promotionStageInventoryPageSize,
+        newerFreight: attention === "newer-freight" || undefined,
         offset: (page - 1) * promotionStageInventoryPageSize,
         pendingReview: attention === "pending-review" || undefined,
         project,

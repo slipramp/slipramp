@@ -29,6 +29,7 @@ type FreightRequest struct {
 type FreightItem struct {
 	Origin           string                `json:"origin"`
 	Name             string                `json:"name"`
+	DiscoveredAt     *time.Time            `json:"discoveredAt,omitempty"`
 	Artifacts        []FreightArtifact     `json:"artifacts"`
 	ApprovedFor      []string              `json:"approvedFor,omitempty"`
 	VerifiedIn       []FreightVerification `json:"verifiedIn,omitempty"`
@@ -62,6 +63,9 @@ func cloneFreight(freight Freight) Freight {
 }
 
 func cloneFreightItem(item FreightItem) FreightItem {
+	if item.DiscoveredAt != nil {
+		item.DiscoveredAt = new(*item.DiscoveredAt)
+	}
 	artifacts := make([]FreightArtifact, len(item.Artifacts))
 	for index, value := range item.Artifacts {
 		artifacts[index] = value

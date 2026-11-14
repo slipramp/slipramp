@@ -2342,6 +2342,10 @@ export type PromotionFreightOccupancy = {
 export type PromotionFreightItem = {
   origin: string;
   name: string;
+  /**
+   * Kargo discovery time when the Freight resource remains observable.
+   */
+  discoveredAt?: string;
   artifacts: Array<PromotionFreightArtifact>;
   approvedFor?: Array<string>;
   verifiedIn?: Array<PromotionFreightVerification>;
@@ -2618,7 +2622,7 @@ export type PromotionStageObservation = {
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
   /**
-   * Latest observed Freight for each requested origin, including Kargo eligibility evidence.
+   * Observed Freight for each requested origin ordered newest-first by Kargo discovery time, including Kargo eligibility evidence.
    */
   candidateFreight: PromotionFreight;
   /**
@@ -6017,6 +6021,10 @@ export type ListPromotionPipelinesData = {
      */
     freightAlignment?: PromotionFreightAlignmentStatus;
     /**
+     * Select pipelines containing at least one Stage with newer eligible Freight, or eligible initial Freight when the Stage has none current.
+     */
+    newerFreight?: boolean;
+    /**
      * Select pipelines containing at least one current non-ready Stage.
      */
     unhealthy?: boolean;
@@ -6120,6 +6128,10 @@ export type ListPromotionStagesData = {
      * Select Stages containing at least one comparison in this Freight alignment state.
      */
     freightAlignment?: PromotionFreightAlignmentStatus;
+    /**
+     * Select Stages with eligible Freight discovered after their current Freight, or eligible initial Freight when none is current.
+     */
+    newerFreight?: boolean;
     /**
      * Select current non-ready Stages.
      */

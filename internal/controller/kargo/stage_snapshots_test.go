@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -22,6 +23,14 @@ func TestKargoStageObserverReportsCandidateFreightNewestFirst(t *testing.T) {
 		"origin":  map[string]any{"kind": "Warehouse", "name": "external-dns"},
 		"sources": map[string]any{"direct": true},
 	}}
+	stage.Object["status"] = map[string]any{
+		"freightHistory": []any{map[string]any{"items": map[string]any{
+			"Warehouse/external-dns": map[string]any{
+				"name":   "freight-old",
+				"images": []any{map[string]any{"repoURL": "ghcr.io/example/external-dns", "tag": "1.0.0"}},
+			},
+		}}},
+	}
 
 	newest := unstructuredFreight(t, "kargo-core", "freight-new", "2026-10-21T11:00:00Z", "2.0.0")
 	newest.Object["status"] = map[string]any{
@@ -44,6 +53,16 @@ func TestKargoStageObserverReportsCandidateFreightNewestFirst(t *testing.T) {
 	if item.Name != "freight-new" || item.Origin != "Warehouse/external-dns" ||
 		len(item.Artifacts) != 1 || item.Artifacts[0].Version != "2.0.0" {
 		t.Errorf("direct Freight = %#v", item)
+	}
+	wantNewestAt := time.Date(2026, time.October, 21, 11, 0, 0, 0, time.UTC)
+	if item.DiscoveredAt == nil || !item.DiscoveredAt.Equal(wantNewestAt) {
+		t.Errorf("newest Freight discovery time = %v, want %s", item.DiscoveredAt, wantNewestAt)
+	}
+	current := snapshot.Stages[0].Freight.Items
+	wantCurrentAt := time.Date(2026, time.October, 21, 10, 0, 0, 0, time.UTC)
+	if len(current) != 1 || current[0].Name != "freight-old" || current[0].DiscoveredAt == nil ||
+		!current[0].DiscoveredAt.Equal(wantCurrentAt) {
+		t.Errorf("current Freight discovery time = %#v, want %s", current, wantCurrentAt)
 	}
 	if item.ApprovedFor == nil || !reflect.DeepEqual(*item.ApprovedFor, []string{"prod"}) ||
 		item.VerifiedIn == nil || len(*item.VerifiedIn) != 1 ||

@@ -1,6 +1,11 @@
 import type { PromotionFreightAlignmentStatus } from "~/api/generated";
 
-export type PromotionProjectAttention = "all" | "unhealthy" | "stale" | "pending-review";
+export type PromotionProjectAttention =
+  | "all"
+  | "unhealthy"
+  | "stale"
+  | "pending-review"
+  | "newer-freight";
 export type PromotionInventoryStatus = Exclude<PromotionProjectAttention, "all">;
 
 export type PromotionProjectListContext = {
@@ -13,7 +18,11 @@ export type PromotionProjectListContext = {
 export function promotionProjectAttention(
   value: string | null,
 ): PromotionProjectAttention | undefined {
-  return value === "all" || value === "unhealthy" || value === "stale" || value === "pending-review"
+  return value === "all" ||
+    value === "unhealthy" ||
+    value === "stale" ||
+    value === "pending-review" ||
+    value === "newer-freight"
     ? value
     : undefined;
 }

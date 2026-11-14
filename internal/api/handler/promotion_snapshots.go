@@ -63,7 +63,9 @@ func promotionFreightItemResponse(item promotion.FreightItem) api.PromotionFreig
 			Version:    artifact.Version,
 		})
 	}
-	result := api.PromotionFreightItem{Origin: item.Origin, Name: item.Name, Artifacts: artifacts}
+	result := api.PromotionFreightItem{
+		Origin: item.Origin, Name: item.Name, DiscoveredAt: item.DiscoveredAt, Artifacts: artifacts,
+	}
 	if !item.EvidenceObserved {
 		return result
 	}

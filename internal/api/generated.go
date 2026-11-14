@@ -3411,12 +3411,15 @@ type PromotionFreightCandidateReadiness string
 
 // PromotionFreightItem defines model for PromotionFreightItem.
 type PromotionFreightItem struct {
-	ApprovedFor *[]string                       `json:"approvedFor,omitempty"`
-	Artifacts   []PromotionFreightArtifact      `json:"artifacts"`
-	CurrentlyIn *[]PromotionFreightOccupancy    `json:"currentlyIn,omitempty"`
-	Name        string                          `json:"name"`
-	Origin      string                          `json:"origin"`
-	VerifiedIn  *[]PromotionFreightVerification `json:"verifiedIn,omitempty"`
+	ApprovedFor *[]string                    `json:"approvedFor,omitempty"`
+	Artifacts   []PromotionFreightArtifact   `json:"artifacts"`
+	CurrentlyIn *[]PromotionFreightOccupancy `json:"currentlyIn,omitempty"`
+
+	// DiscoveredAt Kargo discovery time when the Freight resource remains observable.
+	DiscoveredAt *time.Time                      `json:"discoveredAt,omitempty"`
+	Name         string                          `json:"name"`
+	Origin       string                          `json:"origin"`
+	VerifiedIn   *[]PromotionFreightVerification `json:"verifiedIn,omitempty"`
 }
 
 // PromotionFreightOccupancy defines model for PromotionFreightOccupancy.
@@ -3680,7 +3683,7 @@ type PromotionStageObservation struct {
 	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
 	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
 
-	// CandidateFreight Latest observed Freight for each requested origin, including Kargo eligibility evidence.
+	// CandidateFreight Observed Freight for each requested origin ordered newest-first by Kargo discovery time, including Kargo eligibility evidence.
 	CandidateFreight PromotionFreight          `json:"candidateFreight"`
 	Conditions       []PromotionStageCondition `json:"conditions"`
 
@@ -4802,6 +4805,9 @@ type ListPromotionPipelinesParams struct {
 	// FreightAlignment Select pipelines containing at least one comparison in this Freight alignment state.
 	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
 
+	// NewerFreight Select pipelines containing at least one Stage with newer eligible Freight, or eligible initial Freight when the Stage has none current.
+	NewerFreight *bool `form:"newerFreight,omitempty" json:"newerFreight,omitempty"`
+
 	// Unhealthy Select pipelines containing at least one current non-ready Stage.
 	Unhealthy *bool `form:"unhealthy,omitempty" json:"unhealthy,omitempty"`
 
@@ -4844,6 +4850,9 @@ type ListPromotionStagesParams struct {
 
 	// FreightAlignment Select Stages containing at least one comparison in this Freight alignment state.
 	FreightAlignment *PromotionFreightAlignmentStatus `form:"freightAlignment,omitempty" json:"freightAlignment,omitempty"`
+
+	// NewerFreight Select Stages with eligible Freight discovered after their current Freight, or eligible initial Freight when none is current.
+	NewerFreight *bool `form:"newerFreight,omitempty" json:"newerFreight,omitempty"`
 
 	// Unhealthy Select current non-ready Stages.
 	Unhealthy *bool `form:"unhealthy,omitempty" json:"unhealthy,omitempty"`
@@ -9806,6 +9815,18 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 
 		}
 
+		if params.NewerFreight != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "newerFreight", *params.NewerFreight, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Unhealthy != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "unhealthy", *params.Unhealthy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -10157,6 +10178,18 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 		if params.FreightAlignment != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "freightAlignment", *params.FreightAlignment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NewerFreight != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "newerFreight", *params.NewerFreight, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -27524,6 +27557,19 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 		return
 	}
 
+	// ------------- Optional query parameter "newerFreight" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "newerFreight", r.URL.Query(), &params.NewerFreight, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "newerFreight"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "newerFreight", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "unhealthy" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "unhealthy", r.URL.Query(), &params.Unhealthy, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
@@ -27851,6 +27897,19 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "freightAlignment"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "freightAlignment", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "newerFreight" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "newerFreight", r.URL.Query(), &params.NewerFreight, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "newerFreight"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "newerFreight", Err: err})
 		}
 		return
 	}

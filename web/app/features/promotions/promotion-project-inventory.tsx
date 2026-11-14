@@ -56,6 +56,7 @@ export function PromotionInventoryFilters({
           { label: "Non-ready", value: "unhealthy" },
           { label: "Stale", value: "stale" },
           { label: "Pending review", value: "pending-review" },
+          { label: "Newer Freight available", value: "newer-freight" },
         ],
         kind: "select",
         label: "Status",

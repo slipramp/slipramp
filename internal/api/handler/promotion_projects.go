@@ -36,6 +36,7 @@ func (h *Handler) ListPromotionPipelines(
 	filter.Unhealthy = request.Params.Unhealthy != nil && *request.Params.Unhealthy
 	filter.Stale = request.Params.Stale != nil && *request.Params.Stale
 	filter.PendingReview = request.Params.PendingReview != nil && *request.Params.PendingReview
+	filter.NewerFreight = request.Params.NewerFreight != nil && *request.Params.NewerFreight
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
 	}
@@ -165,6 +166,7 @@ func (h *Handler) ListPromotionStages(
 	filter.Unhealthy = request.Params.Unhealthy != nil && *request.Params.Unhealthy
 	filter.Stale = request.Params.Stale != nil && *request.Params.Stale
 	filter.PendingReview = request.Params.PendingReview != nil && *request.Params.PendingReview
+	filter.NewerFreight = request.Params.NewerFreight != nil && *request.Params.NewerFreight
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
 	}

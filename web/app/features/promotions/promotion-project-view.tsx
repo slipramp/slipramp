@@ -46,6 +46,7 @@ import {
   freightNames,
   freightOriginLabel,
   otherFreightCandidates,
+  stageHasNewerFreight,
 } from "~/features/promotions/promotion-freight";
 import {
   promotionStagePolicyColor,
@@ -383,6 +384,7 @@ export function ProjectFilter({
           { label: "Non-ready", value: "unhealthy" },
           { label: "Stale", value: "stale" },
           { label: "Pending review", value: "pending-review" },
+          { label: "Newer Freight available", value: "newer-freight" },
         ]}
         onChange={(event) =>
           onAttentionChange(promotionProjectAttention(event.currentTarget.value))
@@ -981,6 +983,8 @@ export function stageMatchesAttention(
       return stage.observationStale;
     case "pending-review":
       return stage.pendingPromotionCount > 0;
+    case "newer-freight":
+      return stageHasNewerFreight(stage);
   }
 }
 
@@ -989,6 +993,7 @@ function stageNeedsAttention(stage: PromotionProjectStage) {
     stage.observationStale ||
     stageIsUnhealthy(stage) ||
     stage.pendingPromotionCount > 0 ||
+    stageHasNewerFreight(stage) ||
     stage.freightAlignments.some((alignment) => alignment.status === "different") ||
     stageCapabilityWarnings(stage).length > 0
   );
