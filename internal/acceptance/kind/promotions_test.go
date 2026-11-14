@@ -23,6 +23,10 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		[]string{"slipramp:promotions:submit"})
 	kargoClient := s.newAPIClient(t, kargoAPIKey)
 	kargoStage := s.waitForKargoStage(t)
+	if kargoStage.ControlFlow ||
+		kargoStage.Capabilities.Promotion.Status != api.PromotionStageCapabilityStatusReady {
+		t.Fatalf("Kargo acceptance Stage is not promotable: %#v", kargoStage.Capabilities.Promotion)
+	}
 
 	t.Log("testing operator-started Promotion dispatch and callback hydration")
 	creationResponse, err := s.productClient.CreatePromotionWithResponse(t.Context(), kargoStage.ID, api.PromotionCreate{
@@ -113,6 +117,10 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 	automaticRetry := submitKargoPromotion(t, kargoClient, automaticRequest)
 	if automaticRetry.ID != automatic.ID || automaticRetry.Status != api.PromotionStatusApproved {
 		t.Fatalf("automatic Promotion retry = %#v", automaticRetry)
+	}
+	automaticFinal := s.waitForPromotionKargoOutcome(t, automatic.ID)
+	if automaticFinal.KargoPromotionUID == nil {
+		t.Fatalf("automatic Promotion terminal outcome omitted its Kargo UID: %#v", automaticFinal)
 	}
 
 	t.Log("testing guarded Promotion execution and real artifact uploads")
@@ -209,21 +217,58 @@ func (s *suite) waitForOperatorPromotionDispatch(t *testing.T, promotionID uuid.
 		response, err := s.productClient.GetPromotionWithResponse(t.Context(), promotionID)
 		if err == nil && response.JSON200 != nil {
 			last = *response.JSON200
-			if last.Source == api.Slipramp &&
-				(last.Status == api.PromotionStatusCreating || last.Status == api.PromotionStatusApproved) &&
-				last.CreationDispatch.AttemptCount >= 1 &&
-				last.CreationDispatch.Phase == api.PromotionCreationDispatchPhaseDelivered &&
-				last.CreationDispatch.DeliveredAt != nil && last.KargoPromotionUID != nil {
+			if promotionCreationDelivered(last) {
 				return last
 			}
-			if last.Status != api.PromotionStatusCreating && last.Status != api.PromotionStatusApproved {
-				t.Fatalf("operator Promotion %s left its accepted state before delivery: %#v", promotionID, last)
+			switch last.Status {
+			case api.PromotionStatusError, api.PromotionStatusExpired, api.PromotionStatusRejected:
+				t.Fatalf("operator Promotion %s reached %s before delivery: %#v", promotionID, last.Status, last)
 			}
 		}
 		wait(t, time.Second)
 	}
 	t.Fatalf("operator Promotion %s was not dispatched: %#v", promotionID, last)
 	return api.Promotion{}
+}
+
+func promotionCreationDelivered(value api.Promotion) bool {
+	return value.Source == api.Slipramp && value.CreationDispatch.AttemptCount >= 1 &&
+		value.CreationDispatch.Phase == api.PromotionCreationDispatchPhaseDelivered &&
+		value.CreationDispatch.DeliveredAt != nil && value.KargoPromotionUID != nil
+}
+
+func TestPromotionCreationDeliveredAllowsForwardProgress(t *testing.T) {
+	t.Parallel()
+
+	deliveredAt := time.Now()
+	for _, status := range []api.PromotionStatus{
+		api.PromotionStatusCreating,
+		api.PromotionStatusPreparing,
+		api.PromotionStatusPending,
+		api.PromotionStatusApproved,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			t.Parallel()
+
+			value := api.Promotion{
+				Source: api.Slipramp,
+				Status: status,
+				CreationDispatch: api.PromotionCreationDispatch{
+					AttemptCount: 1,
+					DeliveredAt:  &deliveredAt,
+					Phase:        api.PromotionCreationDispatchPhaseDelivered,
+				},
+				KargoPromotionUID: new("kargo-uid"),
+			}
+			if !promotionCreationDelivered(value) {
+				t.Fatalf("delivered Promotion with status %s was not recognized", status)
+			}
+		})
+	}
+
+	if promotionCreationDelivered(api.Promotion{Source: api.Slipramp, Status: api.PromotionStatusPreparing}) {
+		t.Fatal("incomplete Promotion creation was recognized as delivered")
+	}
 }
 
 func submitKargoPromotion(

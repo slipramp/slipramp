@@ -141,14 +141,17 @@ func (s *suite) createCluster(t *testing.T) {
 		"--format", "{{.Os}}/{{.Architecture}}{{if .Variant}}/{{.Variant}}{{end}}",
 		"slipramp-server:acceptance",
 	)))
-	imageArchive := filepath.Join(s.temporaryDirectory, "images.tar")
-	exportArguments := []string{"image", "save", "--platform", imagePlatform, "--output", imageArchive}
-	exportArguments = append(exportArguments, images...)
-	t.Logf("exporting %s acceptance images", imagePlatform)
-	s.mustRunVisible(t, "docker", exportArguments...)
+	imageArchive := filepath.Join(s.temporaryDirectory, "image.tar")
+	for _, image := range images {
+		t.Logf("exporting %s image %s", imagePlatform, image)
+		s.mustRunVisible(t, "docker", "image", "save", "--platform", imagePlatform, "--output", imageArchive, image)
 
-	t.Log("loading images into kind")
-	s.mustRunVisible(t, s.kindBin, "load", "image-archive", "--name", s.clusterName, imageArchive)
+		t.Logf("loading image %s into kind", image)
+		s.mustRunVisible(t, s.kindBin, "load", "image-archive", "--name", s.clusterName, imageArchive)
+		if err := os.Remove(imageArchive); err != nil {
+			t.Fatalf("remove imported image archive: %v", err)
+		}
+	}
 }
 
 func (s *suite) createFixture(t *testing.T) {
