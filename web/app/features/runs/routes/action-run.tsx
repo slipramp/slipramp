@@ -7,25 +7,19 @@ import {
   Code,
   Divider,
   Group,
-  NativeSelect,
-  NumberInput,
   Paper,
   SimpleGrid,
   Stack,
   Switch,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation } from "react-router";
 
-import {
-  decodeActionParameters,
-  parameterFieldName,
-  sortedEntries,
-} from "~/features/runs/action-run";
+import { decodeActionParameters, sortedEntries } from "~/features/runs/action-run";
+import { RunParameterFields } from "~/features/runs/run-parameter-fields";
 import {
   credentialInjectionLines,
   explainedEntries,
@@ -43,7 +37,6 @@ import {
   type ExplainedString,
   type InputExplanation,
   type OutputExplanation,
-  type Parameter,
   type TargetDefinition,
 } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
@@ -70,15 +63,18 @@ export function meta({ loaderData, params }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
+  const dialog = new URL(request.url).searchParams.get("display") === "dialog";
   const [targetResult, explanationResult] = await Promise.all([
     getTarget({ client, path: { targetId: params.targetId } }),
-    explainTargetAction({
-      client,
-      path: {
-        actionName: params.actionName,
-        targetId: params.targetId,
-      },
-    }),
+    dialog
+      ? Promise.resolve(undefined)
+      : explainTargetAction({
+          client,
+          path: {
+            actionName: params.actionName,
+            targetId: params.targetId,
+          },
+        }),
   ]);
   const target = targetResult.data?.definition;
 
@@ -88,11 +84,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       targetResult.error?.detail ??
       targetResult.error?.title ??
       "The action definition could not be loaded.",
-    explanation: explanationResult.data,
-    explanationError:
-      explanationResult.error?.detail ??
-      explanationResult.error?.title ??
-      "The effective execution context could not be loaded.",
+    explanation: explanationResult?.data,
+    explanationError: explanationResult
+      ? (explanationResult.error?.detail ??
+        explanationResult.error?.title ??
+        "The effective execution context could not be loaded.")
+      : undefined,
     record: targetResult.data,
     target,
   };
@@ -100,6 +97,10 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  const mode = formData.get("mode");
+  if (mode !== null && mode !== "view" && mode !== "background") {
+    return { error: "Choose how to open the created Run.", values: {} };
+  }
   const client = createServerAPIClient(request, context);
   const targetResult = await getTarget({
     client,
@@ -133,7 +134,10 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     },
     client,
   });
-  if (result.data) return redirect(`/runs/${result.data.id}`);
+  if (result.data) {
+    if (mode === "background") return { runId: result.data.id };
+    return redirect(`/runs/${result.data.id}`);
+  }
 
   return {
     error: result.error?.detail ?? result.error?.title ?? "The Run could not be created.",
@@ -672,21 +676,11 @@ function RunForm({
               {error}
             </Alert>
           ) : null}
-          {parameters.length === 0 ? (
-            <Text c="dimmed">This action has no parameters.</Text>
-          ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              {parameters.map(([name, parameter]) => (
-                <ParameterControl
-                  key={name}
-                  name={name}
-                  parameter={parameter}
-                  showTechnicalDetails={showTechnicalDetails}
-                  submittedValue={submittedValues?.[name]}
-                />
-              ))}
-            </SimpleGrid>
-          )}
+          <RunParameterFields
+            declarations={actionDefinition.parameters}
+            showTechnicalDetails={showTechnicalDetails}
+            submittedValues={submittedValues}
+          />
           <Group justify="flex-end">
             <Button component={Link} to={targetURL} variant="default">
               Cancel
@@ -703,86 +697,6 @@ function RunForm({
       </Form>
     </Paper>
   );
-}
-
-function ParameterControl({
-  name,
-  parameter,
-  showTechnicalDetails,
-  submittedValue,
-}: Readonly<{
-  name: string;
-  parameter: Parameter;
-  showTechnicalDetails: boolean;
-  submittedValue?: string;
-}>) {
-  const common = {
-    description:
-      parameter.description || showTechnicalDetails ? (
-        <Stack gap={2}>
-          {showTechnicalDetails && parameter.title ? (
-            <Text c="dimmed" ff="monospace" size="xs">
-              {name}
-            </Text>
-          ) : null}
-          {parameter.description ? (
-            <Text c="dimmed" size="xs">
-              {parameter.description}
-            </Text>
-          ) : null}
-          {showTechnicalDetails ? (
-            <Text c="dimmed" size="xs">
-              <ParameterDelivery parameter={parameter} />
-            </Text>
-          ) : null}
-        </Stack>
-      ) : undefined,
-    label: parameter.title ?? name,
-    name: parameterFieldName(name),
-    required: parameter.required,
-  };
-
-  switch (parameter.type) {
-    case "boolean":
-      return (
-        <NativeSelect
-          {...common}
-          data={selectOptions(parameter.required, ["true", "false"])}
-          defaultValue={submittedValue ?? ""}
-        />
-      );
-    case "enum":
-      return (
-        <NativeSelect
-          {...common}
-          data={selectOptions(parameter.required, parameter.values ?? [])}
-          defaultValue={submittedValue ?? ""}
-        />
-      );
-    case "number":
-      return <NumberInput {...common} defaultValue={submittedValue ?? ""} />;
-    case "string":
-      return <TextInput {...common} defaultValue={submittedValue ?? ""} />;
-  }
-}
-
-function ParameterDelivery({ parameter }: Readonly<{ parameter: Parameter }>) {
-  if (parameter.environment) {
-    return (
-      <>
-        Environment <Code>{parameter.environment}</Code>
-      </>
-    );
-  }
-  if (parameter.argument?.name) {
-    return (
-      <>
-        Argument <Code>{parameter.argument.name}</Code>
-      </>
-    );
-  }
-  if (parameter.argument) return "Positional argument";
-  return "Not mapped";
 }
 
 function ArtifactContext({
@@ -890,17 +804,6 @@ function ArtifactInputs({ inputs }: Readonly<{ inputs: InputExplanation[] }>) {
       )}
     </Stack>
   );
-}
-
-function selectOptions(required: boolean | undefined, values: string[]) {
-  return [
-    {
-      disabled: required,
-      label: required ? "Select a value" : "Not set",
-      value: "",
-    },
-    ...values.map((value) => ({ label: value, value })),
-  ];
 }
 
 function targetPath(targetId: string) {

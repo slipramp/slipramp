@@ -1,19 +1,8 @@
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Button,
-  Group,
-  Menu,
-  Paper,
-  Stack,
-  Table,
-  Text,
-} from "@mantine/core";
-import { IconChevronDown, IconPlayerPlay } from "@tabler/icons-react";
-import { Link, redirect } from "react-router";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Link, redirect, type ShouldRevalidateFunctionArgs } from "react-router";
 
-import { actionRunPath } from "~/features/runs/action-run";
+import { updateRunCreationSearchParams } from "~/features/runs/action-run";
+import { RunCreateMenu } from "~/features/runs/run-create-dialog";
 import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, listTargets, type TargetReconciliationStatus } from "~/api/generated";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
@@ -30,6 +19,21 @@ const pageSize = 25;
 
 export function meta() {
   return [{ title: pageTitle("Targets") }];
+}
+
+export function shouldRevalidate({
+  currentUrl,
+  defaultShouldRevalidate,
+  formMethod,
+  nextUrl,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod !== undefined || currentUrl.pathname !== nextUrl.pathname) {
+    return defaultShouldRevalidate;
+  }
+
+  const currentDataSearch = updateRunCreationSearchParams(currentUrl.searchParams).toString();
+  const nextDataSearch = updateRunCreationSearchParams(nextUrl.searchParams).toString();
+  return currentDataSearch === nextDataSearch ? false : defaultShouldRevalidate;
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
@@ -247,30 +251,10 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                             />
                           </Table.Td>
                           <Table.Td>
-                            <Menu position="bottom-start" shadow="md" width={220}>
-                              <Menu.Target>
-                                <Button
-                                  rightSection={<IconChevronDown aria-hidden size={14} />}
-                                  size="compact-sm"
-                                  variant="light"
-                                >
-                                  Run action
-                                </Button>
-                              </Menu.Target>
-                              <Menu.Dropdown>
-                                <Menu.Label>Choose an action</Menu.Label>
-                                {target.actions.map((action) => (
-                                  <Menu.Item
-                                    component={Link}
-                                    key={action}
-                                    leftSection={<IconPlayerPlay aria-hidden size={14} />}
-                                    to={actionRunPath(target.id, action)}
-                                  >
-                                    {action}
-                                  </Menu.Item>
-                                ))}
-                              </Menu.Dropdown>
-                            </Menu>
+                            <RunCreateMenu
+                              actions={target.actions.map((name) => ({ name }))}
+                              targetId={target.id}
+                            />
                           </Table.Td>
                         </Table.Tr>
                       ))}

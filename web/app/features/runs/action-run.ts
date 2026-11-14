@@ -13,8 +13,50 @@ export type ArtifactConsumerSelection = {
   consumer: RunArtifactConsumer;
 };
 
+export type RunCreationActionResult = {
+  error?: string;
+  runId?: string;
+  values?: Record<string, string>;
+};
+
+export type RunCreationURLSelection = {
+  actionName: string;
+  targetId: string;
+};
+
+export const runCreationSearchParamNames = {
+  action: "runAction",
+  target: "runTarget",
+} as const;
+
 export function actionRunPath(targetId: string, actionName: string) {
   return `/targets/${targetId}/actions/${encodeURIComponent(actionName)}/run`;
+}
+
+export function actionRunDialogDataPath(targetId: string, actionName: string) {
+  return `${actionRunPath(targetId, actionName)}?display=dialog`;
+}
+
+export function runCreationURLSelection(
+  searchParams: URLSearchParams,
+): RunCreationURLSelection | undefined {
+  const actionName = searchParams.get(runCreationSearchParamNames.action);
+  const targetId = searchParams.get(runCreationSearchParamNames.target);
+  return actionName && targetId ? { actionName, targetId } : undefined;
+}
+
+export function updateRunCreationSearchParams(
+  searchParams: URLSearchParams,
+  selection?: RunCreationURLSelection,
+) {
+  const next = new URLSearchParams(searchParams);
+  next.delete(runCreationSearchParamNames.action);
+  next.delete(runCreationSearchParamNames.target);
+  if (!selection) return next;
+
+  next.set(runCreationSearchParamNames.action, selection.actionName);
+  next.set(runCreationSearchParamNames.target, selection.targetId);
+  return next;
 }
 
 export function otherTargetActions(

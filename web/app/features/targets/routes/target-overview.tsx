@@ -3,7 +3,6 @@ import {
   Alert,
   Anchor,
   Badge,
-  Button,
   Code,
   Group,
   Paper,
@@ -13,7 +12,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
+import { IconExternalLink } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router";
 
@@ -30,12 +29,8 @@ import {
   type TargetSyncRunCheckpoint,
 } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
-import {
-  actionRunPath,
-  effectiveAction,
-  parameterDelivery,
-  sortedEntries,
-} from "~/features/runs/action-run";
+import { effectiveAction, parameterDelivery, sortedEntries } from "~/features/runs/action-run";
+import { RunCreateButton } from "~/features/runs/run-create-dialog";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import {
   loadLatestScheduledRuns,
@@ -424,15 +419,13 @@ function ActionAccordionItem({
           </Stack>
         </Accordion.Control>
         {!archived ? (
-          <Button
+          <RunCreateButton
+            actionName={name}
+            actionTitle={actionDefinition.title}
             className="target-action-button"
-            component={Link}
-            leftSection={<IconPlayerPlay aria-hidden size={16} />}
             style={{ flexShrink: 0 }}
-            to={actionRunPath(targetId, name)}
-          >
-            Run action
-          </Button>
+            targetId={targetId}
+          />
         ) : null}
       </Group>
       <Accordion.Panel>

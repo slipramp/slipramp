@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { actionRunPath, findArtifactConsumer, otherTargetActions } from "./action-run.ts";
+import {
+  actionRunPath,
+  findArtifactConsumer,
+  otherTargetActions,
+  runCreationURLSelection,
+  updateRunCreationSearchParams,
+} from "./action-run.ts";
 
 test("builds an encoded action Run path", () => {
   assert.equal(
@@ -25,6 +31,24 @@ test("lists other target actions by name with their display titles", () => {
       { name: "sync", title: undefined },
     ],
   );
+});
+
+test("Run creation dialog round-trips through URL state without disturbing page filters", () => {
+  const current = new URLSearchParams("q=database&page=2");
+  const opened = updateRunCreationSearchParams(current, {
+    actionName: "canary/deploy",
+    targetId: "target-id",
+  });
+
+  assert.equal(opened.get("q"), "database");
+  assert.equal(opened.get("page"), "2");
+  assert.deepEqual(runCreationURLSelection(opened), {
+    actionName: "canary/deploy",
+    targetId: "target-id",
+  });
+
+  const closed = updateRunCreationSearchParams(opened);
+  assert.equal(closed.toString(), "q=database&page=2");
 });
 
 test("selects artifact consumers from frozen metadata rather than artifact names", () => {

@@ -41,11 +41,8 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation, useSearchParams } from "react-router";
 
-import {
-  actionRunPath,
-  findArtifactConsumer,
-  otherTargetActions,
-} from "~/features/runs/action-run";
+import { findArtifactConsumer, otherTargetActions } from "~/features/runs/action-run";
+import { RunCreateMenu } from "~/features/runs/run-create-dialog";
 import { createServerAPIClient } from "~/api/client.server";
 import { canReadArtifactContents } from "~/features/artifacts/artifact-access";
 import {
@@ -1106,40 +1103,15 @@ function OtherActionMenu({
   targetId: string;
 }>) {
   return (
-    <Menu position="bottom-end" shadow="md" width={260}>
-      <Menu.Target>
-        <Button
-          leftSection={<IconPlayerPlay aria-hidden size={16} />}
-          rightSection={<IconChevronDown aria-hidden size={14} />}
-          size="compact-md"
-          variant="light"
-        >
-          Run another action
-        </Button>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Label>Choose an action</Menu.Label>
-        {actions.map((actionChoice) => (
-          <Menu.Item
-            component={Link}
-            key={actionChoice.name}
-            leftSection={<IconPlayerPlay aria-hidden size={16} />}
-            to={actionRunPath(targetId, actionChoice.name)}
-          >
-            {actionChoice.title ? (
-              <Stack gap={0}>
-                <Text size="sm">{actionChoice.title}</Text>
-                <Text c="dimmed" ff="monospace" size="xs">
-                  {actionChoice.name}
-                </Text>
-              </Stack>
-            ) : (
-              actionChoice.name
-            )}
-          </Menu.Item>
-        ))}
-      </Menu.Dropdown>
-    </Menu>
+    <RunCreateMenu
+      actions={actions}
+      buttonIcon
+      label="Run another action"
+      position="bottom-end"
+      size="compact-md"
+      targetId={targetId}
+      width={260}
+    />
   );
 }
 
