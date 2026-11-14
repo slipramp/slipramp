@@ -1,27 +1,28 @@
 import { Alert, Badge, Group, Paper, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
-import { redirect, type ShouldRevalidateFunctionArgs } from "react-router";
+import { redirect, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   listPromotionBranchDrift,
   listRepositories,
-  type GitCommit,
   type PromotionBranchDriftRepository,
   type PromotionBranchDriftStage,
   type PromotionBranchDriftStatus,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
-import { RelativeTime, Timestamp } from "~/shared/display-values";
-import { CommitReference } from "~/features/commits/git-commit";
+import { RelativeTime } from "~/shared/display-values";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
 import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
+import { StagePolicyDialog } from "~/features/promotions/promotion-project-view";
+import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
 import { promotionScopeFilters } from "~/features/promotions/promotion-scope-filters";
 import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
-import { submitPromotionCreation } from "~/features/promotions/promotion-creation.server";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
+import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
 
 import type { Route } from "./+types/promotion-branch-drift";
 
@@ -111,13 +112,26 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export async function action({ context, request }: Route.ActionArgs) {
-  return submitPromotionCreation(request, context);
+  return submitPromotionProjectAction(request, context);
 }
 
-export default function PromotionBranchDrift({ loaderData }: Route.ComponentProps) {
+export default function PromotionBranchDrift({ actionData, loaderData }: Route.ComponentProps) {
   useActivityRefresh(true, 30_000);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const canWrite = canWritePromotions(loaderData.principal);
+  const policyStage = loaderData.repositories
+    .flatMap((repository) => repository.stages)
+    .find(
+      (stage) =>
+        stage.id === searchParams.get("policy") && promotionStagePolicyPresentation(stage).editable,
+    );
+
+  function closePolicy() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("policy");
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }
 
   return (
     <Stack gap="lg">
@@ -171,6 +185,8 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
           total={loaderData.total}
         />
       ) : null}
+
+      <StagePolicyDialog actionData={actionData} onClose={closePolicy} stage={policyStage} />
     </Stack>
   );
 }
@@ -324,14 +340,14 @@ function BranchDriftRow({
         )}
       </Table.Td>
       <Table.Td style={{ whiteSpace: "nowrap" }}>
-        <CommitMoment
+        <BranchDriftCommit
           branch={sourceBranch}
           commit={stage.sourceBranchCommit}
           repositoryId={repositoryId}
         />
       </Table.Td>
       <Table.Td style={{ whiteSpace: "nowrap" }}>
-        <CommitMoment
+        <BranchDriftCommit
           branch={stage.targetBranch}
           commit={stage.acknowledgedRenderCommit}
           repositoryId={repositoryId}
@@ -342,51 +358,12 @@ function BranchDriftRow({
           <PromotionCreateButton
             stage={stage}
             freight={stage.freight.items}
-            environment={stage.environment}
             inPlace
             unavailableLabel="This Stage has no current Freight to promote in place."
           />
         ) : null}
       </Table.Td>
     </Table.Tr>
-  );
-}
-
-function CommitMoment({
-  branch,
-  commit,
-  repositoryId,
-}: Readonly<{
-  branch?: string;
-  commit?: GitCommit;
-  repositoryId?: string;
-}>) {
-  return (
-    <Stack gap={2}>
-      <Text fw={600} size="sm">
-        {branch ?? "Unknown branch"}
-      </Text>
-      <Group gap="xs" wrap="nowrap">
-        <Text c="dimmed" size="xs">
-          Commit
-        </Text>
-        {commit ? (
-          <CommitReference commit={commit} repositoryId={repositoryId} />
-        ) : (
-          <Text size="xs">Unknown</Text>
-        )}
-      </Group>
-      <Group gap="xs" wrap="nowrap">
-        <Text c="dimmed" size="xs">
-          Date
-        </Text>
-        {commit?.authoredAt ? (
-          <Timestamp size="xs" value={commit.authoredAt} />
-        ) : (
-          <Text size="xs">Unknown</Text>
-        )}
-      </Group>
-    </Stack>
   );
 }
 

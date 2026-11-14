@@ -8,6 +8,7 @@ import {
   Center,
   ColorSchemeScript,
   MantineProvider,
+  Modal,
   Paper,
   Stack,
   Text,
@@ -112,9 +113,11 @@ export default function App({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
-      <Outlet />
-    </ProductShell>
+    <Modal.Stack>
+      <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
+        <Outlet />
+      </ProductShell>
+    </Modal.Stack>
   );
 }
 

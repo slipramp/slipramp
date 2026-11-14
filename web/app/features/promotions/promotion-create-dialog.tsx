@@ -1,15 +1,14 @@
 import {
   Alert,
   Anchor,
-  Badge,
   Button,
-  Code,
+  Grid,
   Group,
   Menu,
   Modal,
-  NativeSelect,
   Paper,
-  SimpleGrid,
+  Radio,
+  ScrollArea,
   Stack,
   Text,
   Tooltip,
@@ -25,26 +24,16 @@ import {
   promotionCreationContext,
   promotionCreationURLSelection,
   updatePromotionCreationSearchParams,
+  visiblePromotionFreight,
 } from "~/features/promotions/promotion-creation";
-import { promotionStagePolicyColor } from "~/features/promotions/promotion-policy";
-import {
-  freightArtifactVersionLabel,
-  freightDisplayLabel,
-  freightOriginLabel,
-} from "~/features/promotions/promotion-freight";
-import type {
-  PromotionFreightItem,
-  PromotionProjectStage,
-  PromotionStageCapability,
-  PromotionStagePolicy,
-} from "~/api/generated";
-import { formatTimestamp } from "~/shared/display";
-import { useTimeZone } from "~/shared/time-zone-preference";
+import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
+import { freightOriginLabel } from "~/features/promotions/promotion-freight";
+import { StagePolicyBadge } from "~/features/promotions/promotion-policy-badge";
+import type { PromotionFreightItem, PromotionProjectStage } from "~/api/generated";
 
 type PromotionCreateProps = Readonly<{
   stage: Pick<PromotionProjectStage, "id" | "name" | "policy" | "capabilities">;
   freight: PromotionFreightItem[];
-  environment?: string;
   inPlace?: boolean;
   initialFreightName?: string;
   sourceStageId?: string;
@@ -55,13 +44,11 @@ type PromotionCreateMenuProps = Readonly<{
   stage: PromotionCreateProps["stage"];
   eligibleFreight: PromotionFreightItem[];
   currentFreight: PromotionFreightItem[];
-  environment?: string;
 }>;
 
 function PromotionCreateDialog({
   stage,
   freight,
-  environment,
   inPlace,
   sourceStageId,
   sourceStageName,
@@ -74,10 +61,17 @@ function PromotionCreateDialog({
   selectedName: string;
 }) {
   const fetcher = useFetcher<PromotionCreationActionResult>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const handledPromotionID = useRef<string | undefined>(undefined);
   const selected = freight.find((item) => item.name === selectedName);
   const submittingMode = fetcher.formData?.get("mode");
   const actionLabel = inPlace ? "Re-promote" : "Promote";
+
+  function editPolicy() {
+    const next = new URLSearchParams(searchParams);
+    next.set("policy", stage.id);
+    setSearchParams(next, { preventScrollReset: true });
+  }
 
   useEffect(() => {
     const promotionID = fetcher.data?.promotionId;
@@ -100,27 +94,23 @@ function PromotionCreateDialog({
   }, [fetcher.data, onClose]);
 
   return (
-    <Modal centered onClose={onClose} opened size="lg" title={`${actionLabel} ${stage.name}`}>
+    <Modal
+      centered
+      onClose={onClose}
+      opened
+      size="min(72rem, calc(100vw - 2rem))"
+      stackId="promotion-create"
+      styles={{ title: { flex: 1 } }}
+      title={
+        <Group gap="md" justify="space-between" wrap="nowrap" w="100%">
+          <Text fw={600}>{`${actionLabel} ${stage.name}`}</Text>
+          <StagePolicyBadge canEdit onEdit={editPolicy} stage={stage} />
+        </Group>
+      }
+    >
       <fetcher.Form method="post">
         <Stack gap="md">
-          {environment ? <PromotionFact label="Environment" value={environment} /> : null}
           {sourceStageName ? <PromotionFact label="Source Stage" value={sourceStageName} /> : null}
-
-          {freight.length > 1 || !selected ? (
-            <NativeSelect
-              data={[
-                { label: "Choose exact Freight", value: "" },
-                ...freight.map((item) => ({
-                  label: `${freightDisplayLabel(item)} · ${freightOriginLabel(item.origin)}`,
-                  value: item.name,
-                })),
-              ]}
-              label="Source Freight"
-              onChange={(event) => onSelectedNameChange(event.currentTarget.value)}
-              required
-              value={selected?.name ?? ""}
-            />
-          ) : null}
 
           {fetcher.data?.error ? (
             <Alert color="red" title="Promotion not created">
@@ -128,7 +118,15 @@ function PromotionCreateDialog({
             </Alert>
           ) : null}
 
-          {selected ? <FreightDetails freight={selected} /> : null}
+          <SelectedFreight freight={selected} />
+
+          {freight.length > 1 || !selected ? (
+            <AvailableFreight
+              freight={freight}
+              onChange={onSelectedNameChange}
+              selectedName={selected?.name ?? ""}
+            />
+          ) : null}
 
           {inPlace ? (
             <Alert color="yellow" title="In-place Promotion">
@@ -136,7 +134,6 @@ function PromotionCreateDialog({
             </Alert>
           ) : null}
 
-          <StagePolicyControl policy={stage.policy} reviewCapability={stage.capabilities.review} />
           <input name="targetStageId" type="hidden" value={stage.id} />
           {sourceStageId || inPlace ? (
             <input name="sourceStageId" type="hidden" value={sourceStageId ?? stage.id} />
@@ -174,75 +171,6 @@ function PromotionCreateDialog({
       </fetcher.Form>
     </Modal>
   );
-}
-
-function StagePolicyControl({
-  policy,
-  reviewCapability,
-}: Readonly<{
-  policy: PromotionStagePolicy;
-  reviewCapability: PromotionStageCapability;
-}>) {
-  const reviewRequired = policy.effectiveMode === "review-required";
-  const reviewReady = reviewCapability.status === "ready";
-  const { timeZone } = useTimeZone();
-
-  return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="wrap">
-          <Text fw={600}>Current Stage policy</Text>
-          <Badge color={promotionStagePolicyColor(policy.effectiveMode)} variant="light">
-            {reviewRequired ? "Review required" : "Automatic"}
-          </Badge>
-        </Group>
-        <Text c="dimmed" size="sm">
-          {stagePolicyDescription(policy, timeZone)}
-        </Text>
-        {policy.reason ? (
-          <Text size="sm">
-            <Text c="dimmed" component="span">
-              Reason:{" "}
-            </Text>
-            {policy.reason}
-          </Text>
-        ) : null}
-        <NativeSelect
-          data={[
-            { label: "Keep current policy", value: "unchanged" },
-            { label: "Use automatic policy", value: "automatic" },
-            { disabled: !reviewReady, label: "Require review permanently", value: "permanent" },
-            { disabled: !reviewReady, label: "Require review for 30 minutes", value: "30m" },
-            { disabled: !reviewReady, label: "Require review for 1 hour", value: "1h" },
-            { disabled: !reviewReady, label: "Require review for 24 hours", value: "24h" },
-          ]}
-          defaultValue="unchanged"
-          description="A change is applied to the Stage before this Promotion is created."
-          label="Review policy"
-          name="reviewPolicy"
-        />
-        {!reviewReady ? (
-          <Text c="dimmed" size="sm">
-            {reviewCapability.reason} Review-required cannot be selected until this capability is
-            ready. If it is already configured, select automatic deliberately before promoting.
-          </Text>
-        ) : null}
-      </Stack>
-    </Paper>
-  );
-}
-
-function stagePolicyDescription(policy: PromotionStagePolicy, timeZone: string) {
-  if (policy.effectiveMode === "review-required") {
-    return policy.expiresAt
-      ? `New Promotions require review until ${formatTimestamp(policy.expiresAt, timeZone)}.`
-      : "New Promotions require review until the Stage policy is changed.";
-  }
-  if (policy.configuredMode === "review-required" && policy.expiresAt) {
-    return `The review window expired ${formatTimestamp(policy.expiresAt, timeZone)}. New Promotions are automatic.`;
-  }
-
-  return "New Promotions proceed automatically without operator review.";
 }
 
 export function PromotionCreateButton({
@@ -291,20 +219,19 @@ export function PromotionCreateMenu({
   stage,
   eligibleFreight,
   currentFreight,
-  environment,
 }: PromotionCreateMenuProps) {
   const capability = stage.capabilities.promotion;
   const options = [
     {
       icon: <IconArrowUp aria-hidden size={15} />,
       label: "Promote eligible Freight",
-      props: { environment, freight: eligibleFreight, stage },
+      props: { freight: eligibleFreight, stage },
       unavailableLabel: "No eligible Freight is currently observed.",
     },
     {
       icon: <IconRefresh aria-hidden size={15} />,
       label: "Re-promote in place",
-      props: { environment, freight: currentFreight, inPlace: true, stage },
+      props: { freight: currentFreight, inPlace: true, stage },
       unavailableLabel: "This Stage has no current Freight to promote in place.",
     },
   ] satisfies Array<{
@@ -329,7 +256,6 @@ export function PromotionCreateMenu({
           </Button>
         </Menu.Target>
         <Menu.Dropdown>
-          <Menu.Label>Promotion options</Menu.Label>
           {options.map((option) => {
             const unavailable =
               capability.status !== "ready"
@@ -411,51 +337,96 @@ function usePromotionCreateDialogState(options: PromotionCreateProps[]) {
   return { changeSelectedName, close, open, props, selectedName };
 }
 
-function FreightDetails({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
+function SelectedFreight({ freight }: Readonly<{ freight?: PromotionFreightItem }>) {
   return (
     <Paper p="md" withBorder>
       <Stack gap="sm">
-        <Group justify="space-between" wrap="wrap">
-          <Text fw={600}>Selected Freight</Text>
-          <Text c="dimmed" size="xs">
-            Kargo ID <Code>{freight.name}</Code>
-          </Text>
-        </Group>
-        {freight.artifacts.length === 0 ? (
-          <PromotionFact label="Source" value={freightOriginLabel(freight.origin)} />
+        <Text fw={600}>Selected Freight</Text>
+        {freight ? (
+          <FreightSummary freight={freight} />
         ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            {freight.artifacts.map((artifact) => (
-              <Paper
-                key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
-                p="sm"
-                withBorder
-              >
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="wrap">
-                    <Text c="dimmed" size="xs">
-                      Source
-                    </Text>
-                    <Badge size="xs" variant="light">
-                      {artifact.kind}
-                    </Badge>
-                  </Group>
-                  <Text fw={600} size="sm">
-                    {artifact.repository ?? freightOriginLabel(freight.origin)}
-                  </Text>
-                  <Stack gap={2}>
-                    <Text c="dimmed" size="xs">
-                      {freightArtifactVersionLabel(artifact.kind)}
-                    </Text>
-                    <Code>{artifact.version}</Code>
-                  </Stack>
-                </Stack>
-              </Paper>
-            ))}
-          </SimpleGrid>
+          <Text c="dimmed" size="sm">
+            Choose one of the available Freight entries below.
+          </Text>
         )}
       </Stack>
     </Paper>
+  );
+}
+
+function AvailableFreight({
+  freight,
+  onChange,
+  selectedName,
+}: Readonly<{
+  freight: PromotionFreightItem[];
+  onChange: (name: string) => void;
+  selectedName: string;
+}>) {
+  const visibleFreight = visiblePromotionFreight(freight, selectedName);
+
+  return (
+    <Stack gap="xs">
+      <Group justify="space-between" wrap="wrap">
+        <Text fw={600}>Available Freight</Text>
+        <Text c="dimmed" size="xs">
+          Select the exact Freight to promote
+        </Text>
+      </Group>
+      <ScrollArea.Autosize mah={360} offsetScrollbars type="auto">
+        <Radio.Group aria-label="Available Freight" onChange={onChange} value={selectedName}>
+          <Stack gap="xs">
+            {visibleFreight.map((item) => (
+              <Radio.Card
+                aria-label={`Select Freight ${item.name}`}
+                key={`${item.origin}:${item.name}`}
+                p="md"
+                radius="md"
+                value={item.name}
+              >
+                <Group align="center" gap="md" wrap="nowrap">
+                  <Radio.Indicator />
+                  <FreightSummary freight={item} />
+                </Group>
+              </Radio.Card>
+            ))}
+          </Stack>
+        </Radio.Group>
+      </ScrollArea.Autosize>
+    </Stack>
+  );
+}
+
+function FreightSummary({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
+  return (
+    <Grid gap="md" style={{ flex: 1, minWidth: 0 }}>
+      <Grid.Col span={{ base: 12, sm: 2 }}>
+        <FreightField label="Freight ID">
+          <FreightIdentifier freight={freight} />
+        </FreightField>
+      </Grid.Col>
+      <Grid.Col span={{ base: 12, sm: 2 }}>
+        <FreightField label="Warehouse">
+          <Text size="sm">{freightOriginLabel(freight.origin)}</Text>
+        </FreightField>
+      </Grid.Col>
+      <Grid.Col span={{ base: 12, sm: 8 }}>
+        <FreightField label="Contents">
+          <FreightContents freight={freight} />
+        </FreightField>
+      </Grid.Col>
+    </Grid>
+  );
+}
+
+function FreightField({ children, label }: Readonly<{ children: ReactNode; label: string }>) {
+  return (
+    <Stack gap={4}>
+      <Text c="dimmed" size="xs">
+        {label}
+      </Text>
+      {children}
+    </Stack>
   );
 }
 

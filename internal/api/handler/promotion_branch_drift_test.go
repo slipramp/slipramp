@@ -41,8 +41,12 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	drift := &recordingPromotionBranchDriftService{
 		result: projection.BranchDriftList{
 			Items: []projection.BranchDriftRepository{{
-				Repository: repository.Repository{Name: "ops", Branch: "main"},
-				ScannedAt:  now,
+				Repository: repository.Repository{Config: repository.Config{
+					Name:     "ops",
+					CloneURL: "https://github.com/example/ops.git",
+					Branch:   "main",
+				}},
+				ScannedAt: now,
 				Stages: []projection.BranchDriftStage{{
 					Stage: promotion.Stage{
 						ID:             stageID,
@@ -134,6 +138,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 		`"sourceDrift":false`,
 		`"targetDrift":false`,
 		`"authoredAt":"2026-10-22T10:00:00Z"`,
+		`"url":"https://github.com/example/ops/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {

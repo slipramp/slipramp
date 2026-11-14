@@ -5,10 +5,9 @@ import {
   eligibleStageFreight,
   initialPromotionFreightName,
   promotionCreationContext,
-  parsePromotionReviewPolicySelection,
   promotionCreationURLSelection,
-  promotionReviewPolicyUpdate,
   updatePromotionCreationSearchParams,
+  visiblePromotionFreight,
 } from "./promotion-creation.ts";
 
 const freight = (origin, name, version) => ({
@@ -47,6 +46,21 @@ test("promotion Freight preselection honors a valid requested Freight", () => {
   assert.equal(initialPromotionFreightName([app]), "freight-42");
 });
 
+test("promotion Freight choices are capped while retaining the selection", () => {
+  const choices = Array.from({ length: 12 }, (_, index) =>
+    freight("Warehouse/app", `freight-${index + 1}`, String(index + 1)),
+  );
+
+  assert.deepEqual(
+    visiblePromotionFreight(choices, "").map((item) => item.name),
+    choices.slice(0, 10).map((item) => item.name),
+  );
+  assert.deepEqual(
+    visiblePromotionFreight(choices, "freight-12").map((item) => item.name),
+    ["freight-12", ...choices.slice(0, 9).map((item) => item.name)],
+  );
+});
+
 test("promotion creation round-trips through URL state without disturbing page filters", () => {
   const current = new URLSearchParams("view=stages&attention=unhealthy");
   const opened = updatePromotionCreationSearchParams(current, {
@@ -72,28 +86,4 @@ test("promotion creation round-trips through URL state without disturbing page f
 test("in-place promotion uses a distinct URL context", () => {
   assert.equal(promotionCreationContext({ inPlace: true }), "in-place");
   assert.equal(promotionCreationContext({}), "stage");
-});
-
-test("review policy choices produce permanent and time-boxed updates", () => {
-  const now = new Date("2026-10-29T18:00:00Z");
-
-  assert.equal(parsePromotionReviewPolicySelection("invalid"), undefined);
-  assert.equal(parsePromotionReviewPolicySelection("30m"), "30m");
-  assert.equal(promotionReviewPolicyUpdate("unchanged", now), undefined);
-  assert.deepEqual(promotionReviewPolicyUpdate("automatic", now), { mode: "automatic" });
-  assert.deepEqual(promotionReviewPolicyUpdate("permanent", now), {
-    mode: "review-required",
-  });
-  assert.deepEqual(promotionReviewPolicyUpdate("30m", now), {
-    expiresAt: "2026-10-29T18:30:00.000Z",
-    mode: "review-required",
-  });
-  assert.deepEqual(promotionReviewPolicyUpdate("1h", now), {
-    expiresAt: "2026-10-29T19:00:00.000Z",
-    mode: "review-required",
-  });
-  assert.deepEqual(promotionReviewPolicyUpdate("24h", now), {
-    expiresAt: "2026-10-30T18:00:00.000Z",
-    mode: "review-required",
-  });
 });

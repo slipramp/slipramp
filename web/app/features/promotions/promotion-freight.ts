@@ -1,9 +1,12 @@
 import type {
+  PromotionFreightAlignment,
   PromotionFreightAlignmentStatus,
   PromotionFreightArtifact,
   PromotionFreightCandidate,
   PromotionFreightItem,
+  PromotionProjectFreightRequest,
   PromotionProjectStage,
+  PromotionProjectStageSource,
 } from "~/api/generated";
 
 export type PipelineFreightSourceRow = {
@@ -18,6 +21,34 @@ export type FreightAlignmentPresentation = {
   color: "gray" | "green" | "yellow";
   label: "Aligned" | "Different" | "Unknown";
 };
+
+export type StageFreightDetailRow =
+  | {
+      freight: PromotionFreightItem;
+      key: string;
+      kind: "current";
+      origin: string;
+    }
+  | {
+      alignment?: PromotionFreightAlignment;
+      key: string;
+      kind: "source";
+      origin: string;
+      request: PromotionProjectFreightRequest;
+      source: PromotionProjectStageSource;
+    }
+  | {
+      candidate: PromotionFreightCandidate;
+      key: string;
+      kind: "candidate";
+      origin: string;
+      request: PromotionProjectFreightRequest;
+    }
+  | {
+      key: string;
+      kind: "empty";
+      origin: string;
+    };
 
 export function freightOriginLabel(origin: string) {
   return origin.replace(/^Warehouse\//, "");
@@ -35,6 +66,17 @@ export function freightArtifactVersionLabel(kind: PromotionFreightArtifact["kind
       return "Version";
     case "git":
       return "Revision";
+  }
+}
+
+export function freightSourceKindLabel(kind: PromotionFreightArtifact["kind"]) {
+  switch (kind) {
+    case "git":
+      return "Git";
+    case "image":
+      return "Image";
+    case "chart":
+      return "Chart";
   }
 }
 
@@ -56,6 +98,75 @@ export function otherFreightCandidates(
   return candidates.filter(
     (candidate) => !activeKeys.has(`${candidate.freight.origin}\u0000${candidate.freight.name}`),
   );
+}
+
+export function buildStageFreightDetailRows(stage: PromotionProjectStage): StageFreightDetailRow[] {
+  const origins = new Set([
+    ...stage.freight.items.map((freight) => freight.origin),
+    ...stage.requestedFreight.map((request) => request.origin),
+  ]);
+  const rows: StageFreightDetailRow[] = [];
+
+  for (const origin of [...origins].toSorted((left, right) => left.localeCompare(right))) {
+    const originRows: StageFreightDetailRow[] = [];
+    const activeFreight = stage.freight.items.filter((freight) => freight.origin === origin);
+    const requests = stage.requestedFreight.filter((request) => request.origin === origin);
+
+    activeFreight.forEach((freight, index) => {
+      originRows.push({
+        freight,
+        key: JSON.stringify([origin, "current", freight.name, index]),
+        kind: "current",
+        origin,
+      });
+    });
+
+    requests.forEach((request, requestIndex) => {
+      request.sources.forEach((source, sourceIndex) => {
+        originRows.push({
+          alignment: freightAlignmentForSource(stage, origin, source.name),
+          key: JSON.stringify([
+            origin,
+            "source",
+            source.stageId ?? "unresolved",
+            source.name,
+            requestIndex,
+            sourceIndex,
+          ]),
+          kind: "source",
+          origin,
+          request,
+          source,
+        });
+      });
+
+      otherFreightCandidates(stage.freight.items, request.candidates).forEach(
+        (candidate, candidateIndex) => {
+          originRows.push({
+            candidate,
+            key: JSON.stringify([
+              origin,
+              "candidate",
+              candidate.freight.name,
+              requestIndex,
+              candidateIndex,
+            ]),
+            kind: "candidate",
+            origin,
+            request,
+          });
+        },
+      );
+    });
+
+    rows.push(
+      ...(originRows.length > 0
+        ? originRows
+        : [{ key: JSON.stringify([origin, "empty"]), kind: "empty" as const, origin }]),
+    );
+  }
+
+  return rows;
 }
 
 export function stageHasNewerFreight(stage: PromotionProjectStage) {

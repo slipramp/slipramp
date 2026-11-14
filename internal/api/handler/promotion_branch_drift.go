@@ -98,31 +98,31 @@ func (h *Handler) ListPromotionBranchDrift(
 				),
 			}
 			response.AcknowledgedSourceCommit = optionalGitCommit(
-				item.Repository.ID,
+				item.Repository,
 				stage.AcknowledgedSourceRevision,
 				nil,
 				commits,
 			)
 			response.AcknowledgedRenderBaseCommit = optionalGitCommit(
-				item.Repository.ID,
+				item.Repository,
 				stage.AcknowledgedRenderBaseRevision,
 				nil,
 				commits,
 			)
 			response.AcknowledgedRenderCommit = optionalGitCommit(
-				item.Repository.ID,
+				item.Repository,
 				stage.AcknowledgedRenderRevision,
 				stage.AcknowledgedRenderAuthoredAt,
 				commits,
 			)
 			response.SourceBranchCommit = optionalGitCommit(
-				item.Repository.ID,
+				item.Repository,
 				stage.SourceBranchRevision,
 				stage.SourceBranchAuthoredAt,
 				commits,
 			)
 			response.TargetBranchCommit = optionalGitCommit(
-				item.Repository.ID,
+				item.Repository,
 				stage.TargetBranchRevision,
 				nil,
 				commits,
@@ -163,7 +163,7 @@ func (h *Handler) ListPromotionBranchDrift(
 }
 
 func optionalGitCommit(
-	repositoryID repository.RepositoryID,
+	record repository.Repository,
 	value string,
 	authoredAt *time.Time,
 	commits map[repository.CommitKey]api.GitCommit,
@@ -172,9 +172,12 @@ func optionalGitCommit(
 		return nil
 	}
 
-	commit := commits[commitKey(repositoryID, value)]
+	commit := commits[commitKey(record.ID, value)]
 	if commit.AuthoredAt == nil {
 		commit.AuthoredAt = authoredAt
+	}
+	if commit.URL == nil {
+		commit.URL = repository.CommitURL(record.Config, value)
 	}
 
 	return &commit

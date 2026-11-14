@@ -19,7 +19,8 @@ export function CommitReference({
   length = 12,
   repositoryId,
 }: Readonly<CommitReferenceProps>) {
-  const detailsURL = repositoryId ? commitPath(repositoryId, commit.sha) : undefined;
+  const detailsURL =
+    repositoryId && commit.title !== undefined ? commitPath(repositoryId, commit.sha) : undefined;
   const hasDetails = Boolean(detailsURL || commit.title || commit.author || commit.authoredAt);
   const reference = detailsURL ? (
     <Anchor aria-label={`Open commit ${commit.sha}`} component={Link} to={detailsURL}>

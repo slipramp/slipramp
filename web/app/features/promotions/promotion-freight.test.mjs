@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildPipelineFreightSourceRows,
+  buildStageFreightDetailRows,
   freightArtifactReference,
   freightArtifactVersionLabel,
   freightAlignmentForSource,
@@ -143,6 +144,57 @@ test("other Freight excludes every active item from a multi-Freight Stage", () =
     otherFreightCandidates([activeApp, activeConfig], candidates).map(({ freight }) => freight),
     [nextApp],
   );
+});
+
+test("Stage Freight detail rows include current, source, candidate, and empty Warehouse entries", () => {
+  const current = {
+    artifacts: [],
+    name: "freight-current",
+    origin: "Warehouse/app",
+  };
+  const candidate = {
+    artifacts: [],
+    name: "freight-next",
+    origin: "Warehouse/app",
+  };
+  const value = {
+    freight: { items: [current] },
+    freightAlignments: [
+      {
+        origin: "Warehouse/app",
+        sourceStageName: "app-qa",
+        status: "different",
+        targetStageId: "target",
+      },
+    ],
+    requestedFreight: [
+      {
+        candidates: [
+          { evidence: [], freight: current, readiness: "ready" },
+          { evidence: [], freight: candidate, readiness: "ready" },
+        ],
+        origin: "Warehouse/app",
+        sources: [{ name: "app-qa", stageId: "source" }],
+      },
+      {
+        candidates: [],
+        origin: "Warehouse/config",
+        sources: [],
+      },
+    ],
+  };
+
+  const rows = buildStageFreightDetailRows(value);
+  assert.deepEqual(
+    rows.map((row) => [row.origin, row.kind]),
+    [
+      ["Warehouse/app", "current"],
+      ["Warehouse/app", "source"],
+      ["Warehouse/app", "candidate"],
+      ["Warehouse/config", "empty"],
+    ],
+  );
+  assert.equal(rows[1].alignment, value.freightAlignments[0]);
 });
 
 test("newer Freight uses ready Kargo discovery order instead of version strings", () => {

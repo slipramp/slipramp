@@ -2,21 +2,12 @@ import type {
   ProductPrincipal,
   PromotionFreightItem,
   PromotionProjectStage,
-  PromotionStagePolicyUpdate,
 } from "~/api/generated";
 
 export type PromotionCreationActionResult = {
   error?: string;
   promotionId?: string;
 };
-
-export type PromotionReviewPolicySelection =
-  | "unchanged"
-  | "automatic"
-  | "permanent"
-  | "30m"
-  | "1h"
-  | "24h";
 
 export type PromotionCreationContext = "candidate" | "in-place" | "stage" | "upstream";
 
@@ -41,43 +32,6 @@ const promotionCreationContexts = new Set<PromotionCreationContext>([
   "upstream",
 ]);
 
-const promotionReviewPolicySelections = new Set<PromotionReviewPolicySelection>([
-  "unchanged",
-  "automatic",
-  "permanent",
-  "30m",
-  "1h",
-  "24h",
-]);
-
-export function parsePromotionReviewPolicySelection(
-  value: string,
-): PromotionReviewPolicySelection | undefined {
-  return promotionReviewPolicySelections.has(value as PromotionReviewPolicySelection)
-    ? (value as PromotionReviewPolicySelection)
-    : undefined;
-}
-
-export function promotionReviewPolicyUpdate(
-  selection: PromotionReviewPolicySelection,
-  now = new Date(),
-): PromotionStagePolicyUpdate | undefined {
-  if (selection === "unchanged") return undefined;
-  if (selection === "automatic") return { mode: "automatic" };
-  if (selection === "permanent") return { mode: "review-required" };
-
-  const durationMilliseconds = {
-    "30m": 30 * 60 * 1000,
-    "1h": 60 * 60 * 1000,
-    "24h": 24 * 60 * 60 * 1000,
-  }[selection];
-
-  return {
-    expiresAt: new Date(now.getTime() + durationMilliseconds).toISOString(),
-    mode: "review-required",
-  };
-}
-
 export function eligibleStageFreight(stage: PromotionProjectStage): PromotionFreightItem[] {
   if (stage.capabilities.promotion.status !== "ready") return [];
 
@@ -94,6 +48,20 @@ export function initialPromotionFreightName(
 ) {
   if (requestedName && freight.some((item) => item.name === requestedName)) return requestedName;
   return freight.length === 1 ? (freight[0]?.name ?? "") : "";
+}
+
+export function visiblePromotionFreight(
+  freight: PromotionFreightItem[],
+  selectedName: string,
+  limit = 10,
+) {
+  const visible = freight.slice(0, limit);
+  if (!selectedName || visible.some((item) => item.name === selectedName)) return visible;
+
+  const selected = freight.find((item) => item.name === selectedName);
+  if (!selected) return visible;
+
+  return [selected, ...visible.filter((item) => item.name !== selectedName)].slice(0, limit);
 }
 
 export function promotionCreationContext(options: {

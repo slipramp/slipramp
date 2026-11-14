@@ -20,14 +20,13 @@ import {
 } from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconListDetails, IconRoute, IconSearch } from "@tabler/icons-react";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import {
   type PromotionFreightAlignmentStatus,
   type PromotionFreightCandidate,
   type PromotionFreightItem,
-  type PromotionPolicyMode,
   type PromotionPipeline,
   type PromotionProjectDetail,
   type PromotionProjectStage,
@@ -37,21 +36,21 @@ import {
   PromotionCreateMenu,
 } from "~/features/promotions/promotion-create-dialog";
 import { eligibleStageFreight } from "~/features/promotions/promotion-creation";
+import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
 import {
+  buildStageFreightDetailRows,
   buildPipelineFreightSourceRows,
   freightArtifactReference,
-  freightAlignmentForSource,
   freightAlignmentPresentation,
   freightDisplayLabel,
   freightNames,
   freightOriginLabel,
-  otherFreightCandidates,
+  freightSourceKindLabel,
   stageHasNewerFreight,
+  type StageFreightDetailRow,
 } from "~/features/promotions/promotion-freight";
-import {
-  promotionStagePolicyColor,
-  promotionStagePolicyPresentation,
-} from "~/features/promotions/promotion-policy";
+import { promotionStagePolicyPresentation } from "~/features/promotions/promotion-policy";
+import { StagePolicyBadge } from "~/features/promotions/promotion-policy-badge";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import { promotionStageFilterSearch } from "~/features/promotions/promotion-project-inventory-state";
@@ -66,6 +65,8 @@ import {
 } from "~/features/promotions/promotion-topology";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { KargoObservationTime } from "~/features/promotions/kargo-observation-time";
+import { RelativeTime } from "~/shared/display-values";
+import { ListPagination } from "~/shared/list-controls";
 import { EmptyState, PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 
 export function ProjectDetail({
@@ -556,16 +557,21 @@ function FreightSourceTable({
   columns,
   emptyMessage,
   minWidth,
+  warehouseDiscoveredAt,
 }: Readonly<{
   borderTop?: boolean;
   columns: Array<{ header: ReactNode; stage: PromotionProjectStage }>;
   emptyMessage: string;
   minWidth: number;
+  warehouseDiscoveredAt?: Record<string, string>;
 }>) {
   const stages = columns.map((column) => column.stage);
   const freightRows = buildPipelineFreightSourceRows(stages);
   const warehouseGroups = Map.groupBy(freightRows, (row) => row.origin);
-  const freightSourceColumnStyle = { maxWidth: 300, minWidth: 300, width: 300 } as const;
+  const freightSourceColumnStyle =
+    stages.length === 1
+      ? ({ minWidth: 300 } as const)
+      : ({ maxWidth: 300, minWidth: 300, width: 300 } as const);
 
   return (
     <Table.ScrollContainer
@@ -595,13 +601,23 @@ function FreightSourceTable({
                   colSpan={stages.length + 1}
                   scope="rowgroup"
                 >
-                  <Group gap="xs">
-                    <Text fw={700} size="sm">
-                      {freightOriginLabel(origin)}
-                    </Text>
-                    <Text c="dimmed" size="xs">
-                      Warehouse
-                    </Text>
+                  <Group justify="space-between" wrap="wrap">
+                    <Group gap="xs">
+                      <Text fw={700} size="sm">
+                        {freightOriginLabel(origin)}
+                      </Text>
+                      <Text c="dimmed" size="xs">
+                        Warehouse
+                      </Text>
+                    </Group>
+                    {warehouseDiscoveredAt?.[origin] ? (
+                      <Group gap={4} wrap="wrap">
+                        <Text c="dimmed" size="xs">
+                          Discovered
+                        </Text>
+                        <RelativeTime c="dimmed" size="xs" value={warehouseDiscoveredAt[origin]} />
+                      </Group>
+                    ) : null}
                   </Group>
                 </Table.Th>
               </Table.Tr>
@@ -652,7 +668,6 @@ function PipelineStageColumnTitle({
   onEditPolicy: () => void;
   stage: PromotionProjectStage;
 }>) {
-  const policy = promotionStagePolicyPresentation(stage);
   const warnings = stageCapabilityWarnings(stage);
 
   return (
@@ -681,14 +696,7 @@ function PipelineStageColumnTitle({
       </Group>
       <Group gap={6} justify="space-between" wrap="wrap">
         <Group gap={6} wrap="wrap">
-          <StagePolicyBadge
-            canEdit={canWrite && policy.editable}
-            editable={policy.editable}
-            label={policy.label}
-            mode={stage.policy.effectiveMode}
-            onEdit={onEditPolicy}
-            stageName={stage.name}
-          />
+          <StagePolicyBadge canEdit={canWrite} onEdit={onEditPolicy} stage={stage} />
           {stage.pendingPromotionCount > 0 ? (
             <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
               {stage.pendingPromotionCount} pending
@@ -722,17 +730,6 @@ function PipelineFreightValues({ values }: Readonly<{ values: string[] }>) {
       ))}
     </Stack>
   );
-}
-
-function freightSourceKindLabel(kind: PromotionFreightItem["artifacts"][number]["kind"]) {
-  switch (kind) {
-    case "git":
-      return "Git";
-    case "image":
-      return "Image";
-    case "chart":
-      return "Chart";
-  }
 }
 
 export function StageInventory({
@@ -791,7 +788,6 @@ export function StageInventory({
             {stages
               .toSorted((left, right) => left.name.localeCompare(right.name))
               .map((stage) => {
-                const policy = promotionStagePolicyPresentation(stage);
                 const currentFreight = stage.freight.items;
 
                 return (
@@ -917,12 +913,9 @@ export function StageInventory({
                     <Table.Td>
                       <Stack gap={4}>
                         <StagePolicyBadge
-                          canEdit={canWrite && policy.editable}
-                          editable={policy.editable}
-                          label={policy.label}
-                          mode={stage.policy.effectiveMode}
+                          canEdit={canWrite}
                           onEdit={() => onEditPolicy(stage)}
-                          stageName={stage.name}
+                          stage={stage}
                         />
                         {stage.pendingPromotionCount > 0 ? (
                           <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
@@ -1127,102 +1120,69 @@ export function StageHealthBadge({ stage }: Readonly<{ stage: PromotionProjectSt
   );
 }
 
-function StagePolicyBadge({
-  canEdit,
-  editable,
-  label,
-  mode,
-  onEdit,
-  stageName,
-}: Readonly<{
-  canEdit: boolean;
-  editable: boolean;
-  label: string;
-  mode: PromotionPolicyMode;
-  onEdit: () => void;
-  stageName: string;
-}>) {
-  const color = editable ? promotionStagePolicyColor(mode) : "gray";
-  if (!canEdit) {
-    return (
-      <Badge color={color} variant="light">
-        {label}
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge
-      aria-label={`Edit ${stageName} policy`}
-      color={color}
-      component="button"
-      onClick={onEdit}
-      style={{ cursor: "pointer" }}
-      type="button"
-      variant="light"
-    >
-      {label}
-    </Badge>
-  );
-}
-
 export function StageCard({
   canWrite,
   linkName = true,
   onEditPolicy,
+  showFreightDetails = true,
   showKargoLink = true,
+  showStageHeader = true,
   stage,
 }: Readonly<{
   canWrite: boolean;
   linkName?: boolean;
   onEditPolicy: () => void;
+  showFreightDetails?: boolean;
   showKargoLink?: boolean;
+  showStageHeader?: boolean;
   stage: PromotionProjectStage;
 }>) {
-  const policyPresentation = promotionStagePolicyPresentation(stage);
   const capabilityWarnings = stageCapabilityWarnings(stage);
+  const policyControls = (
+    <>
+      <StagePolicyBadge canEdit={canWrite} onEdit={onEditPolicy} stage={stage} />
+      {stage.pendingPromotionCount > 0 ? (
+        <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
+          {stage.pendingPromotionCount} pending
+        </Anchor>
+      ) : null}
+    </>
+  );
 
   return (
     <Paper style={{ overflow: "hidden" }} withBorder>
       <Stack gap={0}>
         <Stack gap="md" p="md">
-          <Group align="flex-start" justify="space-between" wrap="nowrap">
-            <Stack gap={3}>
-              <Group gap="xs">
-                {linkName ? (
-                  <PromotionStageLink heading showKargoLink={showKargoLink} stage={stage} />
-                ) : (
-                  <Title order={3} size="h4">
-                    {stage.name}
-                  </Title>
-                )}
-                <KargoObservationTime value={stage.lastObservedAt} />
-                {stage.controlFlow ? <Badge variant="light">Control flow</Badge> : null}
-              </Group>
-            </Stack>
-            <StageHealthBadge stage={stage} />
-          </Group>
+          {showStageHeader ? (
+            <Group align="flex-start" justify="space-between" wrap="nowrap">
+              <Stack gap={3}>
+                <Group gap="xs">
+                  {linkName ? (
+                    <PromotionStageLink heading showKargoLink={showKargoLink} stage={stage} />
+                  ) : (
+                    <Title order={3} size="h4">
+                      {stage.name}
+                    </Title>
+                  )}
+                  <KargoObservationTime value={stage.lastObservedAt} />
+                  {stage.controlFlow ? <Badge variant="light">Control flow</Badge> : null}
+                </Group>
+              </Stack>
+              <StageHealthBadge stage={stage} />
+            </Group>
+          ) : null}
 
-          <Group justify="space-between" wrap="wrap">
-            <Group gap="xs">
-              <StagePolicyBadge
-                canEdit={canWrite && policyPresentation.editable}
-                editable={policyPresentation.editable}
-                label={policyPresentation.label}
-                mode={stage.policy.effectiveMode}
-                onEdit={onEditPolicy}
-                stageName={stage.name}
-              />
-              {stage.pendingPromotionCount > 0 ? (
-                <Anchor component={Link} size="sm" to={`/promotions?stageId=${stage.id}`}>
-                  {stage.pendingPromotionCount} pending
-                </Anchor>
-              ) : null}
-            </Group>
-            <Group gap="xs">
-              <StageFreightDetailsDialog compact canWrite={canWrite} stage={stage} />
-              {canWrite ? <StagePromotionActions stage={stage} /> : null}
-            </Group>
+          <Group justify={showStageHeader ? "space-between" : "flex-end"} wrap="wrap">
+            {showStageHeader ? <Group gap="xs">{policyControls}</Group> : null}
+            {!showStageHeader || showFreightDetails || canWrite ? (
+              <Group gap="xs">
+                {!showStageHeader ? policyControls : null}
+                {showFreightDetails ? (
+                  <StageFreightDetailsDialog compact canWrite={canWrite} stage={stage} />
+                ) : null}
+                {canWrite ? <StagePromotionActions stage={stage} /> : null}
+              </Group>
+            ) : null}
           </Group>
 
           {capabilityWarnings.length > 0 ? (
@@ -1249,13 +1209,18 @@ function StagePromotionActions({ stage }: Readonly<{ stage: PromotionProjectStag
     <PromotionCreateMenu
       currentFreight={stage.freight.items}
       eligibleFreight={eligibleStageFreight(stage)}
-      environment={stage.enrichment?.environment}
       stage={stage}
     />
   );
 }
 
 function StageFreight({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
+  const warehouseDiscoveredAt = Object.fromEntries(
+    stage.freight.items.flatMap((freight) =>
+      freight.discoveredAt ? [[freight.origin, freight.discoveredAt]] : [],
+    ),
+  );
+
   return (
     <FreightSourceTable
       borderTop
@@ -1271,6 +1236,7 @@ function StageFreight({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
       ]}
       emptyMessage="This Stage does not request or report Freight."
       minWidth={540}
+      warehouseDiscoveredAt={warehouseDiscoveredAt}
     />
   );
 }
@@ -1287,52 +1253,6 @@ function StageFreightDetailsDialog({
   stage: PromotionProjectStage;
 }>) {
   const [opened, setOpened] = useState(false);
-  const activeFreight = stage.freight.items;
-  const requests = stage.requestedFreight.map((request) => ({
-    request,
-    otherCandidates: otherFreightCandidates(activeFreight, request.candidates),
-  }));
-  const otherCount = requests.reduce((count, request) => count + request.otherCandidates.length, 0);
-  const eligibleFreight = eligibleStageFreight(stage);
-  const upstreamPromotions = stage.requestedFreight.flatMap((request) =>
-    request.sources.flatMap((source) => {
-      const alignment = freightAlignmentForSource(stage, request.origin, source.name);
-      const freight = alignment?.sourceCurrentFreight;
-      if (!alignment?.sourceStageId || !freight) return [];
-      const eligible = eligibleFreight.some(
-        (item) => item.origin === freight.origin && item.name === freight.name,
-      );
-      if (!eligible) return [];
-
-      return [
-        {
-          freight,
-          origin: request.origin,
-          sourceStageId: alignment.sourceStageId,
-          sourceStageName: source.name,
-        },
-      ];
-    }),
-  );
-  const warnings = includeWarnings ? stageCapabilityWarnings(stage) : [];
-  const warehouses = new Map<
-    string,
-    { activeFreight: PromotionFreightItem[]; requests: typeof requests }
-  >();
-
-  for (const freight of activeFreight) {
-    const warehouse = warehouses.get(freight.origin) ?? { activeFreight: [], requests: [] };
-    warehouse.activeFreight.push(freight);
-    warehouses.set(freight.origin, warehouse);
-  }
-  for (const request of requests) {
-    const warehouse = warehouses.get(request.request.origin) ?? {
-      activeFreight: [],
-      requests: [],
-    };
-    warehouse.requests.push(request);
-    warehouses.set(request.request.origin, warehouse);
-  }
 
   return (
     <>
@@ -1348,270 +1268,278 @@ function StageFreightDetailsDialog({
         centered
         onClose={() => setOpened(false)}
         opened={opened}
-        size="min(72rem, calc(100vw - 2rem))"
+        size="min(90rem, calc(100vw - 2rem))"
         title={`Freight details · ${stage.name}`}
       >
-        <Stack gap="md">
-          <Group justify="space-between" wrap="wrap">
-            <Text c="dimmed" size="sm">
-              Current Freight, requested sources, and observed alternatives by Warehouse.
-            </Text>
-            {otherCount > 0 ? (
-              <Badge color="gray" variant="light">
-                {otherCount} other option{otherCount === 1 ? "" : "s"}
-              </Badge>
-            ) : null}
-          </Group>
-
-          {warnings.length > 0 ? (
-            <Alert color="orange" title="Slipramp enrichment needs attention">
-              <Stack gap={4}>
-                {warnings.map((warning) => (
-                  <Text key={warning} size="sm">
-                    {warning}
-                  </Text>
-                ))}
-              </Stack>
-            </Alert>
-          ) : null}
-
-          <Paper withBorder>
-            <Table.ScrollContainer minWidth={720} type="native">
-              <Table
-                styles={{ th: { textTransform: "none" } }}
-                verticalSpacing="sm"
-                withColumnBorders
-              >
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th miw={150}>Source</Table.Th>
-                    <Table.Th miw={270}>Freight</Table.Th>
-                    <Table.Th miw={120}>State</Table.Th>
-                    <Table.Th miw={130}>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {[...warehouses]
-                    .toSorted(([left], [right]) => left.localeCompare(right))
-                    .map(([origin, warehouse]) => {
-                      const detailRowCount =
-                        warehouse.activeFreight.length +
-                        warehouse.requests.reduce(
-                          (count, item) =>
-                            count + item.request.sources.length + item.otherCandidates.length,
-                          0,
-                        );
-
-                      return (
-                        <Fragment key={origin}>
-                          <Table.Tr>
-                            <Table.Th
-                              bg="var(--mantine-color-default-hover)"
-                              colSpan={4}
-                              scope="rowgroup"
-                            >
-                              <Group gap="xs" wrap="wrap">
-                                <Text fw={700} size="sm">
-                                  {freightOriginLabel(origin)}
-                                </Text>
-                                <Text c="dimmed" size="xs">
-                                  Warehouse
-                                </Text>
-                                {warehouse.requests.map(({ request }, requestIndex) => (
-                                  <Fragment key={`${request.origin}:${requestIndex}`}>
-                                    {request.direct ? <Badge size="xs">Direct</Badge> : null}
-                                    <Badge size="xs" variant="outline">
-                                      {request.availabilityStrategy}
-                                    </Badge>
-                                    {request.requiredSoakTime ? (
-                                      <Badge size="xs" variant="outline">
-                                        Soak {request.requiredSoakTime}
-                                      </Badge>
-                                    ) : null}
-                                  </Fragment>
-                                ))}
-                              </Group>
-                            </Table.Th>
-                          </Table.Tr>
-
-                          {warehouse.activeFreight.map((freight) => (
-                            <Table.Tr key={`active:${freight.name}`}>
-                              <Table.Th scope="row">
-                                <Text fw={600} size="sm">
-                                  Current Stage
-                                </Text>
-                              </Table.Th>
-                              <Table.Td>
-                                <FreightTableValue freight={freight} />
-                              </Table.Td>
-                              <Table.Td>
-                                <FreightStatusBadge
-                                  color="green"
-                                  details={[`Observed in ${stage.name}.`]}
-                                  label="Active"
-                                />
-                              </Table.Td>
-                              <Table.Td />
-                            </Table.Tr>
-                          ))}
-
-                          {warehouse.requests.flatMap(({ request }) =>
-                            request.sources.map((source) => {
-                              const alignment = freightAlignmentForSource(
-                                stage,
-                                request.origin,
-                                source.name,
-                              );
-                              const presentation = freightAlignmentPresentation(
-                                alignment?.status ?? "unknown",
-                              );
-                              const upstreamPromotion = upstreamPromotions.find(
-                                (promotion) =>
-                                  promotion.origin === request.origin &&
-                                  promotion.sourceStageId === alignment?.sourceStageId,
-                              );
-
-                              return (
-                                <Table.Tr
-                                  key={`source:${source.stageId ?? "unresolved"}:${source.name}`}
-                                >
-                                  <Table.Th scope="row">
-                                    <Text fw={600} size="sm">
-                                      {source.name}
-                                    </Text>
-                                    <Text c="dimmed" size="xs">
-                                      Upstream Stage
-                                    </Text>
-                                  </Table.Th>
-                                  <Table.Td>
-                                    {alignment?.sourceCurrentFreight ? (
-                                      <FreightTableValue freight={alignment.sourceCurrentFreight} />
-                                    ) : (
-                                      <Text c="dimmed" size="xs">
-                                        None observed
-                                      </Text>
-                                    )}
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <FreightStatusBadge
-                                      color={presentation.color}
-                                      details={[
-                                        ...(alignment?.targetCurrentFreight
-                                          ? [
-                                              `${stage.name}: ${freightDisplayLabel(
-                                                alignment.targetCurrentFreight,
-                                              )}`,
-                                            ]
-                                          : []),
-                                        ...(alignment?.reason ? [alignment.reason] : []),
-                                      ]}
-                                      label={presentation.label}
-                                      variant="light"
-                                    />
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <Group gap="xs" wrap="wrap">
-                                      {canWrite && upstreamPromotion ? (
-                                        <PromotionCreateButton
-                                          environment={stage.enrichment?.environment}
-                                          freight={[upstreamPromotion.freight]}
-                                          initialFreightName={upstreamPromotion.freight.name}
-                                          sourceStageId={upstreamPromotion.sourceStageId}
-                                          sourceStageName={upstreamPromotion.sourceStageName}
-                                          stage={stage}
-                                        />
-                                      ) : null}
-                                    </Group>
-                                  </Table.Td>
-                                </Table.Tr>
-                              );
-                            }),
-                          )}
-
-                          {warehouse.requests.flatMap(({ otherCandidates, request }) =>
-                            otherCandidates.map((candidate) => (
-                              <Table.Tr key={`candidate:${candidate.freight.name}`}>
-                                <Table.Th scope="row">
-                                  <Text fw={600} size="sm">
-                                    {request.direct ? "Direct candidate" : "Candidate"}
-                                  </Text>
-                                </Table.Th>
-                                <Table.Td>
-                                  <FreightTableValue freight={candidate.freight} />
-                                </Table.Td>
-                                <Table.Td>
-                                  <FreightReadinessBadge candidate={candidate} />
-                                </Table.Td>
-                                <Table.Td>
-                                  {canWrite && request.direct && candidate.readiness === "ready" ? (
-                                    <PromotionCreateButton
-                                      stage={stage}
-                                      freight={eligibleFreight}
-                                      environment={stage.enrichment?.environment}
-                                      initialFreightName={candidate.freight.name}
-                                    />
-                                  ) : null}
-                                </Table.Td>
-                              </Table.Tr>
-                            )),
-                          )}
-
-                          {detailRowCount === 0 ? (
-                            <Table.Tr>
-                              <Table.Td c="dimmed" colSpan={4}>
-                                No Freight is currently observed for this Warehouse.
-                              </Table.Td>
-                            </Table.Tr>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  {warehouses.size === 0 ? (
-                    <Table.Tr>
-                      <Table.Td c="dimmed" colSpan={4}>
-                        This Stage does not request or report Freight.
-                      </Table.Td>
-                    </Table.Tr>
-                  ) : null}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          </Paper>
-        </Stack>
+        <StageFreightDetails canWrite={canWrite} includeWarnings={includeWarnings} stage={stage} />
       </Modal>
     </>
   );
 }
 
-function FreightTableValue({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
+export function StageFreightDetails({
+  canWrite,
+  includeWarnings = false,
+  page = 1,
+  pageParam = "freightPage",
+  pageSize,
+  stage,
+}: Readonly<{
+  canWrite: boolean;
+  includeWarnings?: boolean;
+  page?: number;
+  pageParam?: string;
+  pageSize?: number;
+  stage: PromotionProjectStage;
+}>) {
+  const rows = buildStageFreightDetailRows(stage);
+  const visibleRows = pageSize ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
+  const warnings = includeWarnings ? stageCapabilityWarnings(stage) : [];
+  const eligibleFreight = eligibleStageFreight(stage);
+
   return (
-    <Stack gap={4}>
-      {freight.artifacts.length > 0 ? (
-        freight.artifacts.map((artifact) => (
-          <Group
-            align="center"
-            gap="xs"
-            key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
-            wrap="wrap"
-          >
-            <Badge size="xs" variant="light">
-              {freightSourceKindLabel(artifact.kind)}
-            </Badge>
-            <Text size="xs" style={{ overflowWrap: "anywhere" }}>
-              {artifact.repository ?? freightOriginLabel(freight.origin)}
-            </Text>
-            <Code>{artifact.version}</Code>
-          </Group>
-        ))
-      ) : (
-        <Text c="dimmed" size="xs">
-          No versioned artifacts
-        </Text>
-      )}
-      <Text c="dimmed" size="xs">
-        Kargo Freight <Code>{freight.name}</Code>
-      </Text>
+    <Stack gap="md">
+      {warnings.length > 0 ? (
+        <Alert color="orange" title="Slipramp enrichment needs attention">
+          <Stack gap={4}>
+            {warnings.map((warning) => (
+              <Text key={warning} size="sm">
+                {warning}
+              </Text>
+            ))}
+          </Stack>
+        </Alert>
+      ) : null}
+
+      <Paper withBorder>
+        <Table.ScrollContainer minWidth={840} type="native">
+          <Table styles={{ th: { textTransform: "none" } }} verticalSpacing="sm" withColumnBorders>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th miw={120}>Freight ID</Table.Th>
+                <Table.Th miw={150}>Source</Table.Th>
+                <Table.Th miw={270}>Contents</Table.Th>
+                <Table.Th miw={120}>State</Table.Th>
+                <Table.Th miw={130}>Actions</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {visibleRows.map((row, index) => (
+                <Fragment key={row.key}>
+                  {index === 0 || visibleRows[index - 1]?.origin !== row.origin ? (
+                    <StageFreightWarehouseHeader origin={row.origin} stage={stage} />
+                  ) : null}
+                  <StageFreightDetailTableRow
+                    canWrite={canWrite}
+                    eligibleFreight={eligibleFreight}
+                    row={row}
+                    stage={stage}
+                  />
+                </Fragment>
+              ))}
+              {rows.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td c="dimmed" colSpan={5}>
+                    This Stage does not request or report Freight.
+                  </Table.Td>
+                </Table.Tr>
+              ) : null}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </Paper>
+
+      {pageSize && rows.length > 0 ? (
+        <ListPagination
+          itemCount={visibleRows.length}
+          noun="Freight entries"
+          page={page}
+          pageParam={pageParam}
+          pageSize={pageSize}
+          total={rows.length}
+        />
+      ) : null}
     </Stack>
+  );
+}
+
+function StageFreightWarehouseHeader({
+  origin,
+  stage,
+}: Readonly<{ origin: string; stage: PromotionProjectStage }>) {
+  const requests = stage.requestedFreight.filter((request) => request.origin === origin);
+
+  return (
+    <Table.Tr>
+      <Table.Th bg="var(--mantine-color-default-hover)" colSpan={5} scope="rowgroup">
+        <Group gap="xs" wrap="wrap">
+          <Text fw={700} size="sm">
+            {freightOriginLabel(origin)}
+          </Text>
+          <Text c="dimmed" size="xs">
+            Warehouse
+          </Text>
+          {requests.map((request, requestIndex) => (
+            <Fragment key={`${request.origin}:${requestIndex}`}>
+              {request.direct ? <Badge size="xs">Direct</Badge> : null}
+              <Badge size="xs" variant="outline">
+                {request.availabilityStrategy}
+              </Badge>
+              {request.requiredSoakTime ? (
+                <Badge size="xs" variant="outline">
+                  Soak {request.requiredSoakTime}
+                </Badge>
+              ) : null}
+            </Fragment>
+          ))}
+        </Group>
+      </Table.Th>
+    </Table.Tr>
+  );
+}
+
+function StageFreightDetailTableRow({
+  canWrite,
+  eligibleFreight,
+  row,
+  stage,
+}: Readonly<{
+  canWrite: boolean;
+  eligibleFreight: PromotionFreightItem[];
+  row: StageFreightDetailRow;
+  stage: PromotionProjectStage;
+}>) {
+  if (row.kind === "current") {
+    return (
+      <Table.Tr>
+        <Table.Th scope="row">
+          <FreightIdentifier freight={row.freight} />
+        </Table.Th>
+        <Table.Td>
+          <Text fw={600} size="sm">
+            {stage.name}
+          </Text>
+          <Text c="dimmed" size="xs">
+            Current Stage
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          <FreightContents freight={row.freight} />
+        </Table.Td>
+        <Table.Td>
+          <FreightStatusBadge
+            color="green"
+            details={[`Observed in ${stage.name}.`]}
+            label="Active"
+          />
+        </Table.Td>
+        <Table.Td />
+      </Table.Tr>
+    );
+  }
+
+  if (row.kind === "source") {
+    const presentation = freightAlignmentPresentation(row.alignment?.status ?? "unknown");
+    const sourceFreight = row.alignment?.sourceCurrentFreight;
+    const sourceStageId = row.alignment?.sourceStageId;
+    const canPromote =
+      canWrite &&
+      sourceStageId &&
+      sourceFreight &&
+      eligibleFreight.some(
+        (item) => item.origin === sourceFreight.origin && item.name === sourceFreight.name,
+      );
+
+    return (
+      <Table.Tr>
+        <Table.Th scope="row">
+          {sourceFreight ? (
+            <FreightIdentifier freight={sourceFreight} />
+          ) : (
+            <Text c="dimmed">—</Text>
+          )}
+        </Table.Th>
+        <Table.Td>
+          <Text fw={600} size="sm">
+            {row.source.name}
+          </Text>
+          <Text c="dimmed" size="xs">
+            Upstream Stage
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          {sourceFreight ? (
+            <FreightContents freight={sourceFreight} />
+          ) : (
+            <Text c="dimmed" size="xs">
+              None observed
+            </Text>
+          )}
+        </Table.Td>
+        <Table.Td>
+          <FreightStatusBadge
+            color={presentation.color}
+            details={[
+              ...(row.alignment?.targetCurrentFreight
+                ? [`${stage.name}: ${freightDisplayLabel(row.alignment.targetCurrentFreight)}`]
+                : []),
+              ...(row.alignment?.reason ? [row.alignment.reason] : []),
+            ]}
+            label={presentation.label}
+            variant="light"
+          />
+        </Table.Td>
+        <Table.Td>
+          {canPromote ? (
+            <PromotionCreateButton
+              freight={[sourceFreight]}
+              initialFreightName={sourceFreight.name}
+              sourceStageId={sourceStageId}
+              sourceStageName={row.source.name}
+              stage={stage}
+            />
+          ) : null}
+        </Table.Td>
+      </Table.Tr>
+    );
+  }
+
+  if (row.kind === "candidate") {
+    return (
+      <Table.Tr>
+        <Table.Th scope="row">
+          <FreightIdentifier freight={row.candidate.freight} />
+        </Table.Th>
+        <Table.Td>
+          <Text fw={600} size="sm">
+            {row.request.direct ? "Direct candidate" : "Candidate"}
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          <FreightContents freight={row.candidate.freight} />
+        </Table.Td>
+        <Table.Td>
+          <FreightReadinessBadge candidate={row.candidate} />
+        </Table.Td>
+        <Table.Td>
+          {canWrite && row.request.direct && row.candidate.readiness === "ready" ? (
+            <PromotionCreateButton
+              freight={eligibleFreight}
+              initialFreightName={row.candidate.freight.name}
+              stage={stage}
+            />
+          ) : null}
+        </Table.Td>
+      </Table.Tr>
+    );
+  }
+
+  return (
+    <Table.Tr>
+      <Table.Td c="dimmed" colSpan={5}>
+        No Freight is currently observed for this Warehouse.
+      </Table.Td>
+    </Table.Tr>
   );
 }
 
@@ -1620,14 +1548,13 @@ function FreightReadinessBadge({ candidate }: Readonly<{ candidate: PromotionFre
     <FreightStatusBadge
       color={
         candidate.readiness === "ready"
-          ? "green"
+          ? "blue"
           : candidate.readiness === "unknown"
             ? "gray"
             : "orange"
       }
       details={[...(candidate.reason ? [candidate.reason] : []), ...(candidate.evidence ?? [])]}
       label={candidate.readiness}
-      size="xs"
     />
   );
 }
@@ -1636,17 +1563,15 @@ function FreightStatusBadge({
   color,
   details,
   label,
-  size,
   variant,
 }: Readonly<{
   color: string;
   details: string[];
   label: string;
-  size?: "xs";
   variant?: "light";
 }>) {
   const badge = (
-    <Badge color={color} size={size} variant={variant}>
+    <Badge color={color} variant={variant}>
       {label}
     </Badge>
   );
@@ -1680,7 +1605,7 @@ export function StagePolicyDialog({
 }: Readonly<{
   actionData: unknown;
   onClose: () => void;
-  stage?: PromotionProjectStage;
+  stage?: Pick<PromotionProjectStage, "id" | "name" | "policy" | "capabilities">;
 }>) {
   return (
     <Modal
@@ -1688,6 +1613,7 @@ export function StagePolicyDialog({
       onClose={onClose}
       opened={stage !== undefined}
       size="lg"
+      stackId="stage-policy"
       title={stage ? `Policy · ${stage.name}` : "Stage policy"}
     >
       {stage ? <PolicyForm actionData={actionData} onCancel={onClose} stage={stage} /> : null}
@@ -1702,12 +1628,24 @@ function PolicyForm({
 }: Readonly<{
   actionData: unknown;
   onCancel: () => void;
-  stage: PromotionProjectStage;
+  stage: Pick<PromotionProjectStage, "id" | "name" | "policy" | "capabilities">;
 }>) {
   const navigation = useNavigation();
   const submitting = navigation.formData?.get("stageId") === stage.id;
+  const submitted = useRef(false);
   const policyActionData = policyActionFeedback(actionData);
   const policyPresentation = promotionStagePolicyPresentation(stage);
+
+  useEffect(() => {
+    if (submitting) {
+      submitted.current = true;
+      return;
+    }
+    if (!submitted.current || policyActionData?.stageId !== stage.id) return;
+
+    submitted.current = false;
+    if (policyActionData.message) onCancel();
+  }, [onCancel, policyActionData, stage.id, submitting]);
 
   return (
     <Form method="post">
