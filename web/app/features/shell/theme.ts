@@ -57,7 +57,8 @@ export const sliprampTheme = createTheme({
   cursorType: "pointer",
   defaultRadius: "md",
   fontFamily: '"Manrope Variable", "Avenir Next", "Segoe UI", sans-serif',
-  fontFamilyMonospace: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+  fontFamilyMonospace:
+    '"Geist Mono Variable", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
   headings: {
     fontFamily: '"Manrope Variable", "Avenir Next", "Segoe UI", sans-serif',
     fontWeight: "700",
