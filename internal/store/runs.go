@@ -72,6 +72,10 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	if filter.ClusterName != "" {
 		clusterName = &filter.ClusterName
 	}
+	var placementName *string
+	if filter.PlacementName != "" {
+		placementName = &filter.PlacementName
+	}
 	var phase *string
 	if filter.Phase != "" {
 		value := string(filter.Phase)
@@ -92,6 +96,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,
+		PlacementName:   placementName,
 		Phase:           phase,
 		ReviewState:     reviewState,
 		ResultLimit:     filter.Limit,
@@ -113,6 +118,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,
+		PlacementName:   placementName,
 		Phase:           phase,
 		ReviewState:     reviewState,
 	})

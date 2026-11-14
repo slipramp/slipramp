@@ -49,6 +49,7 @@ func TestRunListFiltersTextAndJSON(t *testing.T) {
 		"--commit-sha", commitSHA,
 		"--input-artifact-id", testArtifactID,
 		"--cluster", "colo",
+		"--placement", "infrastructure",
 		"--phase", "running",
 		"--review-state", "approved",
 		"--limit", "10",
@@ -84,7 +85,8 @@ func TestRunListFiltersTextAndJSON(t *testing.T) {
 		for name, want := range map[string]string{
 			"repositoryId": "018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
 			"targetId":     testTargetID, "commitSha": commitSHA, "inputArtifactId": testArtifactID,
-			"cluster": "colo", "phase": "running", "reviewState": "approved", "limit": "10", "offset": "5",
+			"cluster": "colo", "placement": "infrastructure", "phase": "running",
+			"reviewState": "approved", "limit": "10", "offset": "5",
 		} {
 			if got := query.Get(name); got != want {
 				t.Errorf("query %s = %q, want %q", name, got, want)

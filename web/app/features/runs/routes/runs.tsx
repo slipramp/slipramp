@@ -1,5 +1,5 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { Link, redirect } from "react-router";
+import { Alert, Stack } from "@mantine/core";
+import { redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -12,20 +12,11 @@ import {
   type RunSourceType,
 } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
-import { RelativeTime, Timestamp } from "~/shared/display-values";
-import { CommitReference } from "~/features/commits/git-commit";
-import { Identity } from "~/shared/identity";
-import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
-import { formatDuration, formatTimestamp, shortIdentifier } from "~/shared/display";
-import { runActivity } from "~/features/mascot/execution-activity";
 import { pageTitle } from "~/shared/page-title";
-import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
-import { runSourceLabel } from "~/features/runs/run-source";
+import { RunHistoryTable } from "~/features/runs/run-history-table";
 import { pageFromSearchParam } from "~/shared/search-params";
-import { targetFilterPath } from "~/features/targets/target-filter";
-import { useTimeZone } from "~/shared/time-zone-preference";
 
 import type { Route } from "./+types/runs";
 
@@ -43,6 +34,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const source = optionalRunSource(url.searchParams.get("source"));
   const triggerName = optionalSearchValue(url, "triggerName");
   const cluster = optionalSearchValue(url, "cluster");
+  const placement = optionalSearchValue(url, "placement");
   const phase = optionalRunPhase(url.searchParams.get("phase"));
   const reviewState = optionalRunReviewState(url.searchParams.get("reviewState"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
@@ -54,6 +46,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       query: {
         action,
         cluster,
+        placement,
         limit: pageSize,
         offset,
         phase,
@@ -80,6 +73,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         "Run history could not be loaded.",
       page: 1,
       phase,
+      placement,
       repositoryId,
       reviewState,
       repositories: repositoriesResult.data?.items ?? [],
@@ -110,6 +104,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     error: undefined,
     page: requestedPage,
     phase,
+    placement,
     repositoryId,
     reviewState,
     repositories: repositoriesResult.data?.items ?? [],
@@ -135,6 +130,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
         cluster={loaderData.cluster}
         clusters={loaderData.clusters}
         phase={loaderData.phase}
+        placement={loaderData.placement}
         repositoryId={loaderData.repositoryId}
         repositories={loaderData.repositories}
         reviewState={loaderData.reviewState}
@@ -149,7 +145,13 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : (
         <>
-          <HistoryTable repositoryNames={repositoryNames} runs={loaderData.runs} />
+          <RunHistoryTable
+            emptyMessage="No Runs match these filters."
+            repositoryNames={repositoryNames}
+            runs={loaderData.runs}
+            showRevision
+            showSource
+          />
           {loaderData.total > 0 ? (
             <ListPagination
               itemCount={loaderData.runs.length}
@@ -170,6 +172,7 @@ function HistoryFilters({
   cluster,
   clusters,
   phase,
+  placement,
   repositoryId,
   repositories,
   reviewState,
@@ -181,6 +184,7 @@ function HistoryFilters({
   cluster?: string;
   clusters: Cluster[];
   phase?: Run["phase"];
+  placement?: string;
   repositoryId?: string;
   repositories: Repository[];
   reviewState?: Run["review"]["state"];
@@ -267,6 +271,15 @@ function HistoryFilters({
           value: cluster,
         },
         {
+          active: Boolean(placement),
+          kind: "text",
+          label: "Placement",
+          maxLength: 63,
+          name: "placement",
+          placeholder: "Placement name",
+          value: placement,
+        },
+        {
           active: Boolean(phase),
           data: [
             { label: "Any phase", value: "" },
@@ -297,159 +310,6 @@ function HistoryFilters({
         },
       ]}
     />
-  );
-}
-
-function HistoryTable({
-  repositoryNames,
-  runs,
-}: Readonly<{ repositoryNames: Map<string, string>; runs: Run[] }>) {
-  const { timeZone } = useTimeZone();
-
-  if (runs.length === 0) {
-    return (
-      <Paper p="md" withBorder>
-        <Text c="dimmed">No Runs match these filters.</Text>
-      </Paper>
-    );
-  }
-
-  return (
-    <Paper withBorder>
-      <Table.ScrollContainer minWidth={1080} type="native">
-        <Table verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Run / workload</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Execution</Table.Th>
-              <Table.Th>Revision</Table.Th>
-              <Table.Th>Source / author</Table.Th>
-              <Table.Th>Created</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {runs.map((run) => (
-              <Table.Tr key={run.id}>
-                <Table.Td>
-                  <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
-                    {run.target} · {run.action}
-                  </Anchor>
-                  <Group gap="xs">
-                    <Anchor c="dimmed" component={Link} size="xs" to={`/targets/${run.targetId}`}>
-                      {repositoryNames.get(run.repositoryId) ?? shortIdentifier(run.repositoryId)}
-                    </Anchor>
-                    <Text c="dimmed" size="xs">
-                      Run {shortIdentifier(run.id)}
-                    </Text>
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="xs" justify="space-between" wrap="nowrap">
-                    <Group gap="xs" wrap="nowrap">
-                      <Badge color={runStatusColor(run)} variant="light">
-                        {runStatusLabel(run)}
-                      </Badge>
-                      {run.observationState === "unknown" ? (
-                        <Badge color="yellow" variant="outline">
-                          Unknown
-                        </Badge>
-                      ) : null}
-                    </Group>
-                    <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
-                    <Anchor
-                      component={Link}
-                      size="sm"
-                      to={`/clusters/${encodeURIComponent(run.cluster)}`}
-                    >
-                      {run.cluster}
-                    </Anchor>
-                    <Anchor
-                      c="dimmed"
-                      component={Link}
-                      size="xs"
-                      to={targetFilterPath("placement", run.placement)}
-                    >
-                      {run.placement}
-                    </Anchor>
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
-                    <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
-                    <Text c="dimmed" size="xs">
-                      Catalog {shortIdentifier(run.catalogRevisionId)}
-                    </Text>
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
-                    {run.source.type === "schedule" && run.source.schedule ? (
-                      <Tooltip
-                        label={`Trigger: ${run.source.schedule.triggerName} · Instance: ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}`}
-                        openDelay={350}
-                        withArrow
-                      >
-                        <Text
-                          aria-label={`Schedule. Trigger ${run.source.schedule.triggerName}. Instance ${formatTimestamp(run.source.schedule.scheduledAt, timeZone)}.`}
-                          component="span"
-                          display="inline-block"
-                          size="sm"
-                          style={{ alignSelf: "flex-start" }}
-                          tabIndex={0}
-                        >
-                          Schedule
-                        </Text>
-                      </Tooltip>
-                    ) : run.source.type === "promotion" && run.source.promotion ? (
-                      <Anchor
-                        component={Link}
-                        size="sm"
-                        to={`/promotions/${run.source.promotion.promotionId}`}
-                      >
-                        {runSourceLabel(run.source)}
-                      </Anchor>
-                    ) : (
-                      <Text size="sm">{runSourceLabel(run.source)}</Text>
-                    )}
-                    <Identity
-                      avatarSize={22}
-                      name={
-                        run.createdBy?.displayName ??
-                        (run.source.type === "git" || run.source.type === "schedule"
-                          ? "Automation"
-                          : "System")
-                      }
-                      nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
-                    />
-                  </Stack>
-                </Table.Td>
-                <Table.Td style={{ whiteSpace: "nowrap" }}>
-                  <Stack gap={0}>
-                    <RelativeTime size="sm" value={run.createdAt} />
-                    {run.startedAt && run.finishedAt ? (
-                      <Text c="dimmed" size="xs">
-                        {formatDuration(run.startedAt, run.finishedAt)} runtime
-                      </Text>
-                    ) : run.startedAt ? (
-                      <Timestamp c="dimmed" size="xs" value={run.startedAt} />
-                    ) : (
-                      <Text c="dimmed" size="xs">
-                        Not started
-                      </Text>
-                    )}
-                  </Stack>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-    </Paper>
   );
 }
 

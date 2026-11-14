@@ -135,7 +135,6 @@ export default function TargetOverview({ loaderData }: Route.ComponentProps) {
       <RecentRuns
         available={loaderData.activeRunsAvailable}
         emptyMessage="No active Runs for this Target."
-        linkExecution
         plainEmpty
         runs={loaderData.activeRuns}
         showSource

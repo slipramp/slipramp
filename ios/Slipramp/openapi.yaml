@@ -2181,7 +2181,7 @@ paths:
     get:
       operationId: listRuns
       summary: List recent Runs
-      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
       security:
         - ProductSession: []
         - ProductBearer: []
@@ -2238,6 +2238,12 @@ paths:
           in: query
           required: false
           description: Limit results to Runs assigned to one execution cluster.
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: placement
+          in: query
+          required: false
+          description: Limit results to Runs assigned to one Placement.
           schema:
             $ref: '#/components/schemas/CatalogName'
         - name: phase

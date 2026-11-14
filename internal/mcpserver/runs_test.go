@@ -47,6 +47,7 @@ func TestHTTPListRunsFilters(t *testing.T) {
 		"commitSha":       commitSHA,
 		"inputArtifactId": artifactID.String(),
 		"cluster":         "homelab",
+		"placement":       "infrastructure",
 		"phase":           "finished",
 		"reviewState":     "approved",
 		"limit":           2,
@@ -64,6 +65,7 @@ func TestHTTPListRunsFilters(t *testing.T) {
 		filter.TargetID == nil || *filter.TargetID != targetID ||
 		filter.InputArtifactID == nil || *filter.InputArtifactID != artifactID ||
 		filter.CommitSHA != commitSHA || filter.ClusterName != "homelab" ||
+		filter.PlacementName != "infrastructure" ||
 		filter.Phase != run.PhaseFinished || filter.ReviewState != run.ReviewStateApproved ||
 		filter.Limit != 2 || filter.Offset != 1 {
 		t.Errorf("ListRuns filter = %#v", filter)

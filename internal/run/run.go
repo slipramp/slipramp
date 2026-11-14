@@ -184,6 +184,7 @@ type RunListFilter struct {
 	CommitSHA       string
 	InputArtifactID *uuid.UUID
 	ClusterName     string
+	PlacementName   string
 	Phase           Phase
 	ReviewState     ReviewState
 	Limit           int32

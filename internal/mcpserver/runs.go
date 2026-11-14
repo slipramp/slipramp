@@ -127,6 +127,7 @@ type listRunsInput struct {
 	CommitSHA       string `json:"commitSha,omitempty" jsonschema:"Optional lowercase full Git object ID. Requires repositoryId."`
 	InputArtifactID string `json:"inputArtifactId,omitempty" jsonschema:"Optional Artifact UUID to find Runs that consume it."`
 	Cluster         string `json:"cluster,omitempty" jsonschema:"Optional execution cluster name to filter by."`
+	Placement       string `json:"placement,omitempty" jsonschema:"Optional Placement name to filter by."`
 	Phase           string `json:"phase,omitempty" jsonschema:"Optional phase: queued, assigned, preparing, running, or finished."`
 	ReviewState     string `json:"reviewState,omitempty" jsonschema:"Optional review state: not-required, pending, approved, or rejected."`
 	Limit           int32  `json:"limit,omitempty" jsonschema:"Maximum Runs to return, from 1 to 100. Defaults to 50."`
@@ -202,6 +203,7 @@ func runListFilter(input listRunsInput) (run.RunListFilter, error) {
 		CommitSHA:       input.CommitSHA,
 		InputArtifactID: inputArtifactID,
 		ClusterName:     input.Cluster,
+		PlacementName:   input.Placement,
 		Phase:           run.Phase(input.Phase),
 		ReviewState:     run.ReviewState(input.ReviewState),
 		Limit:           limit,

@@ -2,7 +2,7 @@ import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { getCommit, listPromotions, listRuns, type Promotion, type Run } from "~/api/generated";
+import { getCommit, listPromotions, listRuns, type Promotion } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime } from "~/shared/display-values";
 import { CommitDetails } from "~/features/commits/git-commit";
@@ -12,13 +12,12 @@ import { ListPagination } from "~/shared/list-controls";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { abbreviateMiddle, shortIdentifier } from "~/shared/display";
-import { promotionActivity, runActivity } from "~/features/mascot/execution-activity";
+import { promotionActivity } from "~/features/mascot/execution-activity";
 import { promotionOverallStatus } from "~/features/promotions/promotion-status";
 import { PromotionLink } from "~/features/promotions/promotion-link";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
-import { runSourceLabel } from "~/features/runs/run-source";
-import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
+import { RunHistoryTable } from "~/features/runs/run-history-table";
 import { pageFromSearchParam } from "~/shared/search-params";
 
 import type { Route } from "./+types/commit";
@@ -141,7 +140,11 @@ export default function Commit({ loaderData }: Route.ComponentProps) {
             Associated Runs could not be loaded.
           </Alert>
         ) : (
-          <RunAssociations runs={loaderData.runs} />
+          <RunHistoryTable
+            emptyMessage="No Runs are associated with this commit."
+            runs={loaderData.runs}
+            showSource
+          />
         )}
         {loaderData.runsAvailable && loaderData.runsTotal > 0 ? (
           <ListPagination
@@ -179,75 +182,6 @@ export default function Commit({ loaderData }: Route.ComponentProps) {
         ) : null}
       </Stack>
     </Stack>
-  );
-}
-
-function RunAssociations({ runs }: Readonly<{ runs: Run[] }>) {
-  if (runs.length === 0) {
-    return (
-      <Paper p="md" withBorder>
-        <Text c="dimmed">No Runs are associated with this commit.</Text>
-      </Paper>
-    );
-  }
-
-  return (
-    <Paper withBorder>
-      <Table.ScrollContainer minWidth={720} type="native">
-        <Table verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Run</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Source / actor</Table.Th>
-              <Table.Th>Created</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {runs.map((run) => (
-              <Table.Tr key={run.id}>
-                <Table.Td>
-                  <Stack gap={0}>
-                    <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
-                      {run.target} · {run.action}
-                    </Anchor>
-                    <Text c="dimmed" size="xs">
-                      Run {shortIdentifier(run.id)} · {run.cluster}
-                    </Text>
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="xs" justify="space-between" wrap="nowrap">
-                    <Badge color={runStatusColor(run)} variant="light">
-                      {runStatusLabel(run)}
-                    </Badge>
-                    <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
-                    <Text size="sm">{runSourceLabel(run.source)}</Text>
-                    <Identity
-                      avatarSize={22}
-                      name={
-                        run.createdBy?.displayName ??
-                        (run.source.type === "git" || run.source.type === "schedule"
-                          ? "Automation"
-                          : "System")
-                      }
-                      nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
-                    />
-                  </Stack>
-                </Table.Td>
-                <Table.Td style={{ whiteSpace: "nowrap" }}>
-                  <RelativeTime size="sm" value={run.createdAt} />
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-    </Paper>
   );
 }
 

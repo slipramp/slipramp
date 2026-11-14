@@ -369,7 +369,8 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 			"&inputArtifactId="+inputArtifactID.String()+
 			"&targetId="+targetID.String()+
 			"&action=apply&source=schedule&triggerName=nightly-apply"+
-			"&cluster=colo&phase=running&reviewState=pending&limit=12&offset=4",
+			"&cluster=colo&placement=infrastructure"+
+			"&phase=running&reviewState=pending&limit=12&offset=4",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -389,6 +390,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		runs.listFilter.SourceType != run.SourceTypeSchedule ||
 		runs.listFilter.TriggerName != "nightly-apply" ||
 		runs.listFilter.ClusterName != "colo" ||
+		runs.listFilter.PlacementName != "infrastructure" ||
 		runs.listFilter.Phase != run.PhaseRunning ||
 		runs.listFilter.ReviewState != run.ReviewStatePending ||
 		runs.listFilter.Limit != 12 ||

@@ -192,6 +192,14 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("cluster-filtered ListRuns() = %#v, want no Runs", listed)
 	}
 
+	listed, err = database.ListRuns(ctx, run.RunListFilter{PlacementName: "other", Limit: 10})
+	if err != nil {
+		t.Fatalf("placement-filtered ListRuns() error = %v", err)
+	}
+	if len(listed.Items) != 0 || listed.Total != 0 {
+		t.Errorf("placement-filtered ListRuns() = %#v, want no Runs", listed)
+	}
+
 	missingTargetID := uuid.New()
 	listed, err = database.ListRuns(ctx, run.RunListFilter{TargetID: &missingTargetID, Limit: 10})
 	if err != nil {

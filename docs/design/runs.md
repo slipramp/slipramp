@@ -56,10 +56,10 @@ observation does not rewrite phase or fail an active Run.
 
 Run history is read from PostgreSQL in descending creation order. Filters may
 combine Repository, commit, input Artifact, Target, Action, source, trigger,
-Cluster, lifecycle phase, review state, and pagination. Trigger-name filtering
-requires a source that carries a named automatic trigger, currently `git` or
-`schedule`. This allows `limit=1` to select the exact latest Run for one named
-trigger without maintaining a separate latest-result projection.
+Cluster, Placement, lifecycle phase, review state, and pagination. Trigger-name
+filtering requires a source that carries a named automatic trigger, currently
+`git` or `schedule`. This allows `limit=1` to select the exact latest Run for one
+named trigger without maintaining a separate latest-result projection.
 
 The Run domain owns allowed observation transitions. Persistence locks the Run,
 validates the new observation, and writes the current phase plus its stable

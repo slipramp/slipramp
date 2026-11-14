@@ -173,6 +173,10 @@ func (h *Handler) ListRuns(
 	if request.Params.Cluster != nil {
 		clusterName = string(*request.Params.Cluster)
 	}
+	placementName := ""
+	if request.Params.Placement != nil {
+		placementName = string(*request.Params.Placement)
+	}
 	phase := run.Phase("")
 	if request.Params.Phase != nil {
 		phase = run.Phase(*request.Params.Phase)
@@ -218,6 +222,7 @@ func (h *Handler) ListRuns(
 			CommitSHA:       commitSHA,
 			InputArtifactID: request.Params.InputArtifactID,
 			ClusterName:     clusterName,
+			PlacementName:   placementName,
 			Phase:           phase,
 			ReviewState:     reviewState,
 			Limit:           limit,

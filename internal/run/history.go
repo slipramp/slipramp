@@ -60,6 +60,9 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.ClusterName != strings.TrimSpace(filter.ClusterName) {
 		return RunList{}, fmt.Errorf("%w: cluster name must not have surrounding whitespace", ErrInvalidRequest)
 	}
+	if filter.PlacementName != strings.TrimSpace(filter.PlacementName) {
+		return RunList{}, fmt.Errorf("%w: Placement name must not have surrounding whitespace", ErrInvalidRequest)
+	}
 	if filter.Phase != "" && !validPhase(filter.Phase) {
 		return RunList{}, fmt.Errorf("%w: phase is invalid", ErrInvalidRequest)
 	}

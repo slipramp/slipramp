@@ -5112,6 +5112,9 @@ type ListRunsParams struct {
 	// Cluster Limit results to Runs assigned to one execution cluster.
 	Cluster *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 
+	// Placement Limit results to Runs assigned to one Placement.
+	Placement *CatalogName `form:"placement,omitempty" json:"placement,omitempty"`
+
 	// Phase Limit results to one durable lifecycle phase.
 	Phase *ListRunsParamsPhase `form:"phase,omitempty" json:"phase,omitempty"`
 
@@ -6288,7 +6291,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7664,7 +7667,7 @@ func (c *Client) TestRepositoryConnection(ctx context.Context, body TestReposito
 
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11485,6 +11488,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.Placement != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "placement", *params.Placement, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Phase != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "phase", *params.Phase, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -13349,7 +13364,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20676,7 +20691,7 @@ func (c *ClientWithResponses) TestRepositoryConnectionWithResponse(ctx context.C
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28972,6 +28987,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placement" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placement", r.URL.Query(), &params.Placement, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placement"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placement", Err: err})
 		}
 		return
 	}

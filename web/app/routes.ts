@@ -18,6 +18,7 @@ export default [
   route("placements/:placementName", "features/placements/routes/placement.tsx", [
     index("features/placements/routes/placement-overview.tsx"),
     route("preflight", "features/placements/routes/placement-preflight.tsx"),
+    route("runs", "features/placements/routes/placement-runs.tsx"),
     route("definition", "features/placements/routes/placement-definition.tsx"),
   ]),
   route("artifact-storage", "features/artifacts/routes/artifact-storage.tsx"),

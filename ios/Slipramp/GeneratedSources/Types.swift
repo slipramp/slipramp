@@ -41,7 +41,7 @@ internal protocol APIProtocol: Sendable {
     func getTarget(_ input: Operations.GetTarget.Input) async throws -> Operations.GetTarget.Output
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -167,7 +167,7 @@ extension APIProtocol {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -7382,7 +7382,7 @@ internal enum Operations {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -7423,6 +7423,10 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/cluster`.
                 internal var cluster: Components.Schemas.CatalogName?
+                /// Limit results to Runs assigned to one Placement.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/placement`.
+                internal var placement: Components.Schemas.CatalogName?
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/phase`.
                 internal enum PhasePayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case queued = "queued"
@@ -7458,6 +7462,7 @@ internal enum Operations {
                 ///   - commitSha: Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
                 ///   - inputArtifactId: Limit results to Runs that consume this exact artifact.
                 ///   - cluster: Limit results to Runs assigned to one execution cluster.
+                ///   - placement: Limit results to Runs assigned to one Placement.
                 ///   - phase: Limit results to one durable lifecycle phase.
                 ///   - reviewState: Limit results to one Run review state.
                 ///   - limit: Maximum number of recent Runs to return.
@@ -7471,6 +7476,7 @@ internal enum Operations {
                     commitSha: Swift.String? = nil,
                     inputArtifactId: Swift.String? = nil,
                     cluster: Components.Schemas.CatalogName? = nil,
+                    placement: Components.Schemas.CatalogName? = nil,
                     phase: Operations.ListRuns.Input.Query.PhasePayload? = nil,
                     reviewState: Components.Schemas.RunReviewState? = nil,
                     limit: Swift.Int? = nil,
@@ -7484,6 +7490,7 @@ internal enum Operations {
                     self.commitSha = commitSha
                     self.inputArtifactId = inputArtifactId
                     self.cluster = cluster
+                    self.placement = placement
                     self.phase = phase
                     self.reviewState = reviewState
                     self.limit = limit

@@ -1,5 +1,10 @@
 import { Alert, Anchor, Badge, Code, Stack, Tabs } from "@mantine/core";
-import { IconActivityHeartbeat, IconFileCode, IconListDetails } from "@tabler/icons-react";
+import {
+  IconActivityHeartbeat,
+  IconFileCode,
+  IconHistory,
+  IconListDetails,
+} from "@tabler/icons-react";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -137,6 +142,14 @@ export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
             value="preflight"
           >
             Preflight
+          </Tabs.Tab>
+          <Tabs.Tab
+            leftSection={<IconHistory aria-hidden size={16} />}
+            renderRoot={(props) => <Link {...props} to={`${placementPath}/runs`} />}
+            style={{ flexShrink: 0 }}
+            value="runs"
+          >
+            Recent runs
           </Tabs.Tab>
           <Tabs.Tab
             leftSection={<IconFileCode aria-hidden size={16} />}

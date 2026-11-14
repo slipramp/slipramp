@@ -26,6 +26,7 @@ type runListOptions struct {
 	commitSHA       string
 	inputArtifactID string
 	cluster         string
+	placement       string
 	phase           string
 	reviewState     string
 	all             bool
@@ -56,6 +57,7 @@ func (a App) newRunListCommand(exitCode *int) *cobra.Command {
 	flags.StringVar(&options.commitSHA, "commit-sha", "", "exact full commit SHA (requires --repository-id)")
 	flags.StringVar(&options.inputArtifactID, "input-artifact-id", "", "exact input Artifact UUID")
 	flags.StringVar(&options.cluster, "cluster", "", "exact execution Cluster")
+	flags.StringVar(&options.placement, "placement", "", "exact Placement")
 	flags.StringVar(&options.phase, "phase", "", "Run phase: queued, assigned, preparing, running, or finished")
 	flags.StringVar(
 		&options.reviewState,
@@ -193,6 +195,10 @@ func runListParams(options runListOptions) (api.ListRunsParams, error) {
 	if options.cluster != "" {
 		cluster := api.CatalogName(options.cluster)
 		params.Cluster = &cluster
+	}
+	if options.placement != "" {
+		placement := api.CatalogName(options.placement)
+		params.Placement = &placement
 	}
 	if options.phase != "" {
 		phase := api.ListRunsParamsPhase(options.phase)

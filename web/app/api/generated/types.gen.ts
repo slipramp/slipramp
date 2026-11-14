@@ -4513,6 +4513,10 @@ export type ListRunsData = {
      */
     cluster?: CatalogName;
     /**
+     * Limit results to Runs assigned to one Placement.
+     */
+    placement?: CatalogName;
+    /**
      * Limit results to one durable lifecycle phase.
      */
     phase?: "queued" | "assigned" | "preparing" | "running" | "finished";

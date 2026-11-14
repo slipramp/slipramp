@@ -5,7 +5,7 @@ runs:
     description: >-
       Lists Runs in descending creation order with offset pagination.
       Repository, commit, input artifact, target, Action, source, trigger,
-      cluster, phase, and review state filters scope execution history.
+      cluster, Placement, phase, and review state filters scope execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -66,6 +66,12 @@ runs:
         in: query
         required: false
         description: Limit results to Runs assigned to one execution cluster.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: placement
+        in: query
+        required: false
+        description: Limit results to Runs assigned to one Placement.
         schema:
           $ref: ../components/runs.yaml#/CatalogName
       - name: phase

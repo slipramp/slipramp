@@ -112,6 +112,10 @@ AND (
     OR cluster_name = sqlc.narg(cluster_name)
 )
 AND (
+    sqlc.narg(placement_name)::text IS NULL
+    OR placement_name = sqlc.narg(placement_name)
+)
+AND (
     sqlc.narg(phase)::text IS NULL
     OR phase = sqlc.narg(phase)
 )
@@ -163,6 +167,10 @@ AND (
 AND (
     sqlc.narg(cluster_name)::text IS NULL
     OR cluster_name = sqlc.narg(cluster_name)
+)
+AND (
+    sqlc.narg(placement_name)::text IS NULL
+    OR placement_name = sqlc.narg(placement_name)
 )
 AND (
     sqlc.narg(phase)::text IS NULL

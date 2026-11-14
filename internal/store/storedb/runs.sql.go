@@ -172,11 +172,15 @@ AND (
 )
 AND (
     $9::text IS NULL
-    OR phase = $9
+    OR placement_name = $9
 )
 AND (
     $10::text IS NULL
-    OR review_state = $10
+    OR phase = $10
+)
+AND (
+    $11::text IS NULL
+    OR review_state = $11
 )
 `
 
@@ -189,6 +193,7 @@ type CountRunsParams struct {
 	SourceType      *string
 	TriggerName     *string
 	ClusterName     *string
+	PlacementName   *string
 	Phase           *string
 	ReviewState     *string
 }
@@ -203,6 +208,7 @@ func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, er
 		arg.SourceType,
 		arg.TriggerName,
 		arg.ClusterName,
+		arg.PlacementName,
 		arg.Phase,
 		arg.ReviewState,
 	)
@@ -1273,15 +1279,19 @@ AND (
 )
 AND (
     $9::text IS NULL
-    OR phase = $9
+    OR placement_name = $9
 )
 AND (
     $10::text IS NULL
-    OR review_state = $10
+    OR phase = $10
+)
+AND (
+    $11::text IS NULL
+    OR review_state = $11
 )
 ORDER BY created_at DESC, id DESC
-LIMIT $12
-OFFSET $11
+LIMIT $13
+OFFSET $12
 `
 
 type ListRunsParams struct {
@@ -1293,6 +1303,7 @@ type ListRunsParams struct {
 	SourceType      *string
 	TriggerName     *string
 	ClusterName     *string
+	PlacementName   *string
 	Phase           *string
 	ReviewState     *string
 	ResultOffset    int32
@@ -1309,6 +1320,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.SourceType,
 		arg.TriggerName,
 		arg.ClusterName,
+		arg.PlacementName,
 		arg.Phase,
 		arg.ReviewState,
 		arg.ResultOffset,
