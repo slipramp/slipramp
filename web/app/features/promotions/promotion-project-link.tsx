@@ -1,4 +1,4 @@
-import { Anchor, Group, Title } from "@mantine/core";
+import { Anchor, Group, Title, type AnchorProps } from "@mantine/core";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -13,6 +13,7 @@ type PromotionProjectLinkValue = {
 };
 
 export function PromotionProjectLink({
+  c,
   fw = 600,
   heading = false,
   label,
@@ -21,6 +22,7 @@ export function PromotionProjectLink({
   size = "sm",
   to,
 }: Readonly<{
+  c?: AnchorProps["c"];
   fw?: number;
   heading?: boolean;
   label?: ReactNode;
@@ -31,6 +33,7 @@ export function PromotionProjectLink({
 }>) {
   const nameLink = (
     <Anchor
+      c={c}
       component={Link}
       fw={heading ? undefined : fw}
       inherit={heading || undefined}

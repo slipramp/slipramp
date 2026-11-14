@@ -74,7 +74,9 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
   );
   const canWrite = canWritePromotions(loaderData.principal);
   const filtered = Boolean(
+    loaderData.application ||
     loaderData.cluster ||
+    loaderData.environment ||
     loaderData.integration ||
     loaderData.project ||
     loaderData.alignment ||
@@ -116,6 +118,10 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
           alignment: loaderData.alignment,
           status: loaderData.attention,
         }}
+        metadata={{
+          application: loaderData.application,
+          environment: loaderData.environment,
+        }}
       />
 
       <Group justify="flex-end">
@@ -141,6 +147,7 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
       ) : (
         <StageInventory
           canWrite={canWrite}
+          linkFilters
           onEditPolicy={(stage) => editPolicy(stage.id)}
           query=""
           showFreight={showFreight}

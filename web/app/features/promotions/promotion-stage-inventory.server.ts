@@ -4,7 +4,10 @@ import { createServerAPIClient } from "~/api/client.server";
 import { listPromotionStages, type PromotionFreightAlignmentStatus } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { promotionInventoryStatus } from "~/features/promotions/promotion-project-filters";
-import { promotionStageInventoryPageSize } from "~/features/promotions/promotion-project-inventory-state";
+import {
+  promotionStageInventoryPageSize,
+  promotionStageInventoryScope,
+} from "~/features/promotions/promotion-project-inventory-state";
 import { problemDetail } from "~/shared/form-data";
 import { pageFromSearchParam } from "~/shared/search-params";
 
@@ -13,9 +16,9 @@ export async function loadPromotionStageInventory(
   context: Pick<RouterContextProvider, "get">,
 ) {
   const url = new URL(request.url);
-  const integration = optionalValue(url.searchParams.get("integration"));
-  const cluster = optionalValue(url.searchParams.get("cluster"));
-  const project = optionalValue(url.searchParams.get("project"));
+  const { application, cluster, environment, integration, project } = promotionStageInventoryScope(
+    url.searchParams,
+  );
   const attention = promotionInventoryStatus(url.searchParams.get("attention"));
   const alignment = optionalFreightAlignment(url.searchParams.get("alignment"));
   const page = pageFromSearchParam(url.searchParams.get("page"), promotionStageInventoryPageSize);
@@ -24,7 +27,9 @@ export async function loadPromotionStageInventory(
     listPromotionStages({
       client,
       query: {
+        application,
         cluster,
+        environment,
         freightAlignment: alignment,
         integration,
         limit: promotionStageInventoryPageSize,
@@ -42,9 +47,11 @@ export async function loadPromotionStageInventory(
   if (!stageResult.data) {
     return {
       alignment,
+      application,
       attention,
       available: false as const,
       cluster,
+      environment,
       error: problemDetail(stageResult.error, "The Kargo Stage inventory could not be loaded."),
       integration,
       page,
@@ -57,9 +64,11 @@ export async function loadPromotionStageInventory(
 
   return {
     alignment,
+    application,
     attention,
     available: true as const,
     cluster,
+    environment,
     error: undefined,
     integration,
     page,
@@ -68,11 +77,6 @@ export async function loadPromotionStageInventory(
     stages: stageResult.data.items,
     total: stageResult.data.total,
   };
-}
-
-function optionalValue(value: string | null) {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
 }
 
 function optionalFreightAlignment(

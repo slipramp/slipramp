@@ -11,6 +11,7 @@ export function PromotionInventoryFilters({
   cluster,
   integration,
   inventoryState,
+  metadata,
   path,
   project,
 }: Readonly<{
@@ -19,6 +20,10 @@ export function PromotionInventoryFilters({
   inventoryState?: {
     alignment?: PromotionFreightAlignmentStatus;
     status?: PromotionInventoryStatus;
+  };
+  metadata?: {
+    application?: string;
+    environment?: string;
   };
   path: string;
   project?: string;
@@ -46,6 +51,27 @@ export function PromotionInventoryFilters({
       value: cluster,
     },
   ];
+
+  if (metadata) {
+    filters.push(
+      {
+        active: Boolean(metadata.application),
+        kind: "text",
+        label: "Application",
+        maxLength: 200,
+        name: "application",
+        value: metadata.application,
+      },
+      {
+        active: Boolean(metadata.environment),
+        kind: "text",
+        label: "Environment",
+        maxLength: 200,
+        name: "environment",
+        value: metadata.environment,
+      },
+    );
+  }
 
   if (inventoryState) {
     filters.push(

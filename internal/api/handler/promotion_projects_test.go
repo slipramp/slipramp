@@ -213,7 +213,7 @@ func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.
 	request := httptest.NewRequestWithContext(
 		t.Context(),
 		http.MethodGet,
-		"/api/v1/promotion-stages?integration=prod&cluster=colo&project=kargo-core&application=api&"+
+		"/api/v1/promotion-stages?integration=prod&cluster=colo&project=kargo-core&application=api&environment=prod&"+
 			"freightAlignment=different&newerFreight=true&unhealthy=true&stale=true&pendingReview=true&limit=10&offset=2",
 		nil,
 	)
@@ -227,7 +227,8 @@ func TestListPromotionStagesUsesStageFiltersAndReturnsProjectContext(t *testing.
 	}
 	filter := projects.stageFilter
 	if filter.Integration != "prod" || filter.Cluster != "colo" || filter.Project != "kargo-core" ||
-		filter.Application != "api" || filter.FreightAlignment != projection.FreightAlignmentDifferent ||
+		filter.Application != "api" || filter.Environment != "prod" ||
+		filter.FreightAlignment != projection.FreightAlignmentDifferent ||
 		!filter.NewerFreight || !filter.Unhealthy || !filter.Stale || !filter.PendingReview ||
 		filter.Limit != 10 || filter.Offset != 2 {
 		t.Errorf("Stage filter = %#v", filter)

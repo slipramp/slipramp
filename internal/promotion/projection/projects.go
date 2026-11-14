@@ -68,6 +68,7 @@ type StageListFilter struct {
 	Cluster          string
 	Project          string
 	Application      string
+	Environment      string
 	FreightAlignment FreightAlignmentStatus
 	NewerFreight     bool
 	Unhealthy        bool
@@ -301,7 +302,7 @@ func (s *ProjectService) ListStages(ctx context.Context, filter StageListFilter)
 			return StageList{}, detailErr
 		}
 		for _, stage := range project.Stages {
-			if !projectStageMatchesListFilter(stage, filter) {
+			if !stageMatchesStageScope(stage.Stage, filter) || !projectStageMatchesListFilter(stage, filter) {
 				continue
 			}
 			items = append(items, StageDetail{
@@ -600,7 +601,8 @@ func stageMatchesStageScope(stage promotion.Stage, filter StageListFilter) bool 
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
 		(filter.Project == "" || stage.Project == filter.Project) &&
-		(filter.Application == "" || stage.Application == filter.Application)
+		(filter.Application == "" || stage.Application == filter.Application) &&
+		(filter.Environment == "" || stage.Environment == filter.Environment)
 }
 
 func stageMatchesPipelineScope(stage promotion.Stage, filter PipelineListFilter) bool {

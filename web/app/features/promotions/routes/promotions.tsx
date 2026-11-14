@@ -20,6 +20,7 @@ import { abbreviateMiddle } from "~/shared/display";
 import { promotionActivity } from "~/features/mascot/execution-activity";
 import { promotionOverallStatus } from "~/features/promotions/promotion-status";
 import { PromotionLink } from "~/features/promotions/promotion-link";
+import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { pageTitle } from "~/shared/page-title";
@@ -238,7 +239,6 @@ function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
 
 function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stageName = promotion.stageSnapshot.name;
-  const project = promotion.stageSnapshot.project;
   const application = promotion.stageSnapshot.enrichment?.application ?? "Kargo native";
   const status = promotionOverallStatus(promotion);
 
@@ -251,12 +251,17 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             promotion={promotion}
             title={promotion.externalPromotionId}
           />
-          <Group gap="xs" wrap="wrap">
+          <Group gap={4} wrap="nowrap">
             <PromotionStageLink
-              label={`${stageName}${project ? ` · ${project}` : ""}`}
+              c="dimmed"
+              fw={500}
               size="xs"
               stage={{ id: promotion.stageId, name: stageName }}
             />
+            <Text c="dimmed" size="xs">
+              ·
+            </Text>
+            <PromotionProjectLink c="dimmed" fw={500} project={promotion.stageSnapshot} size="xs" />
           </Group>
         </Stack>
       </Table.Td>

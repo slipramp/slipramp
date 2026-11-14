@@ -383,6 +383,14 @@ promotionStages:
           type: string
           minLength: 1
           maxLength: 200
+        description: Select Stages with this exact optional application metadata value.
+      - name: environment
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description: Select Stages with this exact optional environment metadata value.
       - name: cluster
         in: query
         schema:

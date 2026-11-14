@@ -338,8 +338,9 @@ unknown until the Stage mapping matches again.
 Visible Promotion lists, Project inventory, Project detail, branch-drift,
 integration-health, and Inbox views revalidate on a slower operational cadence.
 Promotion lists use a faster cadence while visible work is active. Project
-view, attention and Freight-alignment filters, and selected comparison Stages
-remain in the URL so refreshes and cross-page links preserve operator scope.
+view, Stage application and environment metadata filters, attention and
+Freight-alignment filters, and selected comparison Stages remain in the URL so
+refreshes and cross-page links preserve operator scope.
 
 Branch drift compares watched source paths and target movement independently.
 It preserves the last successful render acknowledgement and reports stale,

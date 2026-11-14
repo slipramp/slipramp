@@ -235,6 +235,8 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	alphaPlatform := projectTestStage("prod", "colo", "platform", "alpha", now)
 	alphaCore := projectTestStage("prod", "colo", "core", "alpha", now)
 	bravo := projectTestStage("prod", "colo", "core", "bravo", now)
+	bravo.Application = "payments"
+	bravo.Environment = "production"
 	bravo.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
 	store := &projectionTestStore{
 		stages:        []promotion.Stage{bravo, alphaPlatform, alphaCore},
@@ -263,7 +265,8 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	}
 
 	filtered, err := service.ListStages(t.Context(), StageListFilter{
-		Integration: "prod", Cluster: "colo", Project: "core", Application: bravo.Application,
+		Integration: "prod", Cluster: "colo", Project: "core",
+		Application: bravo.Application, Environment: bravo.Environment,
 		Unhealthy: true, PendingReview: true, Limit: promotion.DefaultListLimit,
 	})
 	if err != nil {
@@ -271,6 +274,17 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	}
 	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].Stage.Stage.ID != bravo.ID {
 		t.Errorf("filtered Stages = %#v", filtered)
+	}
+
+	environmentFiltered, err := service.ListStages(t.Context(), StageListFilter{
+		Environment: "production", Limit: promotion.DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("ListStages(environment) error = %v", err)
+	}
+	if environmentFiltered.Total != 1 || len(environmentFiltered.Items) != 1 ||
+		environmentFiltered.Items[0].Stage.Stage.ID != bravo.ID {
+		t.Errorf("environment-filtered Stages = %#v", environmentFiltered)
 	}
 }
 

@@ -160,6 +160,9 @@ func (h *Handler) ListPromotionStages(
 	if request.Params.Application != nil {
 		filter.Application = *request.Params.Application
 	}
+	if request.Params.Environment != nil {
+		filter.Environment = *request.Params.Environment
+	}
 	if request.Params.FreightAlignment != nil {
 		filter.FreightAlignment = projection.FreightAlignmentStatus(*request.Params.FreightAlignment)
 	}

@@ -296,21 +296,18 @@ export function PromotionCreateMenu({
   const capability = stage.capabilities.promotion;
   const options = [
     {
-      description: "Start a Promotion with Freight currently eligible for this Stage.",
       icon: <IconArrowUp aria-hidden size={15} />,
       label: "Promote eligible Freight",
       props: { environment, freight: eligibleFreight, stage },
       unavailableLabel: "No eligible Freight is currently observed.",
     },
     {
-      description: "Rerun the Stage's promotion template with its active Freight.",
       icon: <IconRefresh aria-hidden size={15} />,
       label: "Re-promote in place",
       props: { environment, freight: currentFreight, inPlace: true, stage },
       unavailableLabel: "This Stage has no current Freight to promote in place.",
     },
   ] satisfies Array<{
-    description: string;
     icon: ReactNode;
     label: string;
     props: PromotionCreateProps;
@@ -349,12 +346,7 @@ export function PromotionCreateMenu({
                 onClick={() => dialog.open(option.props)}
                 title={unavailable}
               >
-                <Stack gap={0}>
-                  <Text size="sm">{option.label}</Text>
-                  <Text c="dimmed" size="xs">
-                    {unavailable ?? option.description}
-                  </Text>
-                </Stack>
+                {option.label}
               </Menu.Item>
             );
           })}

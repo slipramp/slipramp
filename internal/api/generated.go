@@ -5016,7 +5016,12 @@ type ListPromotionProjectsParams struct {
 type ListPromotionStagesParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
 	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
-	Application *string      `form:"application,omitempty" json:"application,omitempty"`
+
+	// Application Select Stages with this exact optional application metadata value.
+	Application *string `form:"application,omitempty" json:"application,omitempty"`
+
+	// Environment Select Stages with this exact optional environment metadata value.
+	Environment *string      `form:"environment,omitempty" json:"environment,omitempty"`
 	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 
 	// FreightAlignment Select Stages containing at least one comparison in this Freight alignment state.
@@ -10397,6 +10402,18 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 		if params.Application != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Environment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "environment", *params.Environment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -28114,6 +28131,19 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "environment" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "environment", r.URL.Query(), &params.Environment, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "environment"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
 		}
 		return
 	}

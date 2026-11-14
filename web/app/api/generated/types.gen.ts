@@ -6174,7 +6174,14 @@ export type ListPromotionStagesData = {
   query?: {
     integration?: CatalogName;
     project?: CatalogName;
+    /**
+     * Select Stages with this exact optional application metadata value.
+     */
     application?: string;
+    /**
+     * Select Stages with this exact optional environment metadata value.
+     */
+    environment?: string;
     cluster?: CatalogName;
     /**
      * Select Stages containing at least one comparison in this Freight alignment state.

@@ -54,6 +54,7 @@ import {
 } from "~/features/promotions/promotion-policy";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
+import { promotionStageFilterSearch } from "~/features/promotions/promotion-project-inventory-state";
 import {
   promotionProjectAttention,
   type PromotionProjectAttention,
@@ -736,6 +737,7 @@ function freightSourceKindLabel(kind: PromotionFreightItem["artifacts"][number][
 
 export function StageInventory({
   canWrite,
+  linkFilters = false,
   onEditPolicy,
   query,
   showFreight = true,
@@ -743,12 +745,15 @@ export function StageInventory({
   stages,
 }: Readonly<{
   canWrite: boolean;
+  linkFilters?: boolean;
   onEditPolicy: (stage: PromotionProjectStage) => void;
   query: string;
   showFreight?: boolean;
   showProject?: boolean;
   stages: StageInventoryStage[];
 }>) {
+  const [searchParams] = useSearchParams();
+
   if (stages.length === 0) {
     return (
       <EmptyState
@@ -795,11 +800,35 @@ export function StageInventory({
                       <Stack gap={3}>
                         <PromotionStageLink fw={650} stage={stage} />
                         {stage.enrichment?.application || stage.enrichment?.environment ? (
-                          <Text c="dimmed" size="xs" style={{ whiteSpace: "nowrap" }}>
-                            {[stage.enrichment.application, stage.enrichment.environment]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </Text>
+                          linkFilters ? (
+                            <Group gap={4} wrap="nowrap">
+                              {stage.enrichment.application ? (
+                                <StageFilterLink
+                                  name="application"
+                                  searchParams={searchParams}
+                                  value={stage.enrichment.application}
+                                />
+                              ) : null}
+                              {stage.enrichment.application && stage.enrichment.environment ? (
+                                <Text c="dimmed" size="xs">
+                                  ·
+                                </Text>
+                              ) : null}
+                              {stage.enrichment.environment ? (
+                                <StageFilterLink
+                                  name="environment"
+                                  searchParams={searchParams}
+                                  value={stage.enrichment.environment}
+                                />
+                              ) : null}
+                            </Group>
+                          ) : (
+                            <Text c="dimmed" size="xs" style={{ whiteSpace: "nowrap" }}>
+                              {[stage.enrichment.application, stage.enrichment.environment]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </Text>
+                          )
                         ) : (
                           <Text c="dimmed" size="xs">
                             Kargo native
@@ -817,9 +846,27 @@ export function StageInventory({
                         {stage.projectContext ? (
                           <Stack gap={2}>
                             <PromotionProjectLink project={stage.projectContext} />
-                            <Text c="dimmed" size="xs">
-                              {stage.projectContext.integration} · {stage.projectContext.cluster}
-                            </Text>
+                            {linkFilters ? (
+                              <Group gap={4} wrap="nowrap">
+                                <StageFilterLink
+                                  name="integration"
+                                  searchParams={searchParams}
+                                  value={stage.projectContext.integration}
+                                />
+                                <Text c="dimmed" size="xs">
+                                  ·
+                                </Text>
+                                <StageFilterLink
+                                  name="cluster"
+                                  searchParams={searchParams}
+                                  value={stage.projectContext.cluster}
+                                />
+                              </Group>
+                            ) : (
+                              <Text c="dimmed" size="xs">
+                                {stage.projectContext.integration} · {stage.projectContext.cluster}
+                              </Text>
+                            )}
                           </Stack>
                         ) : null}
                       </Table.Td>
@@ -902,6 +949,27 @@ export function StageInventory({
 type StageInventoryStage = PromotionProjectStage & {
   projectContext?: Pick<PromotionProjectDetail, "cluster" | "integration" | "project">;
 };
+
+function StageFilterLink({
+  name,
+  searchParams,
+  value,
+}: Readonly<{
+  name: "application" | "cluster" | "environment" | "integration";
+  searchParams: URLSearchParams;
+  value: string;
+}>) {
+  return (
+    <Anchor
+      c="dimmed"
+      component={Link}
+      size="xs"
+      to={`?${promotionStageFilterSearch(searchParams, name, value)}`}
+    >
+      {value}
+    </Anchor>
+  );
+}
 
 function pipelineLabel(pipeline: PromotionTopologyPipeline, index: number) {
   const applications = pipelineApplications(pipeline);

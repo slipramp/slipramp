@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   promotionProjectDetailPath,
+  promotionStageFilterSearch,
+  promotionStageInventoryScope,
   shouldRevalidatePromotionInventory,
 } from "./promotion-project-inventory-state.ts";
 
@@ -30,9 +32,47 @@ test("aggregate inventory scope and server filters reload Project data", () => {
   assert.equal(shouldRevalidate(base, `${base}&q=api`), true);
   assert.equal(shouldRevalidate(base, `${base}&attention=unhealthy`), true);
   assert.equal(shouldRevalidate(base, `${base}&alignment=different`), true);
+  assert.equal(shouldRevalidate(base, `${base}&application=api`), true);
+  assert.equal(shouldRevalidate(base, `${base}&environment=prod`), true);
   assert.equal(shouldRevalidate(base, `${base}&page=2`), true);
   assert.equal(shouldRevalidate(base, "/promotion-stages?integration=staging"), true);
   assert.equal(shouldRevalidate(base, `${base}&policy=stage-1`, "POST"), true);
+});
+
+test("Stage inventory scope normalizes optional metadata URL values", () => {
+  assert.deepEqual(
+    promotionStageInventoryScope(
+      new URLSearchParams(
+        "integration=prod&cluster=colo&project=kargo-core&application=%20api%20&environment=production",
+      ),
+    ),
+    {
+      application: "api",
+      cluster: "colo",
+      environment: "production",
+      integration: "prod",
+      project: "kargo-core",
+    },
+  );
+
+  const empty = promotionStageInventoryScope(new URLSearchParams("application=%20&environment="));
+  assert.equal(empty.application, undefined);
+  assert.equal(empty.environment, undefined);
+});
+
+test("Stage row filter links preserve active state and reset pagination", () => {
+  const current = new URLSearchParams(
+    "attention=stale&page=3&freight=visible&cluster=edge&policy=stage-1",
+  );
+
+  assert.equal(
+    promotionStageFilterSearch(current, "application", "payments api"),
+    "attention=stale&freight=visible&cluster=edge&application=payments+api",
+  );
+  assert.equal(
+    promotionStageFilterSearch(current, "cluster", "colo"),
+    "attention=stale&freight=visible&cluster=colo",
+  );
 });
 
 test("aggregate inventory Project links encode every identity segment", () => {
