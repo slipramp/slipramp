@@ -18,6 +18,12 @@ export type PromotionCreationURLSelection = {
   stageId: string;
 };
 
+export type UpstreamPromotionOption = {
+  freight: PromotionFreightItem[];
+  sourceStageId: string;
+  sourceStageName: string;
+};
+
 export const promotionCreationSearchParamNames = {
   context: "promote",
   freight: "promoteFreight",
@@ -39,6 +45,43 @@ export function eligibleStageFreight(stage: PromotionProjectStage): PromotionFre
     request.candidates
       .filter((candidate) => candidate.readiness === "ready")
       .map((candidate) => candidate.freight),
+  );
+}
+
+export function upstreamPromotionOptions(stage: PromotionProjectStage): UpstreamPromotionOption[] {
+  const eligibleFreight = eligibleStageFreight(stage);
+  const eligibleKeys = new Set(
+    eligibleFreight.map((item) => JSON.stringify([item.origin, item.name])),
+  );
+  const options = new Map<string, UpstreamPromotionOption>();
+
+  for (const alignment of stage.freightAlignments) {
+    if (!alignment.sourceStageId) continue;
+
+    const option = options.get(alignment.sourceStageId) ?? {
+      freight: [],
+      sourceStageId: alignment.sourceStageId,
+      sourceStageName: alignment.sourceStageName,
+    };
+    options.set(alignment.sourceStageId, option);
+
+    const freight = alignment.sourceCurrentFreight;
+    const freightKey = freight ? JSON.stringify([freight.origin, freight.name]) : undefined;
+    if (
+      !freight ||
+      !freightKey ||
+      !eligibleKeys.has(freightKey) ||
+      option.freight.some((item) => item.origin === freight.origin && item.name === freight.name)
+    ) {
+      continue;
+    }
+    option.freight.push(freight);
+  }
+
+  return [...options.values()].toSorted(
+    (left, right) =>
+      left.sourceStageName.localeCompare(right.sourceStageName) ||
+      left.sourceStageId.localeCompare(right.sourceStageId),
   );
 }
 

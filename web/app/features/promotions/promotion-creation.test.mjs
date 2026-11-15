@@ -7,6 +7,7 @@ import {
   initialPromotionFreightName,
   promotionCreationContext,
   promotionCreationURLSelection,
+  upstreamPromotionOptions,
   updatePromotionCreationSearchParams,
   visiblePromotionFreight,
 } from "./promotion-creation.ts";
@@ -36,6 +37,67 @@ test("Stage promotion offers only eligible Freight, including when review is una
   assert.deepEqual(eligibleStageFreight(stage), [app, config]);
   stage.capabilities.promotion.status = "unavailable";
   assert.deepEqual(eligibleStageFreight(stage), []);
+});
+
+test("upstream promotion options group exact eligible current Freight by source Stage", () => {
+  const app = freight("Warehouse/app", "freight-42", "1.2.3");
+  const config = freight("Warehouse/config", "freight-43", "abc123");
+  const unavailable = freight("Warehouse/other", "freight-44", "4.2.0");
+  const stage = {
+    capabilities: { promotion: { status: "ready" } },
+    freightAlignments: [
+      {
+        sourceCurrentFreight: config,
+        sourceStageId: "stage-qa",
+        sourceStageName: "app-qa",
+      },
+      {
+        sourceCurrentFreight: app,
+        sourceStageId: "stage-qa",
+        sourceStageName: "app-qa",
+      },
+      {
+        sourceCurrentFreight: unavailable,
+        sourceStageId: "stage-test",
+        sourceStageName: "app-test",
+      },
+      {
+        sourceStageId: "stage-empty",
+        sourceStageName: "app-empty",
+      },
+      {
+        sourceCurrentFreight: app,
+        sourceStageName: "missing",
+      },
+    ],
+    requestedFreight: [
+      {
+        candidates: [
+          { freight: app, readiness: "ready" },
+          { freight: config, readiness: "ready" },
+          { freight: unavailable, readiness: "unavailable" },
+        ],
+      },
+    ],
+  };
+
+  assert.deepEqual(upstreamPromotionOptions(stage), [
+    {
+      freight: [],
+      sourceStageId: "stage-empty",
+      sourceStageName: "app-empty",
+    },
+    {
+      freight: [config, app],
+      sourceStageId: "stage-qa",
+      sourceStageName: "app-qa",
+    },
+    {
+      freight: [],
+      sourceStageId: "stage-test",
+      sourceStageName: "app-test",
+    },
+  ]);
 });
 
 test("promotion Freight preselection honors a valid requested Freight", () => {

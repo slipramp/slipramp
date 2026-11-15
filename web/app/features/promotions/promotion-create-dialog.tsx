@@ -24,6 +24,7 @@ import {
   initialPromotionFreightName,
   promotionCreationContext,
   promotionCreationURLSelection,
+  upstreamPromotionOptions,
   updatePromotionCreationSearchParams,
   visiblePromotionFreight,
 } from "~/features/promotions/promotion-creation";
@@ -43,7 +44,7 @@ type PromotionCreateProps = Readonly<{
 }>;
 
 type PromotionCreateMenuProps = Readonly<{
-  stage: PromotionCreateProps["stage"];
+  stage: PromotionProjectStage;
   eligibleFreight: PromotionFreightItem[];
   currentFreight: PromotionFreightItem[];
 }>;
@@ -229,6 +230,7 @@ export function PromotionCreateMenu({
   currentFreight,
 }: PromotionCreateMenuProps) {
   const capability = stage.capabilities.promotion;
+  const upstreamOptions = upstreamPromotionOptions(stage);
   const options = [
     {
       icon: <IconArrowUp aria-hidden size={15} />,
@@ -236,6 +238,18 @@ export function PromotionCreateMenu({
       props: { freight: eligibleFreight, stage },
       unavailableLabel: "No eligible Freight is currently observed.",
     },
+    ...upstreamOptions.map((option) => ({
+      icon: <IconArrowUp aria-hidden size={15} />,
+      label: `Promote from ${option.sourceStageName}`,
+      props: {
+        currentFreight,
+        freight: option.freight,
+        sourceStageId: option.sourceStageId,
+        sourceStageName: option.sourceStageName,
+        stage,
+      },
+      unavailableLabel: "No eligible current Freight is observed on this upstream Stage.",
+    })),
     {
       icon: <IconRefresh aria-hidden size={15} />,
       label: "Re-promote in place",
