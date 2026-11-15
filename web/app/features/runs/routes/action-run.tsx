@@ -201,27 +201,49 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
         }
         details={
           <PageHeaderFacts>
-            <PageHeaderFact label="Target">
-              <Anchor component={Link} to={targetURL}>
-                {targetLabel}
-              </Anchor>
-            </PageHeaderFact>
-            <PageHeaderFact label="Repository">
-              <Anchor component={Link} to={`/repositories/${loaderData.record.repositoryId}`}>
-                {loaderData.record.repositoryName}
-              </Anchor>
-            </PageHeaderFact>
-            {actionDefinition.title ? (
-              <PageHeaderFact label="Action">
-                <Code>{params.actionName}</Code>
-              </PageHeaderFact>
-            ) : null}
             <PageHeaderFact label="Catalog">
               <CommitReference
                 commit={loaderData.record.catalogCommit}
                 repositoryId={loaderData.record.repositoryId}
               />
             </PageHeaderFact>
+            <PageHeaderFact label="Repository">
+              <Anchor component={Link} to={`/repositories/${loaderData.record.repositoryId}`}>
+                {loaderData.record.repositoryName}
+              </Anchor>
+            </PageHeaderFact>
+            {loaderData.explanation ? (
+              <>
+                <PageHeaderFact label="Cluster">
+                  {loaderData.explanation.placement.cluster.resolved ? (
+                    <Anchor
+                      component={Link}
+                      to={`/clusters/${encodeURIComponent(loaderData.explanation.placement.cluster.value)}`}
+                    >
+                      {loaderData.explanation.placement.cluster.value}
+                    </Anchor>
+                  ) : (
+                    explainedValue(loaderData.explanation.placement.cluster)
+                  )}
+                </PageHeaderFact>
+                <PageHeaderFact label="Placement">
+                  <Anchor
+                    component={Link}
+                    to={`/placements/${encodeURIComponent(loaderData.explanation.placement.name.value)}`}
+                  >
+                    {loaderData.explanation.placement.name.value}
+                  </Anchor>
+                </PageHeaderFact>
+                <PageHeaderFact label="Runtime">
+                  <Anchor
+                    component={Link}
+                    to={targetFilterPath("runtime", loaderData.explanation.runtime.name.value)}
+                  >
+                    {loaderData.explanation.runtime.name.value}
+                  </Anchor>
+                </PageHeaderFact>
+              </>
+            ) : null}
           </PageHeaderFacts>
         }
         title={`Run ${actionDefinition.title ?? params.actionName}`}
@@ -260,180 +282,127 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
 
   return (
     <ProvenanceVisibilityContext.Provider value={showProvenance}>
-      <Paper component="section" style={{ overflow: "hidden" }} withBorder>
-        <Stack gap={0}>
-          <Stack gap="lg" p="lg">
-            <SectionHeader
-              actions={
-                <Switch
-                  checked={showProvenance}
-                  label="Show provenance"
-                  onChange={(event) => setShowProvenance(event.currentTarget.checked)}
-                  size="sm"
-                />
-              }
-              title="Execution context"
+      <Stack component="section" gap="lg">
+        <SectionHeader
+          actions={
+            <Switch
+              checked={showProvenance}
+              label="Show provenance"
+              onChange={(event) => setShowProvenance(event.currentTarget.checked)}
+              size="sm"
             />
-            <Stack gap={4}>
-              <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-                Command
-              </Text>
-              <Code block className="technical-code-block technical-code-list">
-                {explanation.process.command.value.join(" ")}
-              </Code>
-              <SourceLabel value={explanation.process.command} />
-            </Stack>
-            <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-              <TechnicalValue
-                description={
-                  showProvenance ? provenanceSummary(explanation.runtime.name) : undefined
-                }
-                label="Runtime"
-                value={
-                  <Anchor
-                    component={Link}
-                    to={targetFilterPath("runtime", explanation.runtime.name.value)}
-                  >
-                    {explanation.runtime.name.value}
-                  </Anchor>
-                }
-              />
-              <TechnicalValue
-                description={
-                  showProvenance ? provenanceSummary(explanation.placement.name) : undefined
-                }
-                label="Placement"
-                value={
-                  <Anchor
-                    component={Link}
-                    to={`/placements/${encodeURIComponent(explanation.placement.name.value)}`}
-                  >
-                    {explanation.placement.name.value}
-                  </Anchor>
-                }
-              />
-              <ExplainedTechnicalValue
-                explained={explanation.placement.cluster}
-                label="Cluster"
-                render={(cluster) => (
-                  <Anchor component={Link} to={`/clusters/${encodeURIComponent(cluster)}`}>
-                    {cluster}
-                  </Anchor>
-                )}
-              />
-              {!explanation.placement.podExtensions.resolved ||
-              explanation.placement.podExtensions.value ? (
-                <ExplainedTechnicalValue
-                  explained={explanation.placement.podExtensions}
-                  label="Pod extensions configured"
-                  render={(value) => (value ? "Yes" : "No")}
-                />
-              ) : null}
-            </SimpleGrid>
-            {!explanation.placement.nodeSelector.resolved ? (
-              <ExplainedTechnicalValue
-                explained={explanation.placement.nodeSelector}
-                label="Node selector"
-              />
-            ) : nodeSelector.length > 0 ? (
-              <>
-                <MappingTable
-                  empty="No node selector"
-                  entries={nodeSelector}
-                  label="Node selector"
-                />
-                <SourceLabel value={explanation.placement.nodeSelector} />
-              </>
-            ) : null}
-          </Stack>
-          <Accordion
-            defaultValue={[]}
-            multiple
-            style={{ borderTop: "1px solid var(--slipramp-border)" }}
-          >
-            <Accordion.Item value="execution-details">
-              <Accordion.Control>
-                <Text fw={600}>Execution details</Text>
-              </Accordion.Control>
-              <Accordion.Panel>
-                <Stack gap="lg">
-                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                    <ExplainedTechnicalValue
-                      explained={explanation.placement.namespace}
-                      label="Namespace"
-                    />
-                    <ExplainedTechnicalValue
-                      explained={explanation.placement.serviceAccount}
-                      label="Service account"
-                    />
-                    <ExplainedTechnicalValue
-                      explained={explanation.process.workingDirectory}
-                      label="Process directory"
-                    />
-                    <ExplainedTechnicalValue
-                      explained={explanation.process.repositoryMount}
-                      label="Repository mount"
-                    />
-                    <ExplainedTechnicalValue
-                      explained={explanation.process.targetPath}
-                      label="Target path"
-                    />
-                    <ExplainedTechnicalValue
-                      explained={explanation.timeout}
-                      label="Timeout"
-                      render={(value) => value || "No timeout"}
-                    />
-                  </SimpleGrid>
-                  <CodeList
-                    empty="No runtime environment values"
-                    label="Command environment before parameters"
-                    values={environment.map(
-                      ([name, value]) => `${name}=${String(explainedValue(value))}`,
-                    )}
-                  />
-                  <MappingSourceLabels entries={environment} />
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-            <Accordion.Item value="resources">
-              <Accordion.Control>
-                <DisclosureLabel count={resourceCount} label="Resources" />
-              </Accordion.Control>
-              <Accordion.Panel>
-                <Stack gap="sm">
-                  <ResourceRequirementsTable
-                    label="Requests and limits"
-                    limits={limits}
-                    requests={requests}
-                  />
-                  <ResourceSourceLabels explanation={explanation} />
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-            <Accordion.Item style={{ borderBottom: 0 }} value="credentials">
-              <Accordion.Control>
-                <DisclosureLabel count={explanation.credentials.length} label="Credentials" />
-              </Accordion.Control>
-              <Accordion.Panel>
-                <Credentials credentials={explanation.credentials} />
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
+          }
+          title="Execution context"
+        />
+        <Stack gap={4}>
+          <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+            Command
+          </Text>
+          <Code block className="technical-code-block technical-code-list">
+            {explanation.process.command.value.join(" ")}
+          </Code>
+          <SourceLabel value={explanation.process.command} />
         </Stack>
-      </Paper>
+        <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
+        {!explanation.placement.podExtensions.resolved ||
+        explanation.placement.podExtensions.value ? (
+          <ExplainedTechnicalValue
+            explained={explanation.placement.podExtensions}
+            label="Pod extensions configured"
+            render={(value) => (value ? "Yes" : "No")}
+          />
+        ) : null}
+        {!explanation.placement.nodeSelector.resolved ? (
+          <ExplainedTechnicalValue
+            explained={explanation.placement.nodeSelector}
+            label="Node selector"
+          />
+        ) : nodeSelector.length > 0 ? (
+          <>
+            <MappingTable empty="No node selector" entries={nodeSelector} label="Node selector" />
+            <SourceLabel value={explanation.placement.nodeSelector} />
+          </>
+        ) : null}
+        <Accordion defaultValue={[]} multiple>
+          <Accordion.Item value="execution-details">
+            <Accordion.Control>
+              <Text fw={600}>Execution details</Text>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="lg">
+                <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                  <ExplainedTechnicalValue
+                    explained={explanation.placement.namespace}
+                    label="Namespace"
+                  />
+                  <ExplainedTechnicalValue
+                    explained={explanation.placement.serviceAccount}
+                    label="Service account"
+                  />
+                  <ExplainedTechnicalValue
+                    explained={explanation.process.workingDirectory}
+                    label="Process directory"
+                  />
+                  <ExplainedTechnicalValue
+                    explained={explanation.process.repositoryMount}
+                    label="Repository mount"
+                  />
+                  <ExplainedTechnicalValue
+                    explained={explanation.process.targetPath}
+                    label="Target path"
+                  />
+                  <ExplainedTechnicalValue
+                    explained={explanation.timeout}
+                    label="Timeout"
+                    render={(value) => value || "No timeout"}
+                  />
+                </SimpleGrid>
+                <CodeList
+                  empty="No runtime environment values"
+                  label="Command environment before parameters"
+                  values={environment.map(
+                    ([name, value]) => `${name}=${String(explainedValue(value))}`,
+                  )}
+                />
+                <MappingSourceLabels entries={environment} />
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+          <Accordion.Item value="resources">
+            <Accordion.Control>
+              <DisclosureLabel count={resourceCount} label="Resources" />
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="sm">
+                <ResourceRequirementsTable
+                  label="Requests and limits"
+                  limits={limits}
+                  requests={requests}
+                />
+                <ResourceSourceLabels explanation={explanation} />
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+          <Accordion.Item style={{ borderBottom: 0 }} value="credentials">
+            <Accordion.Control>
+              <DisclosureLabel count={explanation.credentials.length} label="Credentials" />
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Credentials credentials={explanation.credentials} />
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      </Stack>
     </ProvenanceVisibilityContext.Provider>
   );
 }
 
 function ArtifactSection({ explanation }: Readonly<{ explanation: CatalogExplanation }>) {
   return (
-    <Paper component="section" p="lg" withBorder>
-      <Stack gap="lg">
-        <SectionHeader title="Artifacts" />
-        <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
-      </Stack>
-    </Paper>
+    <Stack component="section" gap="lg">
+      <SectionHeader title="Artifacts" />
+      <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
+    </Stack>
   );
 }
 
@@ -691,49 +660,47 @@ function RunForm({
   }
 
   return (
-    <Paper component="section" p="lg" withBorder>
-      <Form method="post">
-        <Stack gap="lg">
-          <Stack gap="md">
-            <SectionHeader
-              actions={
-                parameters.length > 0 ? (
-                  <Switch
-                    checked={showTechnicalDetails}
-                    label="Show technical details"
-                    onChange={(event) => setShowTechnicalDetails(event.currentTarget.checked)}
-                    size="sm"
-                  />
-                ) : null
-              }
-              title="Parameters"
-            />
-            {error ? (
-              <Alert color="red" title="Run not created">
-                {error}
-              </Alert>
-            ) : null}
-            <RunParameterFields
-              declarations={actionDefinition.parameters}
-              showTechnicalDetails={showTechnicalDetails}
-              submittedValues={submittedValues}
-            />
-          </Stack>
-          <Group justify="flex-end">
-            <Button component={Link} to={targetURL} variant="default">
-              Cancel
-            </Button>
-            <Button
-              leftSection={<IconPlayerPlay aria-hidden size={16} />}
-              loading={navigation.state === "submitting"}
-              type="submit"
-            >
-              Create Run
-            </Button>
-          </Group>
+    <Form method="post">
+      <Stack component="section" gap="lg">
+        <Stack gap="md">
+          <SectionHeader
+            actions={
+              parameters.length > 0 ? (
+                <Switch
+                  checked={showTechnicalDetails}
+                  label="Show technical details"
+                  onChange={(event) => setShowTechnicalDetails(event.currentTarget.checked)}
+                  size="sm"
+                />
+              ) : null
+            }
+            title="Parameters"
+          />
+          {error ? (
+            <Alert color="red" title="Run not created">
+              {error}
+            </Alert>
+          ) : null}
+          <RunParameterFields
+            declarations={actionDefinition.parameters}
+            showTechnicalDetails={showTechnicalDetails}
+            submittedValues={submittedValues}
+          />
         </Stack>
-      </Form>
-    </Paper>
+        <Group justify="flex-end">
+          <Button component={Link} to={targetURL} variant="default">
+            Cancel
+          </Button>
+          <Button
+            leftSection={<IconPlayerPlay aria-hidden size={16} />}
+            loading={navigation.state === "submitting"}
+            type="submit"
+          >
+            Create Run
+          </Button>
+        </Group>
+      </Stack>
+    </Form>
   );
 }
 

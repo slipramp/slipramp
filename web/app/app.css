@@ -439,6 +439,12 @@ a {
   line-height: inherit;
 }
 
+.mantine-Code-root:not([data-block]) {
+  padding: 0.1em 0;
+  border-radius: 0.2rem;
+  background-color: color-mix(in srgb, var(--mantine-color-text) 3%, transparent);
+}
+
 .technical-code-block {
   overflow-x: auto;
   padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
@@ -455,7 +461,6 @@ a {
 
 .technical-inline-value {
   max-width: 100%;
-  padding: 0.25rem 0.45rem;
   overflow-wrap: anywhere;
   font-size: var(--mantine-font-size-sm);
 }

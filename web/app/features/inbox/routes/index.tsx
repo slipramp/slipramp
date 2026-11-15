@@ -538,6 +538,7 @@ function KargoStatusLink({ indicator }: Readonly<{ indicator: KargoStatusIndicat
   return (
     <Button
       component={Link}
+      fz="sm"
       fullWidth
       justify="space-between"
       leftSection={<StatusIcon aria-hidden size={16} />}

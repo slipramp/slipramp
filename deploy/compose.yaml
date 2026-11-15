@@ -62,14 +62,16 @@ services:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
     command:
       - start-dev
-      - --hostname=http://127.0.0.1:5556
+      - --hostname=http://${SLIPRAMP_LOCAL_OIDC_HOST:-127.0.0.1}:5556
       - --features=resource-indicators
       - --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_PASSWORD: slipramp-development
       KC_BOOTSTRAP_ADMIN_USERNAME: slipramp
+      SLIPRAMP_LOCAL_OIDC_HOST: "${SLIPRAMP_LOCAL_OIDC_HOST:-127.0.0.1}"
+      SLIPRAMP_LOCAL_WEB_HOST: "${SLIPRAMP_LOCAL_WEB_HOST:-localhost}"
     ports:
-      - "127.0.0.1:5556:8080"
+      - "5556:8080"
     volumes:
       - ./local/keycloak-realm.json:/opt/keycloak/data/import/slipramp-local-realm.json:ro
     security_opt:

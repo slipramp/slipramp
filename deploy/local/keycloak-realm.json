@@ -193,10 +193,10 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:5173/api/v1/auth/callback"
+        "http://${SLIPRAMP_LOCAL_WEB_HOST}:5173/api/v1/auth/callback"
       ],
       "webOrigins": [
-        "http://localhost:5173"
+        "http://${SLIPRAMP_LOCAL_WEB_HOST}:5173"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"

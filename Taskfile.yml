@@ -22,6 +22,8 @@ vars:
   SQLC: "{{.ROOT_DIR}}/.bin/sqlc"
   SQLC_VERSION: v1.31.1
   XCODE_DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  LOCAL_OIDC_HOST: '{{default "127.0.0.1" .SLIPRAMP_LOCAL_HOST}}'
+  LOCAL_WEB_HOST: '{{default "localhost" .SLIPRAMP_LOCAL_HOST}}'
 
 env:
   GOCACHE: "{{.ROOT_DIR}}/.cache/go-build"
@@ -91,6 +93,8 @@ tasks:
   web:dev:
     desc: Run the web development server
     deps: [deps:web]
+    env:
+      SLIPRAMP_LOCAL_HOST: "{{.LOCAL_WEB_HOST}}"
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run dev'
 
@@ -192,6 +196,9 @@ tasks:
 
   local:dependencies:
     internal: true
+    env:
+      SLIPRAMP_LOCAL_OIDC_HOST: "{{.LOCAL_OIDC_HOST}}"
+      SLIPRAMP_LOCAL_WEB_HOST: "{{.LOCAL_WEB_HOST}}"
     cmds:
       - docker compose -f deploy/compose.yaml up -d --wait postgres rustfs keycloak
       - docker compose -f deploy/compose.yaml run --rm rustfs-init
@@ -221,10 +228,10 @@ tasks:
       SLIPRAMP_KARGO_INTEGRATIONS_FILE: "{{.ROOT_DIR}}/deploy/local/kargo-integrations.yaml"
       SLIPRAMP_OIDC_CLIENT_ID: slipramp-local
       SLIPRAMP_OIDC_CLIENT_SECRET: slipramp-local-client-secret
-      SLIPRAMP_OIDC_ISSUER: http://127.0.0.1:5556/realms/slipramp-local
-      SLIPRAMP_OIDC_REDIRECT_URL: http://localhost:5173/api/v1/auth/callback
+      SLIPRAMP_OIDC_ISSUER: "http://{{.LOCAL_OIDC_HOST}}:5556/realms/slipramp-local"
+      SLIPRAMP_OIDC_REDIRECT_URL: "http://{{.LOCAL_WEB_HOST}}:5173/api/v1/auth/callback"
       SLIPRAMP_OIDC_SUBJECT_ROLES: '{"b1c7f2ce-dca3-4e0f-8b41-abe6453bb40f":"admin"}'
-      SLIPRAMP_MCP_OAUTH_ISSUER: http://127.0.0.1:5556/realms/slipramp-local
+      SLIPRAMP_MCP_OAUTH_ISSUER: "http://{{.LOCAL_OIDC_HOST}}:5556/realms/slipramp-local"
       SLIPRAMP_MCP_OAUTH_RESOURCE: http://localhost:8080/mcp
       SLIPRAMP_PLACEMENTS_FILE: "{{.ROOT_DIR}}/deploy/local/placements.yaml"
       SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS: '{"kcloud-ops":"{{.ROOT_DIR}}/deploy/local/kcloud-ops.gitconfig","universe":"{{.ROOT_DIR}}/deploy/local/universe.gitconfig"}'

@@ -28,6 +28,22 @@ task local:server
 task web:dev
 ```
 
+The web development server listens on all interfaces. To use the local UI from
+another device on the same Tailscale network, set the Mac's MagicDNS hostname
+or Tailscale IPv4 address for each process, running them in separate terminals:
+
+```console
+SLIPRAMP_LOCAL_HOST=macbook.example-tailnet.ts.net task local:server
+SLIPRAMP_LOCAL_HOST=macbook.example-tailnet.ts.net task web:dev
+```
+
+Then open `http://macbook.example-tailnet.ts.net:5173` on the other device.
+Specify only the hostname or IPv4 address, without a scheme or port. This also
+publishes the development Keycloak port on all host interfaces and configures
+its issuer and browser callback for the selected address. Keep the local stack
+on trusted networks because it uses development credentials and unencrypted
+HTTP.
+
 Other useful entry points include:
 
 ```console

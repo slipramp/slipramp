@@ -41,6 +41,7 @@ import {
   type GitCommit,
   type ProductPrincipal,
   type Promotion,
+  type PromotionFreightItem,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
@@ -50,6 +51,8 @@ import { CommitReference } from "~/features/commits/git-commit";
 import { ContextValue } from "~/shared/context-value";
 import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
+import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
+import { freightOriginLabel } from "~/features/promotions/promotion-freight";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
@@ -219,11 +222,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
               <Code>{promotion.id.slice(0, 8)}</Code>
             </PageHeaderFact>
             <PageHeaderFact label="Created">
-              <Group gap="xs" wrap="wrap">
-                <Timestamp value={promotion.createdAt} />
-                <Text c="dimmed">·</Text>
-                <RelativeTime c="dimmed" value={promotion.createdAt} />
-              </Group>
+              <RelativeTime value={promotion.createdAt} />
             </PageHeaderFact>
             <PageHeaderFact label="Source">
               {promotion.source === "kargo" ? "Kargo" : "Slipramp"}
@@ -265,6 +264,21 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         gitDiff={loaderData.gitDiff}
         promotion={promotion}
       />
+    </Stack>
+  );
+}
+
+function SelectedFreight({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
+  return (
+    <Stack component="section" gap="md">
+      <SectionHeader title="Selected Freight" />
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+        <Fact label="Freight ID" value={<FreightIdentifier freight={freight} />} />
+        <Fact label="Warehouse" value={freightOriginLabel(freight.origin)} />
+        <Box style={{ gridColumn: "1 / -1" }}>
+          <Fact label="Contents" value={<FreightContents freight={freight} />} />
+        </Box>
+      </SimpleGrid>
     </Stack>
   );
 }
@@ -896,6 +910,9 @@ function PromotionWorkspace({
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
             <Stack gap="lg">
+              {promotion.selectedFreight ? (
+                <SelectedFreight freight={promotion.selectedFreight} />
+              ) : null}
               <SectionHeader title="Promotion details" />
               <PromotionContext promotion={promotion} />
             </Stack>

@@ -441,11 +441,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
               <Code>{run.id.slice(0, 8)}</Code>
             </PageHeaderFact>
             <PageHeaderFact label="Created">
-              <Group gap="xs" wrap="wrap">
-                <Timestamp value={run.createdAt} />
-                <Text c="dimmed">·</Text>
-                <RelativeTime c="dimmed" value={run.createdAt} />
-              </Group>
+              <RelativeTime value={run.createdAt} />
             </PageHeaderFact>
             <PageHeaderFact label="Source">
               {scheduledSource ? (
