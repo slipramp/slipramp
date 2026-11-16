@@ -240,7 +240,9 @@ Successful Run completion plus Artifact validation moves the Promotion to
 `pending`. A failed Run or missing, malformed, oversized, expired, or deleted
 Artifact moves it to `error` without retrying the infrastructure command.
 Dispatch and result reconciliation may retry their own durable coordination
-work, but never create a second preparation Run.
+work, but never create a second preparation Run. The coordinator alternates
+available dispatch and reconciliation work so sustained arrivals in either
+phase cannot starve the other.
 
 Only pending Promotions accept `approved` or `rejected`. The immutable decision
 records Principal, time, outcome, and optional normalized comment. Identical

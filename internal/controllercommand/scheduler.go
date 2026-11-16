@@ -4,6 +4,7 @@ package controllercommand
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -52,7 +53,24 @@ type Scheduler struct {
 	preflights      PlacementPreflightSource
 	creations       PromotionCreationSource
 	reconciliations PromotionReconciliationSource
+	clustersMutex   sync.Mutex
+	clusters        map[string]*clusterSchedule
 }
+
+type clusterSchedule struct {
+	mutex              sync.Mutex
+	yieldCancellation  bool
+	nextOrdinarySource ordinarySource
+}
+
+type ordinarySource uint8
+
+const (
+	ordinaryPromotionCreation ordinarySource = iota
+	ordinaryPromotionReconciliation
+	ordinaryRunAssignment
+	ordinarySourceCount
+)
 
 func NewScheduler(
 	runs RunSource,
@@ -60,18 +78,57 @@ func NewScheduler(
 	creations PromotionCreationSource,
 	reconciliations PromotionReconciliationSource,
 ) *Scheduler {
-	return &Scheduler{runs: runs, preflights: preflights, creations: creations, reconciliations: reconciliations}
+	return &Scheduler{
+		runs:            runs,
+		preflights:      preflights,
+		creations:       creations,
+		reconciliations: reconciliations,
+		clusters:        make(map[string]*clusterSchedule),
+	}
 }
 
 func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, error) {
-	record, err := s.runs.NextRunToCancel(ctx, clusterName)
-	if err == nil {
-		return Cancellation{Run: record}, nil
-	}
-	if !errors.Is(err, run.ErrNoRunToCancel) {
-		return nil, err
+	schedule := s.clusterSchedule(clusterName)
+	schedule.mutex.Lock()
+	defer schedule.mutex.Unlock()
+
+	if !schedule.yieldCancellation {
+		command, err := s.nextCancellation(ctx, clusterName)
+		if err != nil || command != nil {
+			if command != nil {
+				schedule.yieldCancellation = true
+			}
+
+			return command, err
+		}
 	}
 
+	command, err := s.nextNonCancellation(ctx, clusterName, schedule)
+	if err != nil {
+		schedule.yieldCancellation = false
+		return nil, err
+	}
+	if command != nil {
+		schedule.yieldCancellation = false
+		return command, nil
+	}
+	if !schedule.yieldCancellation {
+		return nil, nil
+	}
+
+	command, err = s.nextCancellation(ctx, clusterName)
+	if err == nil && command == nil {
+		schedule.yieldCancellation = false
+	}
+
+	return command, err
+}
+
+func (s *Scheduler) nextNonCancellation(
+	ctx context.Context,
+	clusterName string,
+	schedule *clusterSchedule,
+) (Command, error) {
 	if s.preflights != nil {
 		preflight, err := s.preflights.Next(ctx, clusterName)
 		if err == nil {
@@ -82,27 +139,75 @@ func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, erro
 		}
 	}
 
-	if s.creations != nil {
+	for offset := range int(ordinarySourceCount) {
+		source := (schedule.nextOrdinarySource + ordinarySource(offset)) % ordinarySourceCount
+		command, err := s.nextOrdinary(ctx, clusterName, source)
+		if err != nil {
+			schedule.nextOrdinarySource = (source + 1) % ordinarySourceCount
+			return nil, err
+		}
+		if command != nil {
+			schedule.nextOrdinarySource = (source + 1) % ordinarySourceCount
+			return command, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (s *Scheduler) nextOrdinary(
+	ctx context.Context,
+	clusterName string,
+	source ordinarySource,
+) (Command, error) {
+	switch source {
+	case ordinaryPromotionCreation:
+		if s.creations == nil {
+			return nil, nil
+		}
 		command, err := s.creations.Next(ctx, clusterName)
-		if err == nil {
-			return PromotionCreation{Command: command}, nil
+		if errors.Is(err, promotion.ErrNoCreationDispatch) {
+			return nil, nil
 		}
-		if !errors.Is(err, promotion.ErrNoCreationDispatch) {
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	if s.reconciliations != nil {
+		return PromotionCreation{Command: command}, nil
+	case ordinaryPromotionReconciliation:
+		if s.reconciliations == nil {
+			return nil, nil
+		}
 		command, err := s.reconciliations.Next(ctx, clusterName)
-		if err == nil {
-			return PromotionReconciliation{Command: command}, nil
+		if errors.Is(err, promotion.ErrNoReconciliation) {
+			return nil, nil
 		}
-		if !errors.Is(err, promotion.ErrNoReconciliation) {
+		if err != nil {
 			return nil, err
 		}
+
+		return PromotionReconciliation{Command: command}, nil
+	case ordinaryRunAssignment:
+		return s.nextRunAssignment(ctx, clusterName)
+	default:
+		panic("unsupported ordinary Controller command source")
+	}
+}
+
+func (s *Scheduler) nextCancellation(ctx context.Context, clusterName string) (Command, error) {
+	record, err := s.runs.NextRunToCancel(ctx, clusterName)
+	if errors.Is(err, run.ErrNoRunToCancel) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	record, err = s.runs.NextRunAssignment(ctx, clusterName)
+	return Cancellation{Run: record}, nil
+}
+
+func (s *Scheduler) nextRunAssignment(ctx context.Context, clusterName string) (Command, error) {
+	record, err := s.runs.NextRunAssignment(ctx, clusterName)
 	if errors.Is(err, run.ErrNoRunAssignment) {
 		return nil, nil
 	}
@@ -111,4 +216,17 @@ func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, erro
 	}
 
 	return Assignment{Run: record}, nil
+}
+
+func (s *Scheduler) clusterSchedule(clusterName string) *clusterSchedule {
+	s.clustersMutex.Lock()
+	defer s.clustersMutex.Unlock()
+
+	schedule := s.clusters[clusterName]
+	if schedule == nil {
+		schedule = &clusterSchedule{}
+		s.clusters[clusterName] = schedule
+	}
+
+	return schedule
 }

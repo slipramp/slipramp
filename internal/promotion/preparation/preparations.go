@@ -133,29 +133,31 @@ func (c *PreparationCoordinator) Run(ctx context.Context) {
 }
 
 func (c *PreparationCoordinator) processAndLog(ctx context.Context) {
-	for ctx.Err() == nil {
-		processed, err := c.DispatchNext(ctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				c.logger.Warn("dispatch Promotion preparation", "error", err)
+	dispatching := true
+	reconciling := true
+	for ctx.Err() == nil && (dispatching || reconciling) {
+		if dispatching {
+			processed, err := c.DispatchNext(ctx)
+			if err != nil {
+				if ctx.Err() == nil {
+					c.logger.Warn("dispatch Promotion preparation", "error", err)
+				}
+				dispatching = false
+			} else {
+				dispatching = processed
 			}
-			break
 		}
-		if !processed {
-			break
-		}
-	}
 
-	for ctx.Err() == nil {
-		processed, err := c.ReconcileNext(ctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				c.logger.Warn("reconcile Promotion preparation", "error", err)
+		if reconciling {
+			processed, err := c.ReconcileNext(ctx)
+			if err != nil {
+				if ctx.Err() == nil {
+					c.logger.Warn("reconcile Promotion preparation", "error", err)
+				}
+				reconciling = false
+			} else {
+				reconciling = processed
 			}
-			break
-		}
-		if !processed {
-			break
 		}
 	}
 }

@@ -14,12 +14,15 @@ from that credential. Authenticated traffic updates last contact without a
 separate heartbeat protocol.
 
 Delivery uses a small versioned HTTP API and is at least once. Long polls return
-Run assignment, Run cancellation, or configured Kargo work. Deterministic
-resource identity makes repeated commands safe without a broker, bidirectional
-RPC, distributed lease, or leader election.
+Run assignment, Run cancellation, Placement preflight, or configured Kargo
+work. Deterministic resource identity makes repeated commands safe without a
+broker, bidirectional RPC, distributed lease, or leader election.
 
-The Server schedules cancellation before new assignment and interleaves due
-Kargo coordination without creating another delivery channel.
+The Server checks cancellation before other work, but after delivering one it
+gives another eligible command one turn before redelivering cancellation.
+Placement preflights precede ordinary work. Within ordinary work, the scheduler
+rotates per Cluster across Kargo creation, Kargo reconciliation, and Run
+assignment so an always-ready source cannot starve the others.
 
 The Server remains authoritative for scheduling and capacity. The Controller
 also bounds concurrent new Run workers as local defense in depth. Recovered Jobs

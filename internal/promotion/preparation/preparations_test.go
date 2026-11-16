@@ -44,6 +44,41 @@ type recordingPreparationStore struct {
 	failureError            error
 }
 
+type scheduledPreparationStore struct {
+	*recordingPreparationStore
+	dispatchRecord           promotion.Promotion
+	reconciliationRecord     promotion.Promotion
+	dispatchesRemaining      int
+	reconciliationsRemaining int
+	calls                    []string
+}
+
+func (s *scheduledPreparationStore) GetPromotionAwaitingDispatch(
+	context.Context,
+	time.Time,
+) (promotion.Promotion, error) {
+	s.calls = append(s.calls, "dispatch")
+	if s.dispatchesRemaining == 0 {
+		return promotion.Promotion{}, promotion.ErrNoPreparationWork
+	}
+	s.dispatchesRemaining--
+
+	return s.dispatchRecord, nil
+}
+
+func (s *scheduledPreparationStore) GetPromotionWithFinishedPreparation(
+	context.Context,
+	time.Time,
+) (promotion.Promotion, error) {
+	s.calls = append(s.calls, "reconcile")
+	if s.reconciliationsRemaining == 0 {
+		return promotion.Promotion{}, promotion.ErrNoPreparationWork
+	}
+	s.reconciliationsRemaining--
+
+	return s.reconciliationRecord, nil
+}
+
 func (s *recordingPreparationStore) GetPromotionAwaitingDispatch(
 	context.Context,
 	time.Time,
@@ -125,6 +160,45 @@ func (s *recordingPreparationStore) FailPromotionPreparation(
 	s.failureMessage = message
 
 	return s.record, nil
+}
+
+func TestPreparationCoordinatorAlternatesDispatchAndReconciliation(t *testing.T) {
+	t.Parallel()
+
+	dispatchRecord := preparingPromotion()
+	repositoryID := uuid.New()
+	revisionID := uuid.New()
+	dispatchRecord.Preparation.RepositoryID = &repositoryID
+	dispatchRecord.Preparation.CatalogRevisionID = &revisionID
+
+	reconciliationRecord := preparingPromotion()
+	reconciliationRecord.ID = uuid.New()
+	runID := uuid.New()
+	reconciliationRecord.Preparation.RunID = &runID
+	store := &scheduledPreparationStore{
+		recordingPreparationStore: &recordingPreparationStore{record: dispatchRecord},
+		dispatchRecord:            dispatchRecord,
+		reconciliationRecord:      reconciliationRecord,
+		dispatchesRemaining:       2,
+		reconciliationsRemaining:  2,
+	}
+	succeeded := run.OutcomeSucceeded
+	coordinator := testPreparationCoordinator(
+		nil,
+		nil,
+		&recordingPreparationRuns{
+			created: run.Run{ID: uuid.New()},
+			loaded:  run.Run{ID: runID, Phase: run.PhaseFinished, Outcome: &succeeded},
+		},
+		validPreparationArtifacts(),
+		store,
+	)
+
+	coordinator.processAndLog(t.Context())
+
+	if got := strings.Join(store.calls, ","); got != "dispatch,reconcile,dispatch,reconcile,dispatch,reconcile" {
+		t.Errorf("preparation calls = %q", got)
+	}
 }
 
 type recordingPreparationCatalogs struct {

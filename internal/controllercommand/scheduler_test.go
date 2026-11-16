@@ -166,6 +166,175 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 	}
 }
 
+func TestSchedulerRotatesOrdinaryCommands(t *testing.T) {
+	t.Parallel()
+
+	record := run.Run{ID: uuid.New()}
+	creation := promotion.CreationCommand{PromotionID: uuid.New(), Attempt: 2}
+	uid := "promotion-uid"
+	reconciliation := promotion.ReconciliationCommand{PromotionID: uuid.New(), KargoUID: &uid}
+	var calls []string
+	runs := schedulerRunSource{
+		cancel: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "cancel")
+			return run.Run{}, run.ErrNoRunToCancel
+		},
+		assign: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "assign")
+			return record, nil
+		},
+	}
+	creations := schedulerCreationSource(func(context.Context, string) (promotion.CreationCommand, error) {
+		calls = append(calls, "create")
+		return creation, nil
+	})
+	reconciliations := schedulerReconciliationSource(func(
+		context.Context,
+		string,
+	) (promotion.ReconciliationCommand, error) {
+		calls = append(calls, "reconcile")
+		return reconciliation, nil
+	})
+	scheduler := NewScheduler(runs, nil, creations, reconciliations)
+
+	want := []Command{
+		PromotionCreation{Command: creation},
+		PromotionReconciliation{Command: reconciliation},
+		Assignment{Run: record},
+		PromotionCreation{Command: creation},
+		PromotionReconciliation{Command: reconciliation},
+		Assignment{Run: record},
+	}
+	for index, expected := range want {
+		got, err := scheduler.Next(t.Context(), "colo")
+		if err != nil || !reflect.DeepEqual(got, expected) {
+			t.Fatalf("Next() call %d = %#v, %v; want %#v, nil", index+1, got, err, expected)
+		}
+	}
+
+	if got := strings.Join(calls, ","); got != "cancel,create,cancel,reconcile,cancel,assign,"+
+		"cancel,create,cancel,reconcile,cancel,assign" {
+		t.Errorf("source calls = %q", got)
+	}
+}
+
+func TestSchedulerRotatesAfterOrdinarySourceFailure(t *testing.T) {
+	t.Parallel()
+
+	record := run.Run{ID: uuid.New()}
+	uid := "promotion-uid"
+	reconciliation := promotion.ReconciliationCommand{PromotionID: uuid.New(), KargoUID: &uid}
+	failure := errors.New("creation source unavailable")
+	var calls []string
+	runs := schedulerRunSource{
+		cancel: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "cancel")
+			return run.Run{}, run.ErrNoRunToCancel
+		},
+		assign: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "assign")
+			return record, nil
+		},
+	}
+	creations := schedulerCreationSource(func(context.Context, string) (promotion.CreationCommand, error) {
+		calls = append(calls, "create")
+		return promotion.CreationCommand{}, failure
+	})
+	reconciliations := schedulerReconciliationSource(func(
+		context.Context,
+		string,
+	) (promotion.ReconciliationCommand, error) {
+		calls = append(calls, "reconcile")
+		return reconciliation, nil
+	})
+	scheduler := NewScheduler(runs, nil, creations, reconciliations)
+
+	wantCommands := []Command{
+		nil,
+		PromotionReconciliation{Command: reconciliation},
+		Assignment{Run: record},
+		nil,
+	}
+	wantErrors := []error{failure, nil, nil, failure}
+	for index := range wantCommands {
+		got, err := scheduler.Next(t.Context(), "colo")
+		if !errors.Is(err, wantErrors[index]) || !reflect.DeepEqual(got, wantCommands[index]) {
+			t.Fatalf(
+				"Next() call %d = %#v, %v; want %#v, %v",
+				index+1,
+				got,
+				err,
+				wantCommands[index],
+				wantErrors[index],
+			)
+		}
+	}
+	if got := strings.Join(calls, ","); got != "cancel,create,cancel,reconcile,cancel,assign,cancel,create" {
+		t.Errorf("source calls = %q", got)
+	}
+}
+
+func TestSchedulerBoundsRepeatedCancellationDelivery(t *testing.T) {
+	t.Parallel()
+
+	record := run.Run{ID: uuid.New()}
+	var calls []string
+	runs := schedulerRunSource{
+		cancel: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "cancel")
+			return record, nil
+		},
+		assign: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "assign")
+			return record, nil
+		},
+	}
+	scheduler := NewScheduler(runs, nil, nil, nil)
+	want := []Command{
+		Cancellation{Run: record},
+		Assignment{Run: record},
+		Cancellation{Run: record},
+		Assignment{Run: record},
+	}
+	for index, expected := range want {
+		got, err := scheduler.Next(t.Context(), "colo")
+		if err != nil || !reflect.DeepEqual(got, expected) {
+			t.Fatalf("Next() call %d = %#v, %v; want %#v, nil", index+1, got, err, expected)
+		}
+	}
+	if got := strings.Join(calls, ","); got != "cancel,assign,cancel,assign" {
+		t.Errorf("source calls = %q", got)
+	}
+}
+
+func TestSchedulerRedeliversCancellationWithoutOtherWork(t *testing.T) {
+	t.Parallel()
+
+	record := run.Run{ID: uuid.New()}
+	var calls []string
+	runs := schedulerRunSource{
+		cancel: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "cancel")
+			return record, nil
+		},
+		assign: func(context.Context, string) (run.Run, error) {
+			calls = append(calls, "assign")
+			return run.Run{}, run.ErrNoRunAssignment
+		},
+	}
+	scheduler := NewScheduler(runs, nil, nil, nil)
+	for call := 1; call <= 2; call++ {
+		got, err := scheduler.Next(t.Context(), "colo")
+		want := Cancellation{Run: record}
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("Next() call %d = %#v, %v; want %#v, nil", call, got, err, want)
+		}
+	}
+	if got := strings.Join(calls, ","); got != "cancel,assign,cancel" {
+		t.Errorf("source calls = %q", got)
+	}
+}
+
 type schedulerRunSource struct {
 	cancel func(context.Context, string) (run.Run, error)
 	assign func(context.Context, string) (run.Run, error)
