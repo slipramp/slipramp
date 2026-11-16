@@ -17,6 +17,33 @@ import {
   shouldAutomaticallyBeginOIDCLogin,
 } from "../../api/request-auth.server.ts";
 import { csrfProtectionMiddleware } from "../../api/csrf.server.ts";
+import {
+  claimOIDCLogin,
+  clearOIDCLoginClaim,
+  oidcLoginLeaseStorageKey,
+} from "./oidc-login-coordination.ts";
+
+function memoryStorage() {
+  const values = new Map();
+
+  return {
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    removeItem(key) {
+      values.delete(key);
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    },
+  };
+}
+
+const immediateLocks = {
+  async request(_name, callback) {
+    return callback({});
+  },
+};
 
 test("forwards only the named browser cookie", () => {
   const request = new Request("http://web.test/runs", {
@@ -125,6 +152,33 @@ test("remembers a successful OIDC login for future unauthenticated visits", () =
     headers: { cookie: `theme=dark; ${automaticOIDCLoginCookieName}=1` },
   });
   assert.equal(shouldAutomaticallyBeginOIDCLogin(returningVisit), true);
+});
+
+test("coordinates automatic OIDC login starts across tabs", async () => {
+  const storage = memoryStorage();
+
+  assert.equal(await claimOIDCLogin(storage, immediateLocks, { now: 1_000 }), "claimed");
+  assert.equal(await claimOIDCLogin(storage, immediateLocks, { now: 2_000 }), "pending");
+  assert.equal(
+    await claimOIDCLogin(storage, immediateLocks, { now: 10 * 60 * 1000 + 1_001 }),
+    "claimed",
+  );
+});
+
+test("requires manual OIDC login when browser coordination is unavailable", async () => {
+  const storage = memoryStorage();
+
+  assert.equal(await claimOIDCLogin(storage, undefined), "unsupported");
+  assert.equal(await claimOIDCLogin(storage, undefined, { force: true }), "claimed");
+});
+
+test("clears the cross-tab OIDC login claim after authentication", () => {
+  const storage = memoryStorage();
+  storage.setItem(oidcLoginLeaseStorageKey, "1234");
+
+  clearOIDCLoginClaim(storage);
+
+  assert.equal(storage.getItem(oidcLoginLeaseStorageKey), null);
 });
 
 test("forgets automatic OIDC login on explicit logout", () => {

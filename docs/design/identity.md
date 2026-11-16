@@ -52,6 +52,11 @@ after Server restart. Anonymous starts are rate-limited by resolved client and
 installation-wide capacity. Client IP resolution trusts forwarded addresses
 only when an exact proxy-hop configuration is enabled.
 
+The Web coordinates remembered automatic sign-in across tabs. One tab begins
+the OIDC transaction while the others wait and revalidate after the shared
+browser session is restored. A user may explicitly move sign-in to the current
+tab.
+
 Unsafe cookie-authenticated product requests require CSRF proof. The Web accepts
 unsafe browser requests only from the same host before forwarding that proof.
 Bearer requests do not use the browser CSRF header.

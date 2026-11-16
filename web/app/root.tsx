@@ -16,16 +16,16 @@ import {
   Title,
 } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, type ReactNode } from "react";
 import {
   isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
-  redirect,
   Scripts,
   ScrollRestoration,
   useRouteError,
+  useRevalidator,
 } from "react-router";
 
 import { csrfProtectionMiddleware } from "~/api/csrf.server";
@@ -36,6 +36,11 @@ import {
   getProductAuthentication,
   productAuthenticationMiddleware,
 } from "~/features/auth/product-authentication.server";
+import {
+  claimOIDCLogin,
+  clearOIDCLoginClaim,
+  oidcLoginLeaseStorageKey,
+} from "~/features/auth/oidc-login-coordination";
 import { ProductShell } from "~/features/shell/product-shell";
 import { pageTitle } from "~/shared/page-title";
 import { serverPerformanceMiddleware } from "~/features/performance/performance.server";
@@ -68,14 +73,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     getProductAuthentication(context),
     getClientCompatibility({ client: createServerAPIClient(request, context) }),
   ]);
-  if (authentication.authentication === "required") {
-    if (shouldAutomaticallyBeginOIDCLogin(request)) {
-      return redirect("/api/v1/auth/login");
-    }
-  }
-
   return {
     ...authentication,
+    automaticOIDCLogin:
+      authentication.authentication === "required" && shouldAutomaticallyBeginOIDCLogin(request),
     kargoEnabled: compatibility.data?.kargoEnabled ?? true,
   };
 }
@@ -107,18 +108,21 @@ export function Layout({ children }: Readonly<{ children: ReactNode }>) {
 
 export default function App({ loaderData }: Route.ComponentProps) {
   if (loaderData.authentication === "required") {
-    return <LoginPrompt />;
+    return <LoginPrompt automatic={loaderData.automaticOIDCLogin} />;
   }
   if (loaderData.authentication === "unavailable") {
     return <AuthenticationUnavailable />;
   }
 
   return (
-    <Modal.Stack>
-      <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
-        <Outlet />
-      </ProductShell>
-    </Modal.Stack>
+    <>
+      <AuthenticationSync />
+      <Modal.Stack>
+        <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
+          <Outlet />
+        </ProductShell>
+      </Modal.Stack>
+    </>
   );
 }
 
@@ -150,7 +154,35 @@ export function ErrorBoundary() {
   );
 }
 
-function LoginPrompt() {
+function LoginPrompt({ automatic }: Readonly<{ automatic: boolean }>) {
+  const revalidator = useRevalidator();
+  const startLogin = useCallback(async (force: boolean) => {
+    const storage = browserLocalStorage();
+    const claim = storage
+      ? await claimOIDCLogin(storage, window.navigator.locks, { force })
+      : force
+        ? "claimed"
+        : "unsupported";
+    if (claim === "claimed") {
+      window.location.assign("/api/v1/auth/login");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (automatic) void startLogin(false);
+  }, [automatic, startLogin]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === oidcLoginLeaseStorageKey && event.newValue === null) {
+        void revalidator.revalidate();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [revalidator]);
+
   return (
     <Center mih="100vh" p="md">
       <Paper maw={420} p="xl" shadow="sm" withBorder>
@@ -158,16 +190,32 @@ function LoginPrompt() {
           <Stack gap={4}>
             <Title order={1}>Sign in to Slipramp</Title>
             <Text c="dimmed">
-              Continue with the identity provider configured for this installation.
+              Continue with the identity provider configured for this installation. If another tab
+              is already signing in, this tab will reconnect when it finishes.
             </Text>
           </Stack>
-          <Button component="a" href="/api/v1/auth/login">
-            Sign in
-          </Button>
+          <Button onClick={() => void startLogin(true)}>Sign in here</Button>
         </Stack>
       </Paper>
     </Center>
   );
+}
+
+function AuthenticationSync() {
+  useEffect(() => {
+    const storage = browserLocalStorage();
+    if (storage) clearOIDCLoginClaim(storage);
+  }, []);
+
+  return null;
+}
+
+function browserLocalStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 function AuthenticationUnavailable() {
