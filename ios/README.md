@@ -1,111 +1,36 @@
 # Slipramp for iOS
 
-The native Slipramp client is an iOS 17 SwiftUI application. It checks one
-Slipramp Server's exact product API contract before revealing authentication,
-then validates an API key, stores the credential in the Keychain, and exposes
-the operational Inbox, recent Runs, Promotion history, Run detail, and
-reconnectable retained or live Run logs. Operators can approve or reject
-pending Run reviews with an immutable optional comment and can request
-cancellation of unfinished Runs. The Targets tab searches active Targets,
-browses their Actions and execution metadata, and starts parameterized Actions
-that do not require Artifact inputs. Promotion-review Inbox items and entries in
-the Promotions tab open a native detail showing frozen Stage, revision, Freight,
-policy, preparation, and
-sensitive Git and Argo CD diff context before a confirmed decision. Finished
-Runs can be started again from the same frozen revision or the latest catalog
-revision; Runs with Artifact inputs remain pinned to their producing revision.
-Active Run details refresh until completion. The log view can be opened before
-the execution Job starts and waits for its durable stream, or explains the
-terminal outcome when no log becomes available. It renders standard ANSI
-styling, 256-color, and truecolor output while discarding terminal controls that
-do not belong in a log document. Run detail browses Artifact metadata and
-provenance, opens retained sealed content through a verified ephemeral system
-preview, and starts compatible Artifact-input Actions from the producing Run
-with an explicit pinned binding.
+Use Slipramp on iPhone or iPad to start Actions, follow Runs, and review changes on your Slipramp Server.
 
-The visual language and extension rules are documented in
-[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md). New screens should compose the shared
-tokens and components instead of introducing feature-local colors, spacing, or
-status treatments.
+- **Inbox** lists items that need attention. Open a pending Run or Promotion review to approve or reject it.
+- **Targets** lets you find a Target, choose an Action, and set its parameters. If the Action needs an Artifact, start it from the Artifact in the Run that produced it.
+- **Runs** shows live and saved logs, Artifacts, and Run status. You can request cancellation of an unfinished Run or rerun a finished one.
+- **Promotions** shows Kargo Promotion history. Open a Promotion to inspect its Stage, Freight, and available Git or Argo CD diffs.
 
-## Requirements
+## Run the app
 
-- Xcode 16.3 or newer with Swift 6.1 support
-- An iOS 17 simulator or device
-- A Slipramp API key with at least `slipramp:read`
+1. Open `ios/Slipramp.xcodeproj` in Xcode 16.3 or later.
+2. Select the **Slipramp** scheme and an iOS 17 or later simulator or device. For a physical device, select your development team under **Signing & Capabilities** in the **Slipramp** target.
+3. Click **Run**.
 
-Run decisions additionally require `slipramp:runs:review`; cancellation,
-Action starts, and reruns require `slipramp:runs:write`; Promotion decisions
-require `slipramp:promotions:write`. Sensitive Promotion diff previews use the
-read scope and require an operator or admin Principal.
+## Connect to your Server
 
-Open `Slipramp.xcodeproj`, select a development team for the `Slipramp` target,
-and run the shared `Slipramp` scheme. The default bundle identifier is
-`com.ianunruh.slipramp` and can be changed for local signing.
+Enter your Slipramp Server URL and tap **Check Server**. Use HTTPS, or confirm private HTTP if a trusted network such as a tailnet already encrypts the connection.
 
-Release builds rely on App Transport Security and should connect over HTTPS.
-The project permits local-network access for development, but it does not
-globally disable transport security.
+Once the compatibility check passes, tap **Sign in with SSO** if your Server offers it, or use a personal API key. The app saves your credential in the device Keychain.
 
-## Generation and tests
+Create a key under **Personal API keys** in the web app. Include `slipramp:read` for browsing and add scopes for the operations you need.
 
-The domain and networking layer is also exposed as a Swift package so it can be
-tested without launching Xcode. The Task commands select the standard
-`/Applications/Xcode.app` installation directly, so they do not require a
-global `xcode-select` change:
-
-```console
-task ios:test
-task ios:build
-```
-
-Run `task mascot:generate` after adding or changing a production mascot pose.
-The existing web pose pools and reviewed CSS frame timing drive a generated
-Swift catalog and a quality-90 WebP resource pack under
-`Slipramp/Resources/Mascots`. Generation requires the `dwebp` and `cwebp`
-commands from libwebp. `task mascot:check`, `task ios:test`, and
-`task ios:build` verify that the checked-in native catalog and assets still
-match their canonical web sources without recompressing them.
-
-Swift models and ordinary clients are generated by the exact-pinned Apple Swift
-OpenAPI Generator from the bundled Server contract. `task api:generate` updates
-the checked-in bundle and Swift sources alongside the Go and TypeScript clients;
-`task api:check` fails when any generated output is stale. Do not edit files in
-`Slipramp/GeneratedSources` by hand.
-
-The generated client handles Inbox, Target, Run, Promotion, Artifact listing,
-and Artifact download operations, including Target browsing, Run creation, Run
-and Promotion decisions, and Run cancellation. The generated Run operations
-also create idempotent same-revision or latest-revision reruns and bind compatible
-Artifact inputs. The handwritten Run log reader remains separate because it
-implements Slipramp's reconnectable byte-offset SSE validation and
-replay-suppression contract.
-
-## Connection state model
-
-`AppModel.connectionState` is the only mutable source of connection workflow
-state observed by the UI. Its cases are:
-
-| Case | Meaning |
+| Operation | Additional scope |
 | --- | --- |
-| `restoring` | Validating a saved Server URL and Keychain credential at launch. |
-| `disconnected` | No usable connection. It may carry an error for display. |
-| `checkingServer` | Loading and validating compatibility for a normalized Server URL. |
-| `awaitingTrustedHTTPConfirmation` | Waiting for the operator to trust private-network HTTP. |
-| `ready` | The Server is compatible and authentication can begin. Errors return here for retry. |
-| `authenticating` | Validating an API key or completing native OIDC with PKCE. |
-| `connected` | Holding the authenticated API client used by product screens. |
+| Start, rerun, or cancel a Run | `slipramp:runs:write` |
+| Approve or reject a Run review | `slipramp:runs:review` |
+| Approve or reject a Promotion | `slipramp:promotions:write` |
 
-Launch restoration moves from `restoring` to either `connected` or
-`disconnected`. Checking a URL moves through `checkingServer`, except untrusted
-private HTTP first moves to `awaitingTrustedHTTPConfirmation`; confirmation
-continues the check and cancellation returns to `disconnected`. A successful
-check enters `ready`. API-key or native OIDC sign-in moves from `ready` to
-`authenticating`, then to `connected` on success or back to `ready` on failure
-or user-canceled OIDC. Choosing another Server or disconnecting returns to
-`disconnected`, and disconnect also clears the saved URL, trusted HTTP URL, and
-Keychain credential.
+Viewing sensitive Promotion diffs also requires an operator or admin role.
 
-In-flight cases carry an operation identifier. An asynchronous result can
-change state only while its identifier is still current, so disconnecting or
-starting a newer attempt prevents stale work from restoring an older state.
+## Development
+
+From the repository root, run `task ios:test` for the Swift package tests and `task ios:build` for a simulator build.
+
+See the [development guide](../docs/DEVELOPMENT.md) for local Server setup and the [iOS design system](./DESIGN_SYSTEM.md) for UI components.
