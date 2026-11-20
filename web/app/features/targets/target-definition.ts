@@ -41,10 +41,11 @@ const targetSpecOrder = {
   watch: 1,
   runtime: 2,
   placement: 3,
-  credentials: 4,
-  timeout: 5,
-  resources: 6,
-  actions: 7,
+  maximumActiveRuns: 4,
+  credentials: 5,
+  timeout: 6,
+  resources: 7,
+  actions: 8,
 } satisfies FieldOrder<TargetSpec>;
 
 const actionOrder = {

@@ -153,7 +153,7 @@ values; it never publishes a partially refreshed view.
 | --- | --- | --- | --- | --- |
 | `slipramp.run.active` | `slipramp_run_active` | observable gauge / `{run}` | `phase=assigned|preparing|running`, `cancellation_state=not-requested|requested` | Active Runs by execution phase and orthogonal operator-cancellation state. |
 | `slipramp.run.review.pending` | `slipramp_run_review_pending` | observable gauge / `{run}` | none | Queued Runs awaiting review. |
-| `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest review-eligible queued Run not blocked by an active Run for its Target. Absent when none is eligible. |
+| `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest review-eligible queued Run whose Target has available capacity. Absent when none is eligible. |
 | `slipramp.controller.connected` | `slipramp_controller_connected` | observable gauge / `{controller}` | none | Controllers whose latest contact is within the connection window. |
 | `slipramp.controller.last_seen.time` | `slipramp_controller_last_seen_time_seconds` | observable gauge / `s` | none | Unix time of the latest Controller contact. Absent until one has been seen. |
 | `slipramp.repository.refresh.state` | `slipramp_repository_refresh_state` | observable gauge / `{repository}` | `state=pending|succeeded|failed` | Active Repositories in each durable refresh state. |
@@ -163,7 +163,7 @@ values; it never publishes a partially refreshed view.
 
 Every metric in this table is a Slipramp-specific convention. Queue age uses
 the same eligibility predicate and FIFO timestamp as dispatch: queued,
-review-not-required or approved, and no active Run for the same Target.
+review-not-required or approved, and below the Target's active Run limit.
 
 ## Slipramp operation metrics
 

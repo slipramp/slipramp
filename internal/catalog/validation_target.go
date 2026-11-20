@@ -127,6 +127,13 @@ func validateTargetPortable(input Catalog, target Target, runtimes map[string]Ru
 			kubevalidate.DNSLabel("target placement", target.Spec.Placement),
 		)
 	}
+	if target.Spec.MaximumActiveRuns != nil && *target.Spec.MaximumActiveRuns < 1 {
+		add(
+			"spec.maximumActiveRuns",
+			"catalog.target.maximum-active-runs-invalid",
+			errors.New("target maximum active Runs must be positive"),
+		)
+	}
 
 	add(
 		"spec.credentials",

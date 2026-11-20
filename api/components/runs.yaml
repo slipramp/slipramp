@@ -167,8 +167,8 @@ Run:
       type: string
       format: uuid
       description: >-
-        Active Run serializing the same Target. Present only when
-        schedulingState is target-busy.
+        One active Run contributing to exhausted Target capacity. Present only
+        when schedulingState is target-busy.
     queueAgeSeconds:
       type: integer
       format: int64

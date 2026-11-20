@@ -1031,6 +1031,13 @@ TargetSpec:
     placement:
       type: string
       minLength: 1
+    maximumActiveRuns:
+      type: integer
+      format: int32
+      minimum: 1
+      description: >-
+        Maximum active Runs admitted for this Target. Omitted values default
+        to one.
     credentials:
       type: object
       additionalProperties:

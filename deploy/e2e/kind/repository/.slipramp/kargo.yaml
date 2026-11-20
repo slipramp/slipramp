@@ -33,6 +33,7 @@ metadata:
 spec:
   runtime: kargo-promotions
   placement: acceptance
+  maximumActiveRuns: 4
   credentials:
     git: review-git
     argocd: review-argocd

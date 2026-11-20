@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
@@ -60,7 +59,7 @@ func (d *Database) ClaimQueuedRun(
 			PlacementMaximumActiveRuns: placementMaximumActiveRuns,
 		},
 	)
-	if errors.Is(err, pgx.ErrNoRows) || isTargetConcurrencyConflict(err) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, run.ErrNoRunAssignment
 	}
 	if err != nil {
@@ -93,11 +92,4 @@ func (d *Database) ClaimQueuedRun(
 	}
 
 	return record, nil
-}
-
-func isTargetConcurrencyConflict(err error) bool {
-	var postgresError *pgconn.PgError
-
-	return errors.As(err, &postgresError) &&
-		postgresError.ConstraintName == "runs_one_active_per_target"
 }

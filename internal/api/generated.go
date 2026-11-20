@@ -4183,7 +4183,7 @@ type Run struct {
 	ArtifactConsumers map[string][]RunArtifactConsumer `json:"artifactConsumers"`
 	AssignedAt        *time.Time                       `json:"assignedAt,omitempty"`
 
-	// BlockingRunID Active Run serializing the same Target. Present only when schedulingState is target-busy.
+	// BlockingRunID One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
 	BlockingRunID *openapi_types.UUID `json:"blockingRunId,omitempty"`
 	CanceledBy    *RunActor           `json:"canceledBy,omitempty"`
 
@@ -4710,14 +4710,17 @@ type TargetReconciliationStatusComparison string
 
 // TargetSpec defines model for TargetSpec.
 type TargetSpec struct {
-	Actions     map[string]Action     `json:"actions"`
-	Credentials *map[string]string    `json:"credentials,omitempty"`
-	Path        *string               `json:"path,omitempty"`
-	Placement   *string               `json:"placement,omitempty"`
-	Resources   *ResourceRequirements `json:"resources,omitempty"`
-	Runtime     *string               `json:"runtime,omitempty"`
-	Timeout     *string               `json:"timeout,omitempty"`
-	Watch       *[]string             `json:"watch,omitempty"`
+	Actions     map[string]Action  `json:"actions"`
+	Credentials *map[string]string `json:"credentials,omitempty"`
+
+	// MaximumActiveRuns Maximum active Runs admitted for this Target. Omitted values default to one.
+	MaximumActiveRuns *int32                `json:"maximumActiveRuns,omitempty"`
+	Path              *string               `json:"path,omitempty"`
+	Placement         *string               `json:"placement,omitempty"`
+	Resources         *ResourceRequirements `json:"resources,omitempty"`
+	Runtime           *string               `json:"runtime,omitempty"`
+	Timeout           *string               `json:"timeout,omitempty"`
+	Watch             *[]string             `json:"watch,omitempty"`
 }
 
 // TargetStatus defines model for TargetStatus.

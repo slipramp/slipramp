@@ -39,6 +39,7 @@ spec:
   watch: [infrastructure/network/**]
   runtime: terraform
   placement: infrastructure-admin
+  maximumActiveRuns: 3
   credentials:
     backend: terraform-backend
   actions:
@@ -125,6 +126,7 @@ spec:
 	plan := preview.Artifacts["plan"]
 	if target.Metadata.Title != "Home network" ||
 		target.Spec.Runtime != "terraform" ||
+		target.Spec.MaximumActiveRuns == nil || *target.Spec.MaximumActiveRuns != 3 ||
 		preview.Title != "Preview network changes" ||
 		preview.Description != "Creates a Terraform plan for operator review." ||
 		preview.DocumentationURL != "https://developer.hashicorp.com/terraform/cli/commands/plan" ||

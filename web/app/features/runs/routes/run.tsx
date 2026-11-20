@@ -805,14 +805,14 @@ function runQueueExplanation(run: Run): ReactNode {
     case "target-busy":
       return run.blockingRunId ? (
         <>
-          The Target is serialized behind active Run{" "}
+          The Target is at capacity behind active Run{" "}
           <Anchor component={Link} to={`/runs/${run.blockingRunId}`}>
             {shortIdentifier(run.blockingRunId)}
           </Anchor>
           .
         </>
       ) : (
-        "Another active Run is serializing this Target."
+        "The Target has reached its active Run limit."
       );
     case "cluster-unreachable":
       return "The Cluster Controller is not currently reachable by the Server.";

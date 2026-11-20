@@ -201,14 +201,16 @@ WHERE phase = 'queued'
 -- name: GetOldestEligibleRunCreatedAt :one
 SELECT min(queued.created_at)::timestamptz AS created_at
 FROM runs AS queued
+JOIN targets AS target_state
+  ON target_state.id = queued.target_id
 WHERE queued.phase = 'queued'
   AND queued.review_state IN ('not-required', 'approved')
-  AND NOT EXISTS (
-      SELECT 1
+  AND (
+      SELECT count(*)
       FROM runs AS active
       WHERE active.target_id = queued.target_id
         AND active.phase IN ('assigned', 'preparing', 'running')
-  );
+  ) < target_state.maximum_active_runs;
 
 -- name: CreateRunArtifactInput :execrows
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
@@ -393,36 +395,38 @@ LIMIT 1;
 
 -- name: ClaimQueuedRun :one
 WITH active_runs AS (
-	SELECT active.placement_name
-	FROM runs AS active
-	WHERE active.cluster_name = sqlc.arg(cluster_name)
-	  AND active.phase IN ('assigned', 'preparing', 'running')
+    SELECT active.placement_name
+    FROM runs AS active
+    WHERE active.cluster_name = sqlc.arg(cluster_name)
+      AND active.phase IN ('assigned', 'preparing', 'running')
 ), candidate AS (
     SELECT queued.id
     FROM runs AS queued
+    JOIN targets AS target_state
+      ON target_state.id = queued.target_id
     WHERE queued.cluster_name = sqlc.arg(cluster_name)
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
       AND (
-	          SELECT count(*)
-	          FROM active_runs
-	      ) < sqlc.arg(cluster_maximum_active_runs)::integer
+          SELECT count(*)
+          FROM active_runs
+      ) < sqlc.arg(cluster_maximum_active_runs)::integer
       AND (
           NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? queued.placement_name)
           OR COALESCE((
-	              SELECT count(*)
-	              FROM active_runs
+              SELECT count(*)
+              FROM active_runs
               WHERE placement_name = queued.placement_name
-	          ), 0) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
+          ), 0) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
       )
-      AND NOT EXISTS (
-          SELECT 1
+      AND (
+          SELECT count(*)
           FROM runs AS active
           WHERE active.target_id = queued.target_id
             AND active.phase IN ('assigned', 'preparing', 'running')
-      )
+      ) < target_state.maximum_active_runs
     ORDER BY queued.created_at, queued.id
-    FOR UPDATE SKIP LOCKED
+    FOR UPDATE OF queued, target_state SKIP LOCKED
     LIMIT 1
 )
 UPDATE runs
@@ -451,7 +455,7 @@ SELECT
     ) AS placement_active_runs,
     CAST(CASE
         WHEN queued.review_state IN ('not-required', 'approved')
-          AND blocker.id IS NULL
+          AND target_activity.active_runs < target_state.maximum_active_runs
           AND (
               SELECT count(*)
               FROM runs AS active
@@ -471,16 +475,18 @@ SELECT
         THEN (
             SELECT count(*)::integer + 1
             FROM runs AS older
+            JOIN targets AS older_target_state
+              ON older_target_state.id = older.target_id
             WHERE older.cluster_name = queued.cluster_name
               AND older.phase = 'queued'
               AND older.review_state IN ('not-required', 'approved')
               AND (older.created_at, older.id) < (queued.created_at, queued.id)
-              AND NOT EXISTS (
-                  SELECT 1
+              AND (
+                  SELECT count(*)
                   FROM runs AS active
                   WHERE active.target_id = older.target_id
                     AND active.phase IN ('assigned', 'preparing', 'running')
-              )
+              ) < older_target_state.maximum_active_runs
               AND (
                   NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? older.placement_name)
                   OR (
@@ -495,6 +501,14 @@ SELECT
         ELSE 0
     END AS integer) AS eligible_position
 FROM runs AS queued
+JOIN targets AS target_state
+  ON target_state.id = queued.target_id
+CROSS JOIN LATERAL (
+    SELECT count(*)::integer AS active_runs
+    FROM runs AS active
+    WHERE active.target_id = queued.target_id
+      AND active.phase IN ('assigned', 'preparing', 'running')
+) AS target_activity
 LEFT JOIN LATERAL (
     SELECT active.id
     FROM runs AS active
@@ -502,6 +516,6 @@ LEFT JOIN LATERAL (
       AND active.phase IN ('assigned', 'preparing', 'running')
     ORDER BY active.assigned_at, active.id
     LIMIT 1
-) AS blocker ON true
+) AS blocker ON target_activity.active_runs >= target_state.maximum_active_runs
 WHERE queued.id = ANY(sqlc.arg(run_ids)::uuid[])
   AND queued.phase = 'queued';

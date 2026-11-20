@@ -35,17 +35,19 @@ Clients cannot choose a source value directly.
 PostgreSQL is the scheduling authority. A Controller claims the oldest eligible
 queued Run for its Cluster while enforcing:
 
-- one active Run per Target by default;
+- the Target's active Run limit, which defaults to one;
 - the installation's Cluster concurrency limit;
 - any tighter Placement concurrency limit;
 - ordinary FIFO order among Runs eligible under those constraints.
 
-Capacity is current deployment policy, not part of the immutable Run snapshot.
+Target, Placement, and Cluster capacity are current deployment policy, not part
+of the immutable Run snapshot. Raising a Target limit admits additional queued
+Runs; lowering it blocks new assignments without canceling active Runs.
 Infrastructure commands are never retried implicitly.
 
 Queue explanation is derived at one read time and is not persisted as mutable
-state. Pending review takes precedence, followed by an active Run for the same
-Target, Controller reachability, Cluster or Placement capacity, and ordinary
+state. Pending review takes precedence, followed by exhausted Target capacity,
+Controller reachability, Cluster or Placement capacity, and ordinary
 eligibility. Queue age and FIFO position are facts at that read time, not
 execution estimates.
 
@@ -208,8 +210,8 @@ Server restart near the occurrence.
 
 If the previous Run from the same Target, Action, and named schedule is still
 unfinished, including queued, the occurrence is skipped. Queued or active Runs
-from other sources do not suppress creation; normal Target serialization may
-still keep the new scheduled Run queued. A creation failure is logged with
+from other sources do not suppress creation; Target capacity may still keep the
+new scheduled Run queued. A creation failure is logged with
 bounded, non-sensitive context and is not retried. The next cron occurrence is
 the next attempt. Scheduled triggers add no delivery API, distributed lease,
 leader election, Kubernetes scheduling, notifications, or retention behavior.

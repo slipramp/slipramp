@@ -84,14 +84,23 @@ type Target struct {
 }
 
 type TargetSpec struct {
-	Path        string               `json:"path,omitempty"        yaml:"path,omitempty"`
-	Watch       []string             `json:"watch,omitempty"       yaml:"watch,omitempty"`
-	Runtime     string               `json:"runtime,omitempty"     yaml:"runtime,omitempty"`
-	Placement   string               `json:"placement,omitempty"   yaml:"placement,omitempty"`
-	Credentials map[string]string    `json:"credentials,omitempty" yaml:"credentials,omitempty"`
-	Timeout     string               `json:"timeout,omitempty"     yaml:"timeout,omitempty"`
-	Resources   ResourceRequirements `json:"resources,omitzero"    yaml:"resources,omitempty"`
-	Actions     map[string]Action    `json:"actions"               yaml:"actions"`
+	Path              string               `json:"path,omitempty"              yaml:"path,omitempty"`
+	Watch             []string             `json:"watch,omitempty"             yaml:"watch,omitempty"`
+	Runtime           string               `json:"runtime,omitempty"           yaml:"runtime,omitempty"`
+	Placement         string               `json:"placement,omitempty"         yaml:"placement,omitempty"`
+	MaximumActiveRuns *int32               `json:"maximumActiveRuns,omitempty" yaml:"maximumActiveRuns,omitempty"`
+	Credentials       map[string]string    `json:"credentials,omitempty"       yaml:"credentials,omitempty"`
+	Timeout           string               `json:"timeout,omitempty"           yaml:"timeout,omitempty"`
+	Resources         ResourceRequirements `json:"resources,omitzero"          yaml:"resources,omitempty"`
+	Actions           map[string]Action    `json:"actions"                     yaml:"actions"`
+}
+
+func (s TargetSpec) EffectiveMaximumActiveRuns() int32 {
+	if s.MaximumActiveRuns == nil {
+		return 1
+	}
+
+	return *s.MaximumActiveRuns
 }
 
 type Action struct {

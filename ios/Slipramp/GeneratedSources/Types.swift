@@ -1149,7 +1149,7 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Run/schedulingState`.
             internal var schedulingState: Components.Schemas.Run.SchedulingStatePayload?
-            /// Active Run serializing the same Target. Present only when schedulingState is target-busy.
+            /// One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
             ///
             /// - Remark: Generated from `#/components/schemas/Run/blockingRunId`.
             internal var blockingRunId: Swift.String?
@@ -1335,7 +1335,7 @@ internal enum Components {
             ///   - id: Stable identity of the immutable action execution.
             ///   - phase: Durable lifecycle position of the Run.
             ///   - schedulingState: Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
-            ///   - blockingRunId: Active Run serializing the same Target. Present only when schedulingState is target-busy.
+            ///   - blockingRunId: One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
             ///   - queueAgeSeconds: Whole seconds since the queued Run was created, evaluated at schedulingSnapshotAt. This is historical age, not an execution ETA.
             ///   - eligiblePosition: One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
             ///   - schedulingSnapshotAt: Evaluation time for the derived scheduling fields.
@@ -3990,6 +3990,10 @@ internal enum Components {
             internal var runtime: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TargetSpec/placement`.
             internal var placement: Swift.String?
+            /// Maximum active Runs admitted for this Target. Omitted values default to one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/maximumActiveRuns`.
+            internal var maximumActiveRuns: Swift.Int32?
             /// - Remark: Generated from `#/components/schemas/TargetSpec/credentials`.
             internal struct CredentialsPayload: Codable, Hashable, Sendable {
                 /// A container of undocumented properties.
@@ -4041,6 +4045,7 @@ internal enum Components {
             ///   - watch:
             ///   - runtime:
             ///   - placement:
+            ///   - maximumActiveRuns: Maximum active Runs admitted for this Target. Omitted values default to one.
             ///   - credentials:
             ///   - timeout:
             ///   - resources:
@@ -4050,6 +4055,7 @@ internal enum Components {
                 watch: [Swift.String]? = nil,
                 runtime: Swift.String? = nil,
                 placement: Swift.String? = nil,
+                maximumActiveRuns: Swift.Int32? = nil,
                 credentials: Components.Schemas.TargetSpec.CredentialsPayload? = nil,
                 timeout: Swift.String? = nil,
                 resources: Components.Schemas.ResourceRequirements? = nil,
@@ -4059,6 +4065,7 @@ internal enum Components {
                 self.watch = watch
                 self.runtime = runtime
                 self.placement = placement
+                self.maximumActiveRuns = maximumActiveRuns
                 self.credentials = credentials
                 self.timeout = timeout
                 self.resources = resources
@@ -4069,6 +4076,7 @@ internal enum Components {
                 case watch
                 case runtime
                 case placement
+                case maximumActiveRuns
                 case credentials
                 case timeout
                 case resources

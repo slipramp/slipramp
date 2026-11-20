@@ -6243,7 +6243,7 @@ components:
         blockingRunId:
           type: string
           format: uuid
-          description: Active Run serializing the same Target. Present only when schedulingState is target-busy.
+          description: One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
         queueAgeSeconds:
           type: integer
           format: int64
@@ -8357,6 +8357,11 @@ components:
         placement:
           type: string
           minLength: 1
+        maximumActiveRuns:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Maximum active Runs admitted for this Target. Omitted values default to one.
         credentials:
           type: object
           additionalProperties:

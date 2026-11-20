@@ -30,9 +30,9 @@ Server alongside `/mcp`.
 
 Run scheduling defaults to four active Runs per Cluster. Override that limit
 under `server.clusters.<name>.maximumActiveRuns`; a Placement may set a tighter
-`maximumActiveRuns`. Both limits count assigned, preparing, and running Runs,
-while one-active-Run-per-Target serialization and ordinary FIFO remain in
-effect.
+`maximumActiveRuns`. Both limits count assigned, preparing, and running Runs.
+Targets also default to one active Run and may declare a higher
+`spec.maximumActiveRuns`; ordinary FIFO remains in effect across all limits.
 
 Secret-bearing settings use this shape:
 

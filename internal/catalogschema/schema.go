@@ -66,6 +66,12 @@ func resourceSchema[T any](kind string) (*jsonschema.Schema, error) {
 }
 
 func configurePresentationMetadata(resource *jsonschema.Schema) {
+	minimumActiveRuns := 1.0
+	maximumActiveRuns := resource.Properties["spec"].Properties["maximumActiveRuns"]
+	maximumActiveRuns.Description =
+		"Maximum active Runs admitted for this Target; omitted defaults to one."
+	maximumActiveRuns.Minimum = &minimumActiveRuns
+
 	action := resource.Properties["spec"].Properties["actions"].AdditionalProperties
 	action.Properties["title"].Description =
 		"Operator-facing display title; the action map key remains the stable identity."

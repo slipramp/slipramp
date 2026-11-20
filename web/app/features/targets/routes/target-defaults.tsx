@@ -26,7 +26,7 @@ export default function TargetDefaults() {
       />
 
       <TechnicalValue label="Path" value={target.spec.path ?? "Repository root"} />
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
         <TechnicalValue
           label="Runtime"
           value={
@@ -52,6 +52,10 @@ export default function TargetDefaults() {
           }
         />
         <TechnicalValue label="Timeout" value={target.spec.timeout ?? "Placement default"} />
+        <TechnicalValue
+          label="Maximum active Runs"
+          value={String(target.spec.maximumActiveRuns ?? 1)}
+        />
       </SimpleGrid>
 
       <CodeList empty="No watch paths" label="Watch paths" values={target.spec.watch ?? []} />

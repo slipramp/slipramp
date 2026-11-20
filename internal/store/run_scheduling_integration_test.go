@@ -87,6 +87,115 @@ func TestRunCapacityIntegration(t *testing.T) {
 	}
 }
 
+func TestTargetRunCapacityIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	repositoryID := uuid.New()
+	if _, err := database.CreateRepository(ctx, repository.Repository{
+		ID: repositoryID, Name: "target-capacity", CloneURL: "https://example.com/infrastructure.git",
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: createdAt,
+	}); err != nil {
+		t.Fatalf("create repository: %v", err)
+	}
+
+	revisionID := uuid.New()
+	refresh := successfulCatalogRefresh(strings.Repeat("a", 40), createdAt.Add(time.Minute), revisionID)
+	refresh.Revision.Catalog = persistedCatalog("1.14.3")
+	maximumActiveRuns := int32(2)
+	refresh.Revision.Catalog.Targets[0].Spec.MaximumActiveRuns = &maximumActiveRuns
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatalf("record catalog refresh: %v", err)
+	}
+
+	targetID := activeTargetID(t, database, repositoryID, "network")
+	for index := range 3 {
+		record := queuedTestRun(
+			uuid.New(),
+			targetID,
+			repositoryID,
+			revisionID,
+			refresh.Commit.SHA,
+			run.SourceTypeManual,
+			createdAt.Add(time.Duration(index+2)*time.Minute),
+			string(rune('b'+index)),
+		)
+		record.ActionName = "preview"
+		if _, err := database.CreateRun(ctx, record, nil); err != nil {
+			t.Fatalf("create queued Run %d: %v", index+1, err)
+		}
+	}
+
+	capacity := testSchedulingCapacity()
+	if _, err := database.ClaimQueuedRun(ctx, "colo", capacity, createdAt.Add(6*time.Minute)); err != nil {
+		t.Fatalf("claim first Run: %v", err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := database.ClaimQueuedRun(ctx, "colo", capacity, createdAt.Add(7*time.Minute))
+			results <- err
+		}()
+	}
+	close(start)
+
+	claimed := 0
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			claimed++
+		case errors.Is(err, run.ErrNoRunAssignment):
+		default:
+			t.Fatalf("concurrent claim: %v", err)
+		}
+	}
+	if claimed != 1 {
+		t.Fatalf("concurrent successful claims = %d, want 1", claimed)
+	}
+
+	var activeRuns int32
+	if err := database.pool.QueryRow(
+		ctx,
+		`SELECT count(*)::integer
+		 FROM runs
+		 WHERE target_id = $1
+		   AND phase IN ('assigned', 'preparing', 'running')`,
+		targetID,
+	).Scan(&activeRuns); err != nil {
+		t.Fatalf("count active Runs: %v", err)
+	}
+	if activeRuns != maximumActiveRuns {
+		t.Fatalf("active Runs = %d, want %d", activeRuns, maximumActiveRuns)
+	}
+
+	queued, err := database.ListRuns(ctx, run.RunListFilter{
+		TargetID: &targetID,
+		Phase:    run.PhaseQueued,
+		Limit:    10,
+	})
+	if err != nil || len(queued.Items) != 1 {
+		t.Fatalf("list capacity-blocked Runs = (%d, %v), want 1", len(queued.Items), err)
+	}
+	snapshots, err := database.GetRunSchedulingSnapshots(
+		ctx,
+		[]uuid.UUID{queued.Items[0].ID},
+		[]byte(`{"colo":4}`),
+		[]byte(`{}`),
+	)
+	if err != nil {
+		t.Fatalf("get target scheduling snapshot: %v", err)
+	}
+	if len(snapshots) != 1 || snapshots[0].BlockingRunID == nil ||
+		snapshots[0].EligiblePosition != nil {
+		t.Errorf("target scheduling snapshot = %#v", snapshots)
+	}
+}
+
 func createCapacityTestRuns(t *testing.T, ctx context.Context, database *Database) (run.Run, run.Run) {
 	t.Helper()
 

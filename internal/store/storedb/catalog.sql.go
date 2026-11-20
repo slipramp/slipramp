@@ -880,6 +880,7 @@ INSERT INTO targets (
     name,
     catalog_revision_id,
     desired_commit_sha,
+    maximum_active_runs,
     created_at,
     updated_at,
     archived_at
@@ -890,12 +891,14 @@ INSERT INTO targets (
     $4,
     $5,
     $6,
-    $6,
+    $7,
+    $7,
     NULL
 )
 ON CONFLICT (repository_id, name) DO UPDATE
 SET catalog_revision_id = EXCLUDED.catalog_revision_id,
     desired_commit_sha = EXCLUDED.desired_commit_sha,
+    maximum_active_runs = EXCLUDED.maximum_active_runs,
     updated_at = EXCLUDED.updated_at,
     archived_at = NULL
 `
@@ -906,6 +909,7 @@ type UpsertTargetStateParams struct {
 	Name              string
 	CatalogRevisionID pgtype.UUID
 	DesiredCommitSha  string
+	MaximumActiveRuns int32
 	UpdatedAt         pgtype.Timestamptz
 }
 
@@ -916,6 +920,7 @@ func (q *Queries) UpsertTargetState(ctx context.Context, arg UpsertTargetStatePa
 		arg.Name,
 		arg.CatalogRevisionID,
 		arg.DesiredCommitSha,
+		arg.MaximumActiveRuns,
 		arg.UpdatedAt,
 	)
 	return err

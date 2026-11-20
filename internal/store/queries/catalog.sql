@@ -138,6 +138,7 @@ INSERT INTO targets (
     name,
     catalog_revision_id,
     desired_commit_sha,
+    maximum_active_runs,
     created_at,
     updated_at,
     archived_at
@@ -147,6 +148,7 @@ INSERT INTO targets (
     sqlc.arg(name),
     sqlc.arg(catalog_revision_id),
     sqlc.arg(desired_commit_sha),
+    sqlc.arg(maximum_active_runs),
     sqlc.arg(updated_at),
     sqlc.arg(updated_at),
     NULL
@@ -154,6 +156,7 @@ INSERT INTO targets (
 ON CONFLICT (repository_id, name) DO UPDATE
 SET catalog_revision_id = EXCLUDED.catalog_revision_id,
     desired_commit_sha = EXCLUDED.desired_commit_sha,
+    maximum_active_runs = EXCLUDED.maximum_active_runs,
     updated_at = EXCLUDED.updated_at,
     archived_at = NULL;
 

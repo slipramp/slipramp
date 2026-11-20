@@ -264,6 +264,7 @@ func updateTargetStates(
 				Name:              name,
 				CatalogRevisionID: revisionID,
 				DesiredCommitSha:  desiredCommitSHA,
+				MaximumActiveRuns: target.Spec.EffectiveMaximumActiveRuns(),
 				UpdatedAt:         updatedAt,
 			},
 		)

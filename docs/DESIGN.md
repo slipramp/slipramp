@@ -45,8 +45,9 @@ explicitly requested.
   and Job identity. The design does not require a broker, bidirectional RPC,
   distributed leases, leader election, or implicit infrastructure-command
   retries.
-- Active Runs for the same Target are serialized by default. Removing a Target
-  archives product state and never means infrastructure destruction.
+- Active Runs for the same Target are serialized by default. A Target may opt
+  into a higher bounded maximum when its Actions are safe to overlap. Removing
+  a Target archives product state and never means infrastructure destruction.
 - Safety policy is opt-in. Direct actions, including unreviewed apply commands,
   remain valid. Preview Artifacts, Run review, and Kargo review add optional
   controls rather than a mandatory approval framework.

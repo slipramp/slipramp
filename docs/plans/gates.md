@@ -375,7 +375,7 @@ queued Run:
 
 1. pending review;
 2. unreleased Gates;
-3. active Run for the same Target;
+3. Target active Run capacity;
 4. Controller reachability;
 5. Cluster or Placement capacity;
 6. ordinary FIFO eligibility.
@@ -536,8 +536,8 @@ responses or credentials.
 - concurrent release or assignment succeeds once;
 - release evidence is immutable;
 - later blocking observations do not affect released subjects;
-- Run review precedence, Target serialization, FIFO order, and capacity remain
-  correct;
+- Run review precedence, Target limits, FIFO order, and Placement and Cluster
+  capacity remain correct;
 - Promotion creation dispatch and Kargo polling preserve their idempotency.
 
 ### End-to-end tests

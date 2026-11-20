@@ -207,7 +207,9 @@ struct TargetDetailView: View {
     @ViewBuilder
     private func defaultsSection(_ target: CatalogTarget) -> some View {
         let spec = target.definition.spec
-        if spec.runtime != nil || spec.placement != nil || spec.timeout != nil || spec.path != nil {
+        if spec.runtime != nil || spec.placement != nil || spec.timeout != nil || spec.path != nil
+            || spec.maximumActiveRuns != nil
+        {
             Section("Defaults") {
                 if let runtime = spec.runtime {
                     LabeledContent("Runtime", value: runtime)
@@ -218,6 +220,10 @@ struct TargetDetailView: View {
                 if let timeout = spec.timeout {
                     LabeledContent("Timeout", value: timeout)
                 }
+                LabeledContent(
+                    "Maximum active Runs",
+                    value: String(spec.maximumActiveRuns ?? 1)
+                )
                 if let path = spec.path {
                     LabeledContent("Path") {
                         Text(path)

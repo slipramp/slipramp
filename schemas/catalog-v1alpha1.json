@@ -191,6 +191,15 @@
             "placement": {
               "type": "string"
             },
+            "maximumActiveRuns": {
+              "type": [
+                "null",
+                "integer"
+              ],
+              "description": "Maximum active Runs admitted for this Target; omitted defaults to one.",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
             "credentials": {
               "type": "object",
               "additionalProperties": {

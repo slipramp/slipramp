@@ -429,6 +429,7 @@ type Target struct {
 	ID                      pgtype.UUID
 	LastAttemptedSyncRunID  pgtype.UUID
 	LastSuccessfulSyncRunID pgtype.UUID
+	MaximumActiveRuns       int32
 }
 
 type WebSession struct {

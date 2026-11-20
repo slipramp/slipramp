@@ -769,7 +769,7 @@ export type Run = {
     | "cluster-capacity"
     | "eligible";
   /**
-   * Active Run serializing the same Target. Present only when schedulingState is target-busy.
+   * One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
    */
   blockingRunId?: string;
   /**
@@ -1653,6 +1653,10 @@ export type TargetSpec = {
   watch?: Array<string>;
   runtime?: string;
   placement?: string;
+  /**
+   * Maximum active Runs admitted for this Target. Omitted values default to one.
+   */
+  maximumActiveRuns?: number;
   credentials?: {
     [key: string]: string;
   };

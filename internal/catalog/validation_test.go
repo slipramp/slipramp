@@ -50,6 +50,14 @@ func TestValidateRejectsIncompleteActions(t *testing.T) {
 			},
 			wantError: `action "preview" command is required`,
 		},
+		{
+			name: "non-positive maximum active Runs",
+			configure: func(input *catalog.Catalog) {
+				maximum := int32(0)
+				input.Targets[0].Spec.MaximumActiveRuns = &maximum
+			},
+			wantError: "target maximum active Runs must be positive",
+		},
 	}
 
 	runValidationTests(t, tests)

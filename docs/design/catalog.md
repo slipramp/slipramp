@@ -112,9 +112,12 @@ and therefore retain exact Git provenance.
 ## Action resolution and parameters
 
 Target defaults supply Runtime, Placement, timeout, credentials, and resources.
-Action scalar overrides replace defaults; credential and resource maps merge by
-key. Resolution copies definitions rather than mutating the catalog, and Runtime
-and Target definitions always come from the same revision.
+`maximumActiveRuns` is a positive Target scheduling limit and defaults to one;
+it applies across all Actions and execution Clusters for the durable Target
+identity. Action scalar overrides replace execution defaults; credential and
+resource maps merge by key. Resolution copies definitions rather than mutating
+the catalog, and Runtime and Target definitions always come from the same
+revision.
 
 Parameters are `string`, `boolean`, finite `number`, or `enum`, with required and enum
 constraints validated before Run creation. Each parameter maps to exactly one
