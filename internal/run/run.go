@@ -54,6 +54,7 @@ const (
 	ReasonReviewRejected        = "ReviewRejected"
 
 	SchedulingStateAwaitingReview     SchedulingState = "awaiting-review"
+	SchedulingStateAwaitingGates      SchedulingState = "awaiting-gates"
 	SchedulingStateTargetBusy         SchedulingState = "target-busy"
 	SchedulingStateClusterUnreachable SchedulingState = "cluster-unreachable"
 	SchedulingStateClusterCapacity    SchedulingState = "cluster-capacity"
@@ -267,6 +268,7 @@ type Scheduling struct {
 
 type SchedulingSnapshot struct {
 	RunID               uuid.UUID
+	GatesReleased       bool
 	BlockingRunID       *uuid.UUID
 	ClusterActiveRuns   int64
 	PlacementActiveRuns int64

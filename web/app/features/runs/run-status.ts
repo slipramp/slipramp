@@ -4,7 +4,7 @@ export function runStatusColor(run: Run) {
   if (
     run.phase === "queued" &&
     (run.review.state === "pending" ||
-      ["awaiting-review", "cluster-unreachable", "cluster-capacity"].includes(
+      ["awaiting-review", "awaiting-gates", "cluster-unreachable", "cluster-capacity"].includes(
         run.schedulingState ?? "",
       ))
   )
@@ -34,6 +34,8 @@ export function runStatusLabel(run: Pick<Run, "outcome" | "phase" | "review" | "
     switch (run.schedulingState) {
       case "awaiting-review":
         return "Awaiting review";
+      case "awaiting-gates":
+        return "Waiting for gates";
       case "target-busy":
         return "Target busy";
       case "cluster-unreachable":

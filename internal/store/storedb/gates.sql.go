@@ -107,6 +107,110 @@ func (q *Queries) ListGateEvaluationTargets(ctx context.Context) ([]ListGateEval
 	return items, nil
 }
 
+const listRunGateProjections = `-- name: ListRunGateProjections :many
+SELECT
+    run_gates.run_id,
+    run_gates.repository_id,
+    run_gates.gate_name,
+    attached_gate.definition AS attached_definition,
+    active_revision.id AS active_catalog_revision_id,
+    active_gate.definition AS active_gate_definition,
+    active_gate.normalized_definition AS active_normalized_definition,
+    active_gate.definition_digest AS active_definition_digest,
+    gate_observations.evaluator_process_id,
+    gate_observations.state AS observation_state,
+    gate_observations.value AS observation_value,
+    gate_observations.diagnostic AS observation_diagnostic,
+    gate_observations.evaluated_at AS observation_evaluated_at,
+    gate_observations.valid_until AS observation_valid_until,
+    run_gates.released_at,
+    run_gates.release_definition,
+    run_gates.release_observed_value,
+    run_gates.release_evaluated_at
+FROM run_gates
+JOIN runs
+  ON runs.id = run_gates.run_id
+JOIN catalog_revisions AS attached_revision
+  ON attached_revision.id = runs.catalog_revision_id
+JOIN catalog_gates AS attached_gate
+  ON attached_gate.catalog_snapshot_id = attached_revision.catalog_snapshot_id
+ AND attached_gate.name = run_gates.gate_name
+JOIN repositories
+  ON repositories.id = run_gates.repository_id
+LEFT JOIN catalog_revisions AS active_revision
+  ON active_revision.id = repositories.active_catalog_revision_id
+LEFT JOIN catalog_gates AS active_gate
+  ON active_gate.catalog_snapshot_id = active_revision.catalog_snapshot_id
+ AND active_gate.name = run_gates.gate_name
+LEFT JOIN gate_observations
+  ON gate_observations.repository_id = run_gates.repository_id
+ AND gate_observations.gate_name = run_gates.gate_name
+ AND gate_observations.catalog_revision_id = active_revision.id
+ AND gate_observations.definition_digest = active_gate.definition_digest
+WHERE run_gates.run_id = ANY($1::uuid[])
+ORDER BY run_gates.run_id, run_gates.attachment_order
+`
+
+type ListRunGateProjectionsRow struct {
+	RunID                      pgtype.UUID
+	RepositoryID               pgtype.UUID
+	GateName                   string
+	AttachedDefinition         []byte
+	ActiveCatalogRevisionID    pgtype.UUID
+	ActiveGateDefinition       []byte
+	ActiveNormalizedDefinition []byte
+	ActiveDefinitionDigest     *string
+	EvaluatorProcessID         pgtype.UUID
+	ObservationState           *string
+	ObservationValue           *float64
+	ObservationDiagnostic      *string
+	ObservationEvaluatedAt     pgtype.Timestamptz
+	ObservationValidUntil      pgtype.Timestamptz
+	ReleasedAt                 pgtype.Timestamptz
+	ReleaseDefinition          []byte
+	ReleaseObservedValue       *float64
+	ReleaseEvaluatedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) ListRunGateProjections(ctx context.Context, runIds []pgtype.UUID) ([]ListRunGateProjectionsRow, error) {
+	rows, err := q.db.Query(ctx, listRunGateProjections, runIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRunGateProjectionsRow
+	for rows.Next() {
+		var i ListRunGateProjectionsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.RepositoryID,
+			&i.GateName,
+			&i.AttachedDefinition,
+			&i.ActiveCatalogRevisionID,
+			&i.ActiveGateDefinition,
+			&i.ActiveNormalizedDefinition,
+			&i.ActiveDefinitionDigest,
+			&i.EvaluatorProcessID,
+			&i.ObservationState,
+			&i.ObservationValue,
+			&i.ObservationDiagnostic,
+			&i.ObservationEvaluatedAt,
+			&i.ObservationValidUntil,
+			&i.ReleasedAt,
+			&i.ReleaseDefinition,
+			&i.ReleaseObservedValue,
+			&i.ReleaseEvaluatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockQueuedRunGateRepositories = `-- name: LockQueuedRunGateRepositories :many
 SELECT repositories.id
 FROM repositories

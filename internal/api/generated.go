@@ -310,6 +310,84 @@ func (e DependencyStatus) Valid() bool {
 	}
 }
 
+// Defines values for GateOperator.
+const (
+	GateOperatorEqual              GateOperator = "equal"
+	GateOperatorGreaterThan        GateOperator = "greater-than"
+	GateOperatorGreaterThanOrEqual GateOperator = "greater-than-or-equal"
+	GateOperatorLessThan           GateOperator = "less-than"
+	GateOperatorLessThanOrEqual    GateOperator = "less-than-or-equal"
+	GateOperatorNotEqual           GateOperator = "not-equal"
+)
+
+// Valid indicates whether the value is a known member of the GateOperator enum.
+func (e GateOperator) Valid() bool {
+	switch e {
+	case GateOperatorEqual:
+		return true
+	case GateOperatorGreaterThan:
+		return true
+	case GateOperatorGreaterThanOrEqual:
+		return true
+	case GateOperatorLessThan:
+		return true
+	case GateOperatorLessThanOrEqual:
+		return true
+	case GateOperatorNotEqual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GateRequirementState.
+const (
+	GateRequirementStateBlocking    GateRequirementState = "blocking"
+	GateRequirementStatePassing     GateRequirementState = "passing"
+	GateRequirementStateReleased    GateRequirementState = "released"
+	GateRequirementStateUnavailable GateRequirementState = "unavailable"
+	GateRequirementStateUnevaluated GateRequirementState = "unevaluated"
+)
+
+// Valid indicates whether the value is a known member of the GateRequirementState enum.
+func (e GateRequirementState) Valid() bool {
+	switch e {
+	case GateRequirementStateBlocking:
+		return true
+	case GateRequirementStatePassing:
+		return true
+	case GateRequirementStateReleased:
+		return true
+	case GateRequirementStateUnavailable:
+		return true
+	case GateRequirementStateUnevaluated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GateSummaryState.
+const (
+	GateSummaryStateNotRequired GateSummaryState = "not-required"
+	GateSummaryStateReleased    GateSummaryState = "released"
+	GateSummaryStateWaiting     GateSummaryState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the GateSummaryState enum.
+func (e GateSummaryState) Valid() bool {
+	switch e {
+	case GateSummaryStateNotRequired:
+		return true
+	case GateSummaryStateReleased:
+		return true
+	case GateSummaryStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	HealthResponseStatusOk HealthResponseStatus = "ok"
@@ -1338,6 +1416,7 @@ func (e RunObservationState) Valid() bool {
 
 // Defines values for RunSchedulingState.
 const (
+	RunSchedulingStateAwaitingGates      RunSchedulingState = "awaiting-gates"
 	RunSchedulingStateAwaitingReview     RunSchedulingState = "awaiting-review"
 	RunSchedulingStateClusterCapacity    RunSchedulingState = "cluster-capacity"
 	RunSchedulingStateClusterUnreachable RunSchedulingState = "cluster-unreachable"
@@ -1348,6 +1427,8 @@ const (
 // Valid indicates whether the value is a known member of the RunSchedulingState enum.
 func (e RunSchedulingState) Valid() bool {
 	switch e {
+	case RunSchedulingStateAwaitingGates:
+		return true
 	case RunSchedulingStateAwaitingReview:
 		return true
 	case RunSchedulingStateClusterCapacity:
@@ -2579,6 +2660,40 @@ type FailedGitTriggerDeliveryList struct {
 	Offset int                        `json:"offset"`
 	Total  int                        `json:"total"`
 }
+
+// GateOperator defines model for GateOperator.
+type GateOperator string
+
+// GateRequirement defines model for GateRequirement.
+type GateRequirement struct {
+	// Diagnostic Bounded sanitized explanation for an unavailable requirement.
+	Diagnostic  *string              `json:"diagnostic,omitempty"`
+	EvaluatedAt *time.Time           `json:"evaluatedAt,omitempty"`
+	Name        CatalogName          `json:"name"`
+	Operator    *GateOperator        `json:"operator,omitempty"`
+	ReleasedAt  *time.Time           `json:"releasedAt,omitempty"`
+	State       GateRequirementState `json:"state"`
+
+	// Threshold Finite comparison threshold from the current or released definition.
+	Threshold *float64 `json:"threshold,omitempty"`
+	Title     *string  `json:"title,omitempty"`
+
+	// Value Finite observed value from current or immutable release evidence.
+	Value *float64 `json:"value,omitempty"`
+}
+
+// GateRequirementState defines model for GateRequirementState.
+type GateRequirementState string
+
+// GateSummary defines model for GateSummary.
+type GateSummary struct {
+	// Requirements Required Gates in their stable attachment order.
+	Requirements []GateRequirement `json:"requirements"`
+	State        GateSummaryState  `json:"state"`
+}
+
+// GateSummaryState defines model for GateSummaryState.
+type GateSummaryState string
 
 // GitCommit defines model for GitCommit.
 type GitCommit struct {
@@ -4200,9 +4315,10 @@ type Run struct {
 	CreatedBy         *RunActor            `json:"createdBy,omitempty"`
 
 	// EligiblePosition One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
-	EligiblePosition *int32     `json:"eligiblePosition,omitempty"`
-	ExitCode         *int32     `json:"exitCode,omitempty"`
-	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
+	EligiblePosition *int32      `json:"eligiblePosition,omitempty"`
+	ExitCode         *int32      `json:"exitCode,omitempty"`
+	FinishedAt       *time.Time  `json:"finishedAt,omitempty"`
+	Gates            GateSummary `json:"gates"`
 
 	// ID Stable identity of the immutable action execution.
 	ID openapi_types.UUID `json:"id"`

@@ -765,6 +765,7 @@ export type Run = {
    */
   schedulingState?:
     | "awaiting-review"
+    | "awaiting-gates"
     | "target-busy"
     | "cluster-unreachable"
     | "cluster-capacity"
@@ -836,6 +837,7 @@ export type Run = {
   createdBy?: RunActor;
   canceledBy?: RunActor;
   review: RunReview;
+  gates: GateSummary;
   inputs: {
     [key: string]: RunArtifactInput;
   };
@@ -925,6 +927,52 @@ export type RunActor = {
    */
   displayName: string;
 };
+
+export type GateSummary = {
+  state: GateSummaryState;
+  /**
+   * Required Gates in their stable attachment order.
+   */
+  requirements: Array<GateRequirement>;
+};
+
+export type GateSummaryState = "not-required" | "waiting" | "released";
+
+export type GateRequirement = {
+  name: CatalogName;
+  title?: string;
+  state: GateRequirementState;
+  /**
+   * Finite observed value from current or immutable release evidence.
+   */
+  value?: number;
+  operator?: GateOperator;
+  /**
+   * Finite comparison threshold from the current or released definition.
+   */
+  threshold?: number;
+  evaluatedAt?: string;
+  releasedAt?: string;
+  /**
+   * Bounded sanitized explanation for an unavailable requirement.
+   */
+  diagnostic?: string;
+};
+
+export type GateRequirementState =
+  | "unevaluated"
+  | "passing"
+  | "blocking"
+  | "unavailable"
+  | "released";
+
+export type GateOperator =
+  | "equal"
+  | "not-equal"
+  | "less-than"
+  | "less-than-or-equal"
+  | "greater-than"
+  | "greater-than-or-equal";
 
 export type Artifact = {
   id: string;

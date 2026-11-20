@@ -1077,6 +1077,12 @@ func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRu
 const getRunSchedulingSnapshots = `-- name: GetRunSchedulingSnapshots :many
 SELECT
     queued.id,
+    NOT EXISTS (
+        SELECT 1
+        FROM run_gates
+        WHERE run_gates.run_id = queued.id
+          AND run_gates.released_at IS NULL
+    ) AS gates_released,
     blocker.id AS blocking_run_id,
     (
         SELECT count(*)::bigint
@@ -1093,6 +1099,12 @@ SELECT
     ) AS placement_active_runs,
     CAST(CASE
         WHEN queued.review_state IN ('not-required', 'approved')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM run_gates
+              WHERE run_gates.run_id = queued.id
+                AND run_gates.released_at IS NULL
+          )
           AND target_activity.active_runs < target_state.maximum_active_runs
           AND (
               SELECT count(*)
@@ -1118,6 +1130,12 @@ SELECT
             WHERE older.cluster_name = queued.cluster_name
               AND older.phase = 'queued'
               AND older.review_state IN ('not-required', 'approved')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM run_gates
+                  WHERE run_gates.run_id = older.id
+                    AND run_gates.released_at IS NULL
+              )
               AND (older.created_at, older.id) < (queued.created_at, queued.id)
               AND (
                   SELECT count(*)
@@ -1167,6 +1185,7 @@ type GetRunSchedulingSnapshotsParams struct {
 
 type GetRunSchedulingSnapshotsRow struct {
 	ID                  pgtype.UUID
+	GatesReleased       bool
 	BlockingRunID       pgtype.UUID
 	ClusterActiveRuns   int64
 	PlacementActiveRuns int64
@@ -1184,6 +1203,7 @@ func (q *Queries) GetRunSchedulingSnapshots(ctx context.Context, arg GetRunSched
 		var i GetRunSchedulingSnapshotsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.GatesReleased,
 			&i.BlockingRunID,
 			&i.ClusterActiveRuns,
 			&i.PlacementActiveRuns,

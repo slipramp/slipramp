@@ -292,6 +292,16 @@ components:
       $ref: ./components/runs.yaml#/RunRerunMode
     RunActor:
       $ref: ./components/runs.yaml#/RunActor
+    GateSummary:
+      $ref: ./components/gates.yaml#/GateSummary
+    GateSummaryState:
+      $ref: ./components/gates.yaml#/GateSummaryState
+    GateRequirement:
+      $ref: ./components/gates.yaml#/GateRequirement
+    GateRequirementState:
+      $ref: ./components/gates.yaml#/GateRequirementState
+    GateOperator:
+      $ref: ./components/gates.yaml#/GateOperator
     Artifact:
       $ref: ./components/artifacts.yaml#/Artifact
     ArtifactList:

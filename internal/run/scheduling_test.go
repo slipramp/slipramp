@@ -40,32 +40,37 @@ func TestSchedulingDerivesQueuedState(t *testing.T) {
 	}{
 		{
 			name: "awaiting review", review: ReviewStatePending, connected: true,
-			snapshot:  SchedulingSnapshot{EligiblePosition: new(int32(1))},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(1))},
 			wantState: SchedulingStateAwaitingReview,
 		},
 		{
+			name: "awaiting gates", review: ReviewStateApproved, connected: true,
+			snapshot:  SchedulingSnapshot{},
+			wantState: SchedulingStateAwaitingGates,
+		},
+		{
 			name: "target busy", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{BlockingRunID: &blockingRunID},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, BlockingRunID: &blockingRunID},
 			wantState: SchedulingStateTargetBusy, wantBlock: true,
 		},
 		{
 			name: "cluster unreachable", review: ReviewStateApproved,
-			snapshot:  SchedulingSnapshot{EligiblePosition: new(int32(1))},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(1))},
 			wantState: SchedulingStateClusterUnreachable, wantPosition: true,
 		},
 		{
 			name: "cluster capacity", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{ClusterActiveRuns: 3},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, ClusterActiveRuns: 3},
 			wantState: SchedulingStateClusterCapacity,
 		},
 		{
 			name: "placement capacity", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{PlacementActiveRuns: 2},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, PlacementActiveRuns: 2},
 			wantState: SchedulingStateClusterCapacity,
 		},
 		{
 			name: "eligible", review: ReviewStateNotRequired, connected: true,
-			snapshot:  SchedulingSnapshot{EligiblePosition: new(int32(2))},
+			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(2))},
 			wantState: SchedulingStateEligible, wantPosition: true,
 		},
 	}

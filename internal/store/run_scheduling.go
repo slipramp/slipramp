@@ -39,6 +39,7 @@ func (d *Database) GetRunSchedulingSnapshots(
 		}
 		snapshots = append(snapshots, run.SchedulingSnapshot{
 			RunID:               uuid.UUID(row.ID.Bytes),
+			GatesReleased:       row.GatesReleased,
 			BlockingRunID:       applicationUUID(row.BlockingRunID),
 			ClusterActiveRuns:   row.ClusterActiveRuns,
 			PlacementActiveRuns: row.PlacementActiveRuns,

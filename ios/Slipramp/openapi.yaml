@@ -6218,6 +6218,7 @@ components:
         - inputs
         - artifactConsumers
         - review
+        - gates
         - cancellationState
         - createdAt
       properties:
@@ -6232,12 +6233,14 @@ components:
           type: string
           enum:
             - awaiting-review
+            - awaiting-gates
             - target-busy
             - cluster-unreachable
             - cluster-capacity
             - eligible
           x-enum-varnames:
             - RunSchedulingStateAwaitingReview
+            - RunSchedulingStateAwaitingGates
             - RunSchedulingStateTargetBusy
             - RunSchedulingStateClusterUnreachable
             - RunSchedulingStateClusterCapacity
@@ -6336,6 +6339,8 @@ components:
           $ref: '#/components/schemas/RunActor'
         review:
           $ref: '#/components/schemas/RunReview'
+        gates:
+          $ref: '#/components/schemas/GateSummary'
         inputs:
           type: object
           additionalProperties:
@@ -6472,6 +6477,83 @@ components:
           minLength: 1
           maxLength: 200
           description: Immutable display-name snapshot captured with the operation.
+    GateSummary:
+      type: object
+      required:
+        - state
+        - requirements
+      properties:
+        state:
+          $ref: '#/components/schemas/GateSummaryState'
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateRequirement'
+          description: Required Gates in their stable attachment order.
+    GateSummaryState:
+      type: string
+      enum:
+        - not-required
+        - waiting
+        - released
+    GateRequirement:
+      type: object
+      required:
+        - name
+        - state
+      properties:
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        title:
+          type: string
+          minLength: 1
+        state:
+          $ref: '#/components/schemas/GateRequirementState'
+        value:
+          type: number
+          format: double
+          description: Finite observed value from current or immutable release evidence.
+        operator:
+          $ref: '#/components/schemas/GateOperator'
+        threshold:
+          type: number
+          format: double
+          description: Finite comparison threshold from the current or released definition.
+        evaluatedAt:
+          type: string
+          format: date-time
+        releasedAt:
+          type: string
+          format: date-time
+        diagnostic:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: Bounded sanitized explanation for an unavailable requirement.
+    GateRequirementState:
+      type: string
+      enum:
+        - unevaluated
+        - passing
+        - blocking
+        - unavailable
+        - released
+    GateOperator:
+      type: string
+      enum:
+        - equal
+        - not-equal
+        - less-than
+        - less-than-or-equal
+        - greater-than
+        - greater-than-or-equal
+      x-enum-varnames:
+        - GateOperatorEqual
+        - GateOperatorNotEqual
+        - GateOperatorLessThan
+        - GateOperatorLessThanOrEqual
+        - GateOperatorGreaterThan
+        - GateOperatorGreaterThanOrEqual
     Artifact:
       type: object
       required:

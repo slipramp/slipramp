@@ -127,3 +127,46 @@ SET released_at = sqlc.arg(released_at),
 FROM evidence
 WHERE run_gates.run_id = evidence.run_id
   AND run_gates.gate_name = evidence.gate_name;
+
+-- name: ListRunGateProjections :many
+SELECT
+    run_gates.run_id,
+    run_gates.repository_id,
+    run_gates.gate_name,
+    attached_gate.definition AS attached_definition,
+    active_revision.id AS active_catalog_revision_id,
+    active_gate.definition AS active_gate_definition,
+    active_gate.normalized_definition AS active_normalized_definition,
+    active_gate.definition_digest AS active_definition_digest,
+    gate_observations.evaluator_process_id,
+    gate_observations.state AS observation_state,
+    gate_observations.value AS observation_value,
+    gate_observations.diagnostic AS observation_diagnostic,
+    gate_observations.evaluated_at AS observation_evaluated_at,
+    gate_observations.valid_until AS observation_valid_until,
+    run_gates.released_at,
+    run_gates.release_definition,
+    run_gates.release_observed_value,
+    run_gates.release_evaluated_at
+FROM run_gates
+JOIN runs
+  ON runs.id = run_gates.run_id
+JOIN catalog_revisions AS attached_revision
+  ON attached_revision.id = runs.catalog_revision_id
+JOIN catalog_gates AS attached_gate
+  ON attached_gate.catalog_snapshot_id = attached_revision.catalog_snapshot_id
+ AND attached_gate.name = run_gates.gate_name
+JOIN repositories
+  ON repositories.id = run_gates.repository_id
+LEFT JOIN catalog_revisions AS active_revision
+  ON active_revision.id = repositories.active_catalog_revision_id
+LEFT JOIN catalog_gates AS active_gate
+  ON active_gate.catalog_snapshot_id = active_revision.catalog_snapshot_id
+ AND active_gate.name = run_gates.gate_name
+LEFT JOIN gate_observations
+  ON gate_observations.repository_id = run_gates.repository_id
+ AND gate_observations.gate_name = run_gates.gate_name
+ AND gate_observations.catalog_revision_id = active_revision.id
+ AND gate_observations.definition_digest = active_gate.definition_digest
+WHERE run_gates.run_id = ANY(sqlc.arg(run_ids)::uuid[])
+ORDER BY run_gates.run_id, run_gates.attachment_order;

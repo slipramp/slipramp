@@ -95,6 +95,9 @@ func (s *Service) Scheduling(
 		case record.Review.State == ReviewStatePending:
 			detail.State = SchedulingStateAwaitingReview
 			detail.EligiblePosition = nil
+		case !snapshot.GatesReleased:
+			detail.State = SchedulingStateAwaitingGates
+			detail.EligiblePosition = nil
 		case snapshot.BlockingRunID != nil:
 			detail.State = SchedulingStateTargetBusy
 			detail.BlockingRunID = snapshot.BlockingRunID

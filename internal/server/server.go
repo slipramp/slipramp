@@ -137,6 +137,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		Creation:           persistence.database,
 		History:            persistence.database,
 		Scheduling:         persistence.database,
+		Gates:              persistence.database,
 		Assignments:        persistence.database,
 		Cancellations:      persistence.database,
 		Reviews:            persistence.database,

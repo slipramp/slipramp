@@ -1140,6 +1140,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/Run/schedulingState`.
             internal enum SchedulingStatePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case awaitingReview = "awaiting-review"
+                case awaitingGates = "awaiting-gates"
                 case targetBusy = "target-busy"
                 case clusterUnreachable = "cluster-unreachable"
                 case clusterCapacity = "cluster-capacity"
@@ -1253,6 +1254,8 @@ internal enum Components {
             internal var canceledBy: Components.Schemas.RunActor?
             /// - Remark: Generated from `#/components/schemas/Run/review`.
             internal var review: Components.Schemas.RunReview
+            /// - Remark: Generated from `#/components/schemas/Run/gates`.
+            internal var gates: Components.Schemas.GateSummary
             /// - Remark: Generated from `#/components/schemas/Run/inputs`.
             internal struct InputsPayload: Codable, Hashable, Sendable {
                 /// A container of undocumented properties.
@@ -1361,6 +1364,7 @@ internal enum Components {
             ///   - createdBy:
             ///   - canceledBy:
             ///   - review:
+            ///   - gates:
             ///   - inputs:
             ///   - artifactConsumers: Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
             ///   - createdAt:
@@ -1406,6 +1410,7 @@ internal enum Components {
                 createdBy: Components.Schemas.RunActor? = nil,
                 canceledBy: Components.Schemas.RunActor? = nil,
                 review: Components.Schemas.RunReview,
+                gates: Components.Schemas.GateSummary,
                 inputs: Components.Schemas.Run.InputsPayload,
                 artifactConsumers: Components.Schemas.Run.ArtifactConsumersPayload,
                 createdAt: Foundation.Date,
@@ -1451,6 +1456,7 @@ internal enum Components {
                 self.createdBy = createdBy
                 self.canceledBy = canceledBy
                 self.review = review
+                self.gates = gates
                 self.inputs = inputs
                 self.artifactConsumers = artifactConsumers
                 self.createdAt = createdAt
@@ -1497,6 +1503,7 @@ internal enum Components {
                 case createdBy
                 case canceledBy
                 case review
+                case gates
                 case inputs
                 case artifactConsumers
                 case createdAt
@@ -1695,6 +1702,125 @@ internal enum Components {
                 case kind
                 case displayName
             }
+        }
+        /// - Remark: Generated from `#/components/schemas/GateSummary`.
+        internal struct GateSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GateSummary/state`.
+            internal var state: Components.Schemas.GateSummaryState
+            /// Required Gates in their stable attachment order.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateSummary/requirements`.
+            internal var requirements: [Components.Schemas.GateRequirement]
+            /// Creates a new `GateSummary`.
+            ///
+            /// - Parameters:
+            ///   - state:
+            ///   - requirements: Required Gates in their stable attachment order.
+            internal init(
+                state: Components.Schemas.GateSummaryState,
+                requirements: [Components.Schemas.GateRequirement]
+            ) {
+                self.state = state
+                self.requirements = requirements
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case state
+                case requirements
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GateSummaryState`.
+        internal enum GateSummaryState: String, Codable, Hashable, Sendable, CaseIterable {
+            case notRequired = "not-required"
+            case waiting = "waiting"
+            case released = "released"
+        }
+        /// - Remark: Generated from `#/components/schemas/GateRequirement`.
+        internal struct GateRequirement: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/name`.
+            internal var name: Components.Schemas.CatalogName
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/title`.
+            internal var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/state`.
+            internal var state: Components.Schemas.GateRequirementState
+            /// Finite observed value from current or immutable release evidence.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/value`.
+            internal var value: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/operator`.
+            internal var _operator: Components.Schemas.GateOperator?
+            /// Finite comparison threshold from the current or released definition.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/threshold`.
+            internal var threshold: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/evaluatedAt`.
+            internal var evaluatedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/releasedAt`.
+            internal var releasedAt: Foundation.Date?
+            /// Bounded sanitized explanation for an unavailable requirement.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/diagnostic`.
+            internal var diagnostic: Swift.String?
+            /// Creates a new `GateRequirement`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - title:
+            ///   - state:
+            ///   - value: Finite observed value from current or immutable release evidence.
+            ///   - _operator:
+            ///   - threshold: Finite comparison threshold from the current or released definition.
+            ///   - evaluatedAt:
+            ///   - releasedAt:
+            ///   - diagnostic: Bounded sanitized explanation for an unavailable requirement.
+            internal init(
+                name: Components.Schemas.CatalogName,
+                title: Swift.String? = nil,
+                state: Components.Schemas.GateRequirementState,
+                value: Swift.Double? = nil,
+                _operator: Components.Schemas.GateOperator? = nil,
+                threshold: Swift.Double? = nil,
+                evaluatedAt: Foundation.Date? = nil,
+                releasedAt: Foundation.Date? = nil,
+                diagnostic: Swift.String? = nil
+            ) {
+                self.name = name
+                self.title = title
+                self.state = state
+                self.value = value
+                self._operator = _operator
+                self.threshold = threshold
+                self.evaluatedAt = evaluatedAt
+                self.releasedAt = releasedAt
+                self.diagnostic = diagnostic
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case name
+                case title
+                case state
+                case value
+                case _operator = "operator"
+                case threshold
+                case evaluatedAt
+                case releasedAt
+                case diagnostic
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GateRequirementState`.
+        internal enum GateRequirementState: String, Codable, Hashable, Sendable, CaseIterable {
+            case unevaluated = "unevaluated"
+            case passing = "passing"
+            case blocking = "blocking"
+            case unavailable = "unavailable"
+            case released = "released"
+        }
+        /// - Remark: Generated from `#/components/schemas/GateOperator`.
+        internal enum GateOperator: String, Codable, Hashable, Sendable, CaseIterable {
+            case equal = "equal"
+            case notEqual = "not-equal"
+            case lessThan = "less-than"
+            case lessThanOrEqual = "less-than-or-equal"
+            case greaterThan = "greater-than"
+            case greaterThanOrEqual = "greater-than-or-equal"
         }
         /// - Remark: Generated from `#/components/schemas/Artifact`.
         internal struct Artifact: Codable, Hashable, Sendable {

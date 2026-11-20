@@ -34,6 +34,11 @@ type RunService interface {
 		connectedClusters map[string]bool,
 		at time.Time,
 	) (map[uuid.UUID]run.Scheduling, error)
+	GateSummaries(
+		ctx context.Context,
+		records []run.Run,
+		at time.Time,
+	) (map[uuid.UUID]run.GateSummary, error)
 }
 
 func (h *Handler) DecideRunReview(
@@ -579,6 +584,10 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 	if err != nil {
 		return nil, err
 	}
+	gates, err := h.runs.GateSummaries(ctx, records, now)
+	if err != nil {
+		return nil, err
+	}
 	for _, record := range records {
 		body, err := runResponse(record, commits)
 		if err != nil {
@@ -602,11 +611,39 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 			body.EligiblePosition = detail.EligiblePosition
 			body.SchedulingSnapshotAt = &detail.SnapshotAt
 		}
+		body.Gates = gateSummaryResponse(gates[record.ID])
 
 		items = append(items, body)
 	}
 
 	return items, nil
+}
+
+func gateSummaryResponse(summary run.GateSummary) api.GateSummary {
+	requirements := make([]api.GateRequirement, 0, len(summary.Requirements))
+	for _, requirement := range summary.Requirements {
+		var operator *api.GateOperator
+		if requirement.Operator != nil {
+			value := api.GateOperator(*requirement.Operator)
+			operator = &value
+		}
+		requirements = append(requirements, api.GateRequirement{
+			Name:        api.CatalogName(requirement.Name),
+			Title:       optionalString(requirement.Title),
+			State:       api.GateRequirementState(requirement.State),
+			Value:       requirement.Value,
+			Operator:    operator,
+			Threshold:   requirement.Threshold,
+			EvaluatedAt: requirement.EvaluatedAt,
+			ReleasedAt:  requirement.ReleasedAt,
+			Diagnostic:  optionalString(requirement.Diagnostic),
+		})
+	}
+
+	return api.GateSummary{
+		State:        api.GateSummaryState(summary.State),
+		Requirements: requirements,
+	}
 }
 
 func optionalCommit(

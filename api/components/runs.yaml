@@ -136,6 +136,7 @@ Run:
     - inputs
     - artifactConsumers
     - review
+    - gates
     - cancellationState
     - createdAt
   properties:
@@ -150,12 +151,14 @@ Run:
       type: string
       enum:
         - awaiting-review
+        - awaiting-gates
         - target-busy
         - cluster-unreachable
         - cluster-capacity
         - eligible
       x-enum-varnames:
         - RunSchedulingStateAwaitingReview
+        - RunSchedulingStateAwaitingGates
         - RunSchedulingStateTargetBusy
         - RunSchedulingStateClusterUnreachable
         - RunSchedulingStateClusterCapacity
@@ -271,6 +274,8 @@ Run:
       $ref: "#/RunActor"
     review:
       $ref: "#/RunReview"
+    gates:
+      $ref: ./gates.yaml#/GateSummary
     inputs:
       type: object
       additionalProperties:

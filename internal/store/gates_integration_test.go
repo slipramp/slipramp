@@ -163,6 +163,48 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, record, nil); err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
 	}
+	projections, err := database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
+	if err != nil {
+		t.Fatalf("ListRunGateProjections() error = %v", err)
+	}
+	wantDefinition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	if len(projections) != 1 || projections[0].RunID != record.ID ||
+		projections[0].Name != "network-idle" || projections[0].ActiveDefinition == nil ||
+		!reflect.DeepEqual(*projections[0].ActiveDefinition, wantDefinition) ||
+		projections[0].CurrentObservation != nil || projections[0].ReleasedAt != nil {
+		t.Errorf("unreleased Run Gate projection = %#v", projections)
+	}
+	ungated := gateTestRun(t, database, repositoryID, revisionID, createdAt.Add(time.Second))
+	ungated.Snapshot.Action.Gates = nil
+	if _, err := database.CreateRun(ctx, ungated, nil); err != nil {
+		t.Fatalf("create later ungated Run: %v", err)
+	}
+	snapshots, err := database.GetRunSchedulingSnapshots(
+		ctx,
+		[]uuid.UUID{record.ID, ungated.ID},
+		[]byte(`{"colo":4}`),
+		[]byte(`{}`),
+	)
+	if err != nil {
+		t.Fatalf("GetRunSchedulingSnapshots() error = %v", err)
+	}
+	if len(snapshots) != 2 {
+		t.Fatalf("Run scheduling snapshots = %#v", snapshots)
+	}
+	snapshotsByID := make(map[uuid.UUID]run.SchedulingSnapshot, len(snapshots))
+	for _, snapshot := range snapshots {
+		snapshotsByID[snapshot.RunID] = snapshot
+	}
+	gatedSnapshot := snapshotsByID[record.ID]
+	ungatedSnapshot := snapshotsByID[ungated.ID]
+	if gatedSnapshot.GatesReleased || gatedSnapshot.EligiblePosition != nil ||
+		!ungatedSnapshot.GatesReleased || ungatedSnapshot.EligiblePosition == nil ||
+		*ungatedSnapshot.EligiblePosition != 1 {
+		t.Errorf("Gate-aware Run scheduling snapshots = %#v", snapshots)
+	}
+	if _, err := database.CancelRun(ctx, ungated.ID, createdAt.Add(2*time.Second), nil); err != nil {
+		t.Fatalf("cancel later ungated Run: %v", err)
+	}
 
 	assignedAt := createdAt.Add(time.Minute)
 	evaluatorID := uuid.New()
@@ -215,6 +257,14 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	observation.ValidUntil = assignedAt.Add(35 * time.Second)
 	if err := database.UpsertGateObservation(ctx, observation); err != nil {
 		t.Fatalf("record passing Gate observation: %v", err)
+	}
+	projections, err = database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
+	if err != nil {
+		t.Fatalf("list observed Run Gate projection: %v", err)
+	}
+	if len(projections) != 1 || projections[0].CurrentObservation == nil ||
+		!reflect.DeepEqual(*projections[0].CurrentObservation, observation) {
+		t.Errorf("observed Run Gate projection = %#v", projections)
 	}
 
 	releaseRevisionID := uuid.New()
@@ -315,6 +365,16 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	if len(targets) != 0 {
 		t.Errorf("Gate evaluation targets after release = %#v", targets)
+	}
+	projections, err = database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
+	if err != nil {
+		t.Fatalf("list released Run Gate projection: %v", err)
+	}
+	if len(projections) != 1 || projections[0].ReleasedAt == nil ||
+		!projections[0].ReleasedAt.Equal(assignedAt) || projections[0].ReleaseDefinition == nil ||
+		!reflect.DeepEqual(*projections[0].ReleaseDefinition, definition) ||
+		projections[0].ReleaseValue == nil || *projections[0].ReleaseValue != observedValue {
+		t.Errorf("released Run Gate projection = %#v", projections)
 	}
 }
 

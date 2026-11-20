@@ -775,6 +775,9 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	blockingRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	snapshotAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
+	observedValue := 1.0
+	operator := "equal"
+	threshold := 0.0
 	runs := &recordingRunService{
 		loaded: run.Run{
 			ID: runID, Phase: run.PhaseQueued, ClusterName: "colo",
@@ -784,6 +787,16 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 			runID: {
 				State: run.SchedulingStateTargetBusy, BlockingRunID: &blockingRunID,
 				QueueAge: 90 * time.Second, SnapshotAt: snapshotAt,
+			},
+		},
+		gates: map[uuid.UUID]run.GateSummary{
+			runID: {
+				State: run.GateSummaryStateWaiting,
+				Requirements: []run.GateRequirement{{
+					Name: "network-idle", Title: "Network idle",
+					State: run.GateRequirementStateBlocking, Value: &observedValue,
+					Operator: &operator, Threshold: &threshold, EvaluatedAt: &snapshotAt,
+				}},
 			},
 		},
 	}
@@ -812,6 +825,18 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 		result.QueueAgeSeconds == nil || *result.QueueAgeSeconds != 90 ||
 		result.SchedulingSnapshotAt == nil || !result.SchedulingSnapshotAt.Equal(snapshotAt) {
 		t.Errorf("scheduling response = %#v", result)
+	}
+	if result.Gates.State != api.GateSummaryStateWaiting || len(result.Gates.Requirements) != 1 {
+		t.Fatalf("Gate summary = %#v", result.Gates)
+	}
+	requirement := result.Gates.Requirements[0]
+	if requirement.Name != "network-idle" || requirement.Title == nil ||
+		*requirement.Title != "Network idle" || requirement.State != api.GateRequirementStateBlocking ||
+		requirement.Value == nil || *requirement.Value != observedValue ||
+		requirement.Operator == nil || *requirement.Operator != api.GateOperatorEqual ||
+		requirement.Threshold == nil || *requirement.Threshold != threshold ||
+		requirement.EvaluatedAt == nil || !requirement.EvaluatedAt.Equal(snapshotAt) {
+		t.Errorf("Gate requirement = %#v", requirement)
 	}
 }
 
@@ -881,6 +906,7 @@ type recordingRunService struct {
 	reviewed      run.Run
 	reviewError   error
 	scheduling    map[uuid.UUID]run.Scheduling
+	gates         map[uuid.UUID]run.GateSummary
 }
 
 func (s *recordingRunService) DecideRunReview(
@@ -936,4 +962,24 @@ func (s *recordingRunService) Scheduling(
 	time.Time,
 ) (map[uuid.UUID]run.Scheduling, error) {
 	return s.scheduling, nil
+}
+
+func (s *recordingRunService) GateSummaries(
+	_ context.Context,
+	records []run.Run,
+	_ time.Time,
+) (map[uuid.UUID]run.GateSummary, error) {
+	if s.gates != nil {
+		return s.gates, nil
+	}
+
+	result := make(map[uuid.UUID]run.GateSummary, len(records))
+	for _, record := range records {
+		result[record.ID] = run.GateSummary{
+			State:        run.GateSummaryStateNotRequired,
+			Requirements: []run.GateRequirement{},
+		}
+	}
+
+	return result, nil
 }

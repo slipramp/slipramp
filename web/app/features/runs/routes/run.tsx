@@ -802,6 +802,8 @@ function runQueueExplanation(run: Run): ReactNode {
   switch (run.schedulingState) {
     case "awaiting-review":
       return "This Run must be approved before it can enter the eligible FIFO queue.";
+    case "awaiting-gates":
+      return "This Run is waiting for every required Gate to pass at the same release check.";
     case "target-busy":
       return run.blockingRunId ? (
         <>
@@ -819,7 +821,7 @@ function runQueueExplanation(run: Run): ReactNode {
     case "cluster-capacity":
       return "The Cluster or this Run's Placement has reached its active Run limit.";
     case "eligible":
-      return "This Run satisfies the current review, Target, and capacity constraints.";
+      return "This Run satisfies the current review, Gate, Target, and capacity constraints.";
     default:
       return "Slipramp has not recorded a current queue scheduling reason.";
   }

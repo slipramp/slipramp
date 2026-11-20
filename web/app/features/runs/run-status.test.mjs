@@ -17,6 +17,10 @@ test("queued status presents the derived scheduling reason", () => {
   const review = { state: "not-required" };
 
   assert.equal(
+    runStatusLabel({ phase: "queued", review, schedulingState: "awaiting-gates" }),
+    "Waiting for gates",
+  );
+  assert.equal(
     runStatusLabel({ phase: "queued", review, schedulingState: "target-busy" }),
     "Target busy",
   );
