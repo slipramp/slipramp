@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -35,7 +36,7 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
 				Condition: catalog.GateCondition{
-					Operator: catalog.GateOperatorEqual,
+					Operator: gate.OperatorEqual,
 					Value:    0,
 				},
 			}},

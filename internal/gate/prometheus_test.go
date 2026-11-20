@@ -1,0 +1,219 @@
+package gate_test
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/slipramp/slipramp/internal/gate"
+)
+
+func TestPrometheusEvaluator(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		statusCode     int
+		response       string
+		wantState      gate.ObservationState
+		wantValue      *float64
+		wantDiagnostic string
+	}{
+		{
+			name:      "passing scalar",
+			response:  `{"status":"success","data":{"resultType":"scalar","result":[1730000000,"0"]}}`,
+			wantState: gate.ObservationPassing,
+			wantValue: float64Pointer(0),
+		},
+		{
+			name:      "blocking vector",
+			response:  `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"secret":"not exposed"},"value":[1730000000,"2"]}]}}`,
+			wantState: gate.ObservationBlocking,
+			wantValue: float64Pointer(2),
+		},
+		{
+			name:           "empty vector",
+			response:       `{"status":"success","data":{"resultType":"vector","result":[]}}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "exactly one sample",
+		},
+		{
+			name:           "multiple vector samples",
+			response:       `{"status":"success","data":{"resultType":"vector","result":[{"value":[1,"0"]},{"value":[1,"0"]}]}}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "exactly one sample",
+		},
+		{
+			name:           "matrix",
+			response:       `{"status":"success","data":{"resultType":"matrix","result":[]}}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "unsupported",
+		},
+		{
+			name:           "non-finite value",
+			response:       `{"status":"success","data":{"resultType":"scalar","result":[1730000000,"NaN"]}}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "scalar result was invalid",
+		},
+		{
+			name:           "unsuccessful response",
+			response:       `{"status":"error","errorType":"bad_data","error":"repository-controlled text"}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "query was unsuccessful",
+		},
+		{
+			name:           "malformed response",
+			response:       `{`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "response was malformed",
+		},
+		{
+			name:           "source response",
+			statusCode:     http.StatusServiceUnavailable,
+			response:       "repository-controlled text",
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "HTTP 503",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			evaluationTime := time.Date(2026, time.November, 19, 12, 34, 56, 123, time.FixedZone("offset", -5*60*60))
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.Method != http.MethodGet || request.URL.Path != "/api/v1/query" {
+					t.Errorf("request = %s %s", request.Method, request.URL.Path)
+				}
+				if got := request.URL.Query().Get("query"); got != "active_sessions" {
+					t.Errorf("query = %q", got)
+				}
+				if got := request.URL.Query().Get("time"); got != evaluationTime.UTC().Format(time.RFC3339Nano) {
+					t.Errorf("time = %q", got)
+				}
+				statusCode := test.statusCode
+				if statusCode == 0 {
+					statusCode = http.StatusOK
+				}
+				writer.WriteHeader(statusCode)
+				_, _ = writer.Write([]byte(test.response))
+			}))
+			defer server.Close()
+
+			evaluator := newTestPrometheusEvaluator(t, server.URL)
+			observation := evaluator.Evaluate(context.Background(), validDefinition(), evaluationTime)
+			if observation.State != test.wantState {
+				t.Errorf("State = %q, want %q", observation.State, test.wantState)
+			}
+			if test.wantValue == nil {
+				if observation.Value != nil {
+					t.Errorf("Value = %v, want nil", *observation.Value)
+				}
+			} else if observation.Value == nil || *observation.Value != *test.wantValue {
+				t.Errorf("Value = %v, want %v", observation.Value, *test.wantValue)
+			}
+			if !strings.Contains(observation.Diagnostic, test.wantDiagnostic) {
+				t.Errorf("Diagnostic = %q, want phrase %q", observation.Diagnostic, test.wantDiagnostic)
+			}
+			if strings.Contains(observation.Diagnostic, "repository-controlled") ||
+				strings.Contains(observation.Diagnostic, "secret") {
+				t.Errorf("Diagnostic exposes upstream contents: %q", observation.Diagnostic)
+			}
+		})
+	}
+}
+
+func TestPrometheusEvaluatorRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(writer, strings.Repeat("x", gate.MaximumPrometheusResponseSize+1))
+	}))
+	defer server.Close()
+
+	evaluator := newTestPrometheusEvaluator(t, server.URL)
+	observation := evaluator.Evaluate(context.Background(), validDefinition(), time.Now())
+	if observation.State != gate.ObservationUnavailable ||
+		!strings.Contains(observation.Diagnostic, "size limit") {
+		t.Errorf("observation = %#v", observation)
+	}
+}
+
+func TestPrometheusEvaluatorUsesConfiguredPathAndBearerToken(t *testing.T) {
+	t.Parallel()
+
+	tokenPath := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenPath, []byte("prometheus-token\n"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/prometheus/api/v1/query" {
+			t.Errorf("path = %q", request.URL.Path)
+		}
+		if got := request.Header.Get("Authorization"); got != "Bearer prometheus-token" {
+			t.Errorf("Authorization = %q", got)
+		}
+		_, _ = writer.Write([]byte(
+			`{"status":"success","data":{"resultType":"scalar","result":[1730000000,"0"]}}`,
+		))
+	}))
+	defer server.Close()
+
+	source := validPrometheusSource(server.URL + "/prometheus")
+	source.BearerTokenFile = tokenPath
+	evaluator, err := gate.NewPrometheusEvaluator(source)
+	if err != nil {
+		t.Fatalf("NewPrometheusEvaluator() error = %v", err)
+	}
+	observation := evaluator.Evaluate(context.Background(), validDefinition(), time.Now())
+	if observation.State != gate.ObservationPassing {
+		t.Errorf("observation = %#v", observation)
+	}
+}
+
+func TestPrometheusEvaluatorRejectsInvalidBearerTokenFile(t *testing.T) {
+	t.Parallel()
+
+	tokenPath := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenPath, []byte("secret token contents"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+
+	source := validPrometheusSource("https://prometheus.example.com")
+	source.BearerTokenFile = tokenPath
+	_, err := gate.NewPrometheusEvaluator(source)
+	if err == nil || !strings.Contains(err.Error(), "invalid token") || strings.Contains(err.Error(), "secret token contents") {
+		t.Fatalf("NewPrometheusEvaluator() error = %v", err)
+	}
+}
+
+func newTestPrometheusEvaluator(t *testing.T, sourceURL string) *gate.PrometheusEvaluator {
+	t.Helper()
+
+	evaluator, err := gate.NewPrometheusEvaluator(validPrometheusSource(sourceURL))
+	if err != nil {
+		t.Fatalf("NewPrometheusEvaluator() error = %v", err)
+	}
+
+	return evaluator
+}
+
+func validPrometheusSource(sourceURL string) gate.PrometheusSource {
+	return gate.PrometheusSource{
+		URL:                sourceURL,
+		EvaluationInterval: time.Minute,
+		Timeout:            5 * time.Second,
+		MaximumConcurrency: 1,
+	}
+}
+
+func float64Pointer(value float64) *float64 {
+	return new(value)
+}

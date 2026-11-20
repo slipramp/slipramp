@@ -38,7 +38,7 @@ func TestValidateGate(t *testing.T) {
 		{
 			name: "oversized query",
 			configure: func(input *catalog.Catalog) {
-				input.Gates[0].Spec.Prometheus.Query = strings.Repeat("x", catalog.GateQueryMaxLength+1)
+				input.Gates[0].Spec.Prometheus.Query = strings.Repeat("x", gate.MaximumQueryLength+1)
 			},
 			wantError: "Gate Prometheus query must not exceed",
 		},
@@ -100,12 +100,12 @@ func TestValidateGateAcceptsEveryOperator(t *testing.T) {
 	t.Parallel()
 
 	operators := []string{
-		catalog.GateOperatorEqual,
-		catalog.GateOperatorNotEqual,
-		catalog.GateOperatorLessThan,
-		catalog.GateOperatorLessThanOrEqual,
-		catalog.GateOperatorGreaterThan,
-		catalog.GateOperatorGreaterThanOrEqual,
+		gate.OperatorEqual,
+		gate.OperatorNotEqual,
+		gate.OperatorLessThan,
+		gate.OperatorLessThanOrEqual,
+		gate.OperatorGreaterThan,
+		gate.OperatorGreaterThanOrEqual,
 	}
 	for _, operator := range operators {
 		t.Run(operator, func(t *testing.T) {
@@ -117,5 +117,24 @@ func TestValidateGateAcceptsEveryOperator(t *testing.T) {
 				t.Fatalf("ValidatePortable() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestGateNormalizedDefinitionExcludesPresentationMetadata(t *testing.T) {
+	t.Parallel()
+
+	input := validCatalog().Gates[0]
+	definition := input.NormalizedDefinition()
+	input.Metadata.Name = "renamed"
+	input.Metadata.Title = "Renamed Gate"
+
+	if got := input.NormalizedDefinition(); got != definition {
+		t.Errorf("definition changed with presentation metadata: %#v", got)
+	}
+	if definition.Prometheus.Source != "homelab" ||
+		definition.Prometheus.Query != "max_over_time(network_active_changes[1m])" ||
+		definition.Prometheus.Condition.Operator != gate.OperatorEqual ||
+		definition.Prometheus.Condition.Value != 0 {
+		t.Errorf("definition = %#v", definition)
 	}
 }

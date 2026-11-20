@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
@@ -145,7 +146,7 @@ func validCatalog() catalog.Catalog {
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
 				Condition: catalog.GateCondition{
-					Operator: catalog.GateOperatorEqual,
+					Operator: gate.OperatorEqual,
 					Value:    0,
 				},
 			}},

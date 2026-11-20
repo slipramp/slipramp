@@ -9,6 +9,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 )
 
 const (
@@ -140,15 +141,15 @@ func configureGate(resource *jsonschema.Schema) {
 	source.MaxLength = new(63)
 	source.Pattern = `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`
 	query := prometheus.Properties["query"]
-	boundedString(query, catalog.GateQueryMaxLength)
+	boundedString(query, gate.MaximumQueryLength)
 	condition := prometheus.Properties["condition"]
 	condition.Properties["operator"].Enum = []any{
-		catalog.GateOperatorEqual,
-		catalog.GateOperatorNotEqual,
-		catalog.GateOperatorLessThan,
-		catalog.GateOperatorLessThanOrEqual,
-		catalog.GateOperatorGreaterThan,
-		catalog.GateOperatorGreaterThanOrEqual,
+		gate.OperatorEqual,
+		gate.OperatorNotEqual,
+		gate.OperatorLessThan,
+		gate.OperatorLessThanOrEqual,
+		gate.OperatorGreaterThan,
+		gate.OperatorGreaterThanOrEqual,
 	}
 }
 

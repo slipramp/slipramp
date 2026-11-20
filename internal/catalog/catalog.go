@@ -9,13 +9,6 @@ const (
 	TargetKind  = "Target"
 	GateKind    = "Gate"
 
-	GateOperatorEqual              = "equal"
-	GateOperatorNotEqual           = "not-equal"
-	GateOperatorLessThan           = "less-than"
-	GateOperatorLessThanOrEqual    = "less-than-or-equal"
-	GateOperatorGreaterThan        = "greater-than"
-	GateOperatorGreaterThanOrEqual = "greater-than-or-equal"
-
 	ParameterTypeString  = "string"
 	ParameterTypeBoolean = "boolean"
 	ParameterTypeNumber  = "number"

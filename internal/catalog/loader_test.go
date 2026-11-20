@@ -5,6 +5,7 @@ import (
 	"testing/fstest"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -136,7 +137,7 @@ spec:
 	if len(loaded.Gates) != 1 ||
 		loaded.Gates[0].Metadata.Name != "network-idle" ||
 		loaded.Gates[0].Spec.Prometheus.Source != "homelab" ||
-		loaded.Gates[0].Spec.Prometheus.Condition.Operator != catalog.GateOperatorEqual {
+		loaded.Gates[0].Spec.Prometheus.Condition.Operator != gate.OperatorEqual {
 		t.Errorf("Gates = %#v", loaded.Gates)
 	}
 
