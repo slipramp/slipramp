@@ -35,6 +35,23 @@ operator need or second integration makes their semantics concrete.
 All trigger adapters must use ordinary Run creation and preserve manual and API
 execution without requiring a trigger.
 
+## Repository-defined release gates
+
+- [ ] Deliver the Run Gate vertical slice: catalog and Server source
+      contracts, durable observations and evidence, Prometheus evaluation, Run
+      creation and assignment integration, generated APIs, and focused client
+      presentation.
+- [ ] Extend the same Gate contract to Kargo Stage metadata, Promotion
+      acceptance, creation delivery, review polling, generated APIs, and
+      focused client presentation.
+- [ ] Complete bounded telemetry, stale-observation cleanup, recovery and
+      end-to-end coverage, and operator configuration and troubleshooting
+      guidance.
+
+The accepted behavior and safety boundaries are defined in
+[Repository-defined release Gates](./design/gates.md). Gates remain opt-in
+repository policy rather than mandatory Server-owned authorization.
+
 ## Catalog tooling
 
 - [ ] Publish versioned binaries, checksums, the schema, and a small CLI OCI

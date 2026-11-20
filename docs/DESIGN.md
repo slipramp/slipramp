@@ -15,6 +15,7 @@ feature. Focused design documents hold current domain contracts:
 - [Logs and Artifacts](./design/artifacts.md)
 - [Identity and authorization](./design/identity.md)
 - [Kargo Promotions](./design/kargo.md)
+- [Repository-defined release Gates](./design/gates.md)
 - [Notifications and Inbox](./design/notifications.md)
 
 [ROADMAP.md](./ROADMAP.md) contains unfinished work. [OpenAPI](../api/openapi.yaml)
@@ -51,6 +52,9 @@ explicitly requested.
 - Safety policy is opt-in. Direct actions, including unreviewed apply commands,
   remain valid. Preview Artifacts, Run review, and Kargo review add optional
   controls rather than a mandatory approval framework.
+- Repository-defined Gates may delay Run assignment or Kargo Promotion release
+  using current observations from operator-configured sources. They latch
+  immutable release evidence once and never cancel active work.
 - Repository maintainers execute with the authority granted by a Placement.
   Containers are not treated as a complete security boundary.
 - The Harness is an internal execution component. Tools and Runtime images do
@@ -94,6 +98,7 @@ process. Kubernetes is an execution backend, not the product database.
 | Cluster | A Kubernetes execution destination represented by its Controller |
 | Run | An immutable Action execution snapshot plus independently recorded observations |
 | Artifact | Durable Run output, including logs, plans, reports, and diff files |
+| Gate | Repository-defined current policy that delays release until a numeric observation passes |
 | Principal | A durable user or service-account actor authenticated by a session or API key |
 | Promotion | A durable Kargo request with Stage, Freight, actor, policy, creation delivery, Kargo execution, and optional review context |
 | Notification event | An immutable channel-neutral snapshot of a selected durable transition |
@@ -190,6 +195,17 @@ applicable, and configured but unavailable so native-only operation remains
 neutral while regressions remain visible. A configured `review-required` policy never falls back to
 automatic when enrichment is unavailable. See
 [Kargo Promotions](./design/kargo.md).
+
+### Gate release
+
+Actions and enriched Kargo Stages may attach ordered repository-local Gate
+names. Waiting subjects resolve those names against the Repository's current
+catalog and share demand-driven observations from administrator-configured
+Prometheus sources. PostgreSQL records the current observation projection and
+the immutable evidence used to release each subject. Run assignment or
+Promotion delivery latches all required passing evidence atomically; later
+blocking observations never stop already released work. See
+[Repository-defined release Gates](./design/gates.md).
 
 ### Notification delivery
 

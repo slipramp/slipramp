@@ -1,6 +1,10 @@
 # Repository-defined gates
 
-Status: proposed implementation plan
+Status: accepted implementation plan
+
+The governing contract now lives in [Repository-defined release
+Gates](../design/gates.md). This plan retains delivery order, acceptance
+coverage, and rollout work while implementation remains incomplete.
 
 ## Goal
 
