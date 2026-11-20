@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controllercommand"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
 	"github.com/slipramp/slipramp/internal/maintenance"
@@ -82,6 +83,25 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database, cfg.Placements, cfg.GateSources)
+	var gateEvaluations *gate.Coordinator
+	if len(cfg.GateSources) > 0 {
+		gateEvaluations, err = gate.NewCoordinator(persistence.database, cfg.GateSources, logger)
+		if err != nil {
+			closeInitialization()
+
+			return nil, fmt.Errorf("initialize Gate evaluation: %w", err)
+		}
+	}
+	repositoryRefresherOptions := []repository.RefresherOption{
+		repository.WithGateSources(cfg.GateSources),
+		repository.WithRefreshObserver(metrics),
+	}
+	if gateEvaluations != nil {
+		repositoryRefresherOptions = append(
+			repositoryRefresherOptions,
+			repository.WithGateEvaluationNotifier(gateEvaluations),
+		)
+	}
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
@@ -89,8 +109,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
-		repository.WithGateSources(cfg.GateSources),
-		repository.WithRefreshObserver(metrics),
+		repositoryRefresherOptions...,
 	)
 	repositories := repository.NewService(
 		persistence.database,
@@ -117,6 +136,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		Reviews:            persistence.database,
 		Observations:       persistence.database,
 		ControllerCommands: controllerCommandWakeups,
+		GateEvaluations:    gateEvaluations,
 		Repositories:       repositories,
 		Catalogs:           catalogs,
 		Placements:         cfg.Placements,
@@ -313,6 +333,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			name: "metrics server",
 			run:  metricsServer.Run,
 		},
+	}
+	if gateEvaluations != nil {
+		workers = append(workers, newServerWorker("Gate evaluation", gateEvaluations.Run))
 	}
 	if promotionPreparations != nil {
 		workers = append(workers, newServerWorker("promotion preparation", promotionPreparations.Run))

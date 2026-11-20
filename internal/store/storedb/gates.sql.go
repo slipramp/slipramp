@@ -50,6 +50,63 @@ func (q *Queries) GetGateObservation(ctx context.Context, arg GetGateObservation
 	return i, err
 }
 
+const listGateEvaluationTargets = `-- name: ListGateEvaluationTargets :many
+SELECT DISTINCT
+    run_gates.repository_id,
+    run_gates.gate_name,
+    repositories.active_catalog_revision_id AS catalog_revision_id,
+    catalog_gates.definition
+FROM run_gates
+JOIN runs
+  ON runs.id = run_gates.run_id
+JOIN repositories
+  ON repositories.id = run_gates.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+ AND catalog_gates.name = run_gates.gate_name
+WHERE run_gates.released_at IS NULL
+  AND runs.phase = 'queued'
+  AND repositories.removed_at IS NULL
+ORDER BY
+    run_gates.repository_id,
+    run_gates.gate_name,
+    repositories.active_catalog_revision_id
+`
+
+type ListGateEvaluationTargetsRow struct {
+	RepositoryID      pgtype.UUID
+	GateName          string
+	CatalogRevisionID pgtype.UUID
+	Definition        []byte
+}
+
+func (q *Queries) ListGateEvaluationTargets(ctx context.Context) ([]ListGateEvaluationTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listGateEvaluationTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGateEvaluationTargetsRow
+	for rows.Next() {
+		var i ListGateEvaluationTargetsRow
+		if err := rows.Scan(
+			&i.RepositoryID,
+			&i.GateName,
+			&i.CatalogRevisionID,
+			&i.Definition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertGateObservation = `-- name: UpsertGateObservation :exec
 INSERT INTO gate_observations (
     repository_id,

@@ -19,6 +19,8 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	service, runs := testService(t)
 	commands := &recordingControllerCommandNotifier{}
 	service.controllerCommands = commands
+	gateEvaluations := &recordingGateEvaluationNotifier{}
+	service.gateEvaluations = gateEvaluations
 	original := finishedTestRun(t)
 	original.Snapshot.Action.Gates = []string{"network-idle"}
 	originalRelevanceCommitSHA := strings.Repeat("b", 40)
@@ -76,6 +78,9 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	}
 	if len(commands.clusters) != 1 || commands.clusters[0] != original.ClusterName {
 		t.Errorf("Controller command notifications = %v, want [%s]", commands.clusters, original.ClusterName)
+	}
+	if gateEvaluations.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", gateEvaluations.calls)
 	}
 }
 

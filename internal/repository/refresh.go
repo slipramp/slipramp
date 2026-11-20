@@ -120,23 +120,30 @@ func WithGateSources(sources gate.SourceSet) RefresherOption {
 	}
 }
 
+func WithGateEvaluationNotifier(notifier gate.EvaluationNotifier) RefresherOption {
+	return func(refresher *Refresher) {
+		refresher.gateEvaluations = notifier
+	}
+}
+
 type noopRefreshObserver struct{}
 
 func (noopRefreshObserver) ObserveRepositoryRefresh(context.Context, RefreshAttemptResult, time.Duration) {
 }
 
 type Refresher struct {
-	repositories RefreshStore
-	fetcher      Fetcher
-	placements   placement.Set
-	gateSources  gate.SourceSet
-	interval     time.Duration
-	fetchTimeout time.Duration
-	logger       *slog.Logger
-	newID        func() uuid.UUID
-	now          func() time.Time
-	observer     RefreshObserver
-	locks        sync.Map
+	repositories    RefreshStore
+	fetcher         Fetcher
+	placements      placement.Set
+	gateSources     gate.SourceSet
+	gateEvaluations gate.EvaluationNotifier
+	interval        time.Duration
+	fetchTimeout    time.Duration
+	logger          *slog.Logger
+	newID           func() uuid.UUID
+	now             func() time.Time
+	observer        RefreshObserver
+	locks           sync.Map
 }
 
 type refreshSemaphore chan struct{}
@@ -337,6 +344,9 @@ func (r *Refresher) refresh(
 	}
 
 	r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptSucceeded, time.Since(startedAt))
+	if r.gateEvaluations != nil {
+		r.gateEvaluations.Notify()
+	}
 	r.logger.Info(
 		"repository catalog indexed",
 		"repository", item.Name,

@@ -59,7 +59,16 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	refresher := NewRefresher(repositories, fetcher, testRepositoryPlacements(t), time.Minute, 10*time.Second, logger)
+	gateEvaluations := &recordingGateEvaluationNotifier{}
+	refresher := NewRefresher(
+		repositories,
+		fetcher,
+		testRepositoryPlacements(t),
+		time.Minute,
+		10*time.Second,
+		logger,
+		WithGateEvaluationNotifier(gateEvaluations),
+	)
 	observer := &recordingRefreshObserver{}
 	refresher.observer = observer
 	attemptedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
@@ -95,6 +104,9 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 	if cleanupCount != 1 {
 		t.Errorf("fetched commit cleanup count = %d, want 1", cleanupCount)
+	}
+	if gateEvaluations.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", gateEvaluations.calls)
 	}
 
 	failed := repositories.results[failedID]
@@ -565,6 +577,14 @@ type recordingRefreshStore struct {
 
 type recordingRefreshObserver struct {
 	results []RefreshAttemptResult
+}
+
+type recordingGateEvaluationNotifier struct {
+	calls int
+}
+
+func (n *recordingGateEvaluationNotifier) Notify() {
+	n.calls++
 }
 
 func (o *recordingRefreshObserver) ObserveRepositoryRefresh(

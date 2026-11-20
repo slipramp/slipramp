@@ -68,6 +68,7 @@ func (s *Service) DecideRunReview(ctx context.Context, request ReviewDecisionReq
 	}
 	if record.Phase == PhaseQueued && record.Review.State == ReviewStateApproved {
 		s.notifyController(record)
+		s.notifyGateEvaluation(record)
 	}
 
 	return record, nil

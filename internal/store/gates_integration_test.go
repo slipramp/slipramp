@@ -117,6 +117,26 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	if !reflect.DeepEqual(names, record.Snapshot.Action.Gates) {
 		t.Errorf("Run Gates = %v, want %v", names, record.Snapshot.Action.Gates)
 	}
+	targets, err := database.ListGateEvaluationTargets(ctx)
+	if err != nil {
+		t.Fatalf("ListGateEvaluationTargets() error = %v", err)
+	}
+	wantDefinition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	if len(targets) != 1 || targets[0].RepositoryID != repositoryID ||
+		targets[0].GateName != "network-idle" || targets[0].CatalogRevisionID != revisionID ||
+		!reflect.DeepEqual(targets[0].Definition, wantDefinition) {
+		t.Errorf("Gate evaluation targets = %#v", targets)
+	}
+	if _, err := database.CancelRun(ctx, record.ID, createdAt.Add(time.Second), nil); err != nil {
+		t.Fatalf("cancel queued Run: %v", err)
+	}
+	targets, err = database.ListGateEvaluationTargets(ctx)
+	if err != nil {
+		t.Fatalf("ListGateEvaluationTargets() after cancellation error = %v", err)
+	}
+	if len(targets) != 0 {
+		t.Errorf("Gate evaluation targets after cancellation = %#v", targets)
+	}
 
 	invalid := gateTestRun(t, database, repositoryID, revisionID, createdAt.Add(time.Minute))
 	invalid.Snapshot.Action.Gates = []string{"network-idle", "network-idle"}

@@ -148,6 +148,14 @@ func (n *recordingControllerCommandNotifier) Notify(clusterName string) {
 	n.clusters = append(n.clusters, clusterName)
 }
 
+type recordingGateEvaluationNotifier struct {
+	calls int
+}
+
+func (n *recordingGateEvaluationNotifier) Notify() {
+	n.calls++
+}
+
 func (s *recordingRuns) DecideRunReview(_ context.Context, transition ReviewTransition) (Run, error) {
 	s.reviewTransition = transition
 

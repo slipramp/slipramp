@@ -42,3 +42,27 @@ WHERE repository_id = sqlc.arg(repository_id)
   AND gate_name = sqlc.arg(gate_name)
   AND catalog_revision_id = sqlc.arg(catalog_revision_id)
   AND definition_digest = sqlc.arg(definition_digest);
+
+-- name: ListGateEvaluationTargets :many
+SELECT DISTINCT
+    run_gates.repository_id,
+    run_gates.gate_name,
+    repositories.active_catalog_revision_id AS catalog_revision_id,
+    catalog_gates.definition
+FROM run_gates
+JOIN runs
+  ON runs.id = run_gates.run_id
+JOIN repositories
+  ON repositories.id = run_gates.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+ AND catalog_gates.name = run_gates.gate_name
+WHERE run_gates.released_at IS NULL
+  AND runs.phase = 'queued'
+  AND repositories.removed_at IS NULL
+ORDER BY
+    run_gates.repository_id,
+    run_gates.gate_name,
+    repositories.active_catalog_revision_id;

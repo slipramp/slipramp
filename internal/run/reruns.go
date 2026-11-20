@@ -102,6 +102,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 		return Run{}, fmt.Errorf("create rerun: %w", err)
 	}
 	s.notifyController(created)
+	s.notifyGateEvaluation(created)
 
 	return created, nil
 }

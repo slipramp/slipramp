@@ -213,6 +213,7 @@ func (s *Service) createRun(
 	if created.Review.State != ReviewStatePending {
 		s.notifyController(created)
 	}
+	s.notifyGateEvaluation(created)
 
 	return created, nil
 }

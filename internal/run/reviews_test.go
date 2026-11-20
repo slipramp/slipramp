@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
@@ -24,10 +25,13 @@ func TestDecideRunReviewNormalizesComment(t *testing.T) {
 	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
 	runs := &recordingRuns{reviewed: Run{
 		ID: runID, Phase: PhaseQueued, ClusterName: "colo", Review: Review{State: ReviewStateApproved},
+		Snapshot: Snapshot{Action: catalog.EffectiveAction{Gates: []string{"network-idle"}}},
 	}}
 	commands := &recordingControllerCommandNotifier{}
+	gateEvaluations := &recordingGateEvaluationNotifier{}
 	service := &Service{
-		reviews: runs, controllerCommands: commands, now: func() time.Time { return decidedAt },
+		reviews: runs, controllerCommands: commands, gateEvaluations: gateEvaluations,
+		now: func() time.Time { return decidedAt },
 	}
 	comment := "  Reviewed against change request 42.  \n"
 
@@ -47,6 +51,9 @@ func TestDecideRunReviewNormalizesComment(t *testing.T) {
 	}
 	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
 		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
+	}
+	if gateEvaluations.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", gateEvaluations.calls)
 	}
 }
 

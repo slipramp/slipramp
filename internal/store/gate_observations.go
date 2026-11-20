@@ -2,15 +2,40 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
+
+func (d *Database) ListGateEvaluationTargets(ctx context.Context) ([]gate.EvaluationTarget, error) {
+	rows, err := d.queries.ListGateEvaluationTargets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list Gate evaluation targets: %w", err)
+	}
+
+	targets := make([]gate.EvaluationTarget, 0, len(rows))
+	for _, row := range rows {
+		var definition catalog.Gate
+		if err := json.Unmarshal(row.Definition, &definition); err != nil {
+			return nil, fmt.Errorf("decode Gate evaluation target %q: %w", row.GateName, err)
+		}
+		targets = append(targets, gate.EvaluationTarget{
+			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
+			GateName:          row.GateName,
+			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
+			Definition:        definition.NormalizedDefinition(),
+		})
+	}
+
+	return targets, nil
+}
 
 func (d *Database) UpsertGateObservation(
 	ctx context.Context,

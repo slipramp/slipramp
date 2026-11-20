@@ -26,6 +26,8 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	service.catalogs = &recordingCatalogs{revision: revision}
 	commands := &recordingControllerCommandNotifier{}
 	service.controllerCommands = commands
+	gateEvaluations := &recordingGateEvaluationNotifier{}
+	service.gateEvaluations = gateEvaluations
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	createdAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
 	service.newID = func() uuid.UUID { return runID }
@@ -90,6 +92,9 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	}
 	if len(commands.clusters) != 1 || commands.clusters[0] != "colo" {
 		t.Errorf("Controller command notifications = %v, want [colo]", commands.clusters)
+	}
+	if gateEvaluations.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", gateEvaluations.calls)
 	}
 	if created.Snapshot.Repository.CloneURL !=
 		"https://github.com/example/infrastructure.git" ||
