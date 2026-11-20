@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestValidateGate(t *testing.T) {
@@ -75,6 +77,23 @@ func TestValidateGate(t *testing.T) {
 	}
 
 	runValidationTests(t, tests)
+}
+
+func TestValidateGateDeploymentRequiresConfiguredSource(t *testing.T) {
+	t.Parallel()
+
+	input := validCatalog()
+	diagnostics := catalog.ValidateGateDeployment(input, gate.SourceSet{})
+	if len(diagnostics) != 1 || diagnostics[0].Code != "catalog.gate.source-not-found" ||
+		diagnostics[0].Location.FieldPath != "spec.prometheus.source" {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+	testcheck.ErrorContains(t, diagnosticsAsError(diagnostics), `source "homelab" is not configured`)
+
+	configured := gate.SourceSet{"homelab": {}}
+	if diagnostics := catalog.ValidateGateDeployment(input, configured); len(diagnostics) != 0 {
+		t.Errorf("configured diagnostics = %#v", diagnostics)
+	}
 }
 
 func TestValidateGateAcceptsEveryOperator(t *testing.T) {

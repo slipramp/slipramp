@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productidentity"
@@ -49,6 +50,7 @@ const (
 	serverMCPOAuthIssuerEnvironment               = "SLIPRAMP_MCP_OAUTH_ISSUER"
 	serverMCPOAuthResourceEnvironment             = "SLIPRAMP_MCP_OAUTH_RESOURCE"
 	serverKargoIntegrationsFileEnvironment        = "SLIPRAMP_KARGO_INTEGRATIONS_FILE"
+	serverGateSourcesFileEnvironment              = "SLIPRAMP_GATE_SOURCES_FILE"
 	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
 	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
 	serverNotificationRoutesEnvironment           = "SLIPRAMP_NOTIFICATIONS_ROUTES"
@@ -276,6 +278,19 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 		}
 
 		cfg.KargoIntegrations = integrations
+	}
+	if value, ok := lookupEnvironment(serverGateSourcesFileEnvironment); ok {
+		sources, err := gate.LoadSourceFile(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf(
+				"load %s from %q: %w",
+				serverGateSourcesFileEnvironment,
+				value,
+				err,
+			)
+		}
+
+		cfg.GateSources = sources
 	}
 	if value, ok := lookupEnvironment(serverNotificationPublicURLEnvironment); ok {
 		cfg.Notifications.PublicURL = value

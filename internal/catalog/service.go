@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -25,12 +26,13 @@ func (s *Service) GetRevision(ctx context.Context, repositoryID uuid.UUID, revis
 }
 
 type Service struct {
-	catalogs   Store
-	placements placement.Set
+	catalogs    Store
+	placements  placement.Set
+	gateSources gate.SourceSet
 }
 
-func NewService(catalogs Store, placements placement.Set) *Service {
-	return &Service{catalogs: catalogs, placements: placements}
+func NewService(catalogs Store, placements placement.Set, gateSources gate.SourceSet) *Service {
+	return &Service{catalogs: catalogs, placements: placements, gateSources: gateSources}
 }
 
 func (s *Service) GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (Revision, error) {
@@ -80,6 +82,7 @@ func (s *Service) ExplainAction(
 
 	placements := s.placements
 	diagnostics := ValidateDeployment(revision.Catalog, placements)
+	diagnostics = append(diagnostics, ValidateGateDeployment(revision.Catalog, s.gateSources)...)
 	result := Result{
 		Catalog:     revision.Catalog,
 		Diagnostics: diagnostics,

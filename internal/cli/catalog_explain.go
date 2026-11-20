@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -33,10 +34,11 @@ func (p parameterAssignments) Set(assignment string) error {
 }
 
 type catalogExplainOptions struct {
-	root           string
-	placementsPath string
-	format         string
-	parameters     parameterAssignments
+	root            string
+	placementsPath  string
+	gateSourcesPath string
+	format          string
+	parameters      parameterAssignments
 }
 
 func (a App) newCatalogExplainCommand(exitCode *int) *cobra.Command {
@@ -61,6 +63,12 @@ func (a App) newCatalogExplainCommand(exitCode *int) *cobra.Command {
 		"placements",
 		"",
 		"PlacementConfig file for deployment validation",
+	)
+	command.Flags().StringVar(
+		&options.gateSourcesPath,
+		"gate-sources",
+		"",
+		"GateSourceConfig file for deployment validation",
 	)
 	command.Flags().Var(&options.parameters, "set", "parameter NAME=VALUE (repeatable)")
 	command.Flags().StringVar(&options.format, "format", "text", "output format: text or json")
@@ -91,12 +99,23 @@ func (a App) runCatalogExplain(options catalogExplainOptions, identities []strin
 		}
 		catalogOptions.Placements = &placements
 	}
+	if options.gateSourcesPath != "" {
+		resolved, err := a.resolvePath(options.gateSourcesPath)
+		if err != nil {
+			return a.invocationError(fmt.Sprintf("resolve Gate source file: %v", err))
+		}
+		gateSources, err := gate.LoadSourceFile(resolved)
+		if err != nil {
+			return a.invocationError(err.Error())
+		}
+		catalogOptions.GateSources = &gateSources
+	}
 	result, err := catalog.Process(os.DirFS(resolvedRoot), catalogOptions)
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
 	if result.Diagnostics.HasErrors() {
-		summary := summarize(result, catalogOptions.Placements)
+		summary := summarize(result, catalogOptions.Placements, catalogOptions.GateSources)
 		if options.format == "json" {
 			err = renderJSON(a.Stdout, result, summary, false)
 		} else {

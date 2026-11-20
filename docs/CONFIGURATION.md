@@ -43,6 +43,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_MCP_OAUTH_ISSUER`                 | Unset                            | Optional MCP OAuth issuer; must exactly match `SLIPRAMP_OIDC_ISSUER` and be set together with the resource URL              |
 | `SLIPRAMP_MCP_OAUTH_RESOURCE`               | Unset                            | Canonical external MCP URL ending in `/mcp`; required as the exact OAuth access-token audience                             |
 | `SLIPRAMP_KARGO_INTEGRATIONS_FILE`          | Unset                            | Path to the versioned YAML Kargo integration configuration used for Stage inventory, operator creation, review preparation, health, and optional UI deep links |
+| `SLIPRAMP_GATE_SOURCES_FILE`                | Unset                            | Path to the versioned YAML Prometheus source configuration used by repository-defined Gates                                  |
 
 The Artifact token key must be supplied explicitly on every Server startup.
 Rotating it invalidates credentials already issued to active Runs, including
@@ -163,6 +164,52 @@ conflict with Slipramp-owned execution resources.
 Cluster scheduling defaults to four active Runs. A configured Cluster maximum
 replaces that default, and a Placement maximum must be no larger than its
 configured Cluster maximum.
+
+### Gate sources
+
+Repository-defined Gates select administrator-configured Prometheus sources by
+name. The optional `SLIPRAMP_GATE_SOURCES_FILE` points to a strict, versioned
+configuration file:
+
+```yaml
+apiVersion: slipramp.com/v1alpha1
+kind: GateSourceConfig
+sources:
+  homelab:
+    prometheus:
+      url: http://prometheus:9090
+      evaluationInterval: 15s
+      timeout: 5s
+      maximumConcurrency: 4
+```
+
+The evaluation interval defaults to 15 seconds, the request timeout defaults
+to five seconds, and concurrency defaults to four with a maximum of 32. The
+timeout must be shorter than the interval. Source URLs must be absolute HTTP or
+HTTPS URLs without credentials, query parameters, or fragments. Plaintext HTTP
+is appropriate only when a trusted encrypted network already protects the
+connection.
+
+Authenticated or private-CA sources use absolute paths to files mounted for the
+Server process. TLS client certificate and key files must be configured
+together, and TLS settings require an HTTPS source:
+
+```yaml
+sources:
+  production:
+    prometheus:
+      url: https://prometheus.example.com
+      bearerTokenFile: /var/run/slipramp/gates/token
+      tls:
+        caFile: /var/run/slipramp/gates/ca.crt
+        clientCertificateFile: /var/run/slipramp/gates/tls.crt
+        clientKeyFile: /var/run/slipramp/gates/tls.key
+```
+
+Secret file contents remain transport configuration and are not part of the
+catalog contract. Repository refresh rejects a Gate whose source name is not
+present in the Server's current source configuration; an unreachable configured
+source does not invalidate the catalog.
 
 ### Kargo integrations
 

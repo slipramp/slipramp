@@ -18,6 +18,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cli"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
@@ -140,6 +141,65 @@ func TestRefresherRecordsRequestedAttempt(t *testing.T) {
 	}
 	if repositories.results[repositoryID].Source != RefreshSourceRequested {
 		t.Errorf("persisted refresh source = %q", repositories.results[repositoryID].Source)
+	}
+}
+
+func TestRefresherValidatesConfiguredGateSources(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		sources  gate.SourceSet
+		accepted bool
+	}{
+		{name: "configured", sources: gate.SourceSet{"homelab": {}}, accepted: true},
+		{name: "not configured", sources: gate.SourceSet{}, accepted: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repositoryID := uuid.New()
+			repositories := &recordingRefreshStore{items: []Repository{{ID: repositoryID, Name: "infrastructure"}}}
+			files := validCatalogFiles()
+			files[".slipramp/gate.yaml"] = &fstest.MapFile{Data: []byte(`
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: maintenance-safe
+spec:
+  prometheus:
+    source: homelab
+    query: maintenance_active
+    condition: {operator: equal, value: 0}
+`)}
+			fetcher := &recordingFetcher{commits: map[RepositoryID]FetchedCommit{
+				repositoryID: {
+					Commit: Commit{RepositoryID: repositoryID, SHA: strings.Repeat("a", 40)},
+					Files:  files,
+				},
+			}}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			refresher := NewRefresher(
+				repositories,
+				fetcher,
+				testRepositoryPlacements(t),
+				time.Minute,
+				10*time.Second,
+				logger,
+				WithGateSources(test.sources),
+			)
+
+			refresher.refreshAll(context.Background())
+
+			result := repositories.results[repositoryID]
+			if (result.Revision != nil) != test.accepted {
+				t.Fatalf("refresh result = %#v, accepted = %t", result, test.accepted)
+			}
+			if !test.accepted && (result.FailureReason == nil ||
+				!strings.Contains(*result.FailureReason, "catalog.gate.source-not-found")) {
+				t.Errorf("failure reason = %v", result.FailureReason)
+			}
+		})
 	}
 }
 

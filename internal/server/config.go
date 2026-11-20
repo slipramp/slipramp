@@ -10,6 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -40,6 +41,7 @@ type Config struct {
 	ProductAuthentication        productauth.Config
 	MCP                          mcpserver.Config
 	KargoIntegrations            promotion.IntegrationSet
+	GateSources                  gate.SourceSet
 	Notifications                notification.Config
 }
 
@@ -59,6 +61,7 @@ func DefaultConfig() Config {
 		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
 		ProductAuthentication:        productauth.DefaultConfig(),
 		KargoIntegrations:            promotion.IntegrationSet{},
+		GateSources:                  gate.SourceSet{},
 		Notifications:                notification.DefaultConfig(),
 	}
 }
@@ -129,6 +132,9 @@ func (c Config) Validate() error {
 
 	if err := c.KargoIntegrations.Validate(); err != nil {
 		return fmt.Errorf("validate Kargo integrations: %w", err)
+	}
+	if err := c.GateSources.Validate(); err != nil {
+		return fmt.Errorf("validate Gate sources: %w", err)
 	}
 	type branchCleanupSelection struct {
 		credential string

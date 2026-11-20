@@ -69,21 +69,68 @@ func renderText(output io.Writer, result catalog.Result, summary validationSumma
 					return err
 				}
 			}
+			if len(summary.GateSources) > 0 {
+				if _, err := fmt.Fprintf(
+					output,
+					"Deployment checks were not run for Gate sources: %s.\n",
+					strings.Join(summary.GateSources, ", "),
+				); err != nil {
+					return err
+				}
+			}
 		} else {
-			if _, err := fmt.Fprintf(
-				output,
-				"Catalog is valid against %d placements: %d runtimes, %d targets, %d actions.\n",
-				len(summary.Placements),
-				summary.Runtimes,
-				summary.Targets,
-				summary.Actions,
-			); err != nil {
+			if err := renderDeploymentSummary(output, summary); err != nil {
 				return err
+			}
+			if !summary.placementsConfigured && len(summary.Placements) > 0 {
+				if _, err := fmt.Fprintf(
+					output,
+					"Deployment checks were not run for placements: %s.\n",
+					strings.Join(summary.Placements, ", "),
+				); err != nil {
+					return err
+				}
+			}
+			if !summary.gateSourcesConfigured && len(summary.GateSources) > 0 {
+				if _, err := fmt.Fprintf(
+					output,
+					"Deployment checks were not run for Gate sources: %s.\n",
+					strings.Join(summary.GateSources, ", "),
+				); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	_, err := fmt.Fprintf(output, "\n%d errors, %d warnings\n", summary.Errors, summary.Warnings)
+
+	return err
+}
+
+func renderDeploymentSummary(output io.Writer, summary validationSummary) error {
+	configuration := "installation configuration"
+	switch {
+	case summary.placementsConfigured && summary.gateSourcesConfigured:
+		configuration = fmt.Sprintf(
+			"%d placements and %d Gate sources",
+			len(summary.Placements),
+			len(summary.GateSources),
+		)
+	case summary.placementsConfigured:
+		configuration = fmt.Sprintf("%d placements", len(summary.Placements))
+	case summary.gateSourcesConfigured:
+		configuration = fmt.Sprintf("%d Gate sources", len(summary.GateSources))
+	}
+
+	_, err := fmt.Fprintf(
+		output,
+		"Catalog is valid against %s: %d runtimes, %d targets, %d actions.\n",
+		configuration,
+		summary.Runtimes,
+		summary.Targets,
+		summary.Actions,
+	)
 
 	return err
 }

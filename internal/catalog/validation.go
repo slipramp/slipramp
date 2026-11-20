@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -18,6 +19,10 @@ type Options struct {
 	// Placements selects deployment validation. Nil explicitly selects portable
 	// validation; an empty, non-nil Set rejects every Placement reference.
 	Placements *placement.Set
+	// GateSources selects deployment validation for repository-defined Gate
+	// source references. Nil explicitly skips installation-specific source
+	// validation; an empty, non-nil Set rejects every source reference.
+	GateSources *gate.SourceSet
 }
 
 type Result struct {
@@ -50,13 +55,18 @@ func Process(files fs.FS, options Options) (Result, error) {
 	diagnostics = append(diagnostics, repositoryDiagnostics...)
 	level := ValidationLevelPortable
 	var validatedPlacements *placement.Set
-	if options.Placements != nil {
+	if options.Placements != nil || options.GateSources != nil {
 		level = ValidationLevelDeployment
+	}
+	if options.Placements != nil {
 		diagnostics = append(diagnostics, ValidateDeployment(loaded, *options.Placements)...)
 		// Set is immutable. Retain the exact configuration used for validation so
 		// explanation cannot accidentally resolve against a different installation.
 		copied := *options.Placements
 		validatedPlacements = &copied
+	}
+	if options.GateSources != nil {
+		diagnostics = append(diagnostics, ValidateGateDeployment(loaded, *options.GateSources)...)
 	}
 	sortDiagnostics(diagnostics)
 

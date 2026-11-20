@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -69,7 +70,7 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 		Target:            store.revision.Catalog.Targets[0],
 	}
 
-	explanation, err := NewService(store, placements).
+	explanation, err := NewService(store, placements, gate.SourceSet{}).
 		ExplainAction(t.Context(), targetID, "plan")
 	if err != nil {
 		t.Fatalf("ExplainActiveAction() error = %v", err)

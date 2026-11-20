@@ -9,13 +9,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
 type catalogValidateOptions struct {
-	format         string
-	placementsPath string
-	strict         bool
+	format          string
+	placementsPath  string
+	gateSourcesPath string
+	strict          bool
 }
 
 func (a App) newCatalogValidateCommand(exitCode *int) *cobra.Command {
@@ -40,6 +42,12 @@ func (a App) newCatalogValidateCommand(exitCode *int) *cobra.Command {
 		"placements",
 		"",
 		"PlacementConfig file for deployment validation",
+	)
+	command.Flags().StringVar(
+		&options.gateSourcesPath,
+		"gate-sources",
+		"",
+		"GateSourceConfig file for deployment validation",
 	)
 	command.Flags().BoolVar(&options.strict, "strict", false, "fail when validation produces warnings")
 
@@ -76,13 +84,25 @@ func (a App) runCatalogValidate(options catalogValidateOptions, arguments []stri
 		}
 		catalogOptions.Placements = &placements
 	}
+	var gateSources gate.SourceSet
+	if options.gateSourcesPath != "" {
+		resolved, err := a.resolvePath(options.gateSourcesPath)
+		if err != nil {
+			return a.invocationError(fmt.Sprintf("resolve Gate source file: %v", err))
+		}
+		gateSources, err = gate.LoadSourceFile(resolved)
+		if err != nil {
+			return a.invocationError(err.Error())
+		}
+		catalogOptions.GateSources = &gateSources
+	}
 
 	result, err := catalog.Process(os.DirFS(root), catalogOptions)
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
 
-	summary := summarize(result, catalogOptions.Placements)
+	summary := summarize(result, catalogOptions.Placements, catalogOptions.GateSources)
 	switch options.format {
 	case "text":
 		err = renderText(a.Stdout, result, summary)
@@ -103,42 +123,56 @@ func (a App) runCatalogValidate(options catalogValidateOptions, arguments []stri
 }
 
 type validationSummary struct {
-	Runtimes   int      `json:"runtimes"`
-	Targets    int      `json:"targets"`
-	Actions    int      `json:"actions"`
-	Placements []string `json:"placements,omitempty"`
-	Errors     int      `json:"errors"`
-	Warnings   int      `json:"warnings"`
+	Runtimes              int      `json:"runtimes"`
+	Targets               int      `json:"targets"`
+	Actions               int      `json:"actions"`
+	Placements            []string `json:"placements,omitempty"`
+	GateSources           []string `json:"gateSources,omitempty"`
+	Errors                int      `json:"errors"`
+	Warnings              int      `json:"warnings"`
+	placementsConfigured  bool
+	gateSourcesConfigured bool
 }
 
-func summarize(result catalog.Result, placements *placement.Set) validationSummary {
+func summarize(result catalog.Result, placements *placement.Set, gateSources *gate.SourceSet) validationSummary {
 	actions := 0
-	referenced := map[string]struct{}{}
+	referencedPlacements := map[string]struct{}{}
+	referencedGateSources := map[string]struct{}{}
+	for _, catalogGate := range result.Catalog.Gates {
+		referencedGateSources[catalogGate.Spec.Prometheus.Source] = struct{}{}
+	}
 	for _, target := range result.Catalog.Targets {
 		actions += len(target.Spec.Actions)
 		if target.Spec.Placement != "" {
-			referenced[target.Spec.Placement] = struct{}{}
+			referencedPlacements[target.Spec.Placement] = struct{}{}
 		}
 		for actionName := range target.Spec.Actions {
 			effective, _ := target.EffectiveAction(actionName)
 			if effective.Placement != "" {
-				referenced[effective.Placement] = struct{}{}
+				referencedPlacements[effective.Placement] = struct{}{}
 			}
 		}
 	}
 
-	placementNames := slices.Sorted(maps.Keys(referenced))
+	placementNames := slices.Sorted(maps.Keys(referencedPlacements))
 	if placements != nil {
 		placementNames = placements.Names()
+	}
+	gateSourceNames := slices.Sorted(maps.Keys(referencedGateSources))
+	if gateSources != nil {
+		gateSourceNames = gateSources.Names()
 	}
 	errorsCount, warnings := result.Diagnostics.Counts()
 
 	return validationSummary{
-		Runtimes:   len(result.Catalog.Runtimes),
-		Targets:    len(result.Catalog.Targets),
-		Actions:    actions,
-		Placements: placementNames,
-		Errors:     errorsCount,
-		Warnings:   warnings,
+		Runtimes:              len(result.Catalog.Runtimes),
+		Targets:               len(result.Catalog.Targets),
+		Actions:               actions,
+		Placements:            placementNames,
+		GateSources:           gateSourceNames,
+		Errors:                errorsCount,
+		Warnings:              warnings,
+		placementsConfigured:  placements != nil,
+		gateSourcesConfigured: gateSources != nil,
 	}
 }

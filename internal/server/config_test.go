@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -196,6 +197,15 @@ func TestConfigValidate(t *testing.T) {
 				settings.RepositoryFetchTimeout = 0
 			},
 			wantError: "repository fetch timeout",
+		},
+		{
+			name: "invalid Gate source",
+			configure: func(settings *Config) {
+				settings.GateSources = gate.SourceSet{
+					"homelab": {Prometheus: gate.PrometheusSource{URL: "not-a-url"}},
+				}
+			},
+			wantError: "validate Gate sources",
 		},
 		{
 			name: "invalid controller cluster name",

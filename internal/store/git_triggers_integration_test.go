@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
@@ -145,7 +146,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		t.Fatalf("placement.NewSet() error = %v", err)
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
-	catalogs := catalog.NewService(database, placement.Set{})
+	catalogs := catalog.NewService(database, placement.Set{}, gate.SourceSet{})
 	runs := run.NewService(run.Dependencies{
 		Creation:      database,
 		History:       database,
@@ -816,7 +817,7 @@ func newGitTriggerTestServicesWithNotifications(
 		t.Fatalf("placement.NewSet() error = %v", err)
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
-	catalogs := catalog.NewService(database, placement.Set{})
+	catalogs := catalog.NewService(database, placement.Set{}, gate.SourceSet{})
 	runs := run.NewService(run.Dependencies{
 		Creation:      database,
 		History:       database,

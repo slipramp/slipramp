@@ -40,14 +40,16 @@ Validation has three deliberately distinct scopes:
 | Scope | Command | Checks |
 | --- | --- | --- |
 | Portable | `slipramp catalog validate` | YAML structure, catalog names and references, resolved Actions, parameters, artifacts, triggers, Gates and Action Gate attachments, repository paths, and watch patterns |
-| Deployment | `slipramp catalog validate --placements placements.yaml` | All portable checks plus Placement existence, offered credential sources, and effective resource constraints |
+| Deployment | `slipramp catalog validate --placements placements.yaml --gate-sources gate-sources.yaml` | All portable checks plus Placement existence, offered credential sources, effective resource constraints, and configured Gate source names |
 | Live-cluster preflight | [Planned Controller-backed command](./ROADMAP.md#placement-inventory-and-controller-preflight) | Cluster reachability, Secret contents, service-account permissions, Runtime image availability, and Kubernetes admission |
 
-Portable validation accepts unknown but well-formed Placement names because
-Placements belong to a Slipramp installation rather than the repository. It
-reports which referenced Placements were not checked. Deployment validation is
-offline too: the supplied `PlacementConfig` contains references and static pod
-settings, not Secret values, and the CLI never contacts Kubernetes.
+Portable validation accepts unknown but well-formed Placement and Gate source
+names because both belong to a Slipramp installation rather than the
+repository. It reports which referenced Placements and Gate sources were not
+checked.
+Deployment validation is offline too: the supplied configuration contains
+references and static settings, not Secret values, and the CLI never contacts
+Kubernetes or Prometheus.
 
 Operator-facing Action and Parameter titles and descriptions and Artifact
 descriptions are bounded catalog values. Action `documentationUrl` must be an
@@ -55,9 +57,10 @@ absolute `http` or `https` URL. These fields never replace Action, Parameter,
 or Artifact map keys as technical identities.
 
 Slipramp Server always performs portable and deployment validation with its
-configured Placements. For the same checkout and `PlacementConfig`, a passing
-deployment-aware CLI result has the same acceptance result as repository
-refresh. A Runtime image without a content digest produces a warning because a
+configured Placements and Gate sources. For the same checkout,
+`PlacementConfig`, and `GateSourceConfig`, a passing deployment-aware CLI result
+has the same acceptance result as repository refresh. A Runtime image without a
+content digest produces a warning because a
 mutable tag can resolve to different bytes later; it remains valid, and the
 Controller records the actual Kubernetes image identities on each Run.
 Warnings do not reject Server refresh; `--strict` only makes warnings fail the
@@ -74,7 +77,7 @@ Run deployment validation when the non-secret Server configuration is
 available:
 
 ```console
-slipramp catalog validate --placements ./placements.yaml
+slipramp catalog validate --placements ./placements.yaml --gate-sources ./gate-sources.yaml
 ```
 
 Text is intended for terminals. JSON is a versioned Slipramp result document,
@@ -124,9 +127,11 @@ GOBIN="$PWD/.bin" go install github.com/slipramp/slipramp/cmd/slipramp@"$SLIPRAM
 .bin/slipramp catalog validate --strict --format sarif > slipramp.sarif
 ```
 
-Add `--placements path/to/placements.yaml` only when CI has the same non-secret
-Placement configuration used by the Server. Do not place Kubernetes Secret
-values in that file or the catalog repository.
+Add `--placements path/to/placements.yaml` and
+`--gate-sources path/to/gate-sources.yaml` when CI has the same non-secret
+installation configuration used by the Server. Gate source files may contain
+mounted credential paths but never credential contents. Do not place
+Kubernetes Secret values in either file or the catalog repository.
 
 ## Editor schema
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
@@ -60,6 +61,31 @@ func validateGatePortable(input Catalog, gate Gate) Diagnostics {
 			errors.New("Gate condition value must be finite"),
 		)
 	}
+
+	return diagnostics
+}
+
+func ValidateGateDeployment(input Catalog, sources gate.SourceSet) Diagnostics {
+	diagnostics := Diagnostics{}
+	for _, catalogGate := range input.Gates {
+		if _, ok := sources.Lookup(catalogGate.Spec.Prometheus.Source); ok {
+			continue
+		}
+
+		diagnostics = append(diagnostics, errorDiagnostic(
+			input,
+			GateKind,
+			catalogGate.Metadata.Name,
+			catalogGate.Source,
+			"spec.prometheus.source",
+			"catalog.gate.source-not-found",
+			fmt.Errorf(
+				"Gate Prometheus source %q is not configured",
+				catalogGate.Spec.Prometheus.Source,
+			),
+		))
+	}
+	sortDiagnostics(diagnostics)
 
 	return diagnostics
 }

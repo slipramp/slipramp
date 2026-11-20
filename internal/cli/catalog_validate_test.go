@@ -98,6 +98,54 @@ func TestCatalogValidateStructuredOutputAndStrictWarnings(t *testing.T) {
 	}
 }
 
+func TestCatalogValidateGateSources(t *testing.T) {
+	t.Parallel()
+
+	workDir := t.TempDir()
+	repositoryRoot := writeRepository(t, workDir, validCatalog+`
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: maintenance-safe
+spec:
+  prometheus:
+    source: homelab
+    query: maintenance_active
+    condition: {operator: equal, value: 0}
+`)
+	configuredPath := filepath.Join(workDir, "gate-sources.yaml")
+	writeFile(t, configuredPath, validGateSources)
+
+	code, output, stderr := runApp(
+		t,
+		workDir,
+		"catalog",
+		"validate",
+		"--gate-sources",
+		filepath.Base(configuredPath),
+		filepath.Base(repositoryRoot),
+	)
+	if code != cli.ExitValid || stderr != "" || !strings.Contains(output, "Catalog is valid") {
+		t.Fatalf("configured exit = %d, output = %q, stderr = %q", code, output, stderr)
+	}
+
+	writeFile(t, configuredPath, strings.Replace(validGateSources, "homelab:", "other:", 1))
+	code, output, stderr = runApp(
+		t,
+		workDir,
+		"catalog",
+		"validate",
+		"--gate-sources",
+		filepath.Base(configuredPath),
+		filepath.Base(repositoryRoot),
+	)
+	if code != cli.ExitInvalid || stderr != "" ||
+		!strings.Contains(output, "catalog.gate.source-not-found") {
+		t.Fatalf("missing source exit = %d, output = %q, stderr = %q", code, output, stderr)
+	}
+}
+
 func TestCatalogValidateGoldenOutput(t *testing.T) {
 	t.Parallel()
 
@@ -160,4 +208,13 @@ spec:
   actions:
     inspect:
       command: [inspect]
+`
+
+const validGateSources = `
+apiVersion: slipramp.com/v1alpha1
+kind: GateSourceConfig
+sources:
+  homelab:
+    prometheus:
+      url: http://prometheus:9090
 `

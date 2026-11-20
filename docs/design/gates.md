@@ -108,13 +108,19 @@ sources:
       url: http://prometheus:9090
       evaluationInterval: 15s
       timeout: 5s
+      maximumConcurrency: 4
 ```
 
 Source configuration owns the fixed Prometheus base URL, evaluation interval,
 request timeout, bounded concurrency, and any bearer-token, TLS CA, or TLS
 client-certificate file references. Repository authors cannot change cadence,
-transport, or credentials. The default interval is 15 seconds and the default
-timeout is five seconds; timeout must be shorter than interval.
+transport, or credentials. The default interval is 15 seconds, the default
+timeout is five seconds, and the default source concurrency is four with a
+maximum of 32. Timeout must be shorter than interval.
+
+Bearer-token, CA, client-certificate, and client-key references are absolute
+file paths. Client certificate and key files are configured together, and TLS
+file settings require an HTTPS source.
 
 Source URLs cannot contain user information, query parameters, or fragments.
 Credential values and file contents never enter PostgreSQL, product APIs,

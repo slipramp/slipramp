@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -29,8 +30,15 @@ func TestInfrastructureOpsExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("placement.LoadFile() error = %v", err)
 	}
+	gateSources, err := gate.LoadSourceFile(filepath.Join(exampleRoot, "gate-sources.yaml"))
+	if err != nil {
+		t.Fatalf("gate.LoadSourceFile() error = %v", err)
+	}
 
-	result, err := catalog.Process(os.DirFS(exampleRoot), catalog.Options{Placements: &placements})
+	result, err := catalog.Process(os.DirFS(exampleRoot), catalog.Options{
+		Placements:  &placements,
+		GateSources: &gateSources,
+	})
 	if err != nil {
 		t.Fatalf("deployment catalog.Process() error = %v", err)
 	}

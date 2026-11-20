@@ -81,7 +81,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
-	catalogs := catalog.NewService(persistence.database, cfg.Placements)
+	catalogs := catalog.NewService(persistence.database, cfg.Placements, cfg.GateSources)
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
@@ -89,6 +89,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
+		repository.WithGateSources(cfg.GateSources),
 		repository.WithRefreshObserver(metrics),
 	)
 	repositories := repository.NewService(

@@ -16,12 +16,13 @@ go run ./cmd/slipramp catalog validate
 go run ./cmd/slipramp catalog validate ../infrastructure
 ```
 
-Supply the Server's non-secret `PlacementConfig` file to include static
-deployment checks such as Placement existence, offered credential sources, and
-effective resource requests and limits. This does not contact Kubernetes:
+Supply the Server's non-secret `PlacementConfig` and `GateSourceConfig` files to
+include static deployment checks such as Placement existence, offered
+credential sources, effective resource requests and limits, and configured
+Gate source names. This does not contact Kubernetes or Prometheus:
 
 ```console
-go run ./cmd/slipramp catalog validate --placements ./placements.yaml
+go run ./cmd/slipramp catalog validate --placements ./placements.yaml --gate-sources ./gate-sources.yaml
 ```
 
 Text is the default output. JSON has a versioned top-level schema for custom
@@ -38,7 +39,7 @@ go run ./cmd/slipramp version
 ```
 
 Exit code `0` means validation passed, `1` means catalog errors or strict
-warnings were found, `2` means the invocation, root, or Placement file was
+warnings were found, `2` means the invocation, root, or configuration file was
 invalid, and `3` reports an unexpected internal/output failure. Diagnostics are
 always written to standard output; invocation and internal failures use
 standard error. See [Catalog validation](CATALOG_VALIDATION.md) for
@@ -55,20 +56,21 @@ go run ./cmd/slipramp catalog explain kubernetes-upgrade upgrade-node --root exa
 ```
 
 `slipramp catalog explain TARGET ACTION [flags]` accepts `--root PATH` (current
-directory by default), optional `--placements PATH`, repeatable `--set
-NAME=VALUE`, and `--format text|json` (text by default). Relative file paths
-resolve from the current directory. Both formats use one structured model of
-effective values with field-level provenance and repository source file/document
-locations. It includes commands, final argv, directories, Runtime environment,
-Placement defaults, resources, credential references and injection mappings,
-Action/Parameter/Artifact presentation metadata, artifact producers/consumers
-and compatibility, watch patterns, and triggers.
+directory by default), optional `--placements PATH` and `--gate-sources PATH`,
+repeatable `--set NAME=VALUE`, and `--format text|json` (text by default).
+Relative file paths resolve from the current directory. Both formats use one
+structured model of effective values with field-level provenance and repository
+source file/document locations. It includes commands, final argv, directories,
+Runtime environment, Placement defaults, resources, credential references and
+injection mappings, Action/Parameter/Artifact presentation metadata, artifact
+producers/consumers and compatibility, watch patterns, and triggers.
 
 The whole catalog must validate before an Action can be explained. Without
 `--placements`, repository-owned contracts are validated and Placement-dependent
 values and remaining resource defaults are explicitly unresolved. With the
-Server's `PlacementConfig` file, the command performs full static deployment
-validation and resolves those defaults and credential sources. Secret contents
+Server's installation configuration files, the command performs full static
+deployment validation and resolves Placement defaults and credential sources.
+Secret contents
 and arbitrary Placement pod configuration are never printed. The command does
 not contact the Server or Kubernetes, inspect images, or execute the Action.
 

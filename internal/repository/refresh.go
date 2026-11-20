@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
@@ -113,6 +114,12 @@ func WithRefreshObserver(observer RefreshObserver) RefresherOption {
 	}
 }
 
+func WithGateSources(sources gate.SourceSet) RefresherOption {
+	return func(refresher *Refresher) {
+		refresher.gateSources = sources
+	}
+}
+
 type noopRefreshObserver struct{}
 
 func (noopRefreshObserver) ObserveRepositoryRefresh(context.Context, RefreshAttemptResult, time.Duration) {
@@ -122,6 +129,7 @@ type Refresher struct {
 	repositories RefreshStore
 	fetcher      Fetcher
 	placements   placement.Set
+	gateSources  gate.SourceSet
 	interval     time.Duration
 	fetchTimeout time.Duration
 	logger       *slog.Logger
@@ -146,6 +154,7 @@ func NewRefresher(
 		repositories: repositories,
 		fetcher:      fetcher,
 		placements:   placements,
+		gateSources:  gate.SourceSet{},
 		interval:     interval,
 		fetchTimeout: fetchTimeout,
 		logger:       logger.With("component", "repository_refresher"),
@@ -252,7 +261,10 @@ func (r *Refresher) refresh(
 	if fetchErr == nil {
 		result.Commit = &fetched.Commit
 
-		validation, loadErr := catalog.Process(fetched.Files, catalog.Options{Placements: &r.placements})
+		validation, loadErr := catalog.Process(fetched.Files, catalog.Options{
+			Placements:  &r.placements,
+			GateSources: &r.gateSources,
+		})
 		if loadErr == nil && !validation.Diagnostics.HasErrors() {
 			result.ChangedPaths = append([]string(nil), fetched.ChangedPaths...)
 			result.Revision = &catalog.Revision{
