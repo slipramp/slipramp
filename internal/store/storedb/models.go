@@ -62,6 +62,14 @@ type ArtifactReport struct {
 	CreatedAt               pgtype.Timestamptz
 }
 
+type CatalogGate struct {
+	CatalogSnapshotID string
+	Name              string
+	SourcePath        string
+	SourceDocument    int32
+	Definition        []byte
+}
+
 type CatalogRevision struct {
 	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID

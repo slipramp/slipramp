@@ -83,7 +83,7 @@ positional/environment booleans emit `true` or `false`.
 Explanation uses the same exit codes as validation. Unknown Targets/Actions and
 invalid parameter values return `1` with an error on standard error; invalid
 catalogs return `1` with the usual validation diagnostics on standard output.
-Successful JSON explanations include `schemaVersion: 1`, `validationLevel`, and
+Successful JSON explanations include `schemaVersion: 2`, `validationLevel`, and
 effective fields carrying `value`, `resolved`, and `provenance`; unresolved
 fields also carry `unresolvedReason`. Checkout warnings remain in the explanation
 and do not prevent success.

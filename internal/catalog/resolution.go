@@ -21,6 +21,7 @@ type EffectiveAction struct {
 	Artifacts        map[string]Artifact
 	Inputs           map[string]Input
 	Triggers         []Trigger
+	Gates            []string
 }
 
 func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
@@ -66,6 +67,7 @@ func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
 		Artifacts:        maps.Clone(action.Artifacts),
 		Inputs:           cloneInputs(action.Inputs),
 		Triggers:         cloneTriggers(action.Triggers),
+		Gates:            append([]string(nil), action.Gates...),
 	}, true
 }
 

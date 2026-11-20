@@ -67,6 +67,32 @@ spec:
 	}
 }
 
+func TestPublishedSchemaAcceptsGate(t *testing.T) {
+	t.Parallel()
+
+	resolved := loadPublishedSchema(t)
+	var document any
+	if err := yaml.Unmarshal([]byte(`
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: network-idle
+  title: Network has no active changes
+spec:
+  prometheus:
+    source: homelab
+    query: max_over_time(network_active_changes[1m])
+    condition:
+      operator: equal
+      value: 0
+`), &document); err != nil {
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
+	}
+	if err := resolved.Validate(document); err != nil {
+		t.Errorf("Gate does not match published schema: %v", err)
+	}
+}
+
 func TestPublishedSchemaRejectsStructuralErrors(t *testing.T) {
 	t.Parallel()
 
@@ -182,6 +208,19 @@ spec:
         - name: nightly
           schedule:
             cron: "0 0 3 * * *"
+`,
+		"unsupported Gate operator": `
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: network-idle
+spec:
+  prometheus:
+    source: homelab
+    query: network_active_changes
+    condition:
+      operator: approximately
+      value: 0
 `,
 	}
 

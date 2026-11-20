@@ -139,6 +139,18 @@ func validCatalog() catalog.Catalog {
 	}
 
 	return catalog.Catalog{
+		Gates: []catalog.Gate{{
+			Metadata: catalog.Metadata{Name: "network-idle"},
+			Spec: catalog.GateSpec{Prometheus: catalog.PrometheusGate{
+				Source: "homelab",
+				Query:  "max_over_time(network_active_changes[1m])",
+				Condition: catalog.GateCondition{
+					Operator: catalog.GateOperatorEqual,
+					Value:    0,
+				},
+			}},
+			Source: source,
+		}},
 		Runtimes: []catalog.Runtime{{
 			Metadata: catalog.Metadata{Name: "terraform"},
 			Spec: catalog.RuntimeSpec{

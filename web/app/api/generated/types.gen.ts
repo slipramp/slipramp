@@ -426,7 +426,7 @@ export type CatalogRevision = {
 };
 
 export type CatalogExplanation = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   validationLevel: "portable" | "deployment";
   target: ExplainedResourceMetadata;
   action: ExplainedString;
@@ -445,6 +445,7 @@ export type CatalogExplanation = {
   inputs: Array<InputExplanation>;
   watch: ExplainedStringList;
   triggers: Array<ExplainedActionTrigger>;
+  gates: ExplainedStringList;
   diagnostics: Array<CatalogDiagnostic>;
 };
 
@@ -1620,6 +1621,8 @@ export type ActionTrigger = {
   };
 };
 
+export type CatalogName = string;
+
 export type Action = {
   /**
    * Operator-facing display title. The action map key remains its stable identity.
@@ -1646,6 +1649,7 @@ export type Action = {
     [key: string]: ArtifactInput;
   };
   triggers?: Array<ActionTrigger>;
+  gates?: Array<CatalogName>;
 };
 
 export type TargetSpec = {
@@ -1709,8 +1713,6 @@ export type TargetStatus = {
   desiredCommit: GitCommit;
   reconciliation: TargetReconciliationStatus;
 };
-
-export type CatalogName = string;
 
 export type CatalogSourceRange = {
   path: string;

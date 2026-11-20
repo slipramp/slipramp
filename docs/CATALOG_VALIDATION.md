@@ -1,6 +1,6 @@
 # Catalog validation
 
-The `slipramp` CLI validates every Runtime and Target below a repository's
+The `slipramp` CLI validates every Runtime, Target, and Gate below a repository's
 `.slipramp` directory. It uses the same decoding, portable validation, and
 deployment validation pipeline as Slipramp Server repository refresh.
 
@@ -39,7 +39,7 @@ Validation has three deliberately distinct scopes:
 
 | Scope | Command | Checks |
 | --- | --- | --- |
-| Portable | `slipramp catalog validate` | YAML structure, catalog names and references, resolved Actions, parameters, artifacts, triggers, repository paths, and watch patterns |
+| Portable | `slipramp catalog validate` | YAML structure, catalog names and references, resolved Actions, parameters, artifacts, triggers, Gates and Action Gate attachments, repository paths, and watch patterns |
 | Deployment | `slipramp catalog validate --placements placements.yaml` | All portable checks plus Placement existence, offered credential sources, and effective resource constraints |
 | Live-cluster preflight | [Planned Controller-backed command](./ROADMAP.md#placement-inventory-and-controller-preflight) | Cluster reachability, Secret contents, service-account permissions, Runtime image availability, and Kubernetes admission |
 
@@ -131,7 +131,7 @@ values in that file or the catalog repository.
 ## Editor schema
 
 [`schemas/catalog-v1alpha1.json`](../schemas/catalog-v1alpha1.json) is a
-generated JSON Schema for one `slipramp.com/v1alpha1` Runtime or Target YAML
+generated JSON Schema for one `slipramp.com/v1alpha1` Runtime, Target, or Gate YAML
 document. It supplies structural validation and completion, but it is not the
 authoritative validator: JSON Schema cannot enforce cross-document references,
 resolved defaults, artifact provenance, credential availability, or Placement

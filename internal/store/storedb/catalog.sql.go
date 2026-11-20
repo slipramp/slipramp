@@ -145,6 +145,41 @@ func (q *Queries) CountActiveTargets(ctx context.Context, arg CountActiveTargets
 	return count, err
 }
 
+const createCatalogGate = `-- name: CreateCatalogGate :exec
+INSERT INTO catalog_gates (
+    catalog_snapshot_id,
+    name,
+    source_path,
+    source_document,
+    definition
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5
+)
+`
+
+type CreateCatalogGateParams struct {
+	CatalogSnapshotID string
+	Name              string
+	SourcePath        string
+	SourceDocument    int32
+	Definition        []byte
+}
+
+func (q *Queries) CreateCatalogGate(ctx context.Context, arg CreateCatalogGateParams) error {
+	_, err := q.db.Exec(ctx, createCatalogGate,
+		arg.CatalogSnapshotID,
+		arg.Name,
+		arg.SourcePath,
+		arg.SourceDocument,
+		arg.Definition,
+	)
+	return err
+}
+
 const createCatalogRevision = `-- name: CreateCatalogRevision :exec
 INSERT INTO catalog_revisions (
     id,
@@ -616,6 +651,35 @@ func (q *Queries) ListActiveTargets(ctx context.Context, arg ListActiveTargetsPa
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCatalogGates = `-- name: ListCatalogGates :many
+SELECT catalog_gates.definition
+FROM catalog_revisions
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = $1
+ORDER BY name
+`
+
+func (q *Queries) ListCatalogGates(ctx context.Context, catalogRevisionID pgtype.UUID) ([][]byte, error) {
+	rows, err := q.db.Query(ctx, listCatalogGates, catalogRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items [][]byte
+	for rows.Next() {
+		var definition []byte
+		if err := rows.Scan(&definition); err != nil {
+			return nil, err
+		}
+		items = append(items, definition)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

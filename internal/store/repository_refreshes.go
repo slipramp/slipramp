@@ -359,7 +359,7 @@ func createCatalogRevision(
 	return nil
 }
 
-const catalogSnapshotManifestVersion = 1
+const catalogSnapshotManifestVersion = 2
 
 // catalogSnapshotManifest is the durable content identity contract. Keep it in
 // sync with the migration backfill before changing persisted catalog fields.
@@ -374,6 +374,7 @@ type catalogSnapshotManifest struct {
 	Version  int                         `json:"version"`
 	Runtimes []catalogSnapshotDefinition `json:"runtimes"`
 	Targets  []catalogSnapshotDefinition `json:"targets"`
+	Gates    []catalogSnapshotDefinition `json:"gates"`
 }
 
 func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManifest, error) {
@@ -381,6 +382,7 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 		Version:  catalogSnapshotManifestVersion,
 		Runtimes: make([]catalogSnapshotDefinition, 0, len(contents.Runtimes)),
 		Targets:  make([]catalogSnapshotDefinition, 0, len(contents.Targets)),
+		Gates:    make([]catalogSnapshotDefinition, 0, len(contents.Gates)),
 	}
 
 	for _, runtime := range contents.Runtimes {
@@ -417,11 +419,31 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 		})
 	}
 
+	for _, gate := range contents.Gates {
+		definition, err := json.Marshal(gate)
+		if err != nil {
+			return catalogSnapshotManifest{}, fmt.Errorf(
+				"marshal catalog Gate %q: %w",
+				gate.Metadata.Name,
+				err,
+			)
+		}
+		manifest.Gates = append(manifest.Gates, catalogSnapshotDefinition{
+			Name:           gate.Metadata.Name,
+			SourcePath:     gate.Source.Path,
+			SourceDocument: int32(gate.Source.Document),
+			Definition:     definition,
+		})
+	}
+
 	sort.Slice(manifest.Runtimes, func(left, right int) bool {
 		return manifest.Runtimes[left].Name < manifest.Runtimes[right].Name
 	})
 	sort.Slice(manifest.Targets, func(left, right int) bool {
 		return manifest.Targets[left].Name < manifest.Targets[right].Name
+	})
+	sort.Slice(manifest.Gates, func(left, right int) bool {
+		return manifest.Gates[left].Name < manifest.Gates[right].Name
 	})
 
 	return manifest, nil
@@ -462,6 +484,22 @@ func createCatalogSnapshotDefinitions(
 		)
 		if err != nil {
 			return fmt.Errorf("create catalog target %q: %w", target.Name, err)
+		}
+	}
+
+	for _, gate := range manifest.Gates {
+		err := queries.CreateCatalogGate(
+			ctx,
+			storedb.CreateCatalogGateParams{
+				CatalogSnapshotID: snapshotID,
+				Name:              gate.Name,
+				SourcePath:        gate.SourcePath,
+				SourceDocument:    gate.SourceDocument,
+				Definition:        gate.Definition,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("create catalog Gate %q: %w", gate.Name, err)
 		}
 	}
 

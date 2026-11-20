@@ -3811,6 +3811,8 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/CatalogName`.
+        internal typealias CatalogName = Swift.String
         /// - Remark: Generated from `#/components/schemas/Action`.
         internal struct Action: Codable, Hashable, Sendable {
             /// Operator-facing display title. The action map key remains its stable identity.
@@ -3915,6 +3917,8 @@ internal enum Components {
             internal var inputs: Components.Schemas.Action.InputsPayload?
             /// - Remark: Generated from `#/components/schemas/Action/triggers`.
             internal var triggers: [Components.Schemas.ActionTrigger]?
+            /// - Remark: Generated from `#/components/schemas/Action/gates`.
+            internal var gates: [Components.Schemas.CatalogName]?
             /// Creates a new `Action`.
             ///
             /// - Parameters:
@@ -3932,6 +3936,7 @@ internal enum Components {
             ///   - artifacts:
             ///   - inputs:
             ///   - triggers:
+            ///   - gates:
             internal init(
                 title: Swift.String? = nil,
                 description: Swift.String? = nil,
@@ -3946,7 +3951,8 @@ internal enum Components {
                 parameters: Components.Schemas.Action.ParametersPayload? = nil,
                 artifacts: Components.Schemas.Action.ArtifactsPayload? = nil,
                 inputs: Components.Schemas.Action.InputsPayload? = nil,
-                triggers: [Components.Schemas.ActionTrigger]? = nil
+                triggers: [Components.Schemas.ActionTrigger]? = nil,
+                gates: [Components.Schemas.CatalogName]? = nil
             ) {
                 self.title = title
                 self.description = description
@@ -3962,6 +3968,7 @@ internal enum Components {
                 self.artifacts = artifacts
                 self.inputs = inputs
                 self.triggers = triggers
+                self.gates = gates
             }
             internal enum CodingKeys: String, CodingKey {
                 case title
@@ -3978,6 +3985,7 @@ internal enum Components {
                 case artifacts
                 case inputs
                 case triggers
+                case gates
             }
         }
         /// - Remark: Generated from `#/components/schemas/TargetSpec`.
@@ -4314,8 +4322,6 @@ internal enum Components {
                 case reconciliation
             }
         }
-        /// - Remark: Generated from `#/components/schemas/CatalogName`.
-        internal typealias CatalogName = Swift.String
         /// - Remark: Generated from `#/components/schemas/PromotionSource`.
         internal enum PromotionSource: String, Codable, Hashable, Sendable, CaseIterable {
             case kargo = "kargo"

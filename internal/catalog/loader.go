@@ -38,6 +38,7 @@ func Decode(files fs.FS) (Catalog, Diagnostics, error) {
 	diagnostics := Diagnostics{}
 	runtimeSources := map[string]knownResource{}
 	targetSources := map[string]knownResource{}
+	gateSources := map[string]knownResource{}
 
 	err := fs.WalkDir(files, Directory, func(filePath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -55,7 +56,7 @@ func Decode(files fs.FS) (Catalog, Diagnostics, error) {
 
 		diagnostics = append(
 			diagnostics,
-			decodeFile(contents, filePath, &result, runtimeSources, targetSources)...,
+			decodeFile(contents, filePath, &result, runtimeSources, targetSources, gateSources)...,
 		)
 
 		return nil
@@ -81,6 +82,7 @@ func decodeFile(
 	result *Catalog,
 	runtimeSources map[string]knownResource,
 	targetSources map[string]knownResource,
+	gateSources map[string]knownResource,
 ) Diagnostics {
 	decoder := yaml.NewDecoder(bytes.NewReader(contents))
 	diagnostics := Diagnostics{}
@@ -111,6 +113,7 @@ func decodeFile(
 			result,
 			runtimeSources,
 			targetSources,
+			gateSources,
 		)...)
 	}
 }
@@ -121,6 +124,7 @@ func decodeDocument(
 	result *Catalog,
 	runtimeSources map[string]knownResource,
 	targetSources map[string]knownResource,
+	gateSources map[string]knownResource,
 ) Diagnostics {
 	root := document.Content[0]
 	rootLocation := nodeRange(source, root, "")
@@ -163,11 +167,18 @@ func decodeDocument(
 		known = runtimeSources
 	case TargetKind:
 		known = targetSources
+	case GateKind:
+		known = gateSources
 	default:
 		return Diagnostics{{
 			Code:     "catalog.resource.kind-unsupported",
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("kind must be %q or %q.", RuntimeKind, TargetKind),
+			Message: fmt.Sprintf(
+				"kind must be %q, %q, or %q.",
+				RuntimeKind,
+				TargetKind,
+				GateKind,
+			),
 			Location: locationFromIndex(locations, "kind", rootLocation),
 		}}
 	}
@@ -211,6 +222,16 @@ func decodeDocument(
 		}
 		target.Source = source
 		result.Targets = append(result.Targets, target)
+	case GateKind:
+		var gate Gate
+		if err := decodeStrict(document, &gate); err != nil {
+			delete(result.locations, resourceKey)
+			delete(known, header.Metadata.Name)
+
+			return Diagnostics{indexedYAMLDiagnostic(source, locations, err, root.Line-1)}
+		}
+		gate.Source = source
+		result.Gates = append(result.Gates, gate)
 	}
 
 	return nil

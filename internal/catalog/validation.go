@@ -70,6 +70,12 @@ func Process(files fs.FS, options Options) (Result, error) {
 
 func ValidatePortable(input Catalog) Diagnostics {
 	diagnostics := Diagnostics{}
+	gates := make(map[string]Gate, len(input.Gates))
+	for _, gate := range input.Gates {
+		diagnostics = append(diagnostics, validateGatePortable(input, gate)...)
+		gates[gate.Metadata.Name] = gate
+	}
+
 	runtimes := make(map[string]Runtime, len(input.Runtimes))
 	for _, runtime := range input.Runtimes {
 		diagnostics = append(diagnostics, validateRuntimePortable(input, runtime)...)
@@ -77,7 +83,7 @@ func ValidatePortable(input Catalog) Diagnostics {
 	}
 
 	for _, target := range input.Targets {
-		diagnostics = append(diagnostics, validateTargetPortable(input, target, runtimes)...)
+		diagnostics = append(diagnostics, validateTargetPortable(input, target, runtimes, gates)...)
 	}
 
 	sortDiagnostics(diagnostics)

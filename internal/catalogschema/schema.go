@@ -16,7 +16,7 @@ const (
 	Draft = "https://json-schema.org/draft/2020-12/schema"
 )
 
-// Generate returns the deterministic, structural schema for one Runtime or Target document.
+// Generate returns the deterministic, structural schema for one Runtime, Target, or Gate document.
 func Generate() ([]byte, error) {
 	runtimeSchema, err := resourceSchema[catalog.Runtime](catalog.RuntimeKind)
 	if err != nil {
@@ -28,12 +28,17 @@ func Generate() ([]byte, error) {
 		return nil, fmt.Errorf("infer Target schema: %w", err)
 	}
 
+	gateSchema, err := resourceSchema[catalog.Gate](catalog.GateKind)
+	if err != nil {
+		return nil, fmt.Errorf("infer Gate schema: %w", err)
+	}
+
 	document := jsonschema.Schema{
 		ID:          ID,
 		Schema:      Draft,
 		Title:       "Slipramp catalog document",
-		Description: "A slipramp.com/v1alpha1 Runtime or Target document.",
-		OneOf:       []*jsonschema.Schema{runtimeSchema, targetSchema},
+		Description: "A slipramp.com/v1alpha1 Runtime, Target, or Gate document.",
+		OneOf:       []*jsonschema.Schema{runtimeSchema, targetSchema, gateSchema},
 	}
 	contents, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
@@ -60,6 +65,9 @@ func resourceSchema[T any](kind string) (*jsonschema.Schema, error) {
 	resource.Properties["kind"].Const = constant(kind)
 	if kind == catalog.TargetKind {
 		configurePresentationMetadata(resource)
+	}
+	if kind == catalog.GateKind {
+		configureGate(resource)
 	}
 
 	return resource, nil
@@ -117,6 +125,31 @@ func configurePresentationMetadata(resource *jsonschema.Schema) {
 	schedule.Description = "Runs the Action on a five-field cron expression evaluated in UTC."
 	schedule.Properties["cron"].Description = "Five-field UTC cron expression: minute hour day-of-month month day-of-week."
 	schedule.Properties["cron"].Pattern = `^\S+(?:\s+\S+){4}$`
+
+	gates := action.Properties["gates"]
+	gates.Items.MaxLength = new(63)
+	gates.Items.Pattern = `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`
+}
+
+func configureGate(resource *jsonschema.Schema) {
+	metadata := resource.Properties["metadata"]
+	boundedString(metadata.Properties["title"], catalog.PresentationTitleMaxLength)
+
+	prometheus := resource.Properties["spec"].Properties["prometheus"]
+	source := prometheus.Properties["source"]
+	source.MaxLength = new(63)
+	source.Pattern = `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`
+	query := prometheus.Properties["query"]
+	boundedString(query, catalog.GateQueryMaxLength)
+	condition := prometheus.Properties["condition"]
+	condition.Properties["operator"].Enum = []any{
+		catalog.GateOperatorEqual,
+		catalog.GateOperatorNotEqual,
+		catalog.GateOperatorLessThan,
+		catalog.GateOperatorLessThanOrEqual,
+		catalog.GateOperatorGreaterThan,
+		catalog.GateOperatorGreaterThanOrEqual,
+	}
 }
 
 func boundedString(schema *jsonschema.Schema, maximum int) {

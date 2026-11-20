@@ -27,6 +27,23 @@ func successfulCatalogRefresh(commitSHA string, attemptedAt time.Time, revisionI
 
 func persistedCatalog(imageVersion string) catalog.Catalog {
 	return catalog.Catalog{
+		Gates: []catalog.Gate{{
+			APIVersion: catalog.APIVersion,
+			Kind:       catalog.GateKind,
+			Metadata:   catalog.Metadata{Name: "network-idle"},
+			Spec: catalog.GateSpec{Prometheus: catalog.PrometheusGate{
+				Source: "homelab",
+				Query:  "max_over_time(network_active_changes[1m])",
+				Condition: catalog.GateCondition{
+					Operator: catalog.GateOperatorEqual,
+					Value:    0,
+				},
+			}},
+			Source: catalog.Source{
+				Path:     ".slipramp/catalog.yaml",
+				Document: 3,
+			},
+		}},
 		Runtimes: []catalog.Runtime{{
 			APIVersion: catalog.APIVersion,
 			Kind:       catalog.RuntimeKind,
@@ -48,7 +65,10 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 				Placement: "infrastructure",
 				Watch:     []string{"infrastructure/network/**"},
 				Actions: map[string]catalog.Action{
-					"preview": {Command: []string{"terraform", "plan"}},
+					"preview": {
+						Command: []string{"terraform", "plan"},
+						Gates:   []string{"network-idle"},
+					},
 				},
 			},
 			Source: catalog.Source{

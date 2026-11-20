@@ -7,6 +7,14 @@ const (
 
 	RuntimeKind = "Runtime"
 	TargetKind  = "Target"
+	GateKind    = "Gate"
+
+	GateOperatorEqual              = "equal"
+	GateOperatorNotEqual           = "not-equal"
+	GateOperatorLessThan           = "less-than"
+	GateOperatorLessThanOrEqual    = "less-than-or-equal"
+	GateOperatorGreaterThan        = "greater-than"
+	GateOperatorGreaterThanOrEqual = "greater-than-or-equal"
 
 	ParameterTypeString  = "string"
 	ParameterTypeBoolean = "boolean"
@@ -20,6 +28,7 @@ const (
 type Catalog struct {
 	Runtimes []Runtime `json:"runtimes"`
 	Targets  []Target  `json:"targets"`
+	Gates    []Gate    `json:"gates"`
 
 	locations sourceLocations
 }
@@ -51,6 +60,29 @@ type RuntimeSpec struct {
 
 type RuntimeCredential struct {
 	Inject CredentialInjection `json:"inject" yaml:"inject"`
+}
+
+type Gate struct {
+	APIVersion string   `json:"apiVersion" yaml:"apiVersion"`
+	Kind       string   `json:"kind"       yaml:"kind"`
+	Metadata   Metadata `json:"metadata"   yaml:"metadata"`
+	Spec       GateSpec `json:"spec"       yaml:"spec"`
+	Source     Source   `json:"source"     yaml:"-"`
+}
+
+type GateSpec struct {
+	Prometheus PrometheusGate `json:"prometheus" yaml:"prometheus"`
+}
+
+type PrometheusGate struct {
+	Source    string        `json:"source"    yaml:"source"`
+	Query     string        `json:"query"     yaml:"query"`
+	Condition GateCondition `json:"condition" yaml:"condition"`
+}
+
+type GateCondition struct {
+	Operator string  `json:"operator" yaml:"operator"`
+	Value    float64 `json:"value"    yaml:"value"`
 }
 
 type CredentialInjection struct {
@@ -118,6 +150,7 @@ type Action struct {
 	Artifacts        map[string]Artifact  `json:"artifacts,omitempty"        yaml:"artifacts,omitempty"`
 	Inputs           map[string]Input     `json:"inputs,omitempty"           yaml:"inputs,omitempty"`
 	Triggers         []Trigger            `json:"triggers,omitempty"         yaml:"triggers,omitempty"`
+	Gates            []string             `json:"gates,omitempty"            yaml:"gates,omitempty"`
 }
 
 // Trigger declares one named source of automatic action Runs.

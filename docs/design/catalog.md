@@ -31,7 +31,7 @@ per-Repository path:
 1. Fetch the tracked branch with the configured Server credential.
 2. Check out the exact head in temporary storage.
 3. Discover, decode, and validate the complete catalog.
-4. Normalize the persisted Runtime and Target definitions and create or reuse
+4. Normalize the persisted Runtime, Target, and Gate definitions and create or reuse
    their content-addressed catalog snapshot.
 5. Create or reuse the immutable catalog revision for that commit.
 6. Atomically activate the revision, update Targets, and enqueue matching Git
@@ -116,8 +116,8 @@ Target defaults supply Runtime, Placement, timeout, credentials, and resources.
 it applies across all Actions and execution Clusters for the durable Target
 identity. Action scalar overrides replace execution defaults; credential and
 resource maps merge by key. Resolution copies definitions rather than mutating
-the catalog, and Runtime and Target definitions always come from the same
-revision.
+the catalog, and Runtime, Target, and Gate definitions always come from the
+same revision.
 
 Parameters are `string`, `boolean`, finite `number`, or `enum`, with required and enum
 constraints validated before Run creation. Each parameter maps to exactly one

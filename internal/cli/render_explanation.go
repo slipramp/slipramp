@@ -109,6 +109,7 @@ func renderExplanationText(output io.Writer, explanation catalog.Explanation) er
 	if len(explanation.Inputs) == 0 {
 		lines = append(lines, "Artifact inputs: (none)")
 	}
+	addExplanationValue(&lines, "Release gates", explanation.Gates)
 	addExplanationValue(&lines, "Target watch patterns", explanation.Watch)
 	for _, trigger := range explanation.Triggers {
 		addExplanationValue(&lines, "Action trigger "+trigger.Value.Name, trigger)

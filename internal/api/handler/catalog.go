@@ -494,6 +494,7 @@ func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.A
 			Artifacts:        catalogArtifactsResponse(action.Artifacts),
 			Inputs:           catalogInputsResponse(action.Inputs),
 			Triggers:         triggers,
+			Gates:            optionalSlice(action.Gates),
 		}
 	}
 

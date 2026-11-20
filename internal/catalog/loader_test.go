@@ -30,6 +30,19 @@ spec:
             mode: 0400
 ---
 apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: network-idle
+  title: Network has no active changes
+spec:
+  prometheus:
+    source: homelab
+    query: max_over_time(network_active_changes[1m])
+    condition:
+      operator: equal
+      value: 0
+---
+apiVersion: slipramp.com/v1alpha1
 kind: Target
 metadata:
   name: network
@@ -49,6 +62,7 @@ spec:
       documentationUrl: https://developer.hashicorp.com/terraform/cli/commands/plan
       intent: preview
       command: [terraform, plan]
+      gates: [network-idle]
       parameters:
         environment:
           title: Environment
@@ -119,6 +133,12 @@ spec:
 	if len(loaded.Targets) != 1 {
 		t.Fatalf("len(Targets) = %d, want 1", len(loaded.Targets))
 	}
+	if len(loaded.Gates) != 1 ||
+		loaded.Gates[0].Metadata.Name != "network-idle" ||
+		loaded.Gates[0].Spec.Prometheus.Source != "homelab" ||
+		loaded.Gates[0].Spec.Prometheus.Condition.Operator != catalog.GateOperatorEqual {
+		t.Errorf("Gates = %#v", loaded.Gates)
+	}
 
 	target := loaded.Targets[0]
 	preview := target.Spec.Actions["preview"]
@@ -133,6 +153,7 @@ spec:
 		environment.Title != "Environment" ||
 		environment.Description != "Deployment environment to preview." ||
 		len(preview.Command) != 2 ||
+		len(preview.Gates) != 1 || preview.Gates[0] != "network-idle" ||
 		plan.Description != "Binary Terraform execution plan." ||
 		plan.Path != "/slipramp/artifacts/plan.tfplan" ||
 		!plan.Sensitive {
@@ -159,7 +180,7 @@ spec:
 
 	wantSource := catalog.Source{
 		Path:     ".slipramp/catalog.yaml",
-		Document: 2,
+		Document: 3,
 	}
 	if target.Source != wantSource {
 		t.Errorf("Target.Source = %#v, want %#v", target.Source, wantSource)
@@ -187,7 +208,7 @@ kind: Placement
 metadata:
   name: infrastructure
 `,
-			wantError: `kind must be "Runtime" or "Target"`,
+			wantError: `kind must be "Runtime", "Target", or "Gate"`,
 		},
 		{
 			name: "missing name",

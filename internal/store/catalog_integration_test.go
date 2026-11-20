@@ -58,6 +58,10 @@ func TestCatalogSnapshotMigrationBackfillsDeduplicatedContentsIntegration(t *tes
 	}
 
 	contents := persistedCatalog("1")
+	contents.Gates = []catalog.Gate{}
+	preview := contents.Targets[0].Spec.Actions["preview"]
+	preview.Gates = nil
+	contents.Targets[0].Spec.Actions["preview"] = preview
 	runtimeDefinition, err := json.Marshal(contents.Runtimes[0])
 	if err != nil {
 		t.Fatalf("marshal migration Runtime: %v", err)
@@ -119,9 +123,12 @@ func TestCatalogSnapshotMigrationBackfillsDeduplicatedContentsIntegration(t *tes
 		t.Fatalf("apply catalog snapshot migration: %v", err)
 	}
 	assertCatalogCounts(t, database, repositoryID, 2, 1, 1, 1)
-	assertCatalogSnapshotIdentity(t, database, revisionIDs[0])
+	assertLegacyCatalogSnapshotIdentity(t, database, revisionIDs[0])
 	if catalogSnapshotID(t, database, revisionIDs[0]) != catalogSnapshotID(t, database, revisionIDs[1]) {
 		t.Error("migration did not deduplicate identical catalog contents")
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatalf("apply remaining migrations: %v", err)
 	}
 
 	for index, revisionID := range revisionIDs {
@@ -174,7 +181,9 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	if len(active.Catalog.Runtimes) != 1 ||
 		active.Catalog.Runtimes[0].Spec.Image != "hashicorp/terraform:1" ||
 		len(active.Catalog.Targets) != 1 ||
-		active.Catalog.Targets[0].Metadata.Name != "network" {
+		active.Catalog.Targets[0].Metadata.Name != "network" ||
+		len(active.Catalog.Gates) != 1 ||
+		active.Catalog.Gates[0].Metadata.Name != "network-idle" {
 		t.Errorf("decoded active catalog = %#v", active.Catalog)
 	}
 
@@ -764,6 +773,87 @@ func catalogSnapshotID(t *testing.T, database *Database, revisionID uuid.UUID) s
 }
 
 func assertCatalogSnapshotIdentity(t *testing.T, database *Database, revisionID uuid.UUID) {
+	t.Helper()
+
+	var snapshotID, persistedContentsID string
+	if err := database.pool.QueryRow(
+		t.Context(),
+		`SELECT
+            catalog_revisions.catalog_snapshot_id,
+            encode(
+                sha256(
+                    convert_to(
+                        jsonb_build_object(
+                            'version', 2,
+                            'runtimes', coalesce(
+                                (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'name', catalog_runtimes.name,
+                                            'sourcePath', catalog_runtimes.source_path,
+                                            'sourceDocument', catalog_runtimes.source_document,
+                                            'definition', catalog_runtimes.definition
+                                        )
+                                        ORDER BY catalog_runtimes.name
+                                    )
+                                    FROM catalog_runtimes
+                                    WHERE catalog_runtimes.catalog_snapshot_id =
+                                        catalog_revisions.catalog_snapshot_id
+                                ),
+                                '[]'::jsonb
+                            ),
+                            'targets', coalesce(
+                                (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'name', catalog_targets.name,
+                                            'sourcePath', catalog_targets.source_path,
+                                            'sourceDocument', catalog_targets.source_document,
+                                            'definition', catalog_targets.definition
+                                        )
+                                        ORDER BY catalog_targets.name
+                                    )
+                                    FROM catalog_targets
+                                    WHERE catalog_targets.catalog_snapshot_id =
+                                        catalog_revisions.catalog_snapshot_id
+                                ),
+                                '[]'::jsonb
+                            ),
+                            'gates', coalesce(
+                                (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'name', catalog_gates.name,
+                                            'sourcePath', catalog_gates.source_path,
+                                            'sourceDocument', catalog_gates.source_document,
+                                            'definition', catalog_gates.definition
+                                        )
+                                        ORDER BY catalog_gates.name
+                                    )
+                                    FROM catalog_gates
+                                    WHERE catalog_gates.catalog_snapshot_id =
+                                        catalog_revisions.catalog_snapshot_id
+                                ),
+                                '[]'::jsonb
+                            )
+                        )::text,
+                        'UTF8'
+                    )
+                ),
+                'hex'
+            )
+         FROM catalog_revisions
+         WHERE catalog_revisions.id = $1`,
+		revisionID,
+	).Scan(&snapshotID, &persistedContentsID); err != nil {
+		t.Fatalf("compute persisted catalog snapshot identity: %v", err)
+	}
+	if snapshotID != persistedContentsID {
+		t.Errorf("catalog snapshot ID = %q, persisted contents digest = %q", snapshotID, persistedContentsID)
+	}
+}
+
+func assertLegacyCatalogSnapshotIdentity(t *testing.T, database *Database, revisionID uuid.UUID) {
 	t.Helper()
 
 	var snapshotID, persistedContentsID string

@@ -72,6 +72,21 @@ INSERT INTO catalog_targets (
     sqlc.arg(definition)
 );
 
+-- name: CreateCatalogGate :exec
+INSERT INTO catalog_gates (
+    catalog_snapshot_id,
+    name,
+    source_path,
+    source_document,
+    definition
+) VALUES (
+    sqlc.arg(catalog_snapshot_id),
+    sqlc.arg(name),
+    sqlc.arg(source_path),
+    sqlc.arg(source_document),
+    sqlc.arg(definition)
+);
+
 -- name: ActivateCatalogRevision :exec
 UPDATE repositories
 SET refresh_status = 'succeeded',
@@ -114,6 +129,14 @@ SELECT catalog_targets.definition
 FROM catalog_revisions
 JOIN catalog_targets
   ON catalog_targets.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE catalog_revisions.id = sqlc.arg(catalog_revision_id)
+ORDER BY name;
+
+-- name: ListCatalogGates :many
+SELECT catalog_gates.definition
+FROM catalog_revisions
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
 WHERE catalog_revisions.id = sqlc.arg(catalog_revision_id)
 ORDER BY name;
 

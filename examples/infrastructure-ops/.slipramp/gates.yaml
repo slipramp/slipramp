@@ -1,0 +1,12 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: maintenance-window-open
+  title: Infrastructure maintenance window is open
+spec:
+  prometheus:
+    source: homelab
+    query: slipramp_example_maintenance_window_open
+    condition:
+      operator: equal
+      value: 1

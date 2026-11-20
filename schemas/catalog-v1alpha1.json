@@ -2,7 +2,7 @@
   "$id": "https://slipramp.com/schemas/catalog-v1alpha1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Slipramp catalog document",
-  "description": "A slipramp.com/v1alpha1 Runtime or Target document.",
+  "description": "A slipramp.com/v1alpha1 Runtime, Target, or Gate document.",
   "oneOf": [
     {
       "type": "object",
@@ -493,6 +493,17 @@
                         }
                       ]
                     }
+                  },
+                  "gates": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string",
+                      "maxLength": 63,
+                      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+                    }
                   }
                 },
                 "required": [
@@ -509,6 +520,98 @@
         }
       },
       "title": "Target",
+      "required": [
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "slipramp.com/v1alpha1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Gate"
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "spec": {
+          "type": "object",
+          "properties": {
+            "prometheus": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "maxLength": 63,
+                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+                },
+                "query": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16384
+                },
+                "condition": {
+                  "type": "object",
+                  "properties": {
+                    "operator": {
+                      "type": "string",
+                      "enum": [
+                        "equal",
+                        "not-equal",
+                        "less-than",
+                        "less-than-or-equal",
+                        "greater-than",
+                        "greater-than-or-equal"
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "operator",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "source",
+                "query",
+                "condition"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "prometheus"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "title": "Gate",
       "required": [
         "apiVersion",
         "kind",

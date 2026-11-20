@@ -211,6 +211,8 @@ spec:
       description: Runs the guarded upgrade procedure against one selected node.
       documentationUrl: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
       intent: operation
+      gates:
+        - maintenance-window-open
       command: [./slipramp/upgrade-k8s.sh, node]
       parameters:
         host:

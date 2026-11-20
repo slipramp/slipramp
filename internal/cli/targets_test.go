@@ -97,6 +97,7 @@ func TestTargetExplainTextAndJSON(t *testing.T) {
 	for _, want := range []string{
 		"Target Action: storage/preview", "Validation: deployment", "Final argv: [\"terraform\",\"plan\"]",
 		"Parameter mode: omitted", "Placement: admin", "Cluster: colo", "value from Action storage/preview",
+		"Release gates: [\"storage-idle\"]",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("text output missing %q: %q", want, output)
@@ -127,7 +128,7 @@ func targetExplanationResponse() catalog.Explanation {
 	placementOrigin := catalog.Origin{Kind: "placement-default", Name: "admin", FieldPath: "cluster"}
 
 	return catalog.Explanation{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Level:         catalog.ValidationLevelDeployment,
 		Target: catalog.ExplainedValue[catalog.Metadata]{
 			Value:    catalog.Metadata{Name: "storage", Title: "Storage infrastructure"},
@@ -191,6 +192,9 @@ func targetExplanationResponse() catalog.Explanation {
 		Inputs:      []catalog.InputExplanation{},
 		Watch:       catalog.ExplainedValue[[]string]{Value: []string{"terraform/storage/**"}, Resolved: true},
 		Triggers:    []catalog.ExplainedValue[catalog.Trigger]{},
+		Gates: catalog.ExplainedValue[[]string]{
+			Value: []string{"storage-idle"}, Resolved: true, Provenance: []catalog.Origin{actionOrigin},
+		},
 		Diagnostics: catalog.Diagnostics{},
 	}
 }

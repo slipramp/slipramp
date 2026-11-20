@@ -414,12 +414,22 @@ func loadCatalogRevision(
 		return catalog.Revision{}, fmt.Errorf("list catalog targets: %w", err)
 	}
 
+	gates, err := queries.ListCatalogGates(ctx, revisionID)
+	if err != nil {
+		return catalog.Revision{}, fmt.Errorf("list catalog Gates: %w", err)
+	}
+
 	decodedRuntimes, err := decodeCatalogDefinitions[catalog.Runtime]("runtime", runtimes)
 	if err != nil {
 		return catalog.Revision{}, err
 	}
 
 	decodedTargets, err := decodeCatalogDefinitions[catalog.Target]("target", targets)
+	if err != nil {
+		return catalog.Revision{}, err
+	}
+
+	decodedGates, err := decodeCatalogDefinitions[catalog.Gate]("Gate", gates)
 	if err != nil {
 		return catalog.Revision{}, err
 	}
@@ -431,6 +441,7 @@ func loadCatalogRevision(
 		Catalog: catalog.Catalog{
 			Runtimes: decodedRuntimes,
 			Targets:  decodedTargets,
+			Gates:    decodedGates,
 		},
 	}, nil
 }

@@ -63,6 +63,7 @@ const actionOrder = {
   artifacts: 11,
   inputs: 12,
   triggers: 13,
+  gates: 14,
 } satisfies FieldOrder<Action>;
 
 const resourceRequirementsOrder = {

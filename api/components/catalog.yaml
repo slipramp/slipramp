@@ -54,11 +54,12 @@ CatalogExplanation:
     - inputs
     - watch
     - triggers
+    - gates
     - diagnostics
   properties:
     schemaVersion:
       type: integer
-      const: 1
+      const: 2
     validationLevel:
       type: string
       enum:
@@ -108,6 +109,8 @@ CatalogExplanation:
       type: array
       items:
         $ref: "#/ExplainedActionTrigger"
+    gates:
+      $ref: "#/ExplainedStringList"
     diagnostics:
       type: array
       items:
@@ -1113,6 +1116,10 @@ Action:
       type: array
       items:
         $ref: "#/ActionTrigger"
+    gates:
+      type: array
+      items:
+        $ref: ./runs.yaml#/CatalogName
 
 ActionTrigger:
   type: object

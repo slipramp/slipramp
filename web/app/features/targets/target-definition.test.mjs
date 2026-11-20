@@ -11,6 +11,7 @@ test("canonicalTargetDefinition orders authored fields and omits Server state", 
     spec: {
       actions: {
         plan: {
+          gates: ["maintenance-window-open"],
           triggers: [
             {
               parameters: { zone: "west", account: "operations" },
@@ -94,6 +95,7 @@ test("canonicalTargetDefinition orders authored fields and omits Server state", 
     "artifacts",
     "inputs",
     "triggers",
+    "gates",
   ]);
   assert.deepEqual(Object.keys(canonical.spec.actions.plan.triggers[0]), [
     "name",
@@ -107,4 +109,5 @@ test("canonicalTargetDefinition orders authored fields and omits Server state", 
   assert.ok(
     rendered.indexOf("      title:", planOffset) < rendered.indexOf("      command:", planOffset),
   );
+  assert.ok(rendered.includes("      gates:\n        - maintenance-window-open"));
 });

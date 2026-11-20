@@ -90,6 +90,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 								DocumentationURL: "https://docs.example.com/actions/preview",
 								Intent:           "preview",
 								Command:          []string{"terraform", "plan"},
+								Gates:            []string{"network-idle"},
 								Parameters: map[string]catalog.Parameter{
 									"workspace": {
 										Title:       "Workspace",
@@ -161,7 +162,8 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 		preview.Parameters == nil || (*preview.Parameters)["workspace"].Title == nil ||
 		*(*preview.Parameters)["workspace"].Title != "Workspace" ||
 		preview.Artifacts == nil || (*preview.Artifacts)["plan"].Description == nil ||
-		*(*preview.Artifacts)["plan"].Description != "Binary Terraform execution plan." {
+		*(*preview.Artifacts)["plan"].Description != "Binary Terraform execution plan." ||
+		preview.Gates == nil || len(*preview.Gates) != 1 || (*preview.Gates)[0] != "network-idle" {
 		t.Errorf("catalog operator metadata = %#v", preview)
 	}
 }
@@ -172,7 +174,7 @@ func TestExplainTargetActionReturnsAuthoritativeExplanation(t *testing.T) {
 	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	catalogs := &recordingCatalogService{
 		explanation: catalog.Explanation{
-			SchemaVersion: 1,
+			SchemaVersion: 2,
 			Level:         catalog.ValidationLevelDeployment,
 			Process: catalog.ProcessExplanation{
 				WorkingDirectory: catalog.ExplainedValue[string]{

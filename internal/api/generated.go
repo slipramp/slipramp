@@ -2033,6 +2033,7 @@ type Action struct {
 	Credentials      *map[string]string              `json:"credentials,omitempty"`
 	Description      *string                         `json:"description,omitempty"`
 	DocumentationURL *string                         `json:"documentationUrl,omitempty"`
+	Gates            *[]CatalogName                  `json:"gates,omitempty"`
 	Inputs           *map[string]ArtifactInput       `json:"inputs,omitempty"`
 	Intent           *string                         `json:"intent,omitempty"`
 	Parameters       *map[string]Parameter           `json:"parameters,omitempty"`

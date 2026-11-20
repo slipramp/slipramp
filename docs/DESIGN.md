@@ -90,7 +90,7 @@ process. Kubernetes is an execution backend, not the product database.
 | --- | --- |
 | Repository | A Git clone URL and tracked branch supplying versioned definitions |
 | Catalog revision | An immutable validated catalog from one exact Git commit |
-| Catalog snapshot | Content-addressed normalized Runtime and Target definitions shared by identical catalog revisions |
+| Catalog snapshot | Content-addressed normalized Runtime, Target, and Gate definitions shared by identical catalog revisions |
 | Target | A durable operational unit containing user-defined Actions |
 | Action | One command with parameters, execution policy, triggers, and Artifacts |
 | Runtime | A repository-defined container environment and process or credential conventions |

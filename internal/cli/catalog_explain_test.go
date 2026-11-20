@@ -56,7 +56,7 @@ func TestCatalogExplainTextAndJSON(t *testing.T) {
 			if err := json.Unmarshal([]byte(output), &document); err != nil {
 				t.Fatal(err)
 			}
-			if document.SchemaVersion != 1 || document.Target.Value.Name != "operations" ||
+			if document.SchemaVersion != 2 || document.Target.Value.Name != "operations" ||
 				document.Action.Value != "inspect" || document.Placement.ConfigurationAvailable != deployment ||
 				document.ActionTitle.Value != "Inspect infrastructure" ||
 				document.ActionDescription.Value != "Shows current state." ||

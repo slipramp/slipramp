@@ -45,6 +45,7 @@ type Explanation struct {
 	Inputs                 []InputExplanation        `json:"inputs"`
 	Watch                  ExplainedValue[[]string]  `json:"watch"`
 	Triggers               []ExplainedValue[Trigger] `json:"triggers"`
+	Gates                  ExplainedValue[[]string]  `json:"gates"`
 	Diagnostics            Diagnostics               `json:"diagnostics"`
 }
 
@@ -284,7 +285,7 @@ func (b explanationBuilder) explain(r Result, parameters ResolvedParameters, cfg
 		environment[name] = explained(value, b.runtimeOrigin("environment."+name))
 	}
 	result := Explanation{
-		SchemaVersion:          1,
+		SchemaVersion:          2,
 		Level:                  r.Level,
 		Target:                 explained(b.target.Metadata, b.targetOrigin("metadata")),
 		Action:                 explained(b.action.Name, b.actionOrigin("")),
@@ -309,6 +310,7 @@ func (b explanationBuilder) explain(r Result, parameters ResolvedParameters, cfg
 		Inputs:      []InputExplanation{},
 		Watch:       explained(append([]string{}, b.target.Spec.Watch...), b.targetOrigin("spec.watch")),
 		Triggers:    []ExplainedValue[Trigger]{},
+		Gates:       explained(append([]string{}, b.action.Gates...), b.actionOrigin(".gates")),
 		Diagnostics: append(Diagnostics{}, r.Diagnostics...),
 	}
 	b.explainParameters(&result, parameters)

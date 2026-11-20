@@ -109,6 +109,11 @@ func TestExplainDeploymentOverridesResourcesAndInputs(t *testing.T) {
 	assertExplained(t, explanation.Runtime.Name, "alternate", "action-override")
 	assertExplained(t, explanation.Placement.Name, "preview-cluster", "action-override")
 	assertExplained(t, explanation.Timeout, "5m", "action-override")
+	if !reflect.DeepEqual(explanation.Gates.Value, []string{"network-idle"}) ||
+		len(explanation.Gates.Provenance) != 1 ||
+		explanation.Gates.Provenance[0].Kind != "action-declaration" {
+		t.Errorf("Gates = %#v", explanation.Gates)
+	}
 	assertExplained(t, explanation.Placement.Cluster, "colo", "placement-default")
 	assertExplained(t, explanation.Placement.Namespace, "slipramp-runs", "placement-default")
 	assertExplained(t, explanation.Placement.ServiceAccount, "ops", "placement-default")
@@ -340,6 +345,7 @@ spec:
           parameters: {z-version: stable}
     apply:
       intent: reconcile
+      gates: [network-idle]
       runtime: alternate
       placement: preview-cluster
       timeout: 5m
@@ -352,6 +358,16 @@ spec:
         plan:
           artifact: {fromAction: plan}
           mountPath: /inputs/plan
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata:
+  name: network-idle
+spec:
+  prometheus:
+    source: homelab
+    query: max_over_time(network_active_changes[1m])
+    condition: {operator: equal, value: 0}
 ---
 apiVersion: slipramp.com/v1alpha1
 kind: Runtime

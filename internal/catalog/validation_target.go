@@ -12,7 +12,12 @@ import (
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
-func validateTargetPortable(input Catalog, target Target, runtimes map[string]Runtime) Diagnostics {
+func validateTargetPortable(
+	input Catalog,
+	target Target,
+	runtimes map[string]Runtime,
+	gates map[string]Gate,
+) Diagnostics {
 	diagnostics := Diagnostics{}
 	add := func(fieldPath, code string, err error) {
 		if err != nil {
@@ -148,7 +153,7 @@ func validateTargetPortable(input Catalog, target Target, runtimes map[string]Ru
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(target.Spec.Actions)) {
-		diagnostics = append(diagnostics, validateActionPortable(input, target, name, runtimes)...)
+		diagnostics = append(diagnostics, validateActionPortable(input, target, name, runtimes, gates)...)
 	}
 	if err := validateTargetCredentialUsage(target, runtimes); err != nil {
 		add("spec.credentials", "catalog.credential.unused", err)
@@ -164,6 +169,7 @@ func validateActionPortable(
 	target Target,
 	actionName string,
 	runtimes map[string]Runtime,
+	gates map[string]Gate,
 ) Diagnostics {
 	diagnostics := Diagnostics{}
 	action := target.Spec.Actions[actionName]
@@ -205,6 +211,44 @@ func validateActionPortable(
 		validateDocumentationURL(fmt.Sprintf("action %q documentationUrl", actionName), action.DocumentationURL),
 	)
 	addFindings(validateTriggers(target, actionName, action))
+	seenGates := make(map[string]int, len(action.Gates))
+	for index, gateName := range action.Gates {
+		fieldPath := fmt.Sprintf(".gates.%d", index)
+		if err := kubevalidate.DNSLabel(fmt.Sprintf("action %q Gate name", actionName), gateName); err != nil {
+			add(fieldPath, "catalog.gate.name-invalid", err)
+			continue
+		}
+		if _, found := gates[gateName]; !found {
+			add(
+				fieldPath,
+				"catalog.gate.not-found",
+				fmt.Errorf("action %q references Gate %q that is not defined", actionName, gateName),
+			)
+		}
+		if previous, found := seenGates[gateName]; found {
+			item := errorDiagnostic(
+				input,
+				TargetKind,
+				target.Metadata.Name,
+				target.Source,
+				basePath+fieldPath,
+				"catalog.gate.duplicate",
+				fmt.Errorf("action %q Gate %q is duplicated", actionName, gateName),
+			)
+			item.Related = []RelatedLocation{{
+				Message: "The first reference is here.",
+				Location: input.location(
+					TargetKind,
+					target.Metadata.Name,
+					fmt.Sprintf("%s.gates.%d", basePath, previous),
+					target.Source,
+				),
+			}}
+			diagnostics = append(diagnostics, item)
+		} else {
+			seenGates[gateName] = index
+		}
+	}
 	add(".intent", "catalog.intent.invalid", validateIntent(actionName, action.Intent))
 	add(".command", "catalog.command.invalid", validateCommand(actionName, action.Command))
 
