@@ -55,6 +55,7 @@ import {
   listRuns,
   rerunRun,
   type Artifact,
+  type GateRequirement,
   type ProductPrincipal,
   type Run,
   type RunArtifactConsumer,
@@ -86,6 +87,13 @@ import { pageTitle } from "~/shared/page-title";
 import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
+import {
+  gateConditionLabel,
+  gateRequirementStateColor,
+  gateRequirementStateLabel,
+  gateSummaryStateColor,
+  gateSummaryStateLabel,
+} from "~/features/runs/run-gates";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { reportDetailRequestState, type ReportLoad } from "~/features/runs/run-reports";
 import {
@@ -756,6 +764,7 @@ function RunDetails({
     <Stack gap="lg">
       <SectionHeader title="Run details" />
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      <RunGateDetails run={run} />
       <ParameterTable parameters={run.parameters} />
       <RunOverview repositoryName={repositoryName} run={run} />
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
@@ -768,6 +777,89 @@ function RunDetails({
         producerSucceeded={run.outcome === "succeeded"}
       />
     </Stack>
+  );
+}
+
+function RunGateDetails({ run }: Readonly<{ run: Run }>) {
+  if (run.gates.state === "not-required") return null;
+
+  const description =
+    run.gates.state === "waiting"
+      ? "This Run remains queued until every required Gate passes in the same release check."
+      : "Every required Gate passed together when this Run was released for assignment.";
+
+  return (
+    <Stack gap="md">
+      <SectionHeader
+        actions={
+          <Badge color={gateSummaryStateColor(run.gates.state)} variant="light">
+            {gateSummaryStateLabel(run.gates.state)}
+          </Badge>
+        }
+        description={description}
+        title="Release gates"
+      />
+      {run.gates.requirements.map((requirement) => (
+        <RunGateRequirementDetails key={requirement.name} requirement={requirement} />
+      ))}
+    </Stack>
+  );
+}
+
+function RunGateRequirementDetails({ requirement }: Readonly<{ requirement: GateRequirement }>) {
+  return (
+    <Paper p="md" withBorder>
+      <Stack gap="md">
+        <Group align="flex-start" justify="space-between" wrap="nowrap">
+          <Stack gap={2}>
+            <Text fw={650}>{requirement.title ?? requirement.name}</Text>
+            {requirement.title ? (
+              <Text c="dimmed" size="xs">
+                {requirement.name}
+              </Text>
+            ) : null}
+          </Stack>
+          <Badge color={gateRequirementStateColor(requirement.state)} variant="light">
+            {gateRequirementStateLabel(requirement.state)}
+          </Badge>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, sm: requirement.releasedAt ? 4 : 3 }} spacing="lg">
+          <Fact label="Observed value">
+            {requirement.value === undefined ? (
+              <Text c="dimmed" size="sm">
+                No observation
+              </Text>
+            ) : (
+              <Code>{requirement.value}</Code>
+            )}
+          </Fact>
+          <Fact label="Expected condition">
+            <Text size="sm">{gateConditionLabel(requirement)}</Text>
+          </Fact>
+          <Fact label="Last evaluation">
+            {requirement.evaluatedAt ? (
+              <Timestamp size="sm" value={requirement.evaluatedAt} />
+            ) : (
+              <Text c="dimmed" size="sm">
+                Not evaluated
+              </Text>
+            )}
+          </Fact>
+          {requirement.releasedAt ? (
+            <Fact label="Released">
+              <Timestamp size="sm" value={requirement.releasedAt} />
+            </Fact>
+          ) : null}
+        </SimpleGrid>
+
+        {requirement.diagnostic ? (
+          <Alert color="orange" title="Gate diagnostic">
+            {requirement.diagnostic}
+          </Alert>
+        ) : null}
+      </Stack>
+    </Paper>
   );
 }
 

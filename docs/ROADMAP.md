@@ -37,7 +37,7 @@ execution without requiring a trigger.
 
 ## Repository-defined release gates
 
-- [ ] Deliver the Run Gate vertical slice: catalog and Server source
+- [x] Deliver the Run Gate vertical slice: catalog and Server source
       contracts, durable observations and evidence, Prometheus evaluation, Run
       creation and assignment integration, generated APIs, and focused client
       presentation.
