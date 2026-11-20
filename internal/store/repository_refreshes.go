@@ -364,10 +364,12 @@ const catalogSnapshotManifestVersion = 2
 // catalogSnapshotManifest is the durable content identity contract. Keep it in
 // sync with the migration backfill before changing persisted catalog fields.
 type catalogSnapshotDefinition struct {
-	Name           string          `json:"name"`
-	SourcePath     string          `json:"sourcePath"`
-	SourceDocument int32           `json:"sourceDocument"`
-	Definition     json.RawMessage `json:"definition"`
+	Name                 string          `json:"name"`
+	SourcePath           string          `json:"sourcePath"`
+	SourceDocument       int32           `json:"sourceDocument"`
+	Definition           json.RawMessage `json:"definition"`
+	NormalizedDefinition json.RawMessage `json:"-"`
+	DefinitionDigest     string          `json:"-"`
 }
 
 type catalogSnapshotManifest struct {
@@ -428,11 +430,30 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 				err,
 			)
 		}
+		normalized := gate.NormalizedDefinition()
+		normalizedDefinition, err := json.Marshal(normalized)
+		if err != nil {
+			return catalogSnapshotManifest{}, fmt.Errorf(
+				"marshal normalized catalog Gate %q: %w",
+				gate.Metadata.Name,
+				err,
+			)
+		}
+		definitionDigest, err := normalized.Digest()
+		if err != nil {
+			return catalogSnapshotManifest{}, fmt.Errorf(
+				"digest catalog Gate %q: %w",
+				gate.Metadata.Name,
+				err,
+			)
+		}
 		manifest.Gates = append(manifest.Gates, catalogSnapshotDefinition{
-			Name:           gate.Metadata.Name,
-			SourcePath:     gate.Source.Path,
-			SourceDocument: int32(gate.Source.Document),
-			Definition:     definition,
+			Name:                 gate.Metadata.Name,
+			SourcePath:           gate.Source.Path,
+			SourceDocument:       int32(gate.Source.Document),
+			Definition:           definition,
+			NormalizedDefinition: normalizedDefinition,
+			DefinitionDigest:     definitionDigest,
 		})
 	}
 
@@ -491,11 +512,13 @@ func createCatalogSnapshotDefinitions(
 		err := queries.CreateCatalogGate(
 			ctx,
 			storedb.CreateCatalogGateParams{
-				CatalogSnapshotID: snapshotID,
-				Name:              gate.Name,
-				SourcePath:        gate.SourcePath,
-				SourceDocument:    gate.SourceDocument,
-				Definition:        gate.Definition,
+				CatalogSnapshotID:    snapshotID,
+				Name:                 gate.Name,
+				SourcePath:           gate.SourcePath,
+				SourceDocument:       gate.SourceDocument,
+				Definition:           gate.Definition,
+				NormalizedDefinition: gate.NormalizedDefinition,
+				DefinitionDigest:     gate.DefinitionDigest,
 			},
 		)
 		if err != nil {

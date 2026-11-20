@@ -210,7 +210,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	claimedAt := second.CreatedAt.Add(time.Minute)
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), claimedAt)
+	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
 	if err != nil {
 		t.Fatalf("ClaimQueuedRun() error = %v", err)
 	}
@@ -298,7 +298,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Fatalf("wrong-cluster observation error = %v, want Run not found", err)
 	}
 
-	_, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), claimedAt)
+	_, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
 	if !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Errorf("second ClaimQueuedRun() error = %v, want no work", err)
 	}
@@ -387,7 +387,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("stored execution images = %#v", stored.Images)
 	}
 
-	claimed, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), completedAt.Add(time.Minute))
+	claimed, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, completedAt.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("claim unblocked Run: %v", err)
 	}

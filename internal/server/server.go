@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -127,6 +129,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		return nil, fmt.Errorf("initialize notifications: %w", err)
 	}
 	controllerCommandWakeups := controllercommand.NewWakeups()
+	var gateProcessID uuid.UUID
+	if gateEvaluations != nil {
+		gateProcessID = gateEvaluations.ProcessID()
+	}
 	runs := run.NewService(run.Dependencies{
 		Creation:           persistence.database,
 		History:            persistence.database,
@@ -137,6 +143,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		Observations:       persistence.database,
 		ControllerCommands: controllerCommandWakeups,
 		GateEvaluations:    gateEvaluations,
+		GateProcessID:      gateProcessID,
 		Repositories:       repositories,
 		Catalogs:           catalogs,
 		Placements:         cfg.Placements,

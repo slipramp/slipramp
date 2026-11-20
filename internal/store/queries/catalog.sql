@@ -78,13 +78,17 @@ INSERT INTO catalog_gates (
     name,
     source_path,
     source_document,
-    definition
+    definition,
+    normalized_definition,
+    definition_digest
 ) VALUES (
     sqlc.arg(catalog_snapshot_id),
     sqlc.arg(name),
     sqlc.arg(source_path),
     sqlc.arg(source_document),
-    sqlc.arg(definition)
+    sqlc.arg(definition),
+    sqlc.arg(normalized_definition),
+    sqlc.arg(definition_digest)
 );
 
 -- name: ActivateCatalogRevision :exec

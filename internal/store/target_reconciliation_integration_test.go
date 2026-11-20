@@ -243,7 +243,7 @@ func claimReconciliationRun(
 	assignedAt time.Time,
 ) {
 	t.Helper()
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), assignedAt)
+	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt)
 	if err != nil {
 		t.Fatalf("claim Run %s: %v", wantRunID, err)
 	}

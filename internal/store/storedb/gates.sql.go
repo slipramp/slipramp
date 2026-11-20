@@ -55,7 +55,7 @@ SELECT DISTINCT
     run_gates.repository_id,
     run_gates.gate_name,
     repositories.active_catalog_revision_id AS catalog_revision_id,
-    catalog_gates.definition
+    catalog_gates.normalized_definition
 FROM run_gates
 JOIN runs
   ON runs.id = run_gates.run_id
@@ -76,10 +76,10 @@ ORDER BY
 `
 
 type ListGateEvaluationTargetsRow struct {
-	RepositoryID      pgtype.UUID
-	GateName          string
-	CatalogRevisionID pgtype.UUID
-	Definition        []byte
+	RepositoryID         pgtype.UUID
+	GateName             string
+	CatalogRevisionID    pgtype.UUID
+	NormalizedDefinition []byte
 }
 
 func (q *Queries) ListGateEvaluationTargets(ctx context.Context) ([]ListGateEvaluationTargetsRow, error) {
@@ -95,7 +95,7 @@ func (q *Queries) ListGateEvaluationTargets(ctx context.Context) ([]ListGateEval
 			&i.RepositoryID,
 			&i.GateName,
 			&i.CatalogRevisionID,
-			&i.Definition,
+			&i.NormalizedDefinition,
 		); err != nil {
 			return nil, err
 		}
@@ -105,6 +105,103 @@ func (q *Queries) ListGateEvaluationTargets(ctx context.Context) ([]ListGateEval
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockQueuedRunGateRepositories = `-- name: LockQueuedRunGateRepositories :many
+SELECT repositories.id
+FROM repositories
+WHERE repositories.id IN (
+    SELECT run_gates.repository_id
+    FROM run_gates
+    JOIN runs
+      ON runs.id = run_gates.run_id
+    WHERE runs.cluster_name = $1
+      AND runs.phase = 'queued'
+      AND run_gates.released_at IS NULL
+)
+ORDER BY repositories.id
+FOR UPDATE
+`
+
+func (q *Queries) LockQueuedRunGateRepositories(ctx context.Context, clusterName string) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, lockQueuedRunGateRepositories, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const releaseRunGates = `-- name: ReleaseRunGates :execrows
+WITH evidence AS (
+    SELECT
+        run_gates.run_id,
+        run_gates.gate_name,
+        repositories.active_catalog_revision_id AS catalog_revision_id,
+        catalog_gates.normalized_definition,
+        catalog_gates.definition_digest,
+        gate_observations.evaluator_process_id,
+        gate_observations.value,
+        gate_observations.evaluated_at,
+        gate_observations.valid_until
+    FROM run_gates
+    JOIN repositories
+      ON repositories.id = run_gates.repository_id
+    JOIN catalog_revisions
+      ON catalog_revisions.id = repositories.active_catalog_revision_id
+    JOIN catalog_gates
+      ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+     AND catalog_gates.name = run_gates.gate_name
+    JOIN gate_observations
+      ON gate_observations.repository_id = run_gates.repository_id
+     AND gate_observations.gate_name = run_gates.gate_name
+     AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
+     AND gate_observations.definition_digest = catalog_gates.definition_digest
+     AND gate_observations.evaluator_process_id = $2
+     AND gate_observations.state = 'passing'
+     AND gate_observations.evaluated_at <= $1
+     AND gate_observations.valid_until > $1
+    WHERE run_gates.run_id = $3
+      AND run_gates.released_at IS NULL
+      AND repositories.removed_at IS NULL
+)
+UPDATE run_gates
+SET released_at = $1,
+    release_catalog_revision_id = evidence.catalog_revision_id,
+    release_definition = evidence.normalized_definition,
+    release_definition_digest = evidence.definition_digest,
+    release_evaluator_process_id = evidence.evaluator_process_id,
+    release_observed_value = evidence.value,
+    release_evaluated_at = evidence.evaluated_at,
+    release_valid_until = evidence.valid_until
+FROM evidence
+WHERE run_gates.run_id = evidence.run_id
+  AND run_gates.gate_name = evidence.gate_name
+`
+
+type ReleaseRunGatesParams struct {
+	ReleasedAt         pgtype.Timestamptz
+	EvaluatorProcessID pgtype.UUID
+	RunID              pgtype.UUID
+}
+
+func (q *Queries) ReleaseRunGates(ctx context.Context, arg ReleaseRunGatesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseRunGates, arg.ReleasedAt, arg.EvaluatorProcessID, arg.RunID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertGateObservation = `-- name: UpsertGateObservation :exec

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/slipramp/slipramp/internal/run"
@@ -34,6 +35,7 @@ func (d *Database) ClaimQueuedRun(
 	ctx context.Context,
 	clusterName string,
 	capacity run.SchedulingCapacity,
+	gateEvaluatorProcessID uuid.UUID,
 	claimedAt time.Time,
 ) (run.Run, error) {
 	placementMaximumActiveRuns, err := json.Marshal(capacity.PlacementMaximumActiveRuns)
@@ -50,6 +52,9 @@ func (d *Database) ClaimQueuedRun(
 	}()
 
 	queries := d.queries.WithTx(transaction)
+	if _, err := queries.LockQueuedRunGateRepositories(ctx, clusterName); err != nil {
+		return run.Run{}, fmt.Errorf("lock queued Run Gate repositories: %w", err)
+	}
 	row, err := queries.ClaimQueuedRun(
 		ctx,
 		storedb.ClaimQueuedRunParams{
@@ -57,6 +62,7 @@ func (d *Database) ClaimQueuedRun(
 			ClusterName:                clusterName,
 			ClusterMaximumActiveRuns:   capacity.ClusterMaximumActiveRuns,
 			PlacementMaximumActiveRuns: placementMaximumActiveRuns,
+			EvaluatorProcessID:         databaseUUID(gateEvaluatorProcessID),
 		},
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -64,6 +70,22 @@ func (d *Database) ClaimQueuedRun(
 	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("claim queued Run: %w", err)
+	}
+	record, err := runFromRow(row)
+	if err != nil {
+		return run.Run{}, err
+	}
+
+	released, err := queries.ReleaseRunGates(ctx, storedb.ReleaseRunGatesParams{
+		RunID:              row.ID,
+		EvaluatorProcessID: databaseUUID(gateEvaluatorProcessID),
+		ReleasedAt:         databaseTime(claimedAt),
+	})
+	if err != nil {
+		return run.Run{}, fmt.Errorf("release Run Gates: %w", err)
+	}
+	if released != int64(len(record.Snapshot.Action.Gates)) {
+		return run.Run{}, run.ErrNoRunAssignment
 	}
 
 	if row.ActionName == "sync" {
@@ -84,11 +106,6 @@ func (d *Database) ClaimQueuedRun(
 
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit Run claim transaction: %w", err)
-	}
-
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
 	}
 
 	return record, nil

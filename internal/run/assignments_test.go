@@ -43,6 +43,8 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 		claimed:       want,
 	}
 	service := &Service{assignments: runs}
+	gateEvaluatorProcessID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
+	service.gateProcessID = gateEvaluatorProcessID
 	location := time.FixedZone("test", -6*60*60)
 	claimedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return claimedAt }
@@ -62,6 +64,13 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 			"claim cluster maximum = %d, want %d",
 			runs.claimCapacity.ClusterMaximumActiveRuns,
 			DefaultMaximumActiveRuns,
+		)
+	}
+	if runs.claimGateEvaluatorProcessID != gateEvaluatorProcessID {
+		t.Errorf(
+			"claim Gate evaluator process ID = %s, want %s",
+			runs.claimGateEvaluatorProcessID,
+			gateEvaluatorProcessID,
 		)
 	}
 	if !runs.claimedAt.Equal(claimedAt) || runs.claimedAt.Location() != time.UTC {
@@ -100,15 +109,16 @@ func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 }
 
 type recordingAssignments struct {
-	assignedCalls    int
-	assigned         Run
-	assignedError    error
-	claimCalls       int
-	claimClusterName string
-	claimCapacity    SchedulingCapacity
-	claimedAt        time.Time
-	claimed          Run
-	claimError       error
+	assignedCalls               int
+	assigned                    Run
+	assignedError               error
+	claimCalls                  int
+	claimClusterName            string
+	claimCapacity               SchedulingCapacity
+	claimGateEvaluatorProcessID uuid.UUID
+	claimedAt                   time.Time
+	claimed                     Run
+	claimError                  error
 }
 
 func (s *recordingAssignments) GetAssignedRunForCluster(context.Context, string) (Run, error) {
@@ -121,11 +131,13 @@ func (s *recordingAssignments) ClaimQueuedRun(
 	_ context.Context,
 	clusterName string,
 	capacity SchedulingCapacity,
+	gateEvaluatorProcessID uuid.UUID,
 	claimedAt time.Time,
 ) (Run, error) {
 	s.claimCalls++
 	s.claimClusterName = clusterName
 	s.claimCapacity = capacity
+	s.claimGateEvaluatorProcessID = gateEvaluatorProcessID
 	s.claimedAt = claimedAt
 
 	return s.claimed, s.claimError

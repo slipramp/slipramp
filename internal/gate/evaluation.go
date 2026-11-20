@@ -155,6 +155,13 @@ func (c *Coordinator) Notify() {
 	}
 }
 
+// ProcessID identifies observations produced by this Server process. Release
+// rejects observations from an earlier process so endpoint or credential
+// changes cannot authorize new work after restart.
+func (c *Coordinator) ProcessID() uuid.UUID {
+	return c.processID
+}
+
 func (c *Coordinator) reconcileAndLog(ctx context.Context) {
 	if err := c.Reconcile(ctx); err != nil && ctx.Err() == nil {
 		c.logger.Warn("evaluate repository Gates", "error", err)

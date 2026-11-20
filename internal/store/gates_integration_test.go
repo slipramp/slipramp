@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/repository"
@@ -145,6 +147,194 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	}
 	if _, err := database.GetRun(ctx, invalid.ID); !errors.Is(err, run.ErrRunNotFound) {
 		t.Errorf("rolled back Run error = %v, want Run not found", err)
+	}
+}
+
+func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	repositoryID := uuid.New()
+	revisionID := uuid.New()
+	createdAt := time.Date(2026, time.November, 19, 14, 0, 0, 0, time.UTC)
+	createGateTestRepository(t, database, repositoryID, revisionID, createdAt)
+
+	record := gateTestRun(t, database, repositoryID, revisionID, createdAt)
+	if _, err := database.CreateRun(ctx, record, nil); err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+
+	assignedAt := createdAt.Add(time.Minute)
+	evaluatorID := uuid.New()
+	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
+
+	definition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	digest, err := definition.Digest()
+	if err != nil {
+		t.Fatalf("digest Gate definition: %v", err)
+	}
+	observedValue := 1.0
+	observation := gate.CurrentObservation{
+		RepositoryID:       repositoryID,
+		GateName:           "network-idle",
+		CatalogRevisionID:  revisionID,
+		DefinitionDigest:   digest,
+		EvaluatorProcessID: evaluatorID,
+		Observation: gate.Observation{
+			State: gate.ObservationBlocking,
+			Value: &observedValue,
+		},
+		EvaluatedAt: assignedAt.Add(-10 * time.Second),
+		ValidUntil:  assignedAt.Add(35 * time.Second),
+	}
+	if err := database.UpsertGateObservation(ctx, observation); err != nil {
+		t.Fatalf("record blocking Gate observation: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
+
+	observedValue = 0
+	observation.Observation = gate.Observation{
+		State: gate.ObservationPassing,
+		Value: &observedValue,
+	}
+	observation.EvaluatorProcessID = uuid.New()
+	if err := database.UpsertGateObservation(ctx, observation); err != nil {
+		t.Fatalf("record prior-process Gate observation: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
+
+	observation.EvaluatorProcessID = evaluatorID
+	observation.EvaluatedAt = assignedAt.Add(-time.Minute)
+	observation.ValidUntil = assignedAt
+	if err := database.UpsertGateObservation(ctx, observation); err != nil {
+		t.Fatalf("record stale Gate observation: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
+
+	observation.EvaluatedAt = assignedAt.Add(-10 * time.Second)
+	observation.ValidUntil = assignedAt.Add(35 * time.Second)
+	if err := database.UpsertGateObservation(ctx, observation); err != nil {
+		t.Fatalf("record passing Gate observation: %v", err)
+	}
+
+	releaseRevisionID := uuid.New()
+	releaseCatalog := persistedCatalog("1.14.4")
+	releaseCatalog.Gates[0].Spec.Prometheus.Condition.Value = 2
+	refresh := successfulCatalogRefresh(
+		strings.Repeat("c", 40),
+		assignedAt.Add(-5*time.Second),
+		releaseRevisionID,
+	)
+	refresh.Revision.Catalog = releaseCatalog
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatalf("activate changed Gate definition: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
+
+	definition = releaseCatalog.Gates[0].NormalizedDefinition()
+	digest, err = definition.Digest()
+	if err != nil {
+		t.Fatalf("digest changed Gate definition: %v", err)
+	}
+	observedValue = 2
+	observation.CatalogRevisionID = releaseRevisionID
+	observation.DefinitionDigest = digest
+	observation.Observation.Value = &observedValue
+	if err := database.UpsertGateObservation(ctx, observation); err != nil {
+		t.Fatalf("record changed passing Gate observation: %v", err)
+	}
+	claimed, err := database.ClaimQueuedRun(
+		ctx,
+		"colo",
+		testSchedulingCapacity(),
+		evaluatorID,
+		assignedAt,
+	)
+	if err != nil {
+		t.Fatalf("claim passing gated Run: %v", err)
+	}
+	if claimed.ID != record.ID || claimed.Phase != run.PhaseAssigned {
+		t.Errorf("claimed Run = %#v", claimed)
+	}
+
+	var (
+		releasedAt               time.Time
+		releaseCatalogRevisionID pgtype.UUID
+		releaseDefinition        []byte
+		releaseDefinitionDigest  string
+		releaseEvaluatorID       pgtype.UUID
+		releaseObservedValue     float64
+		releaseEvaluatedAt       time.Time
+		releaseValidUntil        time.Time
+	)
+	err = database.pool.QueryRow(
+		ctx,
+		`SELECT
+             released_at,
+             release_catalog_revision_id,
+             release_definition,
+             release_definition_digest,
+             release_evaluator_process_id,
+             release_observed_value,
+             release_evaluated_at,
+             release_valid_until
+         FROM run_gates
+         WHERE run_id = $1 AND gate_name = 'network-idle'`,
+		databaseUUID(record.ID),
+	).Scan(
+		&releasedAt,
+		&releaseCatalogRevisionID,
+		&releaseDefinition,
+		&releaseDefinitionDigest,
+		&releaseEvaluatorID,
+		&releaseObservedValue,
+		&releaseEvaluatedAt,
+		&releaseValidUntil,
+	)
+	if err != nil {
+		t.Fatalf("load Run Gate release evidence: %v", err)
+	}
+	var releasedDefinition gate.Definition
+	if err := json.Unmarshal(releaseDefinition, &releasedDefinition); err != nil {
+		t.Fatalf("decode released Gate definition: %v", err)
+	}
+	if !releasedAt.Equal(assignedAt) ||
+		uuid.UUID(releaseCatalogRevisionID.Bytes) != releaseRevisionID ||
+		!reflect.DeepEqual(releasedDefinition, definition) ||
+		releaseDefinitionDigest != digest ||
+		uuid.UUID(releaseEvaluatorID.Bytes) != evaluatorID ||
+		releaseObservedValue != observedValue ||
+		!releaseEvaluatedAt.Equal(observation.EvaluatedAt) ||
+		!releaseValidUntil.Equal(observation.ValidUntil) {
+		t.Errorf("released Gate evidence does not match current observation")
+	}
+
+	targets, err := database.ListGateEvaluationTargets(ctx)
+	if err != nil {
+		t.Fatalf("ListGateEvaluationTargets() after release error = %v", err)
+	}
+	if len(targets) != 0 {
+		t.Errorf("Gate evaluation targets after release = %#v", targets)
+	}
+}
+
+func assertNoGateRunAssignment(
+	t *testing.T,
+	database *Database,
+	evaluatorID uuid.UUID,
+	assignedAt time.Time,
+) {
+	t.Helper()
+
+	_, err := database.ClaimQueuedRun(
+		t.Context(),
+		"colo",
+		testSchedulingCapacity(),
+		evaluatorID,
+		assignedAt,
+	)
+	if !errors.Is(err, run.ErrNoRunAssignment) {
+		t.Fatalf("ClaimQueuedRun() error = %v, want no assignment", err)
 	}
 }
 

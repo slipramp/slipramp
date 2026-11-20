@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
@@ -22,15 +21,15 @@ func (d *Database) ListGateEvaluationTargets(ctx context.Context) ([]gate.Evalua
 
 	targets := make([]gate.EvaluationTarget, 0, len(rows))
 	for _, row := range rows {
-		var definition catalog.Gate
-		if err := json.Unmarshal(row.Definition, &definition); err != nil {
+		var definition gate.Definition
+		if err := json.Unmarshal(row.NormalizedDefinition, &definition); err != nil {
 			return nil, fmt.Errorf("decode Gate evaluation target %q: %w", row.GateName, err)
 		}
 		targets = append(targets, gate.EvaluationTarget{
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			GateName:          row.GateName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
-			Definition:        definition.NormalizedDefinition(),
+			Definition:        definition,
 		})
 	}
 

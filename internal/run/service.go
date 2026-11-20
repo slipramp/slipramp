@@ -18,6 +18,7 @@ type Service struct {
 	observations       ObservationStore
 	controllerCommands ControllerCommandNotifier
 	gateEvaluations    GateEvaluationNotifier
+	gateProcessID      uuid.UUID
 	repositories       RepositoryService
 	catalogs           CatalogService
 	placements         placement.Set
@@ -36,6 +37,7 @@ type Dependencies struct {
 	Observations       ObservationStore
 	ControllerCommands ControllerCommandNotifier
 	GateEvaluations    GateEvaluationNotifier
+	GateProcessID      uuid.UUID
 	Repositories       RepositoryService
 	Catalogs           CatalogService
 	Placements         placement.Set
@@ -53,6 +55,7 @@ func NewService(dependencies Dependencies) *Service {
 		observations:       dependencies.Observations,
 		controllerCommands: dependencies.ControllerCommands,
 		gateEvaluations:    dependencies.GateEvaluations,
+		gateProcessID:      dependencies.GateProcessID,
 		repositories:       dependencies.Repositories,
 		catalogs:           dependencies.Catalogs,
 		placements:         dependencies.Placements,

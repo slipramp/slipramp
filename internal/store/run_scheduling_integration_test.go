@@ -43,7 +43,7 @@ func TestRunCapacityIntegration(t *testing.T) {
 
 			first, second := createCapacityTestRuns(t, ctx, database)
 			claimedAt := first.CreatedAt.Add(time.Minute)
-			claimed, err := database.ClaimQueuedRun(ctx, "colo", test.capacity, claimedAt)
+			claimed, err := database.ClaimQueuedRun(ctx, "colo", test.capacity, uuid.Nil, claimedAt)
 			if err != nil {
 				t.Fatalf("claim first Run: %v", err)
 			}
@@ -55,6 +55,7 @@ func TestRunCapacityIntegration(t *testing.T) {
 				ctx,
 				"colo",
 				test.capacity,
+				uuid.Nil,
 				claimedAt.Add(time.Minute),
 			); !errors.Is(err, run.ErrNoRunAssignment) {
 				t.Fatalf("capacity-limited claim error = %v, want no assignment", err)
@@ -128,7 +129,7 @@ func TestTargetRunCapacityIntegration(t *testing.T) {
 	}
 
 	capacity := testSchedulingCapacity()
-	if _, err := database.ClaimQueuedRun(ctx, "colo", capacity, createdAt.Add(6*time.Minute)); err != nil {
+	if _, err := database.ClaimQueuedRun(ctx, "colo", capacity, uuid.Nil, createdAt.Add(6*time.Minute)); err != nil {
 		t.Fatalf("claim first Run: %v", err)
 	}
 
@@ -137,7 +138,7 @@ func TestTargetRunCapacityIntegration(t *testing.T) {
 	for range 2 {
 		go func() {
 			<-start
-			_, err := database.ClaimQueuedRun(ctx, "colo", capacity, createdAt.Add(7*time.Minute))
+			_, err := database.ClaimQueuedRun(ctx, "colo", capacity, uuid.Nil, createdAt.Add(7*time.Minute))
 			results <- err
 		}()
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type AssignmentStore interface {
@@ -14,6 +16,7 @@ type AssignmentStore interface {
 		ctx context.Context,
 		clusterName string,
 		capacity SchedulingCapacity,
+		gateEvaluatorProcessID uuid.UUID,
 		claimedAt time.Time,
 	) (Run, error)
 }
@@ -39,6 +42,7 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		ctx,
 		clusterName,
 		s.AssignmentCapacity(clusterName),
+		s.gateProcessID,
 		s.now().UTC(),
 	)
 	if err != nil {

@@ -25,17 +25,43 @@ WITH active_runs AS (
     WHERE queued.cluster_name = $2
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
+      AND NOT EXISTS (
+          SELECT 1
+          FROM run_gates
+          WHERE run_gates.run_id = queued.id
+            AND run_gates.released_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM repositories
+                JOIN catalog_revisions
+                  ON catalog_revisions.id = repositories.active_catalog_revision_id
+                JOIN catalog_gates
+                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+                 AND catalog_gates.name = run_gates.gate_name
+                JOIN gate_observations
+                  ON gate_observations.repository_id = run_gates.repository_id
+                 AND gate_observations.gate_name = run_gates.gate_name
+                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
+                 AND gate_observations.definition_digest = catalog_gates.definition_digest
+                 AND gate_observations.evaluator_process_id = $3
+                 AND gate_observations.state = 'passing'
+                 AND gate_observations.evaluated_at <= $1
+                 AND gate_observations.valid_until > $1
+                WHERE repositories.id = run_gates.repository_id
+                  AND repositories.removed_at IS NULL
+            )
+      )
       AND (
           SELECT count(*)
           FROM active_runs
-      ) < $3::integer
+      ) < $4::integer
       AND (
-          NOT ($4::jsonb ? queued.placement_name)
+          NOT ($5::jsonb ? queued.placement_name)
           OR COALESCE((
               SELECT count(*)
               FROM active_runs
               WHERE placement_name = queued.placement_name
-          ), 0) < ($4::jsonb ->> queued.placement_name)::bigint
+          ), 0) < ($5::jsonb ->> queued.placement_name)::bigint
       )
       AND (
           SELECT count(*)
@@ -58,6 +84,7 @@ RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_re
 type ClaimQueuedRunParams struct {
 	AssignedAt                 pgtype.Timestamptz
 	ClusterName                string
+	EvaluatorProcessID         pgtype.UUID
 	ClusterMaximumActiveRuns   int32
 	PlacementMaximumActiveRuns []byte
 }
@@ -66,6 +93,7 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 	row := q.db.QueryRow(ctx, claimQueuedRun,
 		arg.AssignedAt,
 		arg.ClusterName,
+		arg.EvaluatorProcessID,
 		arg.ClusterMaximumActiveRuns,
 		arg.PlacementMaximumActiveRuns,
 	)

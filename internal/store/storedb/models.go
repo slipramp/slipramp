@@ -63,11 +63,13 @@ type ArtifactReport struct {
 }
 
 type CatalogGate struct {
-	CatalogSnapshotID string
-	Name              string
-	SourcePath        string
-	SourceDocument    int32
-	Definition        []byte
+	CatalogSnapshotID    string
+	Name                 string
+	SourcePath           string
+	SourceDocument       int32
+	Definition           []byte
+	NormalizedDefinition []byte
+	DefinitionDigest     string
 }
 
 type CatalogRevision struct {
