@@ -297,6 +297,17 @@ func (d *Database) CreateRun(
 		return run.Run{}, fmt.Errorf("insert run: %w", err)
 	}
 
+	for index, gateName := range record.Snapshot.Action.Gates {
+		if err := queries.CreateRunGate(ctx, storedb.CreateRunGateParams{
+			RunID:           databaseUUID(record.ID),
+			RepositoryID:    databaseUUID(record.RepositoryID),
+			GateName:        gateName,
+			AttachmentOrder: int32(index),
+		}); err != nil {
+			return run.Run{}, fmt.Errorf("record Run Gate %q: %w", gateName, err)
+		}
+	}
+
 	for _, inputName := range slices.Sorted(maps.Keys(record.Snapshot.Inputs)) {
 		input := record.Snapshot.Inputs[inputName]
 		rowsAffected, err := queries.CreateRunArtifactInput(

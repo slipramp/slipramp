@@ -49,6 +49,25 @@ INSERT INTO runs (
 ON CONFLICT DO NOTHING
 RETURNING *;
 
+-- name: CreateRunGate :exec
+INSERT INTO run_gates (
+    run_id,
+    repository_id,
+    gate_name,
+    attachment_order
+) VALUES (
+    sqlc.arg(run_id),
+    sqlc.arg(repository_id),
+    sqlc.arg(gate_name),
+    sqlc.arg(attachment_order)
+);
+
+-- name: ListRunGateNames :many
+SELECT gate_name
+FROM run_gates
+WHERE run_id = sqlc.arg(run_id)
+ORDER BY attachment_order;
+
 -- name: GetRunByIdempotencyKey :one
 SELECT *
 FROM runs

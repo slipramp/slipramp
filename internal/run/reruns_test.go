@@ -20,6 +20,7 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	commands := &recordingControllerCommandNotifier{}
 	service.controllerCommands = commands
 	original := finishedTestRun(t)
+	original.Snapshot.Action.Gates = []string{"network-idle"}
 	originalRelevanceCommitSHA := strings.Repeat("b", 40)
 	original.TargetRelevanceCommitSHA = &originalRelevanceCommitSHA
 	runs.loaded = original
@@ -88,6 +89,9 @@ func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 	latest.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1302")
 	latest.CommitSHA = "abcdef0123456789abcdef0123456789abcdef01"
 	latest.Catalog.Runtimes[0].Spec.Image = "hashicorp/terraform:1.15.0"
+	latestAction := latest.Catalog.Targets[0].Spec.Actions["preview"]
+	latestAction.Gates = []string{"change-window"}
+	latest.Catalog.Targets[0].Spec.Actions["preview"] = latestAction
 	service.catalogs = &recordingCatalogs{revision: latest}
 
 	created, err := service.RerunRun(
@@ -103,7 +107,8 @@ func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 	}
 
 	if created.CatalogRevisionID != latest.ID || created.CommitSHA != latest.CommitSHA ||
-		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.15.0" {
+		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.15.0" ||
+		!reflect.DeepEqual(created.Snapshot.Action.Gates, []string{"change-window"}) {
 		t.Errorf("latest rerun resolution = %#v", created)
 	}
 	if created.TargetRelevanceCommitSHA == nil || *created.TargetRelevanceCommitSHA != latest.CommitSHA {

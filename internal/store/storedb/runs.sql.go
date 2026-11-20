@@ -393,6 +393,37 @@ func (q *Queries) CreateRunArtifactInput(ctx context.Context, arg CreateRunArtif
 	return result.RowsAffected(), nil
 }
 
+const createRunGate = `-- name: CreateRunGate :exec
+INSERT INTO run_gates (
+    run_id,
+    repository_id,
+    gate_name,
+    attachment_order
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
+`
+
+type CreateRunGateParams struct {
+	RunID           pgtype.UUID
+	RepositoryID    pgtype.UUID
+	GateName        string
+	AttachmentOrder int32
+}
+
+func (q *Queries) CreateRunGate(ctx context.Context, arg CreateRunGateParams) error {
+	_, err := q.db.Exec(ctx, createRunGate,
+		arg.RunID,
+		arg.RepositoryID,
+		arg.GateName,
+		arg.AttachmentOrder,
+	)
+	return err
+}
+
 const decideRunReview = `-- name: DecideRunReview :one
 UPDATE runs
 SET review_state = $1,
@@ -1243,6 +1274,33 @@ func (q *Queries) ListActiveRunStatesForMetrics(ctx context.Context) ([]ListActi
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunGateNames = `-- name: ListRunGateNames :many
+SELECT gate_name
+FROM run_gates
+WHERE run_id = $1
+ORDER BY attachment_order
+`
+
+func (q *Queries) ListRunGateNames(ctx context.Context, runID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listRunGateNames, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var gate_name string
+		if err := rows.Scan(&gate_name); err != nil {
+			return nil, err
+		}
+		items = append(items, gate_name)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

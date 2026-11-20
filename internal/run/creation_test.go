@@ -19,6 +19,11 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	t.Parallel()
 
 	service, runs := testService(t)
+	revision := testRevision()
+	action := revision.Catalog.Targets[0].Spec.Actions["preview"]
+	action.Gates = []string{"network-idle"}
+	revision.Catalog.Targets[0].Spec.Actions["preview"] = action
+	service.catalogs = &recordingCatalogs{revision: revision}
 	commands := &recordingControllerCommandNotifier{}
 	service.controllerCommands = commands
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
@@ -90,6 +95,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		"https://github.com/example/infrastructure.git" ||
 		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.14.3" ||
 		created.Snapshot.Action.Command[1] != "plan" ||
+		!reflect.DeepEqual(created.Snapshot.Action.Gates, []string{"network-idle"}) ||
 		created.Snapshot.Action.Timeout != "30m" ||
 		created.Snapshot.Placement.JobNamespace != "slipramp-jobs" ||
 		len(created.Snapshot.Placement.ActionVolumes) != 1 ||

@@ -111,6 +111,19 @@ type ControllerCredential struct {
 	EnrolledAt  pgtype.Timestamptz
 }
 
+type GateObservation struct {
+	RepositoryID       pgtype.UUID
+	GateName           string
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   string
+	EvaluatorProcessID pgtype.UUID
+	State              string
+	Value              *float64
+	Diagnostic         *string
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
+}
+
 type GitTriggerDelivery struct {
 	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID
@@ -424,6 +437,21 @@ type RunArtifactInput struct {
 	RunID      pgtype.UUID
 	InputName  string
 	ArtifactID pgtype.UUID
+}
+
+type RunGate struct {
+	RunID                     pgtype.UUID
+	RepositoryID              pgtype.UUID
+	GateName                  string
+	AttachmentOrder           int32
+	ReleasedAt                pgtype.Timestamptz
+	ReleaseCatalogRevisionID  pgtype.UUID
+	ReleaseDefinition         []byte
+	ReleaseDefinitionDigest   *string
+	ReleaseEvaluatorProcessID pgtype.UUID
+	ReleaseObservedValue      *float64
+	ReleaseEvaluatedAt        pgtype.Timestamptz
+	ReleaseValidUntil         pgtype.Timestamptz
 }
 
 type Target struct {
