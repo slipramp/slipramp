@@ -225,6 +225,7 @@ tasks:
     env:
       SLIPRAMP_ARTIFACT_TOKEN_SECRET: slipramp-local-artifact-token-secret
       SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token","prod-sjc1":"slipramp-local-prod-sjc1-enrollment-token"}'
+      SLIPRAMP_GATE_SOURCES_FILE: "{{.ROOT_DIR}}/deploy/local/gate-sources.yaml"
       SLIPRAMP_KARGO_INTEGRATIONS_FILE: "{{.ROOT_DIR}}/deploy/local/kargo-integrations.yaml"
       SLIPRAMP_OIDC_CLIENT_ID: slipramp-local
       SLIPRAMP_OIDC_CLIENT_SECRET: slipramp-local-client-secret
