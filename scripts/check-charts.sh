@@ -91,6 +91,21 @@ assert_contains "$server_render" 'value: "0"'
 assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|ServiceAccount)$'
 assert_not_contains "$server_render" '^kind: (Ingress|HTTPRoute)$'
 
+server_metadata_render="$test_directory/server-deployment-metadata.yaml"
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --show-only templates/server-deployment.yaml \
+  --values "$testdata/slipramp-required.yaml" \
+  --set-json 'server.deploymentAnnotations={"reloader.stakater.com/auto":"true"}' \
+  --set-json 'server.deploymentLabels={"example.com/team":"platform","app.kubernetes.io/component":"other"}' \
+  >"$server_metadata_render"
+sed -n '/^  annotations:$/,/^  labels:$/p' "$server_metadata_render" >"$test_directory/deployment-annotations.yaml"
+sed -n '/^  labels:$/,/^spec:$/p' "$server_metadata_render" >"$test_directory/deployment-labels.yaml"
+assert_contains "$test_directory/deployment-annotations.yaml" '^    reloader\.stakater\.com/auto: "true"$'
+assert_contains "$test_directory/deployment-labels.yaml" '^    example\.com/team: platform$'
+assert_contains "$test_directory/deployment-labels.yaml" '^    app\.kubernetes\.io/component: server$'
+assert_not_contains "$server_metadata_render" 'app\.kubernetes\.io/component: other'
+assert_not_contains "$server_metadata_render" '^ {6,}(example\.com/team|reloader\.stakater\.com/auto):'
+
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
   --values "$testdata/slipramp-required.yaml" \

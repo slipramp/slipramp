@@ -20,6 +20,8 @@
       "additionalProperties": false,
       "required": [
         "replicaCount",
+        "deploymentAnnotations",
+        "deploymentLabels",
         "image",
         "service",
         "metrics",
@@ -51,6 +53,8 @@
       ],
       "properties": {
         "replicaCount": { "type": "integer", "const": 1 },
+        "deploymentAnnotations": { "$ref": "#/$defs/stringMap" },
+        "deploymentLabels": { "$ref": "#/$defs/stringMap" },
         "image": { "$ref": "#/$defs/image" },
         "service": { "$ref": "#/$defs/service" },
         "metrics": {

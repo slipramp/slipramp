@@ -9,9 +9,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "slipramp.serverName" . }}
+  {{- with .Values.server.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
-    {{- include "slipramp.labels" . | nindent 4 }}
-    {{- include "slipramp.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
+    {{- $labels := include "slipramp.labels" . | fromYaml }}
+    {{- $selectorLabels := include "slipramp.selectorLabels" (dict "root" . "component" "server") | fromYaml }}
+    {{- merge $labels $selectorLabels .Values.server.deploymentLabels | toYaml | nindent 4 }}
 spec:
   replicas: {{ .Values.server.replicaCount }}
   strategy:

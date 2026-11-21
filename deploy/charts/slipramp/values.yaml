@@ -5,6 +5,8 @@ imagePullSecrets: []
 
 server:
   replicaCount: 1
+  deploymentAnnotations: {}
+  deploymentLabels: {}
   image:
     repository: ghcr.io/slipramp/slipramp-server
     tag: ""

@@ -10,6 +10,18 @@ sources, and Kargo integrations are ordinary Server configuration in versioned
 files backed by ConfigMaps, never CRDs. Each ConfigMap checksum is attached to
 the Server Pod template so a configuration change rolls the Deployment.
 
+Use `server.deploymentAnnotations` and `server.deploymentLabels` to add
+metadata to the Server Deployment itself. Both accept string values.
+Chart-managed labels take precedence when keys overlap.
+
+```yaml
+server:
+  deploymentAnnotations:
+    reloader.stakater.com/auto: "true"
+  deploymentLabels:
+    example.com/team: platform
+```
+
 ## Required configuration
 
 Set the external database URL, S3 endpoint and bucket, OIDC provider, explicit
