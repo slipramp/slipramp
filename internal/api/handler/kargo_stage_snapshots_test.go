@@ -40,6 +40,7 @@ func TestReplaceKargoStageSnapshot(t *testing.T) {
 			  "stages":[{
 			    "project":"core","name":"prod","kubernetesUid":"stage-uid","resourceVersion":"42",
 			    "repositoryUrl":"https://example.com/ops.git","freight":{"items":[]},"conditions":[],
+			    "gates":["network-idle","change-window"],
 			    "autoPromotionEnabled":false,"controlFlow":false,
 			    "requestedFreight":[{"origin":"Warehouse/app","direct":false,"sourceStages":["test"],
 			       "availabilityStrategy":"OneOf","requiredSoakTime":%q}],
@@ -69,6 +70,9 @@ func TestReplaceKargoStageSnapshot(t *testing.T) {
 			if stage.RepositoryURL != "https://example.com/ops.git" || len(stage.RequestedFreight) != 1 ||
 				stage.RequestedFreight[0].RequiredSoakTime != time.Hour || len(stage.CandidateFreight.Items) != 1 {
 				t.Fatalf("Stage observation = %#v", stage)
+			}
+			if len(stage.Gates) != 2 || stage.Gates[0] != "network-idle" || stage.Gates[1] != "change-window" {
+				t.Errorf("Stage Gates = %v", stage.Gates)
 			}
 			if evidence := stage.CandidateFreight.Items[0].VerifiedIn; len(evidence) != 1 || evidence[0].LongestCompletedSoak != 45*time.Minute {
 				t.Errorf("Freight verification = %#v", evidence)

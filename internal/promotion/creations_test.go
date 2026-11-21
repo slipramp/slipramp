@@ -54,8 +54,9 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 			RepositoryName: "ops", RepositoryURL: "https://example.com/ops.git",
 			TargetBranch: "stage/external-dns/prod", SourcePaths: []string{"k8s/external-dns"},
 		},
-		record: Promotion{ID: promotionID},
+		record: Promotion{ID: promotionID, StageSnapshot: PromotionStageSnapshot{Gates: []string{"network-idle"}}},
 	}
+	notifier := &recordingPromotionGateNotifier{}
 	service := NewCreationService(IntegrationSet{
 		"prod": {
 			Repositories:               []string{"ops"},
@@ -63,7 +64,7 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 			MaximumStageObservationAge: 5 * time.Minute,
 			PendingReviewRetention:     8 * 24 * time.Hour,
 		},
-	}, store)
+	}, store, notifier)
 	service.newID = func() uuid.UUID { return promotionID }
 	service.now = func() time.Time { return now }
 	policyExpiresAt := now.Add(30 * time.Minute)
@@ -94,10 +95,13 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 	if !slices.Equal(store.acceptance.AllowedRepositories, []string{"ops"}) {
 		t.Errorf("allowed repositories = %v", store.acceptance.AllowedRepositories)
 	}
+	if notifier.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", notifier.calls)
+	}
 
 	withoutReview := NewCreationService(IntegrationSet{
 		"prod": {MaximumStageObservationAge: 5 * time.Minute},
-	}, store)
+	}, store, nil)
 	withoutReview.now = func() time.Time { return now }
 	if _, err := withoutReview.Create(t.Context(), OperatorPromotionRequest{
 		TargetStageID: stageID,

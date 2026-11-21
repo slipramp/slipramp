@@ -62,6 +62,7 @@ type DecisionRequest struct {
 }
 
 type ReviewStore interface {
+	GateStore
 	GetPromotionStage(context.Context, uuid.UUID) (Stage, error)
 	UpsertPromotionStagePolicy(context.Context, StagePolicy) (StagePolicy, error)
 	ListPromotionReviews(context.Context, PromotionListFilter) (PromotionReviewPage, error)
@@ -72,13 +73,23 @@ type ReviewStore interface {
 }
 
 type ReviewService struct {
-	integrations IntegrationSet
-	store        ReviewStore
-	now          func() time.Time
+	integrations  IntegrationSet
+	store         ReviewStore
+	gateProcessID uuid.UUID
+	now           func() time.Time
 }
 
-func NewReviewService(integrations IntegrationSet, store ReviewStore) *ReviewService {
-	return &ReviewService{integrations: integrations, store: store, now: time.Now}
+func NewReviewService(
+	integrations IntegrationSet,
+	store ReviewStore,
+	gateProcessID uuid.UUID,
+) *ReviewService {
+	return &ReviewService{
+		integrations:  integrations,
+		store:         store,
+		gateProcessID: gateProcessID,
+		now:           time.Now,
+	}
 }
 
 func (s *ReviewService) ExpirePending(ctx context.Context) error {

@@ -2,7 +2,13 @@ import type { Promotion } from "~/api/generated";
 
 type PromotionState = Pick<
   Promotion,
-  "creationDispatch" | "decidedAt" | "kargoOutcome" | "reviewRequired" | "source" | "status"
+  | "creationDispatch"
+  | "decidedAt"
+  | "gates"
+  | "kargoOutcome"
+  | "reviewRequired"
+  | "source"
+  | "status"
 >;
 
 export type PromotionStatusPresentation = {
@@ -45,6 +51,13 @@ export function promotionOverallStatus(promotion: PromotionState): PromotionStat
         : `Kargo reported ${promotion.kargoOutcome.phase.toLowerCase()}`,
       label: promotion.kargoOutcome.phase,
       recordedAt: promotion.kargoOutcome.observedAt,
+    };
+  }
+  if (promotion.status === "approved" && promotion.gates.state === "waiting") {
+    return {
+      color: "yellow",
+      description: "Waiting for every required Gate to pass together",
+      label: "Waiting for gates",
     };
   }
 
@@ -184,6 +197,17 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
       recordedAt: dispatch.deliveredAt,
     };
   }
+  if (
+    promotion.status === "approved" &&
+    promotion.gates.state === "waiting" &&
+    dispatch.phase === "awaiting-delivery"
+  ) {
+    return {
+      color: "yellow",
+      description: "Kargo delivery starts after every required Gate passes together",
+      label: "Waiting for gates",
+    };
+  }
   if (promotion.status === "creating" || promotion.status === "approved") {
     return {
       color: "cyan",
@@ -209,6 +233,13 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
         : `Kargo reported ${promotion.kargoOutcome.phase.toLowerCase()}`,
       label: promotion.kargoOutcome.phase,
       recordedAt: promotion.kargoOutcome.observedAt,
+    };
+  }
+  if (promotion.status === "approved" && promotion.gates.state === "waiting") {
+    return {
+      color: "yellow",
+      description: "Kargo execution starts after every required Gate passes together",
+      label: "Waiting for gates",
     };
   }
   if (

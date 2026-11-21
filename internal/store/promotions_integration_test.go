@@ -22,6 +22,18 @@ import (
 func TestAcceptPromotionRequestIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
+	gateObservedAt := createdAt.Add(90 * time.Second)
+	fixture.stage.ResourceVersion = "2"
+	fixture.stage.Gates = []string{"network-idle"}
+	fixture.stage.FirstObservedAt = gateObservedAt
+	fixture.stage.LastObservedAt = gateObservedAt
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), "prod", "colo", gateObservedAt),
+		[]promotion.Stage{fixture.stage},
+	); err != nil {
+		t.Fatalf("attach Promotion Gates to observed Stage: %v", err)
+	}
 	request := fixture.request("external-dns-01jbe4q8")
 	acceptance := fixture.acceptance(t, request, createdAt.Add(2*time.Minute))
 	automatic, err := fixture.database.AcceptPromotionRequest(fixture.ctx, acceptance)
@@ -38,10 +50,15 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 	if err := fixture.database.pool.QueryRow(fixture.ctx, `
 SELECT stage_snapshot->'freight' = '{"items":[]}'::jsonb
     AND stage_snapshot->'requestedFreight' = '[]'::jsonb
+    AND stage_snapshot->'gates' = '["network-idle"]'::jsonb
     AND NOT (stage_snapshot ? 'successfulRenderAcknowledgement')
     AND selected_freight_snapshot IS NULL
 FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err != nil || !storedSnapshotShape {
 		t.Errorf("stored snapshot shape = %v, %v", storedSnapshotShape, err)
+	}
+	gateNames, err := fixture.database.queries.ListPromotionGateNames(fixture.ctx, databaseUUID(automatic.ID))
+	if err != nil || len(gateNames) != 1 || gateNames[0] != "network-idle" {
+		t.Errorf("persisted Promotion Gates = %v, %v", gateNames, err)
 	}
 	for _, sha := range []string{
 		automatic.ReviewContext.Git.BaseRevision,
@@ -135,6 +152,34 @@ FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err !=
 	}
 }
 
+func TestAcceptPromotionRequestRejectsUnavailableGateContextAtomicallyIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 21, 13, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	observedAt := createdAt.Add(90 * time.Second)
+	fixture.stage.ResourceVersion = "2"
+	fixture.stage.Gates = []string{"missing-gate"}
+	fixture.stage.FirstObservedAt = observedAt
+	fixture.stage.LastObservedAt = observedAt
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), "prod", "colo", observedAt),
+		[]promotion.Stage{fixture.stage},
+	); err != nil {
+		t.Fatalf("attach unavailable Promotion Gate: %v", err)
+	}
+
+	acceptance := fixture.acceptance(t, fixture.request("external-dns-unavailable"), createdAt.Add(2*time.Minute))
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx,
+		acceptance,
+	); !errors.Is(err, promotion.ErrGateContextUnavailable) {
+		t.Fatalf("unavailable Gate acceptance error = %v", err)
+	}
+	if _, err := fixture.database.GetPromotion(fixture.ctx, acceptance.ID); !errors.Is(err, promotion.ErrPromotionNotFound) {
+		t.Errorf("rolled-back Promotion error = %v, want not found", err)
+	}
+}
+
 func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
@@ -162,6 +207,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	fixture.stage.SuccessfulRenderAcknowledgement = &promotion.SuccessfulRenderAcknowledgement{
 		SourceRevision: strings.Repeat("a", 40),
 	}
+	fixture.stage.Gates = []string{"network-idle"}
 	if err := fixture.database.ReplacePromotionStageSnapshot(
 		fixture.ctx,
 		promotionTestSnapshot(uuid.New(), "prod", "colo", createdAt.Add(2*time.Minute)),
@@ -197,6 +243,15 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateOperatorPromotion() error = %v", err)
 	}
+	gateNames, err := fixture.database.queries.ListPromotionGateNames(fixture.ctx, databaseUUID(record.ID))
+	if err != nil || len(gateNames) != 1 || gateNames[0] != "network-idle" {
+		t.Errorf("persisted operator Promotion Gates = %v, %v", gateNames, err)
+	}
+	targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx)
+	if err != nil || len(targets) != 1 || targets[0].GateName != "network-idle" ||
+		targets[0].RepositoryID != fixture.repositoryID {
+		t.Errorf("Promotion Gate evaluation targets = %#v, %v", targets, err)
+	}
 	if record.Source != promotion.SourceSlipramp || record.Lifecycle.State != promotion.LifecycleCreating ||
 		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
 		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
@@ -215,7 +270,8 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Lifecycle.State != promotion.LifecycleCreating ||
 		loaded.SelectedFreightSnapshot == nil || loaded.SelectedFreightSnapshot.Name != "freight-42" ||
 		loaded.StageSnapshot.SuccessfulRenderAcknowledgement == nil ||
-		loaded.StageSnapshot.SuccessfulRenderAcknowledgement.SourceRevision != strings.Repeat("a", 40) {
+		loaded.StageSnapshot.SuccessfulRenderAcknowledgement.SourceRevision != strings.Repeat("a", 40) ||
+		len(loaded.StageSnapshot.Gates) != 1 || loaded.StageSnapshot.Gates[0] != "network-idle" {
 		t.Errorf("GetPromotion() = %#v, %v", loaded, err)
 	}
 
@@ -1333,7 +1389,7 @@ func TestPromotionReviewStateSurvivesStoreRestartIntegration(t *testing.T) {
 		t.Fatalf("Open() after restart error = %v", err)
 	}
 	t.Cleanup(reopened.Close)
-	reviewService := promotion.NewReviewService(nil, reopened)
+	reviewService := promotion.NewReviewService(nil, reopened, uuid.Nil)
 	review, err := reviewService.GetPromotion(fixture.ctx, pending.ID)
 	if err != nil {
 		t.Fatalf("GetPromotion() after restart error = %v", err)
@@ -1362,6 +1418,7 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 		promotionTestStage("prod", "colo", "kargo-core", "external-dns-prod", observedAt),
 		promotionTestStage("prod", "colo", "kargo-platform", "metrics-server-prod", observedAt),
 	}
+	firstStages[0].Gates = []string{"network-idle", "change-window"}
 	if err := database.ReplacePromotionStageSnapshot(ctx, firstSnapshot, firstStages); err != nil {
 		t.Fatalf("first ReplacePromotionStageSnapshot() error = %v", err)
 	}
@@ -1386,6 +1443,7 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	externalDNS.RepositoryURL = ""
 	externalDNS.TargetBranch = ""
 	externalDNS.SourcePaths = nil
+	externalDNS.Gates = []string{"change-window"}
 	externalDNS.AutoPromotionEnabled = true
 	externalDNS.HealthStatus = new("Healthy")
 	externalDNS.ArgoApplicationNamespace = new("argocd")
@@ -1410,6 +1468,7 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 		active.CandidateFreight.Items[0].Name != "freight-new" ||
 		active.Application != "" || active.Environment != "" || active.RepositoryName != "" ||
 		active.RepositoryURL != "" || active.TargetBranch != "" || len(active.SourcePaths) != 0 ||
+		len(active.Gates) != 1 || active.Gates[0] != "change-window" ||
 		active.HealthStatus == nil || *active.HealthStatus != "Healthy" ||
 		active.ArgoApplicationNamespace == nil || *active.ArgoApplicationNamespace != "argocd" {
 		t.Errorf("active Stage = %#v", active)

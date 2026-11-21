@@ -12,6 +12,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gate"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
@@ -186,6 +187,91 @@ func (d *Database) ListRunGateProjections(
 			var definition gate.Definition
 			if err := json.Unmarshal(row.ReleaseDefinition, &definition); err != nil {
 				return nil, fmt.Errorf("decode released Run Gate definition %q: %w", row.GateName, err)
+			}
+			projection.ReleaseDefinition = &definition
+		}
+
+		projections = append(projections, projection)
+	}
+
+	return projections, nil
+}
+
+func (d *Database) ListPromotionGateProjections(
+	ctx context.Context,
+	promotionIDs []uuid.UUID,
+) ([]promotion.GateProjection, error) {
+	databaseIDs := make([]pgtype.UUID, 0, len(promotionIDs))
+	for _, promotionID := range promotionIDs {
+		databaseIDs = append(databaseIDs, databaseUUID(promotionID))
+	}
+
+	rows, err := d.queries.ListPromotionGateProjections(ctx, databaseIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list Promotion Gate projections: %w", err)
+	}
+
+	projections := make([]promotion.GateProjection, 0, len(rows))
+	for _, row := range rows {
+		projection := promotion.GateProjection{
+			PromotionID:        uuid.UUID(row.PromotionID.Bytes),
+			Name:               row.GateName,
+			ReleasedAt:         applicationTime(row.ReleasedAt),
+			ReleaseValue:       cloneFloat64Pointer(row.ReleaseObservedValue),
+			ReleaseEvaluatedAt: applicationTime(row.ReleaseEvaluatedAt),
+		}
+		if row.ActiveGateDefinition != nil {
+			var active catalog.Gate
+			if err := json.Unmarshal(row.ActiveGateDefinition, &active); err != nil {
+				return nil, fmt.Errorf("decode active Promotion Gate %q: %w", row.GateName, err)
+			}
+			projection.ActiveTitle = active.Metadata.Title
+
+			var definition gate.Definition
+			if err := json.Unmarshal(row.ActiveNormalizedDefinition, &definition); err != nil {
+				return nil, fmt.Errorf("decode active Promotion Gate definition %q: %w", row.GateName, err)
+			}
+			projection.ActiveDefinition = &definition
+		}
+		if row.ObservationState != nil {
+			if row.ActiveDefinitionDigest == nil || !row.ActiveCatalogRevisionID.Valid ||
+				!row.EvaluatorProcessID.Valid || !row.ObservationEvaluatedAt.Valid ||
+				!row.ObservationValidUntil.Valid {
+				return nil, fmt.Errorf("promotion Gate observation %q is incomplete", row.GateName)
+			}
+			diagnostic := ""
+			if row.ObservationDiagnostic != nil {
+				diagnostic = *row.ObservationDiagnostic
+			}
+			projection.CurrentObservation = &gate.CurrentObservation{
+				RepositoryID:       uuid.UUID(row.RepositoryID.Bytes),
+				GateName:           row.GateName,
+				CatalogRevisionID:  uuid.UUID(row.ActiveCatalogRevisionID.Bytes),
+				DefinitionDigest:   *row.ActiveDefinitionDigest,
+				EvaluatorProcessID: uuid.UUID(row.EvaluatorProcessID.Bytes),
+				Observation: gate.Observation{
+					State:      gate.ObservationState(*row.ObservationState),
+					Value:      cloneFloat64Pointer(row.ObservationValue),
+					Diagnostic: diagnostic,
+				},
+				EvaluatedAt: row.ObservationEvaluatedAt.Time.UTC(),
+				ValidUntil:  row.ObservationValidUntil.Time.UTC(),
+			}
+		}
+		if projection.ReleasedAt != nil {
+			if row.ReleaseGateDefinition == nil || row.ReleaseDefinition == nil ||
+				projection.ReleaseValue == nil || projection.ReleaseEvaluatedAt == nil {
+				return nil, fmt.Errorf("promotion Gate release evidence %q is incomplete", row.GateName)
+			}
+			var released catalog.Gate
+			if err := json.Unmarshal(row.ReleaseGateDefinition, &released); err != nil {
+				return nil, fmt.Errorf("decode released Promotion Gate %q: %w", row.GateName, err)
+			}
+			projection.ReleaseTitle = released.Metadata.Title
+
+			var definition gate.Definition
+			if err := json.Unmarshal(row.ReleaseDefinition, &definition); err != nil {
+				return nil, fmt.Errorf("decode released Promotion Gate definition %q: %w", row.GateName, err)
 			}
 			projection.ReleaseDefinition = &definition
 		}

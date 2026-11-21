@@ -7,39 +7,38 @@ import {
   gateRequirementStateLabel,
   gateSummaryStateColor,
   gateSummaryStateLabel,
-} from "./run-gates.ts";
+} from "./gate-presentation.ts";
 
-test("Gate summary states have focused presentation", () => {
-  assert.deepEqual(
-    ["not-required", "waiting", "released"].map((state) => [
-      gateSummaryStateLabel(state),
-      gateSummaryStateColor(state),
-    ]),
-    [
-      ["Not required", "gray"],
-      ["Waiting", "yellow"],
-      ["Released", "green"],
-    ],
-  );
+test("presents every Gate summary state", () => {
+  const states = [
+    ["not-required", "Not required", "gray"],
+    ["waiting", "Waiting", "yellow"],
+    ["released", "Released", "green"],
+  ];
+
+  for (const [state, label, color] of states) {
+    assert.deepEqual([gateSummaryStateLabel(state), gateSummaryStateColor(state)], [label, color]);
+  }
 });
 
-test("Gate requirement states distinguish current evidence", () => {
-  assert.deepEqual(
-    ["unevaluated", "passing", "blocking", "unavailable", "released"].map((state) => [
-      gateRequirementStateLabel(state),
-      gateRequirementStateColor(state),
-    ]),
-    [
-      ["Not evaluated", "gray"],
-      ["Passing", "green"],
-      ["Blocking", "red"],
-      ["Unavailable", "orange"],
-      ["Released", "green"],
-    ],
-  );
+test("presents every Gate requirement state", () => {
+  const states = [
+    ["unevaluated", "Not evaluated", "gray"],
+    ["passing", "Passing", "green"],
+    ["blocking", "Blocking", "red"],
+    ["unavailable", "Unavailable", "orange"],
+    ["released", "Released", "green"],
+  ];
+
+  for (const [state, label, color] of states) {
+    assert.deepEqual(
+      [gateRequirementStateLabel(state), gateRequirementStateColor(state)],
+      [label, color],
+    );
+  }
 });
 
-test("Gate conditions use readable comparison labels", () => {
+test("describes Gate conditions without exposing evaluator details", () => {
   assert.equal(gateConditionLabel({ operator: "equal", threshold: 0 }), "Equal to 0");
   assert.equal(gateConditionLabel({ operator: "not-equal", threshold: 1 }), "Not equal to 1");
   assert.equal(gateConditionLabel({ operator: "less-than", threshold: 2 }), "Less than 2");

@@ -297,6 +297,21 @@ type PromotionDecision struct {
 	DecidedAt            pgtype.Timestamptz
 }
 
+type PromotionGate struct {
+	PromotionID               pgtype.UUID
+	RepositoryID              pgtype.UUID
+	GateName                  string
+	AttachmentOrder           int32
+	ReleasedAt                pgtype.Timestamptz
+	ReleaseCatalogRevisionID  pgtype.UUID
+	ReleaseDefinition         []byte
+	ReleaseDefinitionDigest   *string
+	ReleaseEvaluatorProcessID pgtype.UUID
+	ReleaseObservedValue      *float64
+	ReleaseEvaluatedAt        pgtype.Timestamptz
+	ReleaseValidUntil         pgtype.Timestamptz
+}
+
 type PromotionStage struct {
 	ID                              pgtype.UUID
 	Integration                     string
@@ -322,6 +337,7 @@ type PromotionStage struct {
 	HealthStatus                    *string
 	ArgoApplicationNamespace        *string
 	StageStatusJson                 []byte
+	GateNames                       []string
 }
 
 type PromotionStagePolicy struct {

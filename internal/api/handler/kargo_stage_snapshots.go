@@ -101,6 +101,10 @@ func stageObservationFromRequest(observed api.PromotionStageObservation) (promot
 	if observed.SourcePaths != nil {
 		sourcePaths = append(sourcePaths, (*observed.SourcePaths)...)
 	}
+	gates := make([]string, 0, len(observed.Gates))
+	for _, name := range observed.Gates {
+		gates = append(gates, string(name))
+	}
 	return promotion.StageObservation{
 		Project:                         string(observed.Project),
 		Name:                            observed.Name,
@@ -111,6 +115,7 @@ func stageObservationFromRequest(observed api.PromotionStageObservation) (promot
 		RepositoryURL:                   valueOrEmptyString(observed.RepositoryURL),
 		TargetBranch:                    valueOrEmptyString(observed.TargetBranch),
 		SourcePaths:                     sourcePaths,
+		Gates:                           gates,
 		RequestedFreight:                requests,
 		Freight:                         freight,
 		CandidateFreight:                candidates,

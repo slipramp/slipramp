@@ -52,23 +52,46 @@ type PromotionAcceptance struct {
 	PendingReviewRetention     time.Duration
 }
 
+type KargoResponseStatus string
+
+const KargoResponseStatusGated KargoResponseStatus = "gated"
+
+type KargoSubmission struct {
+	Promotion Promotion
+	Status    KargoResponseStatus
+}
+
 type PromotionRequestStore interface {
 	AcceptPromotionRequest(context.Context, PromotionAcceptance) (Promotion, error)
+	ReleasePromotionGates(context.Context, uuid.UUID, uuid.UUID, time.Time) (bool, error)
+}
+
+type GateEvaluationNotifier interface {
+	Notify()
 }
 
 type RequestService struct {
-	integrations IntegrationSet
-	requests     PromotionRequestStore
-	newID        func() uuid.UUID
-	now          func() time.Time
+	integrations           IntegrationSet
+	requests               PromotionRequestStore
+	gateEvaluatorProcessID uuid.UUID
+	gateEvaluations        GateEvaluationNotifier
+	newID                  func() uuid.UUID
+	now                    func() time.Time
 }
 
-func NewRequestService(integrations IntegrationSet, requests PromotionRequestStore) *RequestService {
+func NewRequestService(
+	integrations IntegrationSet,
+	requests PromotionRequestStore,
+	gateEvaluatorProcessID uuid.UUID,
+	gateEvaluations GateEvaluationNotifier,
+) *RequestService {
 	return &RequestService{
-		integrations: integrations,
-		requests:     requests,
-		newID:        uuid.New,
-		now:          time.Now,
+		integrations:           integrations,
+		requests:               requests,
+		gateEvaluatorProcessID: gateEvaluatorProcessID,
+		gateEvaluations:        gateEvaluations,
+		newID:                  uuid.New,
+		now:                    time.Now,
 	}
 }
 
@@ -188,21 +211,21 @@ func (s *RequestService) SubmitKargoPromotion(
 	integrationName string,
 	request KargoRequest,
 	principal productidentity.Principal,
-) (Promotion, error) {
+) (KargoSubmission, error) {
 	integration, ok := s.integrations.Lookup(integrationName)
 	if !ok {
-		return Promotion{}, ErrIntegrationNotFound
+		return KargoSubmission{}, ErrIntegrationNotFound
 	}
 	digest, err := request.Digest()
 	if err != nil {
-		return Promotion{}, err
+		return KargoSubmission{}, err
 	}
 	actor, err := principal.ActorSnapshot()
 	if err != nil {
-		return Promotion{}, invalid(err)
+		return KargoSubmission{}, invalid(err)
 	}
 	if principal.Kind != productidentity.KindServiceAccount {
-		return Promotion{}, fmt.Errorf("%w: requesting principal must be a service account", ErrInvalid)
+		return KargoSubmission{}, fmt.Errorf("%w: requesting principal must be a service account", ErrInvalid)
 	}
 
 	acceptedAt := s.now().UTC().Truncate(time.Microsecond)
@@ -219,5 +242,29 @@ func (s *RequestService) SubmitKargoPromotion(
 		PendingReviewRetention:     integration.PendingReviewRetention,
 	}
 
-	return s.requests.AcceptPromotionRequest(ctx, acceptance)
+	record, err := s.requests.AcceptPromotionRequest(ctx, acceptance)
+	if err != nil {
+		return KargoSubmission{}, err
+	}
+	if s.gateEvaluations != nil && len(record.StageSnapshot.Gates) > 0 {
+		defer s.gateEvaluations.Notify()
+	}
+
+	status := KargoResponseStatus(record.Lifecycle.State)
+	if record.Lifecycle.State == LifecycleApproved && len(record.StageSnapshot.Gates) > 0 {
+		released, releaseErr := s.requests.ReleasePromotionGates(
+			ctx,
+			record.ID,
+			s.gateEvaluatorProcessID,
+			acceptedAt,
+		)
+		if releaseErr != nil {
+			return KargoSubmission{}, releaseErr
+		}
+		if !released {
+			status = KargoResponseStatusGated
+		}
+	}
+
+	return KargoSubmission{Promotion: record, Status: status}, nil
 }

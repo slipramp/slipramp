@@ -77,6 +77,10 @@ func (d *Database) CreateOperatorPromotion(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
+	gateRepositoryID, err := resolvePromotionGateRepository(ctx, queries, target, acceptance.AllowedRepositories)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
 	if acceptance.Policy != nil {
 		if _, err := upsertPromotionStagePolicy(ctx, queries, *acceptance.Policy); err != nil {
 			return promotion.Promotion{}, fmt.Errorf("update operator Promotion Stage policy: %w", err)
@@ -141,6 +145,9 @@ func (d *Database) CreateOperatorPromotion(
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("insert operator Promotion: %w", err)
 	}
+	if err := createPromotionGates(ctx, queries, record, gateRepositoryID); err != nil {
+		return promotion.Promotion{}, err
+	}
 	if err := transaction.Commit(ctx); err != nil {
 		return promotion.Promotion{}, fmt.Errorf("commit operator Promotion creation: %w", err)
 	}
@@ -194,4 +201,68 @@ func resolvePromotionReviewContext(
 		},
 		TargetBranch: stage.TargetBranch,
 	}, nil
+}
+
+func resolvePromotionGateRepository(
+	ctx context.Context,
+	queries *storedb.Queries,
+	stage promotion.Stage,
+	allowedRepositories []string,
+) (*uuid.UUID, error) {
+	if len(stage.Gates) == 0 {
+		return nil, nil
+	}
+	if stage.RepositoryName == "" || stage.RepositoryURL == "" ||
+		!slices.Contains(allowedRepositories, stage.RepositoryName) {
+		return nil, promotion.ErrGateContextUnavailable
+	}
+
+	repositoryRow, err := queries.GetActivePromotionRepositoryByName(ctx, stage.RepositoryName)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && repositoryRow.CloneUrl != stage.RepositoryURL) {
+		return nil, promotion.ErrGateContextUnavailable
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get Promotion Gate repository: %w", err)
+	}
+
+	repositoryID := uuid.UUID(repositoryRow.ID.Bytes)
+	count, err := queries.CountActivePromotionGates(ctx, storedb.CountActivePromotionGatesParams{
+		RepositoryID: databaseUUID(repositoryID),
+		GateNames:    stage.Gates,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolve Promotion Gates: %w", err)
+	}
+	if count != int64(len(stage.Gates)) {
+		return nil, promotion.ErrGateContextUnavailable
+	}
+
+	return &repositoryID, nil
+}
+
+func createPromotionGates(
+	ctx context.Context,
+	queries *storedb.Queries,
+	record promotion.Promotion,
+	repositoryID *uuid.UUID,
+) error {
+	if len(record.StageSnapshot.Gates) == 0 {
+		return nil
+	}
+	if repositoryID == nil {
+		return promotion.ErrGateContextUnavailable
+	}
+
+	for index, gateName := range record.StageSnapshot.Gates {
+		if err := queries.CreatePromotionGate(ctx, storedb.CreatePromotionGateParams{
+			PromotionID:     databaseUUID(record.ID),
+			RepositoryID:    databaseUUID(*repositoryID),
+			GateName:        gateName,
+			AttachmentOrder: int32(index),
+		}); err != nil {
+			return fmt.Errorf("record Promotion Gate %q: %w", gateName, err)
+		}
+	}
+
+	return nil
 }

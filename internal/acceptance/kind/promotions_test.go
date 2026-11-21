@@ -79,7 +79,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		CandidateBranch:     new("kargo/promotion/acceptance-operator"),
 	}
 	hydrated := submitKargoPromotion(t, kargoClient, operatorCallback)
-	if hydrated.ID != operator.ID || hydrated.Status != api.PromotionStatusApproved || hydrated.ReviewRequired {
+	if hydrated.ID != operator.ID || hydrated.Status != api.KargoPromotionStatusApproved || hydrated.ReviewRequired {
 		t.Fatalf("hydrated operator Promotion = %#v", hydrated)
 	}
 	operatorRead := s.getPromotion(t, operator.ID)
@@ -90,7 +90,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		t.Fatalf("hydrated operator Promotion read = %#v", operatorRead)
 	}
 	operatorRetry := submitKargoPromotion(t, kargoClient, operatorCallback)
-	if operatorRetry.ID != operator.ID || operatorRetry.Status != api.PromotionStatusApproved {
+	if operatorRetry.ID != operator.ID || operatorRetry.Status != api.KargoPromotionStatusApproved {
 		t.Fatalf("operator callback retry = %#v", operatorRetry)
 	}
 
@@ -104,7 +104,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		CandidateBranch:     new("kargo/promotion/acceptance-automatic"),
 	}
 	automatic := submitKargoPromotion(t, kargoClient, automaticRequest)
-	if automatic.Status != api.PromotionStatusApproved || automatic.ReviewRequired {
+	if automatic.Status != api.KargoPromotionStatusApproved || automatic.ReviewRequired {
 		t.Fatalf("automatic Promotion = %#v", automatic)
 	}
 	automaticRead := s.getPromotion(t, automatic.ID)
@@ -115,7 +115,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 		t.Fatalf("automatic Promotion created preparation Runs: %#v", runs)
 	}
 	automaticRetry := submitKargoPromotion(t, kargoClient, automaticRequest)
-	if automaticRetry.ID != automatic.ID || automaticRetry.Status != api.PromotionStatusApproved {
+	if automaticRetry.ID != automatic.ID || automaticRetry.Status != api.KargoPromotionStatusApproved {
 		t.Fatalf("automatic Promotion retry = %#v", automaticRetry)
 	}
 	automaticFinal := s.waitForPromotionKargoOutcome(t, automatic.ID)
@@ -343,7 +343,7 @@ func (s *suite) checkGuardedPromotion(
 	}
 	created := submitKargoPromotion(t, kargoClient, request)
 	if !created.ReviewRequired ||
-		(created.Status != api.PromotionStatusPreparing && created.Status != api.PromotionStatusPending) {
+		(created.Status != api.KargoPromotionStatusPreparing && created.Status != api.KargoPromotionStatusPending) {
 		t.Fatalf("guarded Promotion creation = %#v", created)
 	}
 	promotion := s.waitForPendingPromotion(t, created.ID)
@@ -405,7 +405,7 @@ func (s *suite) checkGuardedPromotion(
 	}
 
 	retry := submitKargoPromotion(t, kargoClient, request)
-	if retry.ID != promotion.ID || retry.Status != api.PromotionStatusPending {
+	if retry.ID != promotion.ID || retry.Status != api.KargoPromotionStatusPending {
 		t.Fatalf("guarded Promotion retry = %#v", retry)
 	}
 	runs := s.listRunsForTarget(t, kargoTargetID)

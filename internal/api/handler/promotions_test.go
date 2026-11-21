@@ -23,6 +23,7 @@ type recordingPromotionService struct {
 	request     promotion.KargoRequest
 	principal   productidentity.Principal
 	record      promotion.Promotion
+	status      promotion.KargoResponseStatus
 	health      []promotion.IntegrationHealth
 	err         error
 }
@@ -35,6 +36,7 @@ type recordingPromotionReviewService struct {
 	promotions      promotion.PromotionReviewList
 	review          promotion.PromotionReview
 	policy          promotion.PromotionPolicySnapshot
+	gates           map[uuid.UUID]promotion.GateSummary
 	err             error
 }
 
@@ -90,17 +92,39 @@ func (s *recordingPromotionReviewService) Decide(
 	return s.review, s.err
 }
 
+func (s *recordingPromotionReviewService) GateSummaries(
+	_ context.Context,
+	records []promotion.Promotion,
+	_ time.Time,
+) (map[uuid.UUID]promotion.GateSummary, error) {
+	if s.gates != nil {
+		return s.gates, s.err
+	}
+
+	result := make(map[uuid.UUID]promotion.GateSummary, len(records))
+	for _, record := range records {
+		result[record.ID] = notRequiredPromotionGates()
+	}
+
+	return result, s.err
+}
+
 func (s *recordingPromotionService) SubmitKargoPromotion(
 	_ context.Context,
 	integration string,
 	request promotion.KargoRequest,
 	principal productidentity.Principal,
-) (promotion.Promotion, error) {
+) (promotion.KargoSubmission, error) {
 	s.integration = integration
 	s.request = request
 	s.principal = principal
 
-	return s.record, s.err
+	status := s.status
+	if status == "" {
+		status = promotion.KargoResponseStatus(s.record.Lifecycle.State)
+	}
+
+	return promotion.KargoSubmission{Promotion: s.record, Status: status}, s.err
 }
 
 func (s *recordingPromotionService) ReplaceStageSnapshot(
@@ -165,6 +189,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	httpHandler := NewHTTP(
 		Dependencies{
 			PromotionCreations: promotions,
+			PromotionReviews:   &recordingPromotionReviewService{},
 			ProductAuthentication: &recordingProductAuthenticationService{
 				authentication: authentication,
 			},
@@ -239,7 +264,12 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		ArgoCDUIURLs: map[string]string{"prod": "https://argocd.example.com"},
 	}}
 
-	body, err := promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
+	body, err := promotionResponse(
+		promotion.PromotionReview{Promotion: record},
+		nil,
+		integrations,
+		notRequiredPromotionGates(),
+	)
 	if err != nil {
 		t.Fatalf("promotionResponse() error = %v", err)
 	}
@@ -253,7 +283,12 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 
 	uid := "promotion-uid"
 	record.KargoExecution.PromotionUID = &uid
-	body, err = promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
+	body, err = promotionResponse(
+		promotion.PromotionReview{Promotion: record},
+		nil,
+		integrations,
+		notRequiredPromotionGates(),
+	)
 	if err != nil {
 		t.Fatalf("dispatched promotionResponse() error = %v", err)
 	}
@@ -287,7 +322,12 @@ func TestPromotionResponseOmitsUnavailableReviewContext(t *testing.T) {
 	}
 	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
 
-	body, err := promotionResponse(promotion.PromotionReview{Promotion: record}, nil, nil)
+	body, err := promotionResponse(
+		promotion.PromotionReview{Promotion: record},
+		nil,
+		nil,
+		notRequiredPromotionGates(),
+	)
 	if err != nil {
 		t.Fatalf("promotionResponse() error = %v", err)
 	}
@@ -315,10 +355,10 @@ func TestSubmitKargoPromotionReturnsDurableState(t *testing.T) {
 		record: promotion.Promotion{
 			ID:                  promotionID,
 			ExternalPromotionID: "external-dns-01jbe4q8",
-			Lifecycle:           promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
-			ReviewRequired:      true,
+			Lifecycle:           promotion.PromotionLifecycle{State: promotion.LifecycleApproved},
 			UpdatedAt:           now,
 		},
+		status: promotion.KargoResponseStatusGated,
 	}
 	authentication := productAuthentication(
 		productidentity.RoleOperator,
@@ -361,7 +401,7 @@ func TestSubmitKargoPromotionReturnsDurableState(t *testing.T) {
 		promotions.principal.ID != authentication.Principal.ID {
 		t.Errorf("submission = %#v", promotions)
 	}
-	for _, expected := range []string{promotionID.String(), `"status":"preparing"`, `"reviewRequired":true`} {
+	for _, expected := range []string{promotionID.String(), `"status":"gated"`, `"reviewRequired":false`} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
 		}
@@ -451,6 +491,15 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 			Limit:  10,
 			Offset: 2,
 		},
+		gates: map[uuid.UUID]promotion.GateSummary{
+			promotionID: {
+				State: promotion.GateSummaryStateWaiting,
+				Requirements: []promotion.GateRequirement{{
+					Name: "network-idle", Title: "Network idle",
+					State: promotion.GateRequirementStateBlocking,
+				}},
+			},
+		},
 	}
 	// The response snapshot is immutable and independently validated by the
 	// domain store. Keep the actor IDs aligned for the API conversion.
@@ -505,11 +554,19 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		promotionID.String(),
 		`"total":1`,
 		`"status":"pending"`,
+		`"gates":{"requirements":[{"name":"network-idle","state":"blocking","title":"Network idle"}],"state":"waiting"}`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/promotion/external-dns-01jbe4q8"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
 		}
+	}
+}
+
+func notRequiredPromotionGates() promotion.GateSummary {
+	return promotion.GateSummary{
+		State:        promotion.GateSummaryStateNotRequired,
+		Requirements: []promotion.GateRequirement{},
 	}
 }
 

@@ -24,6 +24,7 @@ const (
 	promotionRepositoryAnnotation   = "slipramp.com/promotion-repository-url"
 	promotionTargetBranchAnnotation = "slipramp.com/promotion-target-branch"
 	promotionSourcePathsAnnotation  = "slipramp.com/promotion-source-paths"
+	promotionGatesAnnotation        = "slipramp.com/promotion-gates"
 )
 
 type kargoStage struct {
@@ -99,6 +100,14 @@ func normalizeKargoStage(
 		}
 		sourcePaths = &parsed
 	}
+	gates := []api.CatalogName{}
+	if value, present := annotations[promotionGatesAnnotation]; present {
+		parsed, parseErr := kargoPromotionGates(value)
+		if parseErr != nil {
+			return api.PromotionStageObservation{}, parseErr
+		}
+		gates = parsed
+	}
 	requestedFreight, err := requestedKargoFreight(raw)
 	if err != nil {
 		return api.PromotionStageObservation{}, err
@@ -123,6 +132,7 @@ func normalizeKargoStage(
 		AutoPromotionEnabled: raw.Status.AutoPromotionEnabled,
 		ControlFlow:          raw.Spec.PromotionTemplate == nil || len(raw.Spec.PromotionTemplate.Spec.Steps) == 0,
 		Conditions:           kargoStageConditions(raw),
+		Gates:                gates,
 		CurrentPromotion:     observedStagePromotionReference(raw.Status.CurrentPromotion),
 		LastPromotion:        observedStagePromotionReference(raw.Status.LastPromotion),
 		HealthStatus:         optionalNonemptyString(healthStatus),
@@ -272,6 +282,28 @@ func kargoSourcePaths(value string) ([]string, error) {
 	}
 
 	return paths, nil
+}
+
+func kargoPromotionGates(value string) ([]api.CatalogName, error) {
+	var names []string
+	if err := json.Unmarshal([]byte(value), &names); err != nil || names == nil {
+		return nil, fmt.Errorf("%s must be a JSON array of Gate names", promotionGatesAnnotation)
+	}
+
+	gates := make([]api.CatalogName, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if name != strings.TrimSpace(name) || len(validation.IsDNS1123Label(name)) > 0 {
+			return nil, fmt.Errorf("gate name %q must be a DNS label", name)
+		}
+		if _, exists := seen[name]; exists {
+			return nil, fmt.Errorf("gate name %q is duplicated", name)
+		}
+		seen[name] = struct{}{}
+		gates = append(gates, api.CatalogName(name))
+	}
+
+	return gates, nil
 }
 
 func kargoSuccessfulRenderAcknowledgement(stage kargoStage) *api.SuccessfulRenderAcknowledgement {

@@ -53,6 +53,7 @@ import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
+import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
@@ -910,6 +911,7 @@ function PromotionWorkspace({
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
             <Stack gap="lg">
+              <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
               {promotion.selectedFreight ? (
                 <SelectedFreight freight={promotion.selectedFreight} />
               ) : null}

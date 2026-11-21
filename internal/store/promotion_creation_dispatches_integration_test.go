@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
 
@@ -129,6 +131,186 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 		ReportedAt:  dispatchedAt.Add(2 * time.Second),
 	}); !errors.Is(err, promotion.ErrCreationDispatchConflict) {
 		t.Fatalf("conflicting UID error = %v", err)
+	}
+}
+
+func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	acceptedAt := createdAt.Add(2 * time.Minute)
+	evaluatorID := uuid.New()
+
+	stage := fixture.stage
+	stage.ResourceVersion = "2"
+	stage.Gates = []string{"network-idle"}
+	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin:    "Warehouse/external-dns",
+		Name:      "freight-42",
+		Artifacts: []promotion.FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+	}}}
+	stage.FirstObservedAt = acceptedAt.Add(-30 * time.Second)
+	stage.LastObservedAt = acceptedAt.Add(-30 * time.Second)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), stage.Integration, stage.ClusterName, stage.LastObservedAt),
+		[]promotion.Stage{stage},
+	); err != nil {
+		t.Fatalf("attach Gate to dispatch Stage: %v", err)
+	}
+
+	record, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		promotion.OperatorPromotionAcceptance{
+			ID:                         uuid.New(),
+			Integration:                stage.Integration,
+			TargetStageID:              stage.ID,
+			SourceStageID:              stage.ID,
+			FreightName:                "freight-42",
+			AllowedRepositories:        []string{stage.RepositoryName},
+			RequestedByPrincipalID:     fixture.principal.ID,
+			RequestedBySnapshot:        fixture.actor,
+			AcceptedAt:                 acceptedAt,
+			MaximumStageObservationAge: 5 * time.Minute,
+			PendingReviewRetention:     8 * 24 * time.Hour,
+		},
+	)
+	if err != nil {
+		t.Fatalf("create gated automatic Promotion: %v", err)
+	}
+	claim := promotion.CreationDispatchClaim{
+		ClusterName:            stage.ClusterName,
+		GateEvaluatorProcessID: evaluatorID,
+		ClaimedAt:              acceptedAt,
+		RetryDelays:            []time.Duration{time.Minute, 5 * time.Minute},
+		ExhaustedMessage:       "dispatch attempts exhausted",
+	}
+	assertNoPromotionCreationDispatch(t, fixture, claim)
+
+	targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx)
+	if err != nil || len(targets) != 1 {
+		t.Fatalf("Promotion Gate evaluation targets = %#v, %v", targets, err)
+	}
+	target := targets[0]
+	digest, err := target.Definition.Digest()
+	if err != nil {
+		t.Fatalf("digest Promotion Gate definition: %v", err)
+	}
+	observedValue := 1.0
+	observation := gate.CurrentObservation{
+		RepositoryID:       fixture.repositoryID,
+		GateName:           "network-idle",
+		CatalogRevisionID:  target.CatalogRevisionID,
+		DefinitionDigest:   digest,
+		EvaluatorProcessID: evaluatorID,
+		Observation: gate.Observation{
+			State: gate.ObservationBlocking,
+			Value: &observedValue,
+		},
+		EvaluatedAt: acceptedAt.Add(-10 * time.Second),
+		ValidUntil:  acceptedAt.Add(35 * time.Second),
+	}
+	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
+		t.Fatalf("record blocking Promotion Gate observation: %v", err)
+	}
+	assertNoPromotionCreationDispatch(t, fixture, claim)
+
+	observedValue = 0
+	observation.Observation = gate.Observation{State: gate.ObservationPassing, Value: &observedValue}
+	observation.EvaluatorProcessID = uuid.New()
+	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
+		t.Fatalf("record prior-process Promotion Gate observation: %v", err)
+	}
+	assertNoPromotionCreationDispatch(t, fixture, claim)
+
+	observation.EvaluatorProcessID = evaluatorID
+	observation.ValidUntil = acceptedAt
+	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
+		t.Fatalf("record stale Promotion Gate observation: %v", err)
+	}
+	assertNoPromotionCreationDispatch(t, fixture, claim)
+
+	observation.ValidUntil = acceptedAt.Add(35 * time.Second)
+	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
+		t.Fatalf("record passing Promotion Gate observation: %v", err)
+	}
+	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	if err != nil || claimed.ID != record.ID || claimed.CreationDispatch.AttemptCount != 1 {
+		t.Fatalf("claim released automatic Promotion = %#v, %v", claimed, err)
+	}
+
+	var (
+		releasedAt               time.Time
+		releaseCatalogRevisionID pgtype.UUID
+		releaseDefinitionDigest  string
+		releaseEvaluatorID       pgtype.UUID
+		releaseObservedValue     float64
+		releaseEvaluatedAt       time.Time
+		releaseValidUntil        time.Time
+	)
+	err = fixture.database.pool.QueryRow(
+		fixture.ctx,
+		`SELECT
+             released_at,
+             release_catalog_revision_id,
+             release_definition_digest,
+             release_evaluator_process_id,
+             release_observed_value,
+             release_evaluated_at,
+             release_valid_until
+         FROM promotion_gates
+         WHERE promotion_id = $1 AND gate_name = 'network-idle'`,
+		databaseUUID(record.ID),
+	).Scan(
+		&releasedAt,
+		&releaseCatalogRevisionID,
+		&releaseDefinitionDigest,
+		&releaseEvaluatorID,
+		&releaseObservedValue,
+		&releaseEvaluatedAt,
+		&releaseValidUntil,
+	)
+	if err != nil {
+		t.Fatalf("load Promotion Gate release evidence: %v", err)
+	}
+	if !releasedAt.Equal(acceptedAt) ||
+		uuid.UUID(releaseCatalogRevisionID.Bytes) != target.CatalogRevisionID ||
+		releaseDefinitionDigest != digest ||
+		uuid.UUID(releaseEvaluatorID.Bytes) != evaluatorID ||
+		releaseObservedValue != observedValue ||
+		!releaseEvaluatedAt.Equal(observation.EvaluatedAt) ||
+		!releaseValidUntil.Equal(observation.ValidUntil) {
+		t.Errorf("released Promotion Gate evidence does not match current observation")
+	}
+
+	observedValue = 1
+	observation.Observation = gate.Observation{State: gate.ObservationBlocking, Value: &observedValue}
+	observation.EvaluatedAt = acceptedAt.Add(30 * time.Second)
+	observation.ValidUntil = acceptedAt.Add(75 * time.Second)
+	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
+		t.Fatalf("record post-release blocking observation: %v", err)
+	}
+	claim.ClaimedAt = acceptedAt.Add(time.Minute)
+	retry, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	if err != nil || retry.ID != record.ID || retry.CreationDispatch.AttemptCount != 2 {
+		t.Fatalf("claim released Promotion retry = %#v, %v", retry, err)
+	}
+	if targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx); err != nil || len(targets) != 0 {
+		t.Errorf("Gate evaluation targets after Promotion release = %#v, %v", targets, err)
+	}
+}
+
+func assertNoPromotionCreationDispatch(
+	t *testing.T,
+	fixture promotionIntegrationFixture,
+	claim promotion.CreationDispatchClaim,
+) {
+	t.Helper()
+
+	if _, err := fixture.database.ClaimPromotionCreation(
+		fixture.ctx,
+		claim,
+	); !errors.Is(err, promotion.ErrNoCreationDispatch) {
+		t.Fatalf("ClaimPromotionCreation() error = %v, want no dispatch", err)
 	}
 }
 

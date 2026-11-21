@@ -117,6 +117,7 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 				RepositoryURL:            "https://example.com/ops.git",
 				TargetBranch:             "stage/external-dns/prod",
 				SourcePaths:              []string{"k8s/external-dns/base"},
+				Gates:                    []string{"network-idle", "change-window"},
 				Freight:                  Freight{Items: []FreightItem{}},
 				CandidateFreight:         Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}},
 				AutoPromotionEnabled:     true,
@@ -141,6 +142,9 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 		len(stage.CandidateFreight.Items) != 1 || stage.CandidateFreight.Items[0].Name != "freight-new" {
 		t.Errorf("stored Stage = %#v", stage)
 	}
+	if len(stage.Gates) != 2 || stage.Gates[0] != "network-idle" || stage.Gates[1] != "change-window" {
+		t.Errorf("stored Stage Gates = %v", stage.Gates)
+	}
 	stage.RequestedFreight = []FreightRequest{{Origin: "Warehouse/app", SourceStages: []string{"app-qa"}}}
 	stage.Freight = Freight{Items: []FreightItem{{
 		Name: "freight-42", Artifacts: []FreightArtifact{{Repository: new("ghcr.io/example/app"), Version: "1.0"}},
@@ -148,11 +152,13 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	stage.SuccessfulRenderAcknowledgement = &SuccessfulRenderAcknowledgement{SourceRevision: "observed"}
 	frozen := stage.PromotionSnapshot()
 	stage.SourcePaths[0] = "changed"
+	stage.Gates[0] = "changed"
 	stage.RequestedFreight[0].SourceStages[0] = "changed"
 	*stage.Freight.Items[0].Artifacts[0].Repository = "changed"
 	*stage.ArgoApplicationNamespace = "changed"
 	stage.SuccessfulRenderAcknowledgement.SourceRevision = "changed"
-	if frozen.Enrichment.SourcePaths[0] != "k8s/external-dns/base" || frozen.RequestedFreight[0].SourceStages[0] != "app-qa" ||
+	if frozen.Enrichment.SourcePaths[0] != "k8s/external-dns/base" || frozen.Gates[0] != "network-idle" ||
+		frozen.RequestedFreight[0].SourceStages[0] != "app-qa" ||
 		*frozen.Freight.Items[0].Artifacts[0].Repository != "ghcr.io/example/app" ||
 		*frozen.ArgoApplicationNamespace != "argocd" ||
 		frozen.SuccessfulRenderAcknowledgement.SourceRevision != "observed" {

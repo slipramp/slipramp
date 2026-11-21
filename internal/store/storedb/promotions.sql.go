@@ -273,6 +273,30 @@ func (q *Queries) CompletePromotionPreparation(ctx context.Context, arg Complete
 	return i, err
 }
 
+const countActivePromotionGates = `-- name: CountActivePromotionGates :one
+SELECT count(*)
+FROM repositories
+JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE repositories.id = $1
+  AND repositories.removed_at IS NULL
+  AND catalog_gates.name = ANY($2::text[])
+`
+
+type CountActivePromotionGatesParams struct {
+	RepositoryID pgtype.UUID
+	GateNames    []string
+}
+
+func (q *Queries) CountActivePromotionGates(ctx context.Context, arg CountActivePromotionGatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countActivePromotionGates, arg.RepositoryID, arg.GateNames)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPendingPromotionsByStage = `-- name: CountPendingPromotionsByStage :many
 SELECT stage_id, count(*) AS pending_promotion_count
 FROM promotions
@@ -585,6 +609,37 @@ func (q *Queries) CreatePromotion(ctx context.Context, arg CreatePromotionParams
 		&i.DispatchDiagnostic,
 	)
 	return i, err
+}
+
+const createPromotionGate = `-- name: CreatePromotionGate :exec
+INSERT INTO promotion_gates (
+    promotion_id,
+    repository_id,
+    gate_name,
+    attachment_order
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
+`
+
+type CreatePromotionGateParams struct {
+	PromotionID     pgtype.UUID
+	RepositoryID    pgtype.UUID
+	GateName        string
+	AttachmentOrder int32
+}
+
+func (q *Queries) CreatePromotionGate(ctx context.Context, arg CreatePromotionGateParams) error {
+	_, err := q.db.Exec(ctx, createPromotionGate,
+		arg.PromotionID,
+		arg.RepositoryID,
+		arg.GateName,
+		arg.AttachmentOrder,
+	)
+	return err
 }
 
 const exhaustPromotionCreationDispatch = `-- name: ExhaustPromotionCreationDispatch :one
@@ -1120,7 +1175,7 @@ func (q *Queries) GetPromotionDecision(ctx context.Context, promotionID pgtype.U
 }
 
 const getPromotionStage = `-- name: GetPromotionStage :one
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json, gate_names
 FROM promotion_stages
 WHERE id = $1
 `
@@ -1153,12 +1208,13 @@ func (q *Queries) GetPromotionStage(ctx context.Context, id pgtype.UUID) (Promot
 		&i.HealthStatus,
 		&i.ArgoApplicationNamespace,
 		&i.StageStatusJson,
+		&i.GateNames,
 	)
 	return i, err
 }
 
 const getPromotionStageByIdentity = `-- name: GetPromotionStageByIdentity :one
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json, gate_names
 FROM promotion_stages
 WHERE integration = $1
   AND project = $2
@@ -1199,6 +1255,7 @@ func (q *Queries) GetPromotionStageByIdentity(ctx context.Context, arg GetPromot
 		&i.HealthStatus,
 		&i.ArgoApplicationNamespace,
 		&i.StageStatusJson,
+		&i.GateNames,
 	)
 	return i, err
 }
@@ -1489,6 +1546,33 @@ func (q *Queries) LinkPromotionPreparationRun(ctx context.Context, arg LinkPromo
 	return result.RowsAffected(), nil
 }
 
+const listPromotionGateNames = `-- name: ListPromotionGateNames :many
+SELECT gate_name
+FROM promotion_gates
+WHERE promotion_id = $1
+ORDER BY attachment_order
+`
+
+func (q *Queries) ListPromotionGateNames(ctx context.Context, promotionID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPromotionGateNames, promotionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var gate_name string
+		if err := rows.Scan(&gate_name); err != nil {
+			return nil, err
+		}
+		items = append(items, gate_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPromotionReviews = `-- name: ListPromotionReviews :many
 SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic, dispatch_failed_at, dispatch_diagnostic
 FROM promotions
@@ -1651,7 +1735,7 @@ func (q *Queries) ListPromotionStagePolicies(ctx context.Context, stageIds []pgt
 }
 
 const listPromotionStages = `-- name: ListPromotionStages :many
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json, gate_names
 FROM promotion_stages
 ORDER BY integration, project, name
 `
@@ -1690,6 +1774,7 @@ func (q *Queries) ListPromotionStages(ctx context.Context) ([]PromotionStage, er
 			&i.HealthStatus,
 			&i.ArgoApplicationNamespace,
 			&i.StageStatusJson,
+			&i.GateNames,
 		); err != nil {
 			return nil, err
 		}
@@ -1718,18 +1803,48 @@ WHERE source = 'slipramp'
   AND dispatched_at IS NULL
   AND dispatch_failed_at IS NULL
   AND stage_snapshot ->> 'cluster' = $2::text
+  AND (
+      review_required
+      OR NOT EXISTS (
+          SELECT 1
+          FROM promotion_gates
+          WHERE promotion_gates.promotion_id = promotions.id
+            AND promotion_gates.released_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM repositories
+                JOIN catalog_revisions
+                  ON catalog_revisions.id = repositories.active_catalog_revision_id
+                JOIN catalog_gates
+                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+                 AND catalog_gates.name = promotion_gates.gate_name
+                JOIN gate_observations
+                  ON gate_observations.repository_id = promotion_gates.repository_id
+                 AND gate_observations.gate_name = promotion_gates.gate_name
+                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
+                 AND gate_observations.definition_digest = catalog_gates.definition_digest
+                 AND gate_observations.evaluator_process_id = $3
+                 AND gate_observations.state = 'passing'
+                 AND gate_observations.evaluated_at <= $1
+                 AND gate_observations.valid_until > $1
+                WHERE repositories.id = promotion_gates.repository_id
+                  AND repositories.removed_at IS NULL
+            )
+      )
+  )
 ORDER BY next_dispatch_at, created_at, id
 FOR UPDATE SKIP LOCKED
 LIMIT 1
 `
 
 type LockNextPromotionCreationDispatchParams struct {
-	DueAt       pgtype.Timestamptz
-	ClusterName string
+	DueAt              pgtype.Timestamptz
+	ClusterName        string
+	EvaluatorProcessID pgtype.UUID
 }
 
 func (q *Queries) LockNextPromotionCreationDispatch(ctx context.Context, arg LockNextPromotionCreationDispatchParams) (Promotion, error) {
-	row := q.db.QueryRow(ctx, lockNextPromotionCreationDispatch, arg.DueAt, arg.ClusterName)
+	row := q.db.QueryRow(ctx, lockNextPromotionCreationDispatch, arg.DueAt, arg.ClusterName, arg.EvaluatorProcessID)
 	var i Promotion
 	err := row.Scan(
 		&i.ID,
@@ -2528,6 +2643,7 @@ INSERT INTO promotion_stages (
     repository_url,
     target_branch,
     source_paths,
+    gate_names,
     requested_freight_json,
     freight_json,
     candidate_freight_json,
@@ -2563,7 +2679,8 @@ INSERT INTO promotion_stages (
     $21,
     $22,
     $23,
-    $24
+    $24,
+    $25
 )
 ON CONFLICT (integration, project, name) DO UPDATE
 SET cluster_name = EXCLUDED.cluster_name,
@@ -2575,6 +2692,7 @@ SET cluster_name = EXCLUDED.cluster_name,
     repository_url = EXCLUDED.repository_url,
     target_branch = EXCLUDED.target_branch,
     source_paths = EXCLUDED.source_paths,
+    gate_names = EXCLUDED.gate_names,
     requested_freight_json = EXCLUDED.requested_freight_json,
     freight_json = EXCLUDED.freight_json,
     candidate_freight_json = EXCLUDED.candidate_freight_json,
@@ -2590,7 +2708,7 @@ SET cluster_name = EXCLUDED.cluster_name,
     archived_at = EXCLUDED.archived_at
 WHERE promotion_stages.cluster_name = EXCLUDED.cluster_name
   AND promotion_stages.last_observed_at <= EXCLUDED.last_observed_at
-RETURNING id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json
+RETURNING id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json, gate_names
 `
 
 type UpsertPromotionStageParams struct {
@@ -2607,6 +2725,7 @@ type UpsertPromotionStageParams struct {
 	RepositoryUrl                   string
 	TargetBranch                    string
 	SourcePaths                     []string
+	GateNames                       []string
 	RequestedFreightJson            []byte
 	FreightJson                     []byte
 	CandidateFreightJson            []byte
@@ -2635,6 +2754,7 @@ func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionS
 		arg.RepositoryUrl,
 		arg.TargetBranch,
 		arg.SourcePaths,
+		arg.GateNames,
 		arg.RequestedFreightJson,
 		arg.FreightJson,
 		arg.CandidateFreightJson,
@@ -2673,6 +2793,7 @@ func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionS
 		&i.HealthStatus,
 		&i.ArgoApplicationNamespace,
 		&i.StageStatusJson,
+		&i.GateNames,
 	)
 	return i, err
 }

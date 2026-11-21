@@ -54,18 +54,24 @@ type OperatorPromotionStore interface {
 }
 
 type CreationService struct {
-	integrations IntegrationSet
-	store        OperatorPromotionStore
-	newID        func() uuid.UUID
-	now          func() time.Time
+	integrations    IntegrationSet
+	store           OperatorPromotionStore
+	gateEvaluations GateEvaluationNotifier
+	newID           func() uuid.UUID
+	now             func() time.Time
 }
 
-func NewCreationService(integrations IntegrationSet, store OperatorPromotionStore) *CreationService {
+func NewCreationService(
+	integrations IntegrationSet,
+	store OperatorPromotionStore,
+	gateEvaluations GateEvaluationNotifier,
+) *CreationService {
 	return &CreationService{
-		integrations: integrations,
-		store:        store,
-		newID:        uuid.New,
-		now:          time.Now,
+		integrations:    integrations,
+		store:           store,
+		gateEvaluations: gateEvaluations,
+		newID:           uuid.New,
+		now:             time.Now,
 	}
 }
 
@@ -136,7 +142,12 @@ func (s *CreationService) Create(
 		return Promotion{}, err
 	}
 
-	return s.store.CreateOperatorPromotion(ctx, acceptance)
+	record, err := s.store.CreateOperatorPromotion(ctx, acceptance)
+	if err == nil && s.gateEvaluations != nil && len(record.StageSnapshot.Gates) > 0 {
+		s.gateEvaluations.Notify()
+	}
+
+	return record, err
 }
 
 func (a OperatorPromotionAcceptance) Validate() error {

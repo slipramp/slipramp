@@ -520,6 +520,10 @@ func stageDatabaseParams(record promotion.Stage) (storedb.UpsertPromotionStagePa
 	if sourcePaths == nil {
 		sourcePaths = []string{}
 	}
+	gateNames := record.Gates
+	if gateNames == nil {
+		gateNames = []string{}
+	}
 	params := storedb.UpsertPromotionStageParams{
 		ID:                       databaseUUID(record.ID),
 		Integration:              record.Integration,
@@ -534,6 +538,7 @@ func stageDatabaseParams(record promotion.Stage) (storedb.UpsertPromotionStagePa
 		RepositoryUrl:            record.RepositoryURL,
 		TargetBranch:             record.TargetBranch,
 		SourcePaths:              sourcePaths,
+		GateNames:                gateNames,
 		AutoPromotionEnabled:     record.AutoPromotionEnabled,
 		HealthStatus:             record.HealthStatus,
 		ArgoApplicationNamespace: record.ArgoApplicationNamespace,
@@ -616,6 +621,7 @@ func promotionStageFromRow(row storedb.PromotionStage) (promotion.Stage, error) 
 		RepositoryURL:            row.RepositoryUrl,
 		TargetBranch:             row.TargetBranch,
 		SourcePaths:              row.SourcePaths,
+		Gates:                    row.GateNames,
 		AutoPromotionEnabled:     row.AutoPromotionEnabled,
 		HealthStatus:             row.HealthStatus,
 		ArgoApplicationNamespace: row.ArgoApplicationNamespace,

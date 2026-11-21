@@ -316,6 +316,7 @@ func (h *Handler) promotionProjectStageResponse(value projection.ProjectStage) a
 		RequestedFreight: requests, FreightAlignments: alignments, Freight: promotionFreightResponse(stage.Freight),
 		AutoPromotionEnabled: stage.AutoPromotionEnabled, HealthStatus: stage.HealthStatus,
 		Policy: promotionPolicyResponse(value.Policy), PendingPromotionCount: value.PendingPromotionCount,
+		Gates:           promotionGateNamesResponse(stage.Gates),
 		Enrichment:      promotionStageEnrichmentResponse(stage.Enrichment()),
 		Capabilities:    promotionStageCapabilitiesResponse(value.Capabilities),
 		FirstObservedAt: stage.FirstObservedAt, LastObservedAt: stage.LastObservedAt,

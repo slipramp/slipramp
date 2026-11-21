@@ -2947,6 +2947,8 @@ internal enum Components {
             internal var reviewRequired: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/Promotion/status`.
             internal var status: Components.Schemas.PromotionStatus
+            /// - Remark: Generated from `#/components/schemas/Promotion/gates`.
+            internal var gates: Components.Schemas.GateSummary
             /// - Remark: Generated from `#/components/schemas/Promotion/message`.
             internal var message: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Promotion/creationDispatch`.
@@ -3012,6 +3014,7 @@ internal enum Components {
             ///   - selectedFreight:
             ///   - reviewRequired:
             ///   - status:
+            ///   - gates:
             ///   - message:
             ///   - creationDispatch:
             ///   - kargoPromotionUid:
@@ -3046,6 +3049,7 @@ internal enum Components {
                 selectedFreight: Components.Schemas.PromotionFreightItem? = nil,
                 reviewRequired: Swift.Bool,
                 status: Components.Schemas.PromotionStatus,
+                gates: Components.Schemas.GateSummary,
                 message: Swift.String? = nil,
                 creationDispatch: Components.Schemas.PromotionCreationDispatch,
                 kargoPromotionUid: Swift.String? = nil,
@@ -3080,6 +3084,7 @@ internal enum Components {
                 self.selectedFreight = selectedFreight
                 self.reviewRequired = reviewRequired
                 self.status = status
+                self.gates = gates
                 self.message = message
                 self.creationDispatch = creationDispatch
                 self.kargoPromotionUid = kargoPromotionUid
@@ -3115,6 +3120,7 @@ internal enum Components {
                 case selectedFreight
                 case reviewRequired
                 case status
+                case gates
                 case message
                 case creationDispatch
                 case kargoPromotionUid
@@ -3186,6 +3192,10 @@ internal enum Components {
                 self.status = try container.decode(
                     Components.Schemas.PromotionStatus.self,
                     forKey: .status
+                )
+                self.gates = try container.decode(
+                    Components.Schemas.GateSummary.self,
+                    forKey: .gates
                 )
                 self.message = try container.decodeIfPresent(
                     Swift.String.self,
@@ -3284,6 +3294,7 @@ internal enum Components {
                     "selectedFreight",
                     "reviewRequired",
                     "status",
+                    "gates",
                     "message",
                     "creationDispatch",
                     "kargoPromotionUid",
@@ -5433,6 +5444,10 @@ internal enum Components {
             internal var requestedFreight: [Components.Schemas.PromotionFreightRequest]
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/freight`.
             internal var freight: Components.Schemas.PromotionFreight
+            /// Ordered repository-local Gate names frozen at Promotion acceptance.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/gates`.
+            internal var gates: [Components.Schemas.CatalogName]
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/successfulRenderAcknowledgement`.
             internal var successfulRenderAcknowledgement: Components.Schemas.SuccessfulRenderAcknowledgement?
             /// - Remark: Generated from `#/components/schemas/PromotionStageSnapshot/lastObservedAt`.
@@ -5450,6 +5465,7 @@ internal enum Components {
             ///   - enrichment:
             ///   - requestedFreight:
             ///   - freight:
+            ///   - gates: Ordered repository-local Gate names frozen at Promotion acceptance.
             ///   - successfulRenderAcknowledgement:
             ///   - lastObservedAt:
             internal init(
@@ -5463,6 +5479,7 @@ internal enum Components {
                 enrichment: Components.Schemas.PromotionStageEnrichment? = nil,
                 requestedFreight: [Components.Schemas.PromotionFreightRequest],
                 freight: Components.Schemas.PromotionFreight,
+                gates: [Components.Schemas.CatalogName],
                 successfulRenderAcknowledgement: Components.Schemas.SuccessfulRenderAcknowledgement? = nil,
                 lastObservedAt: Foundation.Date
             ) {
@@ -5476,6 +5493,7 @@ internal enum Components {
                 self.enrichment = enrichment
                 self.requestedFreight = requestedFreight
                 self.freight = freight
+                self.gates = gates
                 self.successfulRenderAcknowledgement = successfulRenderAcknowledgement
                 self.lastObservedAt = lastObservedAt
             }
@@ -5490,6 +5508,7 @@ internal enum Components {
                 case enrichment
                 case requestedFreight
                 case freight
+                case gates
                 case successfulRenderAcknowledgement
                 case lastObservedAt
             }
@@ -5535,6 +5554,10 @@ internal enum Components {
                     Components.Schemas.PromotionFreight.self,
                     forKey: .freight
                 )
+                self.gates = try container.decode(
+                    [Components.Schemas.CatalogName].self,
+                    forKey: .gates
+                )
                 self.successfulRenderAcknowledgement = try container.decodeIfPresent(
                     Components.Schemas.SuccessfulRenderAcknowledgement.self,
                     forKey: .successfulRenderAcknowledgement
@@ -5554,6 +5577,7 @@ internal enum Components {
                     "enrichment",
                     "requestedFreight",
                     "freight",
+                    "gates",
                     "successfulRenderAcknowledgement",
                     "lastObservedAt"
                 ])

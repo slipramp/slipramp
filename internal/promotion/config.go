@@ -108,7 +108,10 @@ func (c IntegrationConfig) Validate() error {
 		}
 	}
 
-	if c.ReviewConfigured() {
+	if c.Preparation != (PreparationConfig{}) {
+		if !c.ReviewConfigured() {
+			return fmt.Errorf("kargo review configuration requires repositories and complete preparation settings")
+		}
 		if err := kubevalidate.DNSLabel("Kargo preparation repository", c.Preparation.Repository); err != nil {
 			return err
 		}
@@ -124,8 +127,6 @@ func (c IntegrationConfig) Validate() error {
 		if err := kubevalidate.DNSLabel("Kargo preparation action", c.Preparation.Action); err != nil {
 			return err
 		}
-	} else if len(c.Repositories) != 0 || c.Preparation != (PreparationConfig{}) {
-		return fmt.Errorf("kargo review configuration requires repositories and complete preparation settings")
 	}
 	if c.CandidateBranchCleanup != nil {
 		if c.CandidateBranchCleanup.Retention <= 0 {

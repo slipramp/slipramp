@@ -93,6 +93,28 @@ integrations:
 	}
 }
 
+func TestDecodeIntegrationFileAllowsGateRepositoryMappingWithoutReviewConfiguration(t *testing.T) {
+	t.Parallel()
+
+	integrations, err := DecodeIntegrationFile(strings.NewReader(`
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: colo
+    repositories: [kcloud-ops]
+    maximumStageObservationAge: 5m
+`))
+	if err != nil {
+		t.Fatalf("DecodeIntegrationFile() error = %v", err)
+	}
+	integration, ok := integrations.Lookup("prod")
+	if !ok || integration.ReviewConfigured() || len(integration.Repositories) != 1 ||
+		integration.Repositories[0] != "kcloud-ops" {
+		t.Fatalf("Gate-only integration = %#v, found = %t", integration, ok)
+	}
+}
+
 func TestDecodeIntegrationFileRejectsInvalidDocuments(t *testing.T) {
 	t.Parallel()
 

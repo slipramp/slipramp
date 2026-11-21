@@ -92,6 +92,10 @@ func (d *Database) acceptPromotionRequest(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
+	gateRepositoryID, err := resolvePromotionGateRepository(ctx, queries, stage, acceptance.AllowedRepositories)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
 	gitContext, err := acceptance.Request.GitContext()
 	if err != nil {
 		return promotion.Promotion{}, err
@@ -169,6 +173,9 @@ func (d *Database) acceptPromotionRequest(
 	}
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("insert Kargo Promotion request: %w", err)
+	}
+	if err := createPromotionGates(ctx, queries, record, gateRepositoryID); err != nil {
+		return promotion.Promotion{}, err
 	}
 	if err := transaction.Commit(ctx); err != nil {
 		return promotion.Promotion{}, fmt.Errorf("commit Kargo Promotion request: %w", err)

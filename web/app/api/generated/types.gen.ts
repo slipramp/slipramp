@@ -1327,6 +1327,7 @@ export type Promotion = {
   selectedFreight?: PromotionFreightItem;
   reviewRequired: boolean;
   status: PromotionStatus;
+  gates: GateSummary;
   message?: string;
   creationDispatch: PromotionCreationDispatch;
   kargoPromotionUid?: string;
@@ -2388,10 +2389,14 @@ export type KargoPromotionRequest = {
   candidateBranch?: string;
 };
 
-export type PromotionStatus =
+/**
+ * Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+ */
+export type KargoPromotionStatus =
   | "creating"
   | "preparing"
   | "pending"
+  | "gated"
   | "approved"
   | "rejected"
   | "expired"
@@ -2400,11 +2405,20 @@ export type PromotionStatus =
 export type KargoPromotionResponse = {
   id: string;
   externalPromotionId: string;
-  status: PromotionStatus;
+  status: KargoPromotionStatus;
   reviewRequired: boolean;
   message?: string;
   updatedAt: string;
 };
+
+export type PromotionStatus =
+  | "creating"
+  | "preparing"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "error";
 
 export type PromotionStageEnrichment = {
   application?: string;
@@ -2475,6 +2489,10 @@ export type PromotionStageSnapshot = {
   enrichment?: PromotionStageEnrichment;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
+  /**
+   * Ordered repository-local Gate names frozen at Promotion acceptance.
+   */
+  gates: Array<CatalogName>;
   successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
   lastObservedAt: string;
 };
@@ -2662,6 +2680,10 @@ export type PromotionProjectStage = {
   healthStatus?: string;
   policy: PromotionStagePolicy;
   pendingPromotionCount: number;
+  /**
+   * Ordered repository-local Gate names attached by Kargo Stage metadata.
+   */
+  gates: Array<CatalogName>;
   enrichment?: PromotionStageEnrichment;
   capabilities: PromotionStageCapabilities;
   firstObservedAt: string;
@@ -2740,6 +2762,10 @@ export type PromotionStageObservation = {
    */
   controlFlow: boolean;
   conditions: Array<PromotionStageCondition>;
+  /**
+   * Ordered repository-local Gate names attached by Kargo Stage metadata.
+   */
+  gates: Array<CatalogName>;
   currentPromotion?: PromotionStagePromotionReference;
   lastPromotion?: PromotionStagePromotionReference;
   /**
@@ -5895,7 +5921,7 @@ export type SubmitKargoPromotionError =
 
 export type SubmitKargoPromotionResponses = {
   /**
-   * The newly accepted or previously persisted Promotion state.
+   * The durable Promotion identity and effective callback status. Gated keeps the Kargo PromotionTask polling without changing the persisted Promotion lifecycle.
    */
   200: KargoPromotionResponse;
 };

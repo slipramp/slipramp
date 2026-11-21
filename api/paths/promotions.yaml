@@ -21,7 +21,10 @@ kargoPromotion:
       "413":
         $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
-        description: The newly accepted or previously persisted Promotion state.
+        description: >-
+          The durable Promotion identity and effective callback status. Gated
+          keeps the Kargo PromotionTask polling without changing the persisted
+          Promotion lifecycle.
         content:
           application/json:
             schema:

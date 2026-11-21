@@ -3944,7 +3944,7 @@ paths:
               $ref: '#/components/schemas/KargoPromotionRequest'
       responses:
         '200':
-          description: The newly accepted or previously persisted Promotion state.
+          description: The durable Promotion identity and effective callback status. Gated keeps the Kargo PromotionTask polling without changing the persisted Promotion lifecycle.
           content:
             application/json:
               schema:
@@ -7595,6 +7595,7 @@ components:
         - policySnapshot
         - reviewRequired
         - status
+        - gates
         - creationDispatch
         - requestedBy
         - createdAt
@@ -7629,6 +7630,8 @@ components:
           type: boolean
         status:
           $ref: '#/components/schemas/PromotionStatus'
+        gates:
+          $ref: '#/components/schemas/GateSummary'
         message:
           type: string
           minLength: 1
@@ -9810,12 +9813,14 @@ components:
           minLength: 17
           maxLength: 255
           pattern: ^kargo/promotion/.+$
-    PromotionStatus:
+    KargoPromotionStatus:
       type: string
+      description: Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
       enum:
         - creating
         - preparing
         - pending
+        - gated
         - approved
         - rejected
         - expired
@@ -9838,7 +9843,7 @@ components:
           minLength: 1
           maxLength: 253
         status:
-          $ref: '#/components/schemas/PromotionStatus'
+          $ref: '#/components/schemas/KargoPromotionStatus'
         reviewRequired:
           type: boolean
         message:
@@ -9848,6 +9853,16 @@ components:
         updatedAt:
           type: string
           format: date-time
+    PromotionStatus:
+      type: string
+      enum:
+        - creating
+        - preparing
+        - pending
+        - approved
+        - rejected
+        - expired
+        - error
     PromotionStageEnrichment:
       type: object
       additionalProperties: false
@@ -10019,6 +10034,7 @@ components:
         - resourceVersion
         - requestedFreight
         - freight
+        - gates
         - lastObservedAt
       properties:
         id:
@@ -10050,6 +10066,12 @@ components:
             $ref: '#/components/schemas/PromotionFreightRequest'
         freight:
           $ref: '#/components/schemas/PromotionFreight'
+        gates:
+          type: array
+          uniqueItems: true
+          description: Ordered repository-local Gate names frozen at Promotion acceptance.
+          items:
+            $ref: '#/components/schemas/CatalogName'
         successfulRenderAcknowledgement:
           $ref: '#/components/schemas/SuccessfulRenderAcknowledgement'
         lastObservedAt:
@@ -10436,6 +10458,7 @@ components:
         - autoPromotionEnabled
         - policy
         - pendingPromotionCount
+        - gates
         - firstObservedAt
         - lastObservedAt
         - capabilities
@@ -10489,6 +10512,12 @@ components:
         pendingPromotionCount:
           type: integer
           minimum: 0
+        gates:
+          type: array
+          uniqueItems: true
+          description: Ordered repository-local Gate names attached by Kargo Stage metadata.
+          items:
+            $ref: '#/components/schemas/CatalogName'
         enrichment:
           $ref: '#/components/schemas/PromotionStageEnrichment'
         capabilities:
@@ -10642,6 +10671,7 @@ components:
         - autoPromotionEnabled
         - controlFlow
         - conditions
+        - gates
       properties:
         project:
           $ref: '#/components/schemas/CatalogName'
@@ -10701,6 +10731,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionStageCondition'
+        gates:
+          type: array
+          uniqueItems: true
+          description: Ordered repository-local Gate names attached by Kargo Stage metadata.
+          items:
+            $ref: '#/components/schemas/CatalogName'
         currentPromotion:
           $ref: '#/components/schemas/PromotionStagePromotionReference'
         lastPromotion:

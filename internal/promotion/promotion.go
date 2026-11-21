@@ -52,6 +52,7 @@ var (
 	ErrStageStale                 = errors.New("promotion Stage observation is stale")
 	ErrRepositoryUnavailable      = errors.New("promotion repository is unavailable")
 	ErrReviewContextUnavailable   = errors.New("review context is unavailable for this Stage")
+	ErrGateContextUnavailable     = errors.New("gate context is unavailable for this Stage")
 	ErrStageControlFlow           = errors.New("control-flow Stages cannot materialize Promotions")
 	ErrSnapshotConflict           = errors.New("kargo Stage snapshot identity conflicts with durable state")
 	ErrStaleSnapshot              = errors.New("kargo Stage snapshot is stale")
@@ -98,6 +99,7 @@ type Stage struct {
 	RepositoryURL                   string
 	TargetBranch                    string
 	SourcePaths                     []string
+	Gates                           []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
 	CandidateFreight                Freight
@@ -312,11 +314,29 @@ func (s Stage) Validate() error {
 		}
 		seenPaths[path] = struct{}{}
 	}
+	if err := validatePromotionGateNames(s.Gates); err != nil {
+		return err
+	}
 	if s.FirstObservedAt.IsZero() || s.LastObservedAt.IsZero() || s.LastObservedAt.Before(s.FirstObservedAt) {
 		return fmt.Errorf("%w: Stage observation timestamps are invalid", ErrInvalid)
 	}
 	if s.ArchivedAt != nil && s.ArchivedAt.Before(s.LastObservedAt) {
 		return fmt.Errorf("%w: Stage archive time precedes its last observation", ErrInvalid)
+	}
+
+	return nil
+}
+
+func validatePromotionGateNames(names []string) error {
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if err := kubevalidate.DNSLabel("Gate name", name); err != nil {
+			return invalid(err)
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("%w: Gate name %q is duplicated", ErrInvalid, name)
+		}
+		seen[name] = struct{}{}
 	}
 
 	return nil
@@ -385,6 +405,9 @@ func (p Promotion) Validate() error {
 	}
 	if p.StageSnapshot.ID != p.StageID || p.StageSnapshot.Integration != p.Integration {
 		return fmt.Errorf("%w: Promotion Stage snapshot identity does not match", ErrInvalid)
+	}
+	if err := validatePromotionGateNames(p.StageSnapshot.Gates); err != nil {
+		return err
 	}
 	if !p.PolicySnapshot.ConfiguredMode.Valid() || !p.PolicySnapshot.EffectiveMode.Valid() {
 		return fmt.Errorf("%w: Promotion policy snapshot modes are invalid", ErrInvalid)

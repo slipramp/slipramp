@@ -21,6 +21,14 @@ type reviewStore struct {
 	promotionFilter PromotionListFilter
 	promotionCalls  int
 	promotionReadAt time.Time
+	gateProjections []GateProjection
+}
+
+func (s *reviewStore) ListPromotionGateProjections(
+	_ context.Context,
+	_ []uuid.UUID,
+) ([]GateProjection, error) {
+	return s.gateProjections, nil
 }
 
 func (s *reviewStore) GetPromotionStage(_ context.Context, id uuid.UUID) (Stage, error) {
@@ -131,7 +139,7 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policies:  map[uuid.UUID]StagePolicy{},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(reviewIntegrationSet(), store)
+	service := NewReviewService(reviewIntegrationSet(), store, uuid.Nil)
 	service.now = func() time.Time { return now }
 
 	if _, err := service.UpdateStagePolicy(
@@ -158,7 +166,7 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policy.UpdatedBy.PrincipalID != principal.ID || policy.Reason == nil || *policy.Reason != reason {
 		t.Errorf("updated policy = %#v", policy)
 	}
-	withoutPreparation := NewReviewService(IntegrationSet{"prod": {ClusterName: "colo"}}, store)
+	withoutPreparation := NewReviewService(IntegrationSet{"prod": {ClusterName: "colo"}}, store, uuid.Nil)
 	withoutPreparation.now = func() time.Time { return now }
 	if _, err := withoutPreparation.UpdateStagePolicy(
 		t.Context(),
@@ -205,7 +213,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 		promotions:    []Promotion{record},
 		promotionPage: PromotionReviewPage{Items: []Promotion{expired}, Total: 5},
 	}
-	service := NewReviewService(nil, store)
+	service := NewReviewService(nil, store, uuid.Nil)
 	service.now = func() time.Time { return now }
 	filter := PromotionListFilter{
 		RepositoryID:     new(uuid.New()),
@@ -241,7 +249,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 	t.Parallel()
 
-	service := NewReviewService(nil, &reviewStore{})
+	service := NewReviewService(nil, &reviewStore{}, uuid.Nil)
 	_, err := service.ListPromotions(t.Context(), PromotionListFilter{
 		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
 		Limit:     DefaultListLimit,
@@ -254,7 +262,7 @@ func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 func TestReviewServiceRejectsInvalidOperationalFilters(t *testing.T) {
 	t.Parallel()
 
-	service := NewReviewService(nil, &reviewStore{})
+	service := NewReviewService(nil, &reviewStore{}, uuid.Nil)
 	for _, filter := range []PromotionListFilter{
 		{CreationDispatch: CreationDispatchPhase("missing"), Limit: DefaultListLimit},
 		{KargoOutcome: KargoPhase("Running"), Limit: DefaultListLimit},
@@ -281,7 +289,7 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 		}},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(nil, store)
+	service := NewReviewService(nil, store, uuid.Nil)
 	service.now = func() time.Time { return now }
 	comment := "Validated the RBAC changes"
 

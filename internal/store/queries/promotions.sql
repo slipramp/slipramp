@@ -13,6 +13,7 @@ INSERT INTO promotion_stages (
     repository_url,
     target_branch,
     source_paths,
+    gate_names,
     requested_freight_json,
     freight_json,
     candidate_freight_json,
@@ -38,6 +39,7 @@ INSERT INTO promotion_stages (
     sqlc.arg(repository_url),
     sqlc.arg(target_branch),
     sqlc.arg(source_paths),
+    sqlc.arg(gate_names),
     sqlc.arg(requested_freight_json),
     sqlc.arg(freight_json),
     sqlc.arg(candidate_freight_json),
@@ -60,6 +62,7 @@ SET cluster_name = EXCLUDED.cluster_name,
     repository_url = EXCLUDED.repository_url,
     target_branch = EXCLUDED.target_branch,
     source_paths = EXCLUDED.source_paths,
+    gate_names = EXCLUDED.gate_names,
     requested_freight_json = EXCLUDED.requested_freight_json,
     freight_json = EXCLUDED.freight_json,
     candidate_freight_json = EXCLUDED.candidate_freight_json,
@@ -157,6 +160,36 @@ SELECT
 FROM repositories
 WHERE name = sqlc.arg(name)
   AND removed_at IS NULL;
+
+-- name: CountActivePromotionGates :one
+SELECT count(*)
+FROM repositories
+JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+JOIN catalog_gates
+  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+WHERE repositories.id = sqlc.arg(repository_id)
+  AND repositories.removed_at IS NULL
+  AND catalog_gates.name = ANY(sqlc.arg(gate_names)::text[]);
+
+-- name: CreatePromotionGate :exec
+INSERT INTO promotion_gates (
+    promotion_id,
+    repository_id,
+    gate_name,
+    attachment_order
+) VALUES (
+    sqlc.arg(promotion_id),
+    sqlc.arg(repository_id),
+    sqlc.arg(gate_name),
+    sqlc.arg(attachment_order)
+);
+
+-- name: ListPromotionGateNames :many
+SELECT gate_name
+FROM promotion_gates
+WHERE promotion_id = sqlc.arg(promotion_id)
+ORDER BY attachment_order;
 
 -- name: UpsertKargoStageSnapshot :one
 INSERT INTO kargo_stage_snapshots (
@@ -333,6 +366,35 @@ WHERE source = 'slipramp'
   AND dispatched_at IS NULL
   AND dispatch_failed_at IS NULL
   AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
+  AND (
+      review_required
+      OR NOT EXISTS (
+          SELECT 1
+          FROM promotion_gates
+          WHERE promotion_gates.promotion_id = promotions.id
+            AND promotion_gates.released_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM repositories
+                JOIN catalog_revisions
+                  ON catalog_revisions.id = repositories.active_catalog_revision_id
+                JOIN catalog_gates
+                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+                 AND catalog_gates.name = promotion_gates.gate_name
+                JOIN gate_observations
+                  ON gate_observations.repository_id = promotion_gates.repository_id
+                 AND gate_observations.gate_name = promotion_gates.gate_name
+                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
+                 AND gate_observations.definition_digest = catalog_gates.definition_digest
+                 AND gate_observations.evaluator_process_id = sqlc.arg(evaluator_process_id)
+                 AND gate_observations.state = 'passing'
+                 AND gate_observations.evaluated_at <= sqlc.arg(due_at)
+                 AND gate_observations.valid_until > sqlc.arg(due_at)
+                WHERE repositories.id = promotion_gates.repository_id
+                  AND repositories.removed_at IS NULL
+            )
+      )
+  )
 ORDER BY next_dispatch_at, created_at, id
 FOR UPDATE SKIP LOCKED
 LIMIT 1;

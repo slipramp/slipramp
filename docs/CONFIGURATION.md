@@ -227,8 +227,8 @@ integrations:
     maximumStageObservationAge: 5m
 ```
 
-Repository review, previews, and candidate-branch cleanup use optional
-additional configuration:
+Repository-defined Promotion Gates, review, previews, and candidate-branch
+cleanup use optional additional configuration:
 
 ```yaml
 apiVersion: slipramp.com/v1alpha1
@@ -258,11 +258,13 @@ keys, unsupported versions, invalid durations, and invalid integration values.
 The selected Cluster must be registered in
 `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`. Candidate branch cleanup credential
 names must select entries in `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`.
-`repositories`, `preparation`, and `pendingReviewRetention` form one review
-configuration: configure the allowlist and complete preparation coordinates
-together, with positive retention, or omit all three. Repository allowlists
-authorize review, Git audit, branch cleanup, and other Repository access; they
-do not enroll Stages or authorize native Kargo execution.
+`repositories` maps Stage Repository URLs to named Slipramp Repositories for
+Promotion Gates and other Repository-aware capabilities. Review additionally
+requires complete `preparation` coordinates and positive
+`pendingReviewRetention`; those review fields may be omitted when the allowlist
+is used only for Gates. Repository allowlists authorize Gate resolution,
+review, Git audit, branch cleanup, and other Repository access; they do not
+enroll Stages or authorize native Kargo execution.
 Current contracts are documented in [Kargo Promotions](design/kargo.md),
 [Controller execution](design/execution.md), and
 [Logs and Artifacts](design/artifacts.md). Kargo integration and Placement
@@ -305,6 +307,7 @@ metadata:
     slipramp.com/promotion-repository-url: https://github.com/example/ops.git
     slipramp.com/promotion-target-branch: environments/production
     slipramp.com/promotion-source-paths: '["terraform/dns", "config/production.yaml"]'
+    slipramp.com/promotion-gates: '["teamspeak-idle"]'
 ```
 
 These annotations enrich the native Kargo Stage inventory; none are required to
@@ -318,6 +321,12 @@ endpoint. The target branch is the branch Kargo updates. Source paths are a
 JSON array of distinct, clean repository-relative paths used for preparation
 and branch-drift checks; `.` selects the whole repository. Absolute paths and
 parent traversal are invalid.
+
+Promotion Gates are an ordered JSON array of distinct Gate names from the
+matched Repository's active catalog. The annotation may be omitted or set to
+an empty array when no Gate applies. A gated Stage must supply a Repository URL
+that maps to exactly one active Repository allowed by the integration; Gate
+resolution occurs when Slipramp accepts a Promotion.
 
 The product reports native promotion, Slipramp review, and branch drift as
 separate capabilities. Missing enrichment disables only review, previews,

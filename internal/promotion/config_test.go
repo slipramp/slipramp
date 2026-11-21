@@ -33,6 +33,15 @@ func TestIntegrationSetValidate(t *testing.T) {
 	}
 
 	integration := integrations["prod"]
+	gateOnly := integration
+	gateOnly.Preparation = PreparationConfig{}
+	gateOnly.PendingReviewRetention = 0
+	integrations["prod"] = gateOnly
+	if err := integrations.Validate(); err != nil {
+		t.Fatalf("Validate() Gate-only repository mapping error = %v", err)
+	}
+	integrations["prod"] = integration
+
 	integration.Preparation.Repository = "other"
 	integrations["prod"] = integration
 	if err := integrations.Validate(); err == nil {

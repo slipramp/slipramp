@@ -123,6 +123,22 @@ func TestStagePolicyRejectsExpiredUpdate(t *testing.T) {
 	}
 }
 
+func TestStageAndPromotionSnapshotsRejectInvalidGateNames(t *testing.T) {
+	t.Parallel()
+
+	stage := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", time.Now().UTC())
+	stage.Gates = []string{"network-idle", "network-idle"}
+	if err := stage.Validate(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Stage.Validate() duplicate Gate error = %v, want ErrInvalid", err)
+	}
+
+	record := validPromotion()
+	record.StageSnapshot.Gates = []string{"NetworkIdle"}
+	if err := record.Validate(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Promotion.Validate() invalid Gate error = %v, want ErrInvalid", err)
+	}
+}
+
 func validPromotion() Promotion {
 	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
 	principalID := uuid.New()

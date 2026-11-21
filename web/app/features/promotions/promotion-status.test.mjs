@@ -11,6 +11,7 @@ import {
 
 const base = {
   creationDispatch: { attemptCount: 0, phase: "awaiting-delivery" },
+  gates: { requirements: [], state: "not-required" },
   reviewRequired: false,
   source: "slipramp",
   status: "approved",
@@ -118,4 +119,31 @@ test("detail status keeps review, delivery, and Kargo execution distinct", () =>
     source: "kargo",
   };
   assert.equal(promotionDeliveryStatus(kargoOriginated).label, "Not required");
+});
+
+test("waiting Gates take precedence over active delivery and execution presentation", () => {
+  const waiting = {
+    ...base,
+    gates: { requirements: [{ name: "network-idle", state: "blocking" }], state: "waiting" },
+  };
+
+  assert.deepEqual(
+    [promotionOverallStatus(waiting).label, promotionOverallStatus(waiting).color],
+    ["Waiting for gates", "yellow"],
+  );
+  assert.equal(promotionDeliveryStatus(waiting).label, "Waiting for gates");
+  assert.equal(
+    promotionExecutionStatus({
+      ...waiting,
+      creationDispatch: { attemptCount: 1, phase: "delivered" },
+    }).label,
+    "Waiting for gates",
+  );
+
+  const succeeded = {
+    ...waiting,
+    creationDispatch: { attemptCount: 1, phase: "delivered" },
+    kargoOutcome: { observedAt: "2026-11-11T12:00:00Z", phase: "Succeeded" },
+  };
+  assert.equal(promotionOverallStatus(succeeded).label, "Succeeded");
 });

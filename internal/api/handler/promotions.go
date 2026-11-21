@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -20,7 +21,7 @@ type PromotionRequestService interface {
 		integrationName string,
 		request promotion.KargoRequest,
 		principal productidentity.Principal,
-	) (promotion.Promotion, error)
+	) (promotion.KargoSubmission, error)
 }
 
 type PromotionCreationService interface {
@@ -55,6 +56,11 @@ type PromotionReviewService interface {
 	ListPromotions(context.Context, promotion.PromotionListFilter) (promotion.PromotionReviewList, error)
 	GetPromotion(context.Context, uuid.UUID) (promotion.PromotionReview, error)
 	Decide(context.Context, promotion.DecisionRequest) (promotion.PromotionReview, error)
+	GateSummaries(
+		context.Context,
+		[]promotion.Promotion,
+		time.Time,
+	) (map[uuid.UUID]promotion.GateSummary, error)
 }
 
 func (h *Handler) SubmitKargoPromotion(
@@ -72,7 +78,7 @@ func (h *Handler) SubmitKargoPromotion(
 	if principal == nil {
 		return nil, errors.New("authenticated Kargo service account is missing")
 	}
-	record, err := h.promotionRequests.SubmitKargoPromotion(
+	submission, err := h.promotionRequests.SubmitKargoPromotion(
 		ctx,
 		string(request.Integration),
 		promotion.KargoRequest{
@@ -109,6 +115,7 @@ func (h *Handler) SubmitKargoPromotion(
 			errors.Is(err, promotion.ErrStageArchived),
 			errors.Is(err, promotion.ErrStageStale),
 			errors.Is(err, promotion.ErrReviewContextUnavailable),
+			errors.Is(err, promotion.ErrGateContextUnavailable),
 			errors.Is(err, promotion.ErrRepositoryUnavailable):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
@@ -119,11 +126,12 @@ func (h *Handler) SubmitKargoPromotion(
 			return nil, err
 		}
 	}
+	record := submission.Promotion
 
 	return api.SubmitKargoPromotion200JSONResponse{
 		ID:                  record.ID,
 		ExternalPromotionID: record.ExternalPromotionID,
-		Status:              api.PromotionStatus(record.Lifecycle.State),
+		Status:              api.KargoPromotionStatus(submission.Status),
 		ReviewRequired:      record.ReviewRequired,
 		Message:             record.Message,
 		UpdatedAt:           record.UpdatedAt,
@@ -181,6 +189,7 @@ func (h *Handler) CreatePromotion(
 			}, nil
 		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrStageStale),
 			errors.Is(err, promotion.ErrStageControlFlow), errors.Is(err, promotion.ErrReviewContextUnavailable),
+			errors.Is(err, promotion.ErrGateContextUnavailable),
 			errors.Is(err, promotion.ErrStageScope), errors.Is(err, promotion.ErrFreightNotFound),
 			errors.Is(err, promotion.ErrFreightSource), errors.Is(err, promotion.ErrFreightUnavailable),
 			errors.Is(err, promotion.ErrRepositoryUnavailable):
@@ -194,10 +203,15 @@ func (h *Handler) CreatePromotion(
 		}
 	}
 
+	gates, err := h.promotionReviews.GateSummaries(ctx, []promotion.Promotion{record}, h.now())
+	if err != nil {
+		return nil, err
+	}
 	body, err := promotionResponse(
 		promotion.PromotionReview{Promotion: record},
 		nil,
 		h.kargoIntegrations,
+		gates[record.ID],
 	)
 	if err != nil {
 		return nil, err
@@ -326,10 +340,23 @@ func (h *Handler) ListPromotions(
 	if commitErr != nil {
 		commits = commitFallbacks(keys)
 	}
+	records := make([]promotion.Promotion, 0, len(result.Items))
+	for _, review := range result.Items {
+		records = append(records, review.Promotion)
+	}
+	gates, err := h.promotionReviews.GateSummaries(ctx, records, h.now())
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]api.Promotion, 0, len(result.Items))
 	for _, review := range result.Items {
-		item, convertErr := promotionResponse(review, commits, h.kargoIntegrations)
+		item, convertErr := promotionResponse(
+			review,
+			commits,
+			h.kargoIntegrations,
+			gates[review.Promotion.ID],
+		)
 		if convertErr != nil {
 			return nil, convertErr
 		}
@@ -478,6 +505,7 @@ func promotionResponse(
 	review promotion.PromotionReview,
 	commits map[repository.CommitKey]api.GitCommit,
 	integrations promotion.IntegrationSet,
+	gates promotion.GateSummary,
 ) (api.Promotion, error) {
 	record := review.Promotion
 	requestedBy := apiRunActor(&record.RequestedBySnapshot)
@@ -520,6 +548,7 @@ func promotionResponse(
 		SelectedFreight:     selectedFreight,
 		ReviewRequired:      record.ReviewRequired,
 		Status:              api.PromotionStatus(record.Lifecycle.State),
+		Gates:               promotionGateSummaryResponse(gates),
 		Message:             record.Message,
 		CreationDispatch: api.PromotionCreationDispatch{
 			Phase:         api.PromotionCreationDispatchPhase(record.CreationDispatch.Phase(record.Source)),
@@ -600,7 +629,20 @@ func (h *Handler) promotionDetailResponse(
 	if commitErr != nil {
 		commits = commitFallbacks(keys)
 	}
-	body, err := promotionResponse(review, commits, h.kargoIntegrations)
+	gates, err := h.promotionReviews.GateSummaries(
+		ctx,
+		[]promotion.Promotion{review.Promotion},
+		h.now(),
+	)
+	if err != nil {
+		return api.Promotion{}, err
+	}
+	body, err := promotionResponse(
+		review,
+		commits,
+		h.kargoIntegrations,
+		gates[review.Promotion.ID],
+	)
 	if err != nil {
 		return api.Promotion{}, err
 	}
@@ -652,6 +694,33 @@ func (h *Handler) promotionDetailResponse(
 	}
 
 	return body, nil
+}
+
+func promotionGateSummaryResponse(summary promotion.GateSummary) api.GateSummary {
+	requirements := make([]api.GateRequirement, 0, len(summary.Requirements))
+	for _, requirement := range summary.Requirements {
+		var operator *api.GateOperator
+		if requirement.Operator != nil {
+			value := api.GateOperator(*requirement.Operator)
+			operator = &value
+		}
+		requirements = append(requirements, api.GateRequirement{
+			Name:        api.CatalogName(requirement.Name),
+			Title:       optionalString(requirement.Title),
+			State:       api.GateRequirementState(requirement.State),
+			Value:       requirement.Value,
+			Operator:    operator,
+			Threshold:   requirement.Threshold,
+			EvaluatedAt: requirement.EvaluatedAt,
+			ReleasedAt:  requirement.ReleasedAt,
+			Diagnostic:  optionalString(requirement.Diagnostic),
+		})
+	}
+
+	return api.GateSummary{
+		State:        api.GateSummaryState(summary.State),
+		Requirements: requirements,
+	}
 }
 
 func valueOrNilUUID(value *uuid.UUID) uuid.UUID {

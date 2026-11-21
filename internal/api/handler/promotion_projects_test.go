@@ -468,6 +468,7 @@ func TestGetPromotionStageReturnsCanonicalProjectStage(t *testing.T) {
 				Stage: promotion.Stage{
 					ID: stageID, Integration: "prod", ClusterName: "colo", Project: "kargo-core", Name: "prod",
 					KubernetesUID: "stage-uid", ResourceVersion: "42",
+					Gates:           []string{"network-idle"},
 					Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
 					FirstObservedAt: now.Add(-time.Hour), LastObservedAt: now,
 				},
@@ -518,6 +519,7 @@ func TestGetPromotionStageReturnsCanonicalProjectStage(t *testing.T) {
 		`"stage":{"autoPromotionEnabled":false`,
 		`"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1931"`,
 		`"name":"prod"`,
+		`"gates":["network-idle"]`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/prod"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {

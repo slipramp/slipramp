@@ -20,6 +20,7 @@ type PromotionStageSnapshot struct {
 	Enrichment                      *PromotionStageEnrichment        `json:"enrichment,omitempty"`
 	RequestedFreight                []FreightRequest                 `json:"requestedFreight"`
 	Freight                         Freight                          `json:"freight"`
+	Gates                           []string                         `json:"gates"`
 	ArgoApplicationNamespace        *string                          `json:"argoApplicationNamespace,omitempty"`
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
 	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
@@ -111,6 +112,10 @@ func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
 	if enrichment != nil {
 		enrichment.SourcePaths = slices.Clone(enrichment.SourcePaths)
 	}
+	gates := slices.Clone(s.Gates)
+	if gates == nil {
+		gates = []string{}
+	}
 	return PromotionStageSnapshot{
 		ID:                              s.ID,
 		Integration:                     s.Integration,
@@ -122,6 +127,7 @@ func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
 		Enrichment:                      enrichment,
 		RequestedFreight:                cloneFreightRequests(s.RequestedFreight),
 		Freight:                         cloneFreight(s.Freight),
+		Gates:                           gates,
 		ArgoApplicationNamespace:        cloneOptionalString(s.ArgoApplicationNamespace),
 		SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(s.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  s.LastObservedAt,

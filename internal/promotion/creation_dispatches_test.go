@@ -36,6 +36,7 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 
 	now := time.Date(2026, time.October, 23, 18, 0, 0, 123456789, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1940")
+	gateEvaluatorProcessID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1941")
 	stageSnapshot := PromotionStageSnapshot{
 		ClusterName:   "colo",
 		Project:       "kargo-core",
@@ -54,7 +55,7 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 		SelectedFreightSnapshot: freightSnapshot,
 		CreationDispatch:        CreationDispatchState{AttemptCount: 2},
 	}}
-	service := NewCreationDispatchService(store)
+	service := NewCreationDispatchService(store, gateEvaluatorProcessID)
 	service.now = func() time.Time { return now }
 
 	command, err := service.Next(t.Context(), "colo")
@@ -67,6 +68,7 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 		t.Errorf("command = %#v", command)
 	}
 	if store.claim.ClusterName != "colo" || store.claim.ClaimedAt.Nanosecond() != 123456000 ||
+		store.claim.GateEvaluatorProcessID != gateEvaluatorProcessID ||
 		len(store.claim.RetryDelays) != len(defaultCreationDispatchRetryDelays) {
 		t.Errorf("claim = %#v", store.claim)
 	}

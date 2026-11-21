@@ -12,9 +12,22 @@ import (
 )
 
 type recordingPromotionRequestStore struct {
-	acceptance PromotionAcceptance
-	record     Promotion
-	err        error
+	acceptance                PromotionAcceptance
+	record                    Promotion
+	releasePromotionID        uuid.UUID
+	releaseEvaluatorProcessID uuid.UUID
+	releasedAt                time.Time
+	released                  bool
+	err                       error
+	releaseErr                error
+}
+
+type recordingPromotionGateNotifier struct {
+	calls int
+}
+
+func (n *recordingPromotionGateNotifier) Notify() {
+	n.calls++
 }
 
 func (s *recordingPromotionRequestStore) AcceptPromotionRequest(
@@ -24,6 +37,19 @@ func (s *recordingPromotionRequestStore) AcceptPromotionRequest(
 	s.acceptance = acceptance
 
 	return s.record, s.err
+}
+
+func (s *recordingPromotionRequestStore) ReleasePromotionGates(
+	_ context.Context,
+	promotionID uuid.UUID,
+	evaluatorProcessID uuid.UUID,
+	releasedAt time.Time,
+) (bool, error) {
+	s.releasePromotionID = promotionID
+	s.releaseEvaluatorProcessID = evaluatorProcessID
+	s.releasedAt = releasedAt
+
+	return s.released, s.releaseErr
 }
 
 func TestKargoRequestDigestIsStableAndCoversEveryFact(t *testing.T) {
@@ -96,6 +122,7 @@ func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {
 
 	now := time.Date(2026, time.October, 21, 12, 0, 0, 123456789, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1910")
+	evaluatorProcessID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1912")
 	principal := productidentity.Principal{
 		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1911"),
 		Kind:        productidentity.KindServiceAccount,
@@ -105,8 +132,13 @@ func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {
 		UpdatedAt:   now.Add(-time.Hour),
 	}
 	store := &recordingPromotionRequestStore{
-		record: Promotion{ID: promotionID},
+		record: Promotion{
+			ID:            promotionID,
+			StageSnapshot: PromotionStageSnapshot{Gates: []string{"network-idle"}},
+			Lifecycle:     PromotionLifecycle{State: LifecycleApproved},
+		},
 	}
+	notifier := &recordingPromotionGateNotifier{}
 	service := NewRequestService(
 		IntegrationSet{
 			"prod": {
@@ -116,19 +148,35 @@ func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {
 			},
 		},
 		store,
+		evaluatorProcessID,
+		notifier,
 	)
 	service.newID = func() uuid.UUID { return promotionID }
 	service.now = func() time.Time { return now }
 
-	created, err := service.SubmitKargoPromotion(t.Context(), "prod", validKargoRequest(), principal)
+	submission, err := service.SubmitKargoPromotion(t.Context(), "prod", validKargoRequest(), principal)
 	if err != nil {
 		t.Fatalf("SubmitKargoPromotion() error = %v", err)
 	}
-	if created.ID != promotionID || store.acceptance.ID != promotionID ||
+	if submission.Promotion.ID != promotionID || submission.Status != KargoResponseStatusGated ||
+		store.acceptance.ID != promotionID ||
 		store.acceptance.RequestedByPrincipalID != principal.ID ||
 		store.acceptance.RequestDigest == (RequestDigest{}) ||
 		store.acceptance.AcceptedAt.Nanosecond() != 123456000 {
-		t.Errorf("acceptance = %#v, created = %#v", store.acceptance, created)
+		t.Errorf("acceptance = %#v, submission = %#v", store.acceptance, submission)
+	}
+	if store.releasePromotionID != promotionID || store.releaseEvaluatorProcessID != evaluatorProcessID ||
+		!store.releasedAt.Equal(store.acceptance.AcceptedAt) {
+		t.Errorf("Gate release = %s, %s, %s", store.releasePromotionID, store.releaseEvaluatorProcessID, store.releasedAt)
+	}
+	if notifier.calls != 1 {
+		t.Errorf("Gate evaluation notifications = %d, want 1", notifier.calls)
+	}
+
+	store.released = true
+	submission, err = service.SubmitKargoPromotion(t.Context(), "prod", validKargoRequest(), principal)
+	if err != nil || submission.Status != KargoResponseStatus(LifecycleApproved) {
+		t.Errorf("released submission = %#v, %v", submission, err)
 	}
 }
 

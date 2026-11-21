@@ -21,6 +21,7 @@ type StageObservation struct {
 	RepositoryURL                   string
 	TargetBranch                    string
 	SourcePaths                     []string
+	Gates                           []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
 	CandidateFreight                Freight
@@ -161,6 +162,7 @@ func (s *StageService) ReplaceStageSnapshot(
 			RepositoryURL:                   observed.RepositoryURL,
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     slices.Clone(observed.SourcePaths),
+			Gates:                           slices.Clone(observed.Gates),
 			RequestedFreight:                cloneFreightRequests(observed.RequestedFreight),
 			Freight:                         cloneFreight(observed.Freight),
 			CandidateFreight:                cloneFreight(observed.CandidateFreight),

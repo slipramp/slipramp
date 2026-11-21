@@ -9,6 +9,22 @@ PromotionStatus:
     - expired
     - error
 
+KargoPromotionStatus:
+  type: string
+  description: >-
+    Effective status returned to the polling Kargo PromotionTask. Gated means
+    the durable Promotion is approved but its repository-defined Gates have not
+    released execution.
+  enum:
+    - creating
+    - preparing
+    - pending
+    - gated
+    - approved
+    - rejected
+    - expired
+    - error
+
 PromotionSource:
   type: string
   enum:
@@ -208,7 +224,7 @@ KargoPromotionResponse:
       minLength: 1
       maxLength: 253
     status:
-      $ref: "#/PromotionStatus"
+      $ref: "#/KargoPromotionStatus"
     reviewRequired:
       type: boolean
     message:
@@ -233,6 +249,7 @@ PromotionStageObservation:
     - autoPromotionEnabled
     - controlFlow
     - conditions
+    - gates
   properties:
     project:
       $ref: ./runs.yaml#/CatalogName
@@ -294,6 +311,12 @@ PromotionStageObservation:
       type: array
       items:
         $ref: "#/PromotionStageCondition"
+    gates:
+      type: array
+      uniqueItems: true
+      description: Ordered repository-local Gate names attached by Kargo Stage metadata.
+      items:
+        $ref: ./runs.yaml#/CatalogName
     currentPromotion:
       $ref: "#/PromotionStagePromotionReference"
     lastPromotion:
@@ -594,6 +617,7 @@ PromotionProjectStage:
     - autoPromotionEnabled
     - policy
     - pendingPromotionCount
+    - gates
     - firstObservedAt
     - lastObservedAt
     - capabilities
@@ -648,6 +672,12 @@ PromotionProjectStage:
     pendingPromotionCount:
       type: integer
       minimum: 0
+    gates:
+      type: array
+      uniqueItems: true
+      description: Ordered repository-local Gate names attached by Kargo Stage metadata.
+      items:
+        $ref: ./runs.yaml#/CatalogName
     enrichment:
       $ref: "#/PromotionStageEnrichment"
     capabilities:
@@ -1111,6 +1141,7 @@ PromotionStageSnapshot:
     - resourceVersion
     - requestedFreight
     - freight
+    - gates
     - lastObservedAt
   properties:
     id:
@@ -1142,6 +1173,12 @@ PromotionStageSnapshot:
         $ref: "#/PromotionFreightRequest"
     freight:
       $ref: "#/PromotionFreight"
+    gates:
+      type: array
+      uniqueItems: true
+      description: Ordered repository-local Gate names frozen at Promotion acceptance.
+      items:
+        $ref: ./runs.yaml#/CatalogName
     successfulRenderAcknowledgement:
       $ref: "#/SuccessfulRenderAcknowledgement"
     lastObservedAt:
@@ -1280,6 +1317,7 @@ Promotion:
     - policySnapshot
     - reviewRequired
     - status
+    - gates
     - creationDispatch
     - requestedBy
     - createdAt
@@ -1314,6 +1352,8 @@ Promotion:
       type: boolean
     status:
       $ref: "#/PromotionStatus"
+    gates:
+      $ref: ./gates.yaml#/GateSummary
     message:
       type: string
       minLength: 1

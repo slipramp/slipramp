@@ -357,6 +357,7 @@ export type {
   KargoPromotionReconciliationReport,
   KargoPromotionRequest,
   KargoPromotionResponse,
+  KargoPromotionStatus,
   KargoStageSnapshot,
   Limit,
   ListApiKeysData,

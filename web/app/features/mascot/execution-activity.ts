@@ -400,6 +400,7 @@ export function runResultActivity(
 export function promotionActivity(
   promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
+    gates?: Pick<Promotion["gates"], "state">;
   },
 ): ExecutionActivity | undefined {
   switch (promotion.status) {
@@ -418,6 +419,13 @@ export function promotionActivity(
     case "approved":
       if (!promotion.kargoOutcome) {
         if (promotion.creationDispatch?.phase === "failed") return undefined;
+        if (promotion.gates?.state === "waiting") {
+          return {
+            animation: "waiting",
+            title: "Waiting for gates",
+            description: "Every required Gate must pass together before this Promotion continues.",
+          };
+        }
         if (promotion.creationDispatch?.phase === "awaiting-delivery") {
           return {
             animation: "working",
@@ -440,6 +448,7 @@ export function promotionActivity(
 export function promotionDetailNeedsRefresh(
   promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
+    gates?: Pick<Promotion["gates"], "state">;
   },
   preparedDiffsLoaded: boolean,
 ): boolean {
@@ -452,6 +461,7 @@ export function promotionDetailNeedsRefresh(
 export function promotionDetailActivity(
   promotion: Pick<Promotion, "status" | "message" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "diagnostic" | "phase">;
+    gates?: Pick<Promotion["gates"], "state">;
   },
 ): ExecutionActivity | undefined {
   const activity = promotionActivity(promotion);

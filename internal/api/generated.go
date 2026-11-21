@@ -601,6 +601,42 @@ func (e KargoPromotionReconciliationReportPhase) Valid() bool {
 	}
 }
 
+// Defines values for KargoPromotionStatus.
+const (
+	KargoPromotionStatusApproved  KargoPromotionStatus = "approved"
+	KargoPromotionStatusCreating  KargoPromotionStatus = "creating"
+	KargoPromotionStatusError     KargoPromotionStatus = "error"
+	KargoPromotionStatusExpired   KargoPromotionStatus = "expired"
+	KargoPromotionStatusGated     KargoPromotionStatus = "gated"
+	KargoPromotionStatusPending   KargoPromotionStatus = "pending"
+	KargoPromotionStatusPreparing KargoPromotionStatus = "preparing"
+	KargoPromotionStatusRejected  KargoPromotionStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the KargoPromotionStatus enum.
+func (e KargoPromotionStatus) Valid() bool {
+	switch e {
+	case KargoPromotionStatusApproved:
+		return true
+	case KargoPromotionStatusCreating:
+		return true
+	case KargoPromotionStatusError:
+		return true
+	case KargoPromotionStatusExpired:
+		return true
+	case KargoPromotionStatusGated:
+		return true
+	case KargoPromotionStatusPending:
+		return true
+	case KargoPromotionStatusPreparing:
+		return true
+	case KargoPromotionStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogCursorState.
 const (
 	LogCursorStateFailed LogCursorState = "failed"
@@ -2990,9 +3026,14 @@ type KargoPromotionResponse struct {
 	ID                  openapi_types.UUID `json:"id"`
 	Message             *string            `json:"message,omitempty"`
 	ReviewRequired      bool               `json:"reviewRequired"`
-	Status              PromotionStatus    `json:"status"`
-	UpdatedAt           time.Time          `json:"updatedAt"`
+
+	// Status Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+	Status    KargoPromotionStatus `json:"status"`
+	UpdatedAt time.Time            `json:"updatedAt"`
 }
+
+// KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+type KargoPromotionStatus string
 
 // KargoStageSnapshot defines model for KargoStageSnapshot.
 type KargoStageSnapshot struct {
@@ -3445,6 +3486,7 @@ type Promotion struct {
 	Decision            *PromotionDecision        `json:"decision,omitempty"`
 	ExpiresAt           *time.Time                `json:"expiresAt,omitempty"`
 	ExternalPromotionID string                    `json:"externalPromotionId"`
+	Gates               GateSummary               `json:"gates"`
 	GitDiffArtifact     *Artifact                 `json:"gitDiffArtifact,omitempty"`
 	GitDiffArtifactID   *openapi_types.UUID       `json:"gitDiffArtifactId,omitempty"`
 	ID                  openapi_types.UUID        `json:"id"`
@@ -3785,7 +3827,10 @@ type PromotionProjectStage struct {
 	Freight              PromotionFreight                  `json:"freight"`
 
 	// FreightAlignments Exact requested source Stage relationships evaluated from durable current Freight observations.
-	FreightAlignments     []PromotionFreightAlignment       `json:"freightAlignments"`
+	FreightAlignments []PromotionFreightAlignment `json:"freightAlignments"`
+
+	// Gates Ordered repository-local Gate names attached by Kargo Stage metadata.
+	Gates                 []CatalogName                     `json:"gates"`
 	HealthStatus          *string                           `json:"healthStatus,omitempty"`
 	ID                    openapi_types.UUID                `json:"id"`
 	KargoURL              *string                           `json:"kargoUrl,omitempty"`
@@ -3908,6 +3953,9 @@ type PromotionStageObservation struct {
 	Environment      *string                           `json:"environment,omitempty"`
 	Freight          PromotionFreight                  `json:"freight"`
 
+	// Gates Ordered repository-local Gate names attached by Kargo Stage metadata.
+	Gates []CatalogName `json:"gates"`
+
 	// HealthStatus Aggregate health status reported by Kargo for this Stage.
 	HealthStatus                    *string                           `json:"healthStatus,omitempty"`
 	KubernetesUID                   string                            `json:"kubernetesUid"`
@@ -3948,9 +3996,12 @@ type PromotionStagePromotionReference struct {
 
 // PromotionStageSnapshot defines model for PromotionStageSnapshot.
 type PromotionStageSnapshot struct {
-	Cluster                         CatalogName                      `json:"cluster"`
-	Enrichment                      *PromotionStageEnrichment        `json:"enrichment,omitempty"`
-	Freight                         PromotionFreight                 `json:"freight"`
+	Cluster    CatalogName               `json:"cluster"`
+	Enrichment *PromotionStageEnrichment `json:"enrichment,omitempty"`
+	Freight    PromotionFreight          `json:"freight"`
+
+	// Gates Ordered repository-local Gate names frozen at Promotion acceptance.
+	Gates                           []CatalogName                    `json:"gates"`
 	ID                              openapi_types.UUID               `json:"id"`
 	Integration                     CatalogName                      `json:"integration"`
 	KubernetesUID                   string                           `json:"kubernetesUid"`

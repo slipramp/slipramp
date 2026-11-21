@@ -32,10 +32,11 @@ const (
 )
 
 type CreationDispatchClaim struct {
-	ClusterName      string
-	ClaimedAt        time.Time
-	RetryDelays      []time.Duration
-	ExhaustedMessage string
+	ClusterName            string
+	GateEvaluatorProcessID uuid.UUID
+	ClaimedAt              time.Time
+	RetryDelays            []time.Duration
+	ExhaustedMessage       string
 }
 
 type CreationCommand struct {
@@ -66,16 +67,21 @@ type CreationDispatchStore interface {
 }
 
 type CreationDispatchService struct {
-	store       CreationDispatchStore
-	retryDelays []time.Duration
-	now         func() time.Time
+	store                  CreationDispatchStore
+	gateEvaluatorProcessID uuid.UUID
+	retryDelays            []time.Duration
+	now                    func() time.Time
 }
 
-func NewCreationDispatchService(store CreationDispatchStore) *CreationDispatchService {
+func NewCreationDispatchService(
+	store CreationDispatchStore,
+	gateEvaluatorProcessID uuid.UUID,
+) *CreationDispatchService {
 	return &CreationDispatchService{
-		store:       store,
-		retryDelays: slices.Clone(defaultCreationDispatchRetryDelays),
-		now:         time.Now,
+		store:                  store,
+		gateEvaluatorProcessID: gateEvaluatorProcessID,
+		retryDelays:            slices.Clone(defaultCreationDispatchRetryDelays),
+		now:                    time.Now,
 	}
 }
 
@@ -85,10 +91,11 @@ func (s *CreationDispatchService) Next(ctx context.Context, clusterName string) 
 	}
 
 	record, err := s.store.ClaimPromotionCreation(ctx, CreationDispatchClaim{
-		ClusterName:      clusterName,
-		ClaimedAt:        s.now().UTC().Truncate(time.Microsecond),
-		RetryDelays:      slices.Clone(s.retryDelays),
-		ExhaustedMessage: exhaustedCreationDispatchMessage,
+		ClusterName:            clusterName,
+		GateEvaluatorProcessID: s.gateEvaluatorProcessID,
+		ClaimedAt:              s.now().UTC().Truncate(time.Microsecond),
+		RetryDelays:            slices.Clone(s.retryDelays),
+		ExhaustedMessage:       exhaustedCreationDispatchMessage,
 	})
 	if err != nil {
 		return CreationCommand{}, err

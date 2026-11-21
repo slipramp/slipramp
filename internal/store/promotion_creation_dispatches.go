@@ -33,8 +33,9 @@ func (d *Database) ClaimPromotionCreation(
 		row, lockErr := queries.LockNextPromotionCreationDispatch(
 			ctx,
 			storedb.LockNextPromotionCreationDispatchParams{
-				DueAt:       databaseTime(claim.ClaimedAt),
-				ClusterName: claim.ClusterName,
+				DueAt:              databaseTime(claim.ClaimedAt),
+				ClusterName:        claim.ClusterName,
+				EvaluatorProcessID: databaseUUID(claim.GateEvaluatorProcessID),
 			},
 		)
 		if errors.Is(lockErr, pgx.ErrNoRows) {
@@ -54,6 +55,37 @@ func (d *Database) ClaimPromotionCreation(
 		current, decodeErr := promotionFromRow(row)
 		if decodeErr != nil {
 			return promotion.Promotion{}, decodeErr
+		}
+		if !current.ReviewRequired && len(current.StageSnapshot.Gates) > 0 {
+			if _, lockGateErr := queries.LockPromotionGateRepositories(
+				ctx,
+				databaseUUID(current.ID),
+			); lockGateErr != nil {
+				return promotion.Promotion{}, fmt.Errorf(
+					"lock Promotion Gate repositories: %w",
+					lockGateErr,
+				)
+			}
+			if _, releaseErr := queries.ReleasePromotionGates(
+				ctx,
+				storedb.ReleasePromotionGatesParams{
+					PromotionID:        databaseUUID(current.ID),
+					EvaluatorProcessID: databaseUUID(claim.GateEvaluatorProcessID),
+					ReleasedAt:         databaseTime(claim.ClaimedAt),
+				},
+			); releaseErr != nil {
+				return promotion.Promotion{}, fmt.Errorf("release Promotion Gates: %w", releaseErr)
+			}
+			unreleased, countGateErr := queries.CountUnreleasedPromotionGates(
+				ctx,
+				databaseUUID(current.ID),
+			)
+			if countGateErr != nil {
+				return promotion.Promotion{}, fmt.Errorf("count unreleased Promotion Gates: %w", countGateErr)
+			}
+			if unreleased != 0 {
+				return promotion.Promotion{}, promotion.ErrNoCreationDispatch
+			}
 		}
 
 		transition, transitionErr := promotion.TransitionCreationDispatchClaim(

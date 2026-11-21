@@ -28,7 +28,8 @@ func TestNormalizeKargoStage(t *testing.T) {
           "slipramp.com/promotion-environment":"prod",
           "slipramp.com/promotion-repository-url":"https://example.com/ops.git",
           "slipramp.com/promotion-target-branch":"environments/production",
-          "slipramp.com/promotion-source-paths":"[\"terraform/dns\",\"config/production.yaml\"]"
+          "slipramp.com/promotion-source-paths":"[\"terraform/dns\",\"config/production.yaml\"]",
+          "slipramp.com/promotion-gates":"[\"network-idle\",\"change-window\"]"
         }
       },
       "spec":{
@@ -89,6 +90,10 @@ func TestNormalizeKargoStage(t *testing.T) {
 	if observed.SourcePaths == nil || !reflect.DeepEqual(*observed.SourcePaths, wantPaths) {
 		t.Errorf("source paths = %#v, want %#v", observed.SourcePaths, wantPaths)
 	}
+	wantGates := []api.CatalogName{"network-idle", "change-window"}
+	if !reflect.DeepEqual(observed.Gates, wantGates) {
+		t.Errorf("Gates = %#v, want %#v", observed.Gates, wantGates)
+	}
 	if len(observed.RequestedFreight) != 1 ||
 		observed.RequestedFreight[0].Origin != "Warehouse/external-dns" ||
 		!reflect.DeepEqual(observed.RequestedFreight[0].SourceStages, []string{"external-dns-qa"}) {
@@ -117,6 +122,22 @@ func TestNormalizeKargoStage(t *testing.T) {
 			invalid.SetAnnotations(annotations)
 			if _, err := normalizeKargoStage(invalid, nil); err == nil {
 				t.Fatalf("normalizeKargoStage() accepted invalid source paths %s", paths)
+			}
+		})
+	}
+
+	for _, gates := range []string{
+		``, `null`, `{}`, `["NetworkIdle"]`, `["network-idle", "network-idle"]`,
+	} {
+		t.Run("invalid Gates "+gates, func(t *testing.T) {
+			t.Parallel()
+
+			invalid := stage.DeepCopy()
+			annotations := invalid.GetAnnotations()
+			annotations[promotionGatesAnnotation] = gates
+			invalid.SetAnnotations(annotations)
+			if _, err := normalizeKargoStage(invalid, nil); err == nil {
+				t.Fatalf("normalizeKargoStage() accepted invalid Gates %s", gates)
 			}
 		})
 	}

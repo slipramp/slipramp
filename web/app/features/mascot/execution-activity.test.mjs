@@ -393,6 +393,11 @@ test("active Promotions show creation, preparation, and post-approval Kargo work
     promotionActivity({ creationDispatch: { phase: "failed" }, status: "approved" }),
     undefined,
   );
+  assert.deepEqual(promotionActivity({ gates: { state: "waiting" }, status: "approved" }), {
+    animation: "waiting",
+    title: "Waiting for gates",
+    description: "Every required Gate must pass together before this Promotion continues.",
+  });
   assert.equal(
     promotionActivity({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }),
     undefined,
@@ -415,6 +420,10 @@ test("Promotion details refresh until pending diffs are loaded", () => {
   assert.equal(
     promotionDetailNeedsRefresh({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }, true),
     false,
+  );
+  assert.equal(
+    promotionDetailNeedsRefresh({ gates: { state: "waiting" }, status: "approved" }, true),
+    true,
   );
 
   for (const status of ["rejected", "expired", "error"]) {

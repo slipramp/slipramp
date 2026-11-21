@@ -17,9 +17,19 @@ func promotionStageSnapshotResponse(value promotion.PromotionStageSnapshot) api.
 		Enrichment:                      promotionStageEnrichmentResponse(value.Enrichment),
 		RequestedFreight:                promotionFreightRequestResponse(value.RequestedFreight),
 		Freight:                         promotionFreightResponse(value.Freight),
+		Gates:                           promotionGateNamesResponse(value.Gates),
 		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(value.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  value.LastObservedAt,
 	}
+}
+
+func promotionGateNamesResponse(names []string) []api.CatalogName {
+	result := make([]api.CatalogName, 0, len(names))
+	for _, name := range names {
+		result = append(result, api.CatalogName(name))
+	}
+
+	return result
 }
 
 func promotionStageEnrichmentResponse(value *promotion.PromotionStageEnrichment) *api.PromotionStageEnrichment {

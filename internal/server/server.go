@@ -214,9 +214,14 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		repositories,
 		persistence.database,
 	)
-	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
-	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
-	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
+	promotionRequests := promotion.NewRequestService(
+		cfg.KargoIntegrations,
+		persistence.database,
+		gateProcessID,
+		gateEvaluations,
+	)
+	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database, gateEvaluations)
+	promotionDispatches := promotion.NewCreationDispatchService(persistence.database, gateProcessID)
 	promotionReconciliations := promotion.NewReconciliationService(persistence.database)
 	placementPreflights := placement.NewPreflightService(cfg.Placements, clusters, persistence.database)
 	controllerCommands := controllercommand.NewScheduler(
@@ -225,7 +230,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		promotionDispatches,
 		promotionReconciliations,
 	)
-	promotionReviews := promotion.NewReviewService(cfg.KargoIntegrations, persistence.database)
+	promotionReviews := promotion.NewReviewService(cfg.KargoIntegrations, persistence.database, gateProcessID)
 	promotionProjects := projection.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionBranchDrift := projection.NewBranchDriftService(
 		cfg.KargoIntegrations,
