@@ -80,8 +80,9 @@ enroll:
     summary: Enroll a cluster controller
     description: >-
       Uses a cluster-scoped enrollment credential to bind a
-      controller-generated bearer credential to its cluster. Repeating an
-      enrollment with the same credential digest is idempotent.
+      controller-generated bearer credential and the current Controller build
+      information to its cluster. Repeating an enrollment with the same
+      credential digest is idempotent and refreshes the reported build.
     security:
       - ControllerEnrollmentBearer: []
     tags:

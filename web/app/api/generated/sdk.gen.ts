@@ -938,7 +938,7 @@ export const createPlacementPreflight = <ThrowOnError extends boolean = false>(
 /**
  * Enroll a cluster controller
  *
- * Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+ * Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
  */
 export const enrollController = <ThrowOnError extends boolean = false>(
   options: Options<EnrollControllerData, ThrowOnError>,

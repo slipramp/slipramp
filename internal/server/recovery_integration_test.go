@@ -63,6 +63,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		api.ControllerEnrollment{
 			ClusterName:      recoveryClusterName,
 			CredentialSha256: hex.EncodeToString(credentialDigest[:]),
+			BuildInfo:        api.ControllerBuildInfo{Version: "test"},
 		},
 		bearerAuthorization(recoveryEnrollmentToken),
 	)

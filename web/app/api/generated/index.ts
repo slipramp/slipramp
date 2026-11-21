@@ -153,6 +153,7 @@ export type {
   CompleteOidcLoginData,
   CompleteOidcLoginError,
   CompleteOidcLoginErrors,
+  ControllerBuildInfo,
   ControllerCommand,
   ControllerEnrollment,
   CreateApiKeyData,

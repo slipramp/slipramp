@@ -125,6 +125,44 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	}
 }
 
+func TestControllerReportsConfiguredBuildVersion(t *testing.T) {
+	t.Parallel()
+
+	app, err := New(
+		validConfig(),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		fake.NewClientset(),
+		nil,
+		WithBuildVersion("1.2.3"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	client, ok := app.enrollment.(*serverClient)
+	if !ok {
+		t.Fatalf("enrollment client = %T, want *serverClient", app.enrollment)
+	}
+	if client.buildInfo.Version != "1.2.3" {
+		t.Errorf("reported build version = %q, want 1.2.3", client.buildInfo.Version)
+	}
+}
+
+func TestControllerRejectsInvalidBuildVersion(t *testing.T) {
+	t.Parallel()
+
+	_, err := New(
+		validConfig(),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		fake.NewClientset(),
+		nil,
+		WithBuildVersion(""),
+	)
+	if err == nil || !strings.Contains(err.Error(), "controller version is required") {
+		t.Fatalf("New() error = %v, want invalid Controller version", err)
+	}
+}
+
 func TestRunWorkerLimitBoundsNewAssignments(t *testing.T) {
 	t.Parallel()
 

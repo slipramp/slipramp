@@ -12,7 +12,7 @@ import (
 )
 
 const getCluster = `-- name: GetCluster :one
-SELECT name, first_seen_at, last_seen_at
+SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters
 WHERE name = $1
 `
@@ -20,7 +20,12 @@ WHERE name = $1
 func (q *Queries) GetCluster(ctx context.Context, name string) (Cluster, error) {
 	row := q.db.QueryRow(ctx, getCluster, name)
 	var i Cluster
-	err := row.Scan(&i.Name, &i.FirstSeenAt, &i.LastSeenAt)
+	err := row.Scan(
+		&i.Name,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.ControllerVersion,
+	)
 	return i, err
 }
 
@@ -44,7 +49,7 @@ func (q *Queries) GetControllerMetrics(ctx context.Context, connectedAfter pgtyp
 }
 
 const listClusters = `-- name: ListClusters :many
-SELECT name, first_seen_at, last_seen_at
+SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters
 ORDER BY name
 `
@@ -58,7 +63,12 @@ func (q *Queries) ListClusters(ctx context.Context) ([]Cluster, error) {
 	var items []Cluster
 	for rows.Next() {
 		var i Cluster
-		if err := rows.Scan(&i.Name, &i.FirstSeenAt, &i.LastSeenAt); err != nil {
+		if err := rows.Scan(
+			&i.Name,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ControllerVersion,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -90,5 +100,33 @@ type RecordClusterObservationParams struct {
 
 func (q *Queries) RecordClusterObservation(ctx context.Context, arg RecordClusterObservationParams) error {
 	_, err := q.db.Exec(ctx, recordClusterObservation, arg.Name, arg.ObservedAt)
+	return err
+}
+
+const recordControllerEnrollment = `-- name: RecordControllerEnrollment :exec
+INSERT INTO clusters (
+    name,
+    first_seen_at,
+    last_seen_at,
+    controller_version
+) VALUES (
+    $1,
+    $2,
+    $2,
+    $3
+)
+ON CONFLICT (name) DO UPDATE
+SET last_seen_at = EXCLUDED.last_seen_at,
+    controller_version = EXCLUDED.controller_version
+`
+
+type RecordControllerEnrollmentParams struct {
+	Name              string
+	ObservedAt        pgtype.Timestamptz
+	ControllerVersion *string
+}
+
+func (q *Queries) RecordControllerEnrollment(ctx context.Context, arg RecordControllerEnrollmentParams) error {
+	_, err := q.db.Exec(ctx, recordControllerEnrollment, arg.Name, arg.ObservedAt, arg.ControllerVersion)
 	return err
 }

@@ -11,13 +11,29 @@ INSERT INTO clusters (
 ON CONFLICT (name) DO UPDATE
 SET last_seen_at = EXCLUDED.last_seen_at;
 
+-- name: RecordControllerEnrollment :exec
+INSERT INTO clusters (
+    name,
+    first_seen_at,
+    last_seen_at,
+    controller_version
+) VALUES (
+    sqlc.arg(name),
+    sqlc.arg(observed_at),
+    sqlc.arg(observed_at),
+    sqlc.arg(controller_version)
+)
+ON CONFLICT (name) DO UPDATE
+SET last_seen_at = EXCLUDED.last_seen_at,
+    controller_version = EXCLUDED.controller_version;
+
 -- name: GetCluster :one
-SELECT name, first_seen_at, last_seen_at
+SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters
 WHERE name = sqlc.arg(name);
 
 -- name: ListClusters :many
-SELECT name, first_seen_at, last_seen_at
+SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters
 ORDER BY name;
 

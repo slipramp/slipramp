@@ -1455,7 +1455,7 @@ paths:
     post:
       operationId: enrollController
       summary: Enroll a cluster controller
-      description: Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+      description: Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
       security:
         - ControllerEnrollmentBearer: []
       tags:
@@ -5914,10 +5914,23 @@ components:
           type: string
           format: date-time
           description: Time at which the Server most recently heard from the controller.
+        controllerBuildInfo:
+          $ref: '#/components/schemas/ControllerBuildInfo'
         kargoIntegrations:
           type: array
           items:
             $ref: '#/components/schemas/KargoIntegrationHealth'
+    ControllerBuildInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Release version reported by the Controller process.
     KargoIntegrationHealth:
       type: object
       additionalProperties: false
@@ -6359,6 +6372,7 @@ components:
       required:
         - clusterName
         - credentialSha256
+        - buildInfo
       properties:
         clusterName:
           type: string
@@ -6370,6 +6384,8 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: SHA-256 digest of the controller-generated bearer credential that will identify this cluster after enrollment.
+        buildInfo:
+          $ref: '#/components/schemas/ControllerBuildInfo'
     Run:
       type: object
       required:

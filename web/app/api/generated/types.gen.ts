@@ -522,7 +522,15 @@ export type Cluster = {
    * Time at which the Server most recently heard from the controller.
    */
   lastSeenAt: string;
+  controllerBuildInfo?: ControllerBuildInfo;
   kargoIntegrations: Array<KargoIntegrationHealth>;
+};
+
+export type ControllerBuildInfo = {
+  /**
+   * Release version reported by the Controller process.
+   */
+  version: string;
 };
 
 export type KargoIntegrationHealth = {
@@ -750,6 +758,7 @@ export type ControllerEnrollment = {
    * SHA-256 digest of the controller-generated bearer credential that will identify this cluster after enrollment.
    */
   credentialSha256: string;
+  buildInfo: ControllerBuildInfo;
 };
 
 export type Run = {

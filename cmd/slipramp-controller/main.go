@@ -65,6 +65,7 @@ func main() {
 		logger,
 		kubeClient,
 		dynamicClient,
+		controller.WithBuildVersion(version),
 		controller.WithMetricsHandler(metrics.Handler()),
 		controller.WithServerHTTPTransport(metrics.InstrumentHTTPTransport(nil)),
 	)

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
@@ -16,7 +17,12 @@ import (
 )
 
 type ControllerIdentityService interface {
-	EnrollController(ctx context.Context, clusterName string, credentialSHA256 string) error
+	EnrollController(
+		ctx context.Context,
+		clusterName string,
+		credentialSHA256 string,
+		buildInfo cluster.ControllerBuildInfo,
+	) error
 	AuthenticateController(ctx context.Context, bearerToken string) (controlleridentity.Principal, error)
 }
 

@@ -130,6 +130,9 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
             <PageHeaderFact label="Last observed">
               <RelativeTime value={cluster.lastSeenAt} />
             </PageHeaderFact>
+            <PageHeaderFact label="Controller version">
+              {cluster.controllerBuildInfo?.version ?? "Unknown"}
+            </PageHeaderFact>
           </PageHeaderFacts>
         }
         title={cluster.name}

@@ -258,6 +258,8 @@ components:
       $ref: ./components/catalog.yaml#/TargetDefinition
     Cluster:
       $ref: ./components/controllers.yaml#/Cluster
+    ControllerBuildInfo:
+      $ref: ./components/controllers.yaml#/ControllerBuildInfo
     KargoIntegrationHealth:
       $ref: ./components/controllers.yaml#/KargoIntegrationHealth
     ClusterList:

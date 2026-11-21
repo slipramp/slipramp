@@ -110,12 +110,13 @@ export default function Clusters({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <Paper withBorder>
-          <Table.ScrollContainer minWidth={560} type="native">
+          <Table.ScrollContainer minWidth={680} type="native">
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Cluster</Table.Th>
                   <Table.Th>Connection</Table.Th>
+                  <Table.Th>Controller version</Table.Th>
                   <Table.Th>Last observed</Table.Th>
                   <Table.Th>Registered</Table.Th>
                 </Table.Tr>
@@ -139,6 +140,15 @@ export default function Clusters({ loaderData }: Route.ComponentProps) {
                       >
                         {cluster.connectionState}
                       </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        c={cluster.controllerBuildInfo ? undefined : "dimmed"}
+                        ff="monospace"
+                        size="sm"
+                      >
+                        {cluster.controllerBuildInfo?.version ?? "Unknown"}
+                      </Text>
                     </Table.Td>
                     <Table.Td>
                       <RelativeTime size="sm" value={cluster.lastSeenAt} />

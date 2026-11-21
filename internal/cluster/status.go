@@ -1,8 +1,14 @@
 package cluster
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+)
 
 const ConnectionWindow = time.Minute
+
+const MaximumControllerVersionLength = 128
 
 type ConnectionState string
 
@@ -12,9 +18,25 @@ const (
 )
 
 type Observation struct {
-	Name        string
-	FirstSeenAt time.Time
-	LastSeenAt  time.Time
+	Name                string
+	FirstSeenAt         time.Time
+	LastSeenAt          time.Time
+	ControllerBuildInfo *ControllerBuildInfo
+}
+
+type ControllerBuildInfo struct {
+	Version string
+}
+
+func (i ControllerBuildInfo) Validate() error {
+	if strings.TrimSpace(i.Version) == "" {
+		return errors.New("controller version is required")
+	}
+	if len(i.Version) > MaximumControllerVersionLength {
+		return errors.New("controller version is too long")
+	}
+
+	return nil
 }
 
 type Status struct {

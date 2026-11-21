@@ -32,10 +32,11 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	controllers := &recordingClusterService{
 		clusters: []cluster.Status{
 			{
-				Name:            "colo",
-				FirstSeenAt:     firstSeenAt,
-				LastSeenAt:      lastSeenAt,
-				ConnectionState: cluster.ConnectionStateConnected,
+				Name:                "colo",
+				FirstSeenAt:         firstSeenAt,
+				LastSeenAt:          lastSeenAt,
+				ConnectionState:     cluster.ConnectionStateConnected,
+				ControllerBuildInfo: &cluster.ControllerBuildInfo{Version: "1.2.3"},
 			},
 		},
 	}
@@ -72,6 +73,9 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 
 	if !item.FirstSeenAt.Equal(firstSeenAt) || !item.LastSeenAt.Equal(lastSeenAt) {
 		t.Errorf("observation = (%s, %s), want (%s, %s)", item.FirstSeenAt, item.LastSeenAt, firstSeenAt, lastSeenAt)
+	}
+	if item.ControllerBuildInfo == nil || item.ControllerBuildInfo.Version != "1.2.3" {
+		t.Errorf("Controller build information = %#v, want version 1.2.3", item.ControllerBuildInfo)
 	}
 }
 
@@ -140,7 +144,7 @@ func TestControllerEnrollmentRegistersCredentialDigest(t *testing.T) {
 		http.MethodPost,
 		"/controller/v1/enroll",
 		strings.NewReader(
-			`{"clusterName":"colo","credentialSha256":"`+digest+`"}`,
+			`{"clusterName":"colo","credentialSha256":"`+digest+`","buildInfo":{"version":"1.2.3"}}`,
 		),
 	)
 	request.Header.Set("Authorization", "Bearer enrollment-token")
@@ -168,6 +172,9 @@ func TestControllerEnrollmentRegistersCredentialDigest(t *testing.T) {
 			digest,
 		)
 	}
+	if identities.enrolledBuildInfo.Version != "1.2.3" {
+		t.Errorf("enrolled build information = %#v", identities.enrolledBuildInfo)
+	}
 }
 
 func TestControllerEnrollmentRejectsInvalidCredential(t *testing.T) {
@@ -180,7 +187,7 @@ func TestControllerEnrollmentRejectsInvalidCredential(t *testing.T) {
 		"/controller/v1/enroll",
 		strings.NewReader(
 			`{"clusterName":"colo","credentialSha256":"`+
-				strings.Repeat("a", 64)+`"}`,
+				strings.Repeat("a", 64)+`","buildInfo":{"version":"1.2.3"}}`,
 		),
 	)
 	request.Header.Set("Authorization", "Bearer incorrect-token")
@@ -215,7 +222,7 @@ func TestControllerEnrollmentReturnsConflict(t *testing.T) {
 		"/controller/v1/enroll",
 		strings.NewReader(
 			`{"clusterName":"colo","credentialSha256":"`+
-				strings.Repeat("a", 64)+`"}`,
+				strings.Repeat("a", 64)+`","buildInfo":{"version":"1.2.3"}}`,
 		),
 	)
 	request.Header.Set("Authorization", "Bearer enrollment-token")
@@ -1121,11 +1128,12 @@ type recordingClusterService struct {
 }
 
 type recordingControllerIdentityService struct {
-	clusterByToken  map[string]string
-	authenticateErr error
-	enrollErr       error
-	enrolledCluster string
-	enrolledDigest  string
+	clusterByToken    map[string]string
+	authenticateErr   error
+	enrollErr         error
+	enrolledCluster   string
+	enrolledDigest    string
+	enrolledBuildInfo cluster.ControllerBuildInfo
 }
 
 type recordingArtifactService struct {
@@ -1364,9 +1372,11 @@ func (r *recordingControllerIdentityService) EnrollController(
 	_ context.Context,
 	clusterName string,
 	credentialSHA256 string,
+	buildInfo cluster.ControllerBuildInfo,
 ) error {
 	r.enrolledCluster = clusterName
 	r.enrolledDigest = credentialSHA256
+	r.enrolledBuildInfo = buildInfo
 
 	return r.enrollErr
 }

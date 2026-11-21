@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cluster"
 	controllerkargo "github.com/slipramp/slipramp/internal/controller/kargo"
 	"github.com/slipramp/slipramp/internal/controller/preflight"
 	"github.com/slipramp/slipramp/internal/controller/runjob"
@@ -142,14 +143,19 @@ func New(
 		return nil, errors.New("dynamic Kubernetes client is required for Kargo observation")
 	}
 
-	settings := controllerOptions{}
+	settings := controllerOptions{buildVersion: "dev"}
 	for _, option := range options {
 		option(&settings)
+	}
+	buildInfo := cluster.ControllerBuildInfo{Version: settings.buildVersion}
+	if err := buildInfo.Validate(); err != nil {
+		return nil, err
 	}
 	server, err := newServerClient(cfg, settings.serverHTTPTransport)
 	if err != nil {
 		return nil, err
 	}
+	server.buildInfo = api.ControllerBuildInfo{Version: buildInfo.Version}
 
 	controller := &Controller{
 		clusterName:                    cfg.ClusterName,

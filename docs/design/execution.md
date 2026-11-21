@@ -8,10 +8,12 @@ recovery contracts.
 
 A Controller has one stable Cluster name, a cluster-scoped enrollment
 credential, and a separate Controller-owned bearer credential. Enrollment
-registers only the bearer digest. Repeating the same enrollment is idempotent;
-credential replacement is rejected. Subsequent requests derive Cluster identity
-from that credential. Authenticated traffic updates last contact without a
-separate heartbeat protocol.
+registers the bearer digest and the Controller's current build version.
+Repeating the same enrollment is idempotent and refreshes the reported build;
+credential replacement is rejected. Subsequent requests derive Cluster
+identity from that credential. Authenticated traffic updates last contact
+without a separate heartbeat protocol. The latest reported Controller build is
+part of the Cluster product view.
 
 Delivery uses a small versioned HTTP API and is at least once. Long polls return
 Run assignment, Placement preflight, Run or Promotion cancellation, or Kargo

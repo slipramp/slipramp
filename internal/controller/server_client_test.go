@@ -111,6 +111,7 @@ func TestServerClientEnrollsControllerCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
 	}
+	client.buildInfo.Version = "1.2.3"
 
 	if err := client.Enroll(context.Background()); err != nil {
 		t.Fatalf("Enroll() error = %v", err)
@@ -121,7 +122,8 @@ func TestServerClientEnrollsControllerCredential(t *testing.T) {
 		enrollment.path != "/slipramp/controller/v1/enroll" ||
 		enrollment.authorization != "Bearer enrollment-token" ||
 		!strings.Contains(enrollment.body, `"clusterName":"colo"`) ||
-		!strings.Contains(enrollment.body, `"credentialSha256":"`+fmt.Sprintf("%x", digest)+`"`) {
+		!strings.Contains(enrollment.body, `"credentialSha256":"`+fmt.Sprintf("%x", digest)+`"`) ||
+		!strings.Contains(enrollment.body, `"buildInfo":{"version":"1.2.3"}`) {
 		t.Errorf("enrollment = %#v", enrollment)
 	}
 }

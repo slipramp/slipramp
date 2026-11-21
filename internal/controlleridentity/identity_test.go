@@ -7,6 +7,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/cluster"
 )
 
 type identityStore struct {
@@ -45,13 +47,19 @@ func TestServiceEnrollsController(t *testing.T) {
 	service.now = func() time.Time { return now }
 	digest := sha256.Sum256([]byte("controller-token"))
 
-	err := service.EnrollController(context.Background(), "colo", hex.EncodeToString(digest[:]))
+	err := service.EnrollController(
+		context.Background(),
+		"colo",
+		hex.EncodeToString(digest[:]),
+		cluster.ControllerBuildInfo{Version: "1.2.3"},
+	)
 	if err != nil {
 		t.Fatalf("EnrollController() error = %v", err)
 	}
 	if store.credential.ClusterName != "colo" ||
 		store.credential.SHA256 != hex.EncodeToString(digest[:]) ||
-		!store.credential.EnrolledAt.Equal(now) {
+		!store.credential.EnrolledAt.Equal(now) ||
+		store.credential.BuildInfo.Version != "1.2.3" {
 		t.Errorf("enrolled credential = %#v", store.credential)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 )
 
@@ -19,6 +20,7 @@ func TestControllerCredentialPersistenceIntegration(t *testing.T) {
 		ClusterName: "colo",
 		SHA256:      strings.Repeat("a", 64),
 		EnrolledAt:  enrolledAt,
+		BuildInfo:   cluster.ControllerBuildInfo{Version: "1.2.3"},
 	}
 	if err := database.EnrollControllerCredential(ctx, credential); err != nil {
 		t.Fatalf("EnrollControllerCredential() error = %v", err)
@@ -31,10 +33,25 @@ func TestControllerCredentialPersistenceIntegration(t *testing.T) {
 	if clusterName != "colo" {
 		t.Errorf("cluster name = %q, want colo", clusterName)
 	}
+	observedCluster, err := database.GetCluster(ctx, "colo")
+	if err != nil {
+		t.Fatalf("GetCluster() error = %v", err)
+	}
+	if observedCluster.ControllerBuildInfo == nil || observedCluster.ControllerBuildInfo.Version != "1.2.3" {
+		t.Errorf("Controller build information = %#v, want version 1.2.3", observedCluster.ControllerBuildInfo)
+	}
 
 	credential.EnrolledAt = enrolledAt.Add(time.Minute)
+	credential.BuildInfo.Version = "1.2.4"
 	if err := database.EnrollControllerCredential(ctx, credential); err != nil {
 		t.Fatalf("idempotent EnrollControllerCredential() error = %v", err)
+	}
+	observedCluster, err = database.GetCluster(ctx, "colo")
+	if err != nil {
+		t.Fatalf("updated GetCluster() error = %v", err)
+	}
+	if observedCluster.ControllerBuildInfo == nil || observedCluster.ControllerBuildInfo.Version != "1.2.4" {
+		t.Errorf("updated Controller build information = %#v, want version 1.2.4", observedCluster.ControllerBuildInfo)
 	}
 
 	credential.SHA256 = strings.Repeat("b", 64)
@@ -49,6 +66,7 @@ func TestControllerCredentialPersistenceIntegration(t *testing.T) {
 		ClusterName: "edge",
 		SHA256:      strings.Repeat("a", 64),
 		EnrolledAt:  enrolledAt,
+		BuildInfo:   cluster.ControllerBuildInfo{Version: "1.2.3"},
 	}
 	if err := database.EnrollControllerCredential(ctx, other); !errors.Is(
 		err,

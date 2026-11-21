@@ -88,6 +88,7 @@ type serverClient struct {
 	clusterName     string
 	bearerToken     string
 	enrollmentToken string
+	buildInfo       api.ControllerBuildInfo
 	api             controllerAPI
 }
 
@@ -197,6 +198,7 @@ func newServerClientWithHTTPClient(cfg Config, httpClient api.HttpRequestDoer) (
 		clusterName:     cfg.ClusterName,
 		bearerToken:     cfg.BearerToken,
 		enrollmentToken: cfg.EnrollmentToken,
+		buildInfo:       api.ControllerBuildInfo{Version: "dev"},
 		api:             client,
 	}, nil
 }
@@ -208,6 +210,7 @@ func (c *serverClient) Enroll(ctx context.Context) error {
 		api.ControllerEnrollment{
 			ClusterName:      c.clusterName,
 			CredentialSha256: hex.EncodeToString(digest[:]),
+			BuildInfo:        c.buildInfo,
 		},
 		controllerAuthorization(c.enrollmentToken),
 	)

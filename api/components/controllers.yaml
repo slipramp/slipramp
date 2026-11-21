@@ -29,10 +29,24 @@ Cluster:
       type: string
       format: date-time
       description: Time at which the Server most recently heard from the controller.
+    controllerBuildInfo:
+      $ref: "#/ControllerBuildInfo"
     kargoIntegrations:
       type: array
       items:
         $ref: "#/KargoIntegrationHealth"
+
+ControllerBuildInfo:
+  type: object
+  additionalProperties: false
+  required:
+    - version
+  properties:
+    version:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Release version reported by the Controller process.
 
 KargoIntegrationHealth:
   type: object
@@ -89,6 +103,7 @@ ControllerEnrollment:
   required:
     - clusterName
     - credentialSha256
+    - buildInfo
   properties:
     clusterName:
       type: string
@@ -102,6 +117,8 @@ ControllerEnrollment:
       description: >-
         SHA-256 digest of the controller-generated bearer credential that will
         identify this cluster after enrollment.
+    buildInfo:
+      $ref: "#/ControllerBuildInfo"
 
 RunObservation:
   type: object

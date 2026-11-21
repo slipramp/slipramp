@@ -2499,7 +2499,8 @@ type ClientCompatibility struct {
 // Cluster defines model for Cluster.
 type Cluster struct {
 	// ConnectionState Whether the cluster controller has contacted the Server within the connection window.
-	ConnectionState ClusterConnectionState `json:"connectionState"`
+	ConnectionState     ClusterConnectionState `json:"connectionState"`
+	ControllerBuildInfo *ControllerBuildInfo   `json:"controllerBuildInfo,omitempty"`
 
 	// FirstSeenAt Time at which this Server first observed the controller.
 	FirstSeenAt       time.Time                `json:"firstSeenAt"`
@@ -2521,6 +2522,12 @@ type ClusterList struct {
 	Limit  int       `json:"limit"`
 	Offset int       `json:"offset"`
 	Total  int       `json:"total"`
+}
+
+// ControllerBuildInfo defines model for ControllerBuildInfo.
+type ControllerBuildInfo struct {
+	// Version Release version reported by the Controller process.
+	Version string `json:"version"`
 }
 
 // ControllerCommand defines model for ControllerCommand.
@@ -2547,6 +2554,8 @@ type ControllerCommandType string
 
 // ControllerEnrollment defines model for ControllerEnrollment.
 type ControllerEnrollment struct {
+	BuildInfo ControllerBuildInfo `json:"buildInfo"`
+
 	// ClusterName Cluster identity authorized by the enrollment credential.
 	ClusterName string `json:"clusterName"`
 
@@ -6682,7 +6691,7 @@ type ClientInterface interface {
 
 	// EnrollControllerWithBody Enroll a cluster controller
 	//
-	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6691,7 +6700,7 @@ type ClientInterface interface {
 
 	// EnrollController Enroll a cluster controller
 	//
-	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -8301,7 +8310,7 @@ func (c *Client) ExplainTargetAction(ctx context.Context, targetID openapi_types
 
 // EnrollControllerWithBody Enroll a cluster controller
 //
-// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8320,7 +8329,7 @@ func (c *Client) EnrollControllerWithBody(ctx context.Context, contentType strin
 
 // EnrollController Enroll a cluster controller
 //
-// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -14043,7 +14052,7 @@ type ClientWithResponsesInterface interface {
 
 	// EnrollControllerWithBodyWithResponse Enroll a cluster controller
 	//
-	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14052,7 +14061,7 @@ type ClientWithResponsesInterface interface {
 
 	// EnrollControllerWithResponse Enroll a cluster controller
 	//
-	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21773,7 +21782,7 @@ func (c *ClientWithResponses) ExplainTargetActionWithResponse(ctx context.Contex
 
 // EnrollControllerWithBodyWithResponse Enroll a cluster controller
 //
-// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21788,7 +21797,7 @@ func (c *ClientWithResponses) EnrollControllerWithBodyWithResponse(ctx context.C
 
 // EnrollControllerWithResponse Enroll a cluster controller
 //
-// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential and the current Controller build information to its cluster. Repeating an enrollment with the same credential digest is idempotent and refreshes the reported build.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

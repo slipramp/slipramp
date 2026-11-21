@@ -36,11 +36,12 @@ func (d *Database) EnrollControllerCredential(ctx context.Context, credential co
 		return fmt.Errorf("get controller enrollment: %w", err)
 	}
 
-	if err := queries.RecordClusterObservation(
+	if err := queries.RecordControllerEnrollment(
 		ctx,
-		storedb.RecordClusterObservationParams{
-			Name:       credential.ClusterName,
-			ObservedAt: databaseTime(credential.EnrolledAt),
+		storedb.RecordControllerEnrollmentParams{
+			Name:              credential.ClusterName,
+			ObservedAt:        databaseTime(credential.EnrolledAt),
+			ControllerVersion: &credential.BuildInfo.Version,
 		},
 	); err != nil {
 		return fmt.Errorf("record enrolled cluster: %w", err)

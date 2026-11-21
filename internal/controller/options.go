@@ -5,6 +5,7 @@ import "net/http"
 type controllerOptions struct {
 	metricsHandler      http.Handler
 	serverHTTPTransport http.RoundTripper
+	buildVersion        string
 }
 
 type Option func(*controllerOptions)
@@ -18,5 +19,11 @@ func WithServerHTTPTransport(transport http.RoundTripper) Option {
 func WithMetricsHandler(handler http.Handler) Option {
 	return func(options *controllerOptions) {
 		options.metricsHandler = handler
+	}
+}
+
+func WithBuildVersion(version string) Option {
+	return func(options *controllerOptions) {
+		options.buildVersion = version
 	}
 }

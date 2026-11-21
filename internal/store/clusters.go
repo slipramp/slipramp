@@ -38,9 +38,10 @@ func (d *Database) GetCluster(ctx context.Context, clusterName string) (cluster.
 	}
 
 	return cluster.Observation{
-		Name:        row.Name,
-		FirstSeenAt: row.FirstSeenAt.Time.UTC(),
-		LastSeenAt:  row.LastSeenAt.Time.UTC(),
+		Name:                row.Name,
+		FirstSeenAt:         row.FirstSeenAt.Time.UTC(),
+		LastSeenAt:          row.LastSeenAt.Time.UTC(),
+		ControllerBuildInfo: controllerBuildInfo(row.ControllerVersion),
 	}, nil
 }
 
@@ -53,11 +54,20 @@ func (d *Database) ListClusterObservations(ctx context.Context) ([]cluster.Obser
 	observations := make([]cluster.Observation, 0, len(rows))
 	for _, row := range rows {
 		observations = append(observations, cluster.Observation{
-			Name:        row.Name,
-			FirstSeenAt: row.FirstSeenAt.Time.UTC(),
-			LastSeenAt:  row.LastSeenAt.Time.UTC(),
+			Name:                row.Name,
+			FirstSeenAt:         row.FirstSeenAt.Time.UTC(),
+			LastSeenAt:          row.LastSeenAt.Time.UTC(),
+			ControllerBuildInfo: controllerBuildInfo(row.ControllerVersion),
 		})
 	}
 
 	return observations, nil
+}
+
+func controllerBuildInfo(version *string) *cluster.ControllerBuildInfo {
+	if version == nil {
+		return nil
+	}
+
+	return &cluster.ControllerBuildInfo{Version: *version}
 }

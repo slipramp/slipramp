@@ -49,7 +49,12 @@ func (h *Handler) EnrollController(
 		return api.EnrollController400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	err := h.identities.EnrollController(ctx, request.Body.ClusterName, request.Body.CredentialSha256)
+	err := h.identities.EnrollController(
+		ctx,
+		request.Body.ClusterName,
+		request.Body.CredentialSha256,
+		cluster.ControllerBuildInfo{Version: request.Body.BuildInfo.Version},
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, controlleridentity.ErrInvalid):
@@ -127,12 +132,17 @@ func (h *Handler) ListClusters(
 		if kargoIntegrations == nil {
 			kargoIntegrations = []api.KargoIntegrationHealth{}
 		}
+		var controllerBuildInfo *api.ControllerBuildInfo
+		if status.ControllerBuildInfo != nil {
+			controllerBuildInfo = &api.ControllerBuildInfo{Version: status.ControllerBuildInfo.Version}
+		}
 		items = append(items, api.Cluster{
-			Name:              status.Name,
-			ConnectionState:   api.ClusterConnectionState(status.ConnectionState),
-			FirstSeenAt:       status.FirstSeenAt,
-			LastSeenAt:        status.LastSeenAt,
-			KargoIntegrations: kargoIntegrations,
+			Name:                status.Name,
+			ConnectionState:     api.ClusterConnectionState(status.ConnectionState),
+			FirstSeenAt:         status.FirstSeenAt,
+			LastSeenAt:          status.LastSeenAt,
+			ControllerBuildInfo: controllerBuildInfo,
+			KargoIntegrations:   kargoIntegrations,
 		})
 	}
 

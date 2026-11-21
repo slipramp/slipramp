@@ -113,9 +113,10 @@ type CatalogTarget struct {
 }
 
 type Cluster struct {
-	Name        string
-	FirstSeenAt pgtype.Timestamptz
-	LastSeenAt  pgtype.Timestamptz
+	Name              string
+	FirstSeenAt       pgtype.Timestamptz
+	LastSeenAt        pgtype.Timestamptz
+	ControllerVersion *string
 }
 
 type ControllerCredential struct {

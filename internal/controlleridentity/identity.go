@@ -28,6 +28,7 @@ type Credential struct {
 	ClusterName string
 	SHA256      string
 	EnrolledAt  time.Time
+	BuildInfo   cluster.ControllerBuildInfo
 }
 
 func (c Credential) Validate() error {
@@ -41,6 +42,9 @@ func (c Credential) Validate() error {
 
 	if c.EnrolledAt.IsZero() {
 		return fmt.Errorf("%w: enrollment time is required", ErrInvalid)
+	}
+	if err := c.BuildInfo.Validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 
 	return nil
@@ -67,11 +71,17 @@ func NewService(credentials Store) *Service {
 	}
 }
 
-func (s *Service) EnrollController(ctx context.Context, clusterName string, credentialSHA256 string) error {
+func (s *Service) EnrollController(
+	ctx context.Context,
+	clusterName string,
+	credentialSHA256 string,
+	buildInfo cluster.ControllerBuildInfo,
+) error {
 	credential := Credential{
 		ClusterName: clusterName,
 		SHA256:      credentialSHA256,
 		EnrolledAt:  s.now().UTC(),
+		BuildInfo:   buildInfo,
 	}
 	if err := credential.Validate(); err != nil {
 		return err
