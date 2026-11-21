@@ -143,6 +143,7 @@ func (d *Database) ReportPromotionReconciliation(
 	updatedRow, err := queries.UpdatePromotionReconciliation(
 		ctx,
 		storedb.UpdatePromotionReconciliationParams{
+			CancellationConfirmedAt:   optionalDatabaseTime(transition.Promotion.Cancellation.ConfirmedAt),
 			Status:                    string(transition.Promotion.Lifecycle.State),
 			Message:                   transition.Promotion.Message,
 			KargoPromotionUid:         transition.Promotion.KargoExecution.PromotionUID,

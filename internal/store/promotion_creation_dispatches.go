@@ -164,6 +164,7 @@ func (d *Database) ReportPromotionCreation(
 	updatedRow, err := queries.UpdatePromotionCreationDispatch(
 		ctx,
 		storedb.UpdatePromotionCreationDispatchParams{
+			CancellationConfirmedAt:   optionalDatabaseTime(transitioned.Cancellation.ConfirmedAt),
 			ExternalPromotionID:       transitioned.ExternalPromotionID,
 			Status:                    string(transitioned.Lifecycle.State),
 			Message:                   transitioned.Message,

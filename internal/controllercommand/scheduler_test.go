@@ -38,7 +38,7 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 		wantCalls         string
 	}{
 		{
-			name: "cancellation before other work", want: Cancellation{Run: record}, wantCalls: "cancel",
+			name: "cancellation before other work", want: RunCancellation{Run: record}, wantCalls: "cancel",
 		},
 		{
 			name: "preflight after cancellation", cancelError: run.ErrNoRunToCancel,
@@ -155,7 +155,7 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 				})
 			}
 
-			got, err := NewScheduler(runs, preflights, creations, reconciliations).Next(ctx, "colo")
+			got, err := NewScheduler(runs, preflights, creations, reconciliations, nil).Next(ctx, "colo")
 			if !errors.Is(err, test.wantError) || !reflect.DeepEqual(got, test.want) {
 				t.Errorf("Next() = %#v, %v; want %#v, %v", got, err, test.want, test.wantError)
 			}
@@ -195,7 +195,7 @@ func TestSchedulerRotatesOrdinaryCommands(t *testing.T) {
 		calls = append(calls, "reconcile")
 		return reconciliation, nil
 	})
-	scheduler := NewScheduler(runs, nil, creations, reconciliations)
+	scheduler := NewScheduler(runs, nil, creations, reconciliations, nil)
 
 	want := []Command{
 		PromotionCreation{Command: creation},
@@ -247,7 +247,7 @@ func TestSchedulerRotatesAfterOrdinarySourceFailure(t *testing.T) {
 		calls = append(calls, "reconcile")
 		return reconciliation, nil
 	})
-	scheduler := NewScheduler(runs, nil, creations, reconciliations)
+	scheduler := NewScheduler(runs, nil, creations, reconciliations, nil)
 
 	wantCommands := []Command{
 		nil,
@@ -289,11 +289,11 @@ func TestSchedulerBoundsRepeatedCancellationDelivery(t *testing.T) {
 			return record, nil
 		},
 	}
-	scheduler := NewScheduler(runs, nil, nil, nil)
+	scheduler := NewScheduler(runs, nil, nil, nil, nil)
 	want := []Command{
-		Cancellation{Run: record},
+		RunCancellation{Run: record},
 		Assignment{Run: record},
-		Cancellation{Run: record},
+		RunCancellation{Run: record},
 		Assignment{Run: record},
 	}
 	for index, expected := range want {
@@ -322,10 +322,10 @@ func TestSchedulerRedeliversCancellationWithoutOtherWork(t *testing.T) {
 			return run.Run{}, run.ErrNoRunAssignment
 		},
 	}
-	scheduler := NewScheduler(runs, nil, nil, nil)
+	scheduler := NewScheduler(runs, nil, nil, nil, nil)
 	for call := 1; call <= 2; call++ {
 		got, err := scheduler.Next(t.Context(), "colo")
-		want := Cancellation{Run: record}
+		want := RunCancellation{Run: record}
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("Next() call %d = %#v, %v; want %#v, nil", call, got, err, want)
 		}

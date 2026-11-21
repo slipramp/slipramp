@@ -294,13 +294,13 @@ export function activityAnimationPose(
 }
 
 export function runActivity(
-  run: Pick<Run, "phase" | "observationState"> & Partial<Pick<Run, "review" | "cancellationState">>,
+  run: Pick<Run, "phase" | "observationState"> & Partial<Pick<Run, "review" | "cancellation">>,
 ): ExecutionActivity | undefined {
   if (run.phase === "finished" || run.observationState === "unknown") {
     return undefined;
   }
 
-  if (run.cancellationState === "requested") {
+  if (run.cancellation?.state === "requested") {
     return {
       animation: run.phase === "queued" ? "waiting" : "working",
       title: "Stopping your run",
@@ -398,11 +398,18 @@ export function runResultActivity(
 }
 
 export function promotionActivity(
-  promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
+  promotion: Pick<Promotion, "cancellation" | "status" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
     gates?: Pick<Promotion["gates"], "state">;
   },
 ): ExecutionActivity | undefined {
+  if (promotion.cancellation?.state === "requested")
+    return {
+      animation: "waiting",
+      title: "Canceling Promotion",
+      description: "Waiting for the Controller to confirm the outcome.",
+    };
+  if (promotion.cancellation?.state === "completed" || promotion.kargoOutcome) return undefined;
   switch (promotion.status) {
     case "creating":
       return {
@@ -417,36 +424,33 @@ export function promotionActivity(
         description: "Preparing the Promotion and its diffs.",
       };
     case "approved":
-      if (!promotion.kargoOutcome) {
-        if (promotion.creationDispatch?.phase === "failed") return undefined;
-        if (promotion.gates?.state === "waiting") {
-          return {
-            animation: "waiting",
-            title: "Waiting for gates",
-            description: "Every required Gate must pass together before this Promotion continues.",
-          };
-        }
-        if (promotion.creationDispatch?.phase === "awaiting-delivery") {
-          return {
-            animation: "working",
-            title: "Delivering to Kargo",
-            description: "The Promotion is approved while a Controller creates its Kargo object.",
-          };
-        }
+      if (promotion.creationDispatch?.phase === "failed") return undefined;
+      if (promotion.gates?.state === "waiting") {
         return {
-          animation: "working",
-          title: "Kargo is carrying it forward",
-          description: "The Promotion is approved while Kargo continues its steps.",
+          animation: "waiting",
+          title: "Waiting for gates",
+          description: "Every required Gate must pass together before this Promotion continues.",
         };
       }
-      return undefined;
+      if (promotion.creationDispatch?.phase === "awaiting-delivery") {
+        return {
+          animation: "working",
+          title: "Delivering to Kargo",
+          description: "The Promotion is approved while a Controller creates its Kargo object.",
+        };
+      }
+      return {
+        animation: "working",
+        title: "Kargo is carrying it forward",
+        description: "The Promotion is approved while Kargo continues its steps.",
+      };
     default:
       return undefined;
   }
 }
 
 export function promotionDetailNeedsRefresh(
-  promotion: Pick<Promotion, "status" | "kargoOutcome"> & {
+  promotion: Pick<Promotion, "cancellation" | "status" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "phase">;
     gates?: Pick<Promotion["gates"], "state">;
   },
@@ -454,18 +458,30 @@ export function promotionDetailNeedsRefresh(
 ): boolean {
   return (
     promotionActivity(promotion) !== undefined ||
-    (promotion.status === "pending" && !preparedDiffsLoaded)
+    (promotion.status === "pending" &&
+      !preparedDiffsLoaded &&
+      promotion.cancellation?.state !== "completed" &&
+      !promotion.kargoOutcome)
   );
 }
 
 export function promotionDetailActivity(
-  promotion: Pick<Promotion, "status" | "message" | "kargoOutcome"> & {
+  promotion: Pick<Promotion, "cancellation" | "status" | "message" | "kargoOutcome"> & {
     creationDispatch?: Pick<Promotion["creationDispatch"], "diagnostic" | "phase">;
     gates?: Pick<Promotion["gates"], "state">;
   },
 ): ExecutionActivity | undefined {
   const activity = promotionActivity(promotion);
   if (activity) return activity;
+  if (promotion.cancellation?.state === "completed")
+    return { animation: "phone", tone: "neutral", title: "Promotion canceled" };
+  if (promotion.cancellation?.state === "overtaken")
+    return {
+      animation: "phone",
+      tone: "neutral",
+      title: promotion.kargoOutcome?.phase ?? "Delivery failed",
+      description: "The Promotion finished before cancellation completed.",
+    };
 
   switch (promotion.status) {
     case "pending":

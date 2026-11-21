@@ -4,11 +4,13 @@ type BadgePresentation = { label: string; color: string };
 
 export const gateSummaryBadges = {
   "not-required": { label: "Not required", color: "gray" },
+  stopped: { label: "Stopped", color: "gray" },
   waiting: { label: "Waiting", color: "yellow" },
   released: { label: "Released", color: "green" },
 } satisfies Record<GateSummaryState, BadgePresentation>;
 
 export const gateRequirementBadges = {
+  stopped: { label: "Not released", color: "gray" },
   unevaluated: { label: "Not evaluated", color: "gray" },
   passing: { label: "Passing", color: "green" },
   blocking: { label: "Blocking", color: "red" },

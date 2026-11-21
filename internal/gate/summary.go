@@ -12,6 +12,7 @@ const (
 	SummaryNotRequired SummaryState = "not-required"
 	SummaryWaiting     SummaryState = "waiting"
 	SummaryReleased    SummaryState = "released"
+	SummaryStopped     SummaryState = "stopped"
 )
 
 type RequirementState string
@@ -22,6 +23,7 @@ const (
 	RequirementBlocking    RequirementState = RequirementState(ObservationBlocking)
 	RequirementUnavailable RequirementState = RequirementState(ObservationUnavailable)
 	RequirementReleased    RequirementState = "released"
+	RequirementStopped     RequirementState = "stopped"
 )
 
 // Summary lists requirements in attachment order. Its zero value represents ungated work.
@@ -32,6 +34,9 @@ func (s Summary) State() SummaryState {
 		return SummaryNotRequired
 	}
 	for _, requirement := range s {
+		if requirement.State == RequirementStopped {
+			return SummaryStopped
+		}
 		if requirement.State != RequirementReleased {
 			return SummaryWaiting
 		}
@@ -54,6 +59,7 @@ type Requirement struct {
 // RequirementEvidence holds the fields needed to show one Gate requirement.
 // After release, its condition and observation come from the stored release evidence.
 type RequirementEvidence struct {
+	Canceled           bool
 	Name               string
 	Title              string
 	Condition          *Condition
@@ -72,6 +78,10 @@ func (e RequirementEvidence) RequirementAt(processID uuid.UUID, at time.Time) Re
 		requirement.EvaluatedAt = e.EvaluatedAt
 		requirement.ReleasedAt = e.ReleasedAt
 		return requirement
+	}
+
+	if e.Canceled {
+		return Requirement{Name: e.Name, Title: e.Title, State: RequirementStopped}
 	}
 
 	switch {

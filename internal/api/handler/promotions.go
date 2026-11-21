@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/gate"
 
 	"github.com/google/uuid"
@@ -46,6 +47,10 @@ type PromotionStageService interface {
 		replacement promotion.StageSnapshotReplacement,
 	) error
 	ListIntegrationHealth(context.Context) ([]promotion.IntegrationHealth, error)
+}
+
+type PromotionCancellationService interface {
+	Cancel(context.Context, uuid.UUID, productidentity.Principal) error
 }
 
 type PromotionReviewService interface {
@@ -95,6 +100,8 @@ func (h *Handler) SubmitKargoPromotion(
 	)
 	if err != nil {
 		switch {
+		case errors.Is(err, promotion.ErrCreationIdentityPending):
+			return api.SubmitKargoPromotion202Response{}, nil
 		case errors.Is(err, promotion.ErrInvalid):
 			problem := NewProblem(http.StatusBadRequest, err.Error())
 
@@ -301,6 +308,9 @@ func (h *Handler) ListPromotions(
 	if request.Params.Application != nil {
 		filter.Application = *request.Params.Application
 	}
+	if request.Params.CancellationState != nil {
+		filter.CancellationState = cancellation.State(*request.Params.CancellationState)
+	}
 	if request.Params.Status != nil {
 		filter.Status = promotion.LifecycleState(*request.Params.Status)
 	}
@@ -395,6 +405,37 @@ func (h *Handler) GetPromotion(
 	}
 
 	return api.GetPromotion200JSONResponse(body), nil
+}
+
+func (h *Handler) CancelPromotion(
+	ctx context.Context,
+	request api.CancelPromotionRequestObject,
+) (api.CancelPromotionResponseObject, error) {
+	principal := currentProductPrincipal(ctx)
+	if principal == nil {
+		return nil, errors.New("authenticated cancellation actor is missing")
+	}
+	err := h.promotionCancellations.Cancel(ctx, request.PromotionID, *principal)
+	switch {
+	case errors.Is(err, promotion.ErrPromotionNotFound):
+		problem := NewProblem(http.StatusNotFound, "The Promotion does not exist.")
+		return api.CancelPromotion404ApplicationProblemPlusJSONResponse{
+			NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
+		}, nil
+	case errors.Is(err, promotion.ErrTransitionConflict):
+		problem := NewProblem(http.StatusConflict, "The Promotion already finished.")
+		return api.CancelPromotion409ApplicationProblemPlusJSONResponse{
+			ConflictApplicationProblemPlusJSONResponse: api.ConflictApplicationProblemPlusJSONResponse(problem),
+		}, nil
+	case err != nil:
+		return nil, err
+	}
+	review, err := h.promotionReviews.GetPromotion(ctx, request.PromotionID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := h.promotionDetailResponse(ctx, review)
+	return api.CancelPromotion200JSONResponse(body), err
 }
 
 func (h *Handler) DecidePromotion(
@@ -498,7 +539,7 @@ func promotionPolicyResponse(value promotion.PromotionPolicySnapshot) api.Promot
 		EffectiveMode:  api.PromotionPolicyMode(value.EffectiveMode),
 		ExpiresAt:      value.ExpiresAt,
 		Reason:         value.Reason,
-		UpdatedBy:      apiRunActor(value.UpdatedBy),
+		UpdatedBy:      apiActorSnapshot(value.UpdatedBy),
 		UpdatedAt:      value.UpdatedAt,
 	}
 }
@@ -510,7 +551,7 @@ func promotionResponse(
 	gates gate.Summary,
 ) (api.Promotion, error) {
 	record := review.Promotion
-	requestedBy := apiRunActor(&record.RequestedBySnapshot)
+	requestedBy := apiActorSnapshot(&record.RequestedBySnapshot)
 	if requestedBy == nil {
 		return api.Promotion{}, errors.New("promotion requesting actor is missing")
 	}
@@ -538,6 +579,7 @@ func promotionResponse(
 	}
 
 	body := api.Promotion{
+		Cancellation:        cancellationResponse(record.CancellationState(), record.Cancellation.RequestedAt, record.Cancellation.RequestedBy),
 		ID:                  record.ID,
 		Source:              api.PromotionSource(record.Source),
 		Integration:         api.CatalogName(record.Integration),
@@ -601,7 +643,7 @@ func promotionResponse(
 		)
 	}
 	if review.Decision != nil {
-		decidedBy := apiRunActor(&review.Decision.DecidedBySnapshot)
+		decidedBy := apiActorSnapshot(&review.Decision.DecidedBySnapshot)
 		if decidedBy == nil {
 			return api.Promotion{}, errors.New("promotion decision actor is missing")
 		}

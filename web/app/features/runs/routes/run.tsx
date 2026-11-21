@@ -1,3 +1,5 @@
+import { LifecycleStep } from "~/shared/lifecycle-step";
+import { CancellationDetail, CancellationStep } from "~/shared/cancellation-detail";
 import {
   Accordion,
   Alert,
@@ -9,7 +11,6 @@ import {
   Group,
   Menu,
   Paper,
-  SimpleGrid,
   Stack,
   Table,
   Tabs,
@@ -17,7 +18,6 @@ import {
   Textarea,
   Title,
   Tooltip,
-  UnstyledButton,
 } from "@mantine/core";
 import {
   IconBan,
@@ -62,7 +62,7 @@ import {
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
-import { ContextValue } from "~/shared/context-value";
+import { DetailFact, DetailGrid } from "~/shared/context-value";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { CommitDetails, CommitReference } from "~/features/commits/git-commit";
 import { Identity } from "~/shared/identity";
@@ -390,7 +390,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 </Menu.Dropdown>
               </Menu>
             </Group>
-          ) : run.cancellationState === "not-requested" ? (
+          ) : run.cancellation.state === "not-requested" ? (
             <Form method="post">
               <input name="intent" type="hidden" value="cancel" />
               <Button
@@ -509,6 +509,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
 const lifecycleStages: Run["phase"][] = ["queued", "assigned", "preparing", "running", "finished"];
 
+type RunLifecycleStage = Run["phase"] | "cancellation";
+const stagesWithCancellation: RunLifecycleStage[] = [...lifecycleStages, "cancellation"];
+
 function RunWorkspace({
   artifactRuns,
   artifactRunsAvailable,
@@ -546,19 +549,21 @@ function RunWorkspace({
     outputValues,
     automaticOutput,
   );
+  const hasCancellation = run.cancellation.state !== "not-requested";
+  const availableStages = hasCancellation ? stagesWithCancellation : lifecycleStages;
   const selectedStage = selectedRunDetailValue(
     searchParams,
     runDetailSearchParamNames.stage,
-    lifecycleStages,
-    run.phase,
-  ) as Run["phase"];
+    availableStages,
+    hasCancellation ? "cancellation" : run.phase,
+  ) as RunLifecycleStage;
   const requestedOutput = searchParams.get(runDetailSearchParamNames.output);
   const requestedStage = searchParams.get(runDetailSearchParamNames.stage);
 
   useEffect(() => {
     const invalidOutput = requestedOutput !== null && !outputValues.includes(requestedOutput);
     const invalidStage =
-      requestedStage !== null && !lifecycleStages.includes(requestedStage as Run["phase"]);
+      requestedStage !== null && !(availableStages as readonly string[]).includes(requestedStage);
     if (!invalidOutput && !invalidStage) return;
 
     setSearchParams(
@@ -570,7 +575,14 @@ function RunWorkspace({
       }),
       { preventScrollReset: true, replace: true },
     );
-  }, [outputValues, requestedOutput, requestedStage, searchParams, setSearchParams]);
+  }, [
+    availableStages,
+    outputValues,
+    requestedOutput,
+    requestedStage,
+    searchParams,
+    setSearchParams,
+  ]);
 
   function selectOutput(output: string | null) {
     if (!output) return;
@@ -582,7 +594,7 @@ function RunWorkspace({
     );
   }
 
-  function selectStage(stage: Run["phase"]) {
+  function selectStage(stage: RunLifecycleStage) {
     setSearchParams(
       updateRunDetailSearchParams(searchParams, {
         [runDetailSearchParamNames.stage]: stage,
@@ -993,39 +1005,39 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
   return (
     <Stack gap="lg">
       <Title order={2}>Execution context</Title>
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-        <Fact label="Repository">
+      <DetailGrid>
+        <DetailFact label="Repository">
           <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
             {repositoryName ?? shortIdentifier(run.repositoryId)}
           </Anchor>
-        </Fact>
-        <Fact label="Runtime">
+        </DetailFact>
+        <DetailFact label="Runtime">
           <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
             {run.runtime}
           </Anchor>
-        </Fact>
-        <Fact label="Cluster">
+        </DetailFact>
+        <DetailFact label="Cluster">
           <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
             {run.cluster}
           </Anchor>
-        </Fact>
-        <Fact label="Placement">
+        </DetailFact>
+        <DetailFact label="Placement">
           <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
             {run.placement}
           </Anchor>
-        </Fact>
-        <Fact label="Catalog revision">
+        </DetailFact>
+        <DetailFact label="Catalog revision">
           <Code>{run.catalogRevisionId}</Code>
-        </Fact>
+        </DetailFact>
         {run.rerunOfRunId && run.rerunMode ? (
-          <Fact label="Run again">
+          <DetailFact label="Run again">
             <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
               {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
               {shortIdentifier(run.rerunOfRunId)}
             </Anchor>
-          </Fact>
+          </DetailFact>
         ) : null}
-        <Fact label="Controller observation">
+        <DetailFact label="Controller observation">
           <Stack gap={2}>
             <Text size="sm">{run.observationState ?? "Not active"}</Text>
             {run.lastObservedAt ? (
@@ -1041,16 +1053,16 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
               </Text>
             )}
           </Stack>
-        </Fact>
-      </SimpleGrid>
+        </DetailFact>
+      </DetailGrid>
       <Accordion defaultValue={null} variant="contained">
         <Accordion.Item value="job-details">
           <Accordion.Control>
             <Text fw={600}>Job and image details</Text>
           </Accordion.Control>
           <Accordion.Panel>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-              <Fact label="Job UID">
+            <DetailGrid>
+              <DetailFact label="Job UID">
                 {run.jobUid ? (
                   <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
                 ) : (
@@ -1058,37 +1070,26 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
                     Not materialized
                   </Text>
                 )}
-              </Fact>
+              </DetailFact>
               {run.images?.action ? (
-                <Fact label="Action image ID">
+                <DetailFact label="Action image ID">
                   <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
-                </Fact>
+                </DetailFact>
               ) : null}
               {run.images?.checkout ? (
-                <Fact label="Checkout image ID">
+                <DetailFact label="Checkout image ID">
                   <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
-                </Fact>
+                </DetailFact>
               ) : null}
               {run.images?.harness ? (
-                <Fact label="Harness image ID">
+                <DetailFact label="Harness image ID">
                   <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
-                </Fact>
+                </DetailFact>
               ) : null}
-            </SimpleGrid>
+            </DetailGrid>
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>
-    </Stack>
-  );
-}
-
-function Fact({ children, label }: Readonly<{ children: ReactNode; label: string }>) {
-  return (
-    <Stack gap={3}>
-      <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-        {label}
-      </Text>
-      <ContextValue size="sm">{children}</ContextValue>
     </Stack>
   );
 }
@@ -1101,9 +1102,9 @@ function RunLifecycle({
   showHeading = true,
 }: Readonly<{
   canReview: boolean;
-  onStageChange: (stage: Run["phase"]) => void;
+  onStageChange: (stage: RunLifecycleStage) => void;
   run: Run;
-  selectedStage: Run["phase"];
+  selectedStage: RunLifecycleStage;
   showHeading?: boolean;
 }>) {
   const activeStep = lifecycleStages.indexOf(run.phase);
@@ -1215,43 +1216,55 @@ function RunLifecycle({
           const complete =
             step.value !== undefined && (index < activeStep || run.phase === "finished");
           const status = index === 4 && run.outcome ? run.outcome : undefined;
-          const state = status ?? (active ? "Current" : complete ? "Complete" : "Waiting");
+          const state =
+            status ??
+            (active
+              ? "Current"
+              : complete
+                ? "Complete"
+                : run.phase === "finished"
+                  ? "Skipped"
+                  : "Waiting");
           const color = status ? runOutcomeColor(status) : active ? "lilac" : "gray";
           return (
-            <UnstyledButton
-              aria-current={selectedStage === step.stage ? "step" : undefined}
-              className={styles.lifecycleStep}
-              data-selected={selectedStage === step.stage || undefined}
+            <LifecycleStep
               key={step.stage}
-              onClick={() => onStageChange(step.stage)}
-            >
-              <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
-                <Icon aria-hidden size={15} stroke={2.2} />
-              </Box>
-              <Stack gap={0} style={{ flex: 1 }}>
-                <Text fw={650} size="sm">
-                  {step.label}
-                </Text>
-                <Text c="dimmed" size="xs">
-                  {step.value ? <Timestamp value={step.value} /> : "Not reached"}
-                </Text>
-              </Stack>
-              <Badge color={color} size="xs" variant={active || status ? "light" : "outline"}>
-                {state}
-              </Badge>
-            </UnstyledButton>
+              icon={Icon}
+              label={step.label}
+              time={step.value}
+              status={state}
+              color={color}
+              complete={complete}
+              highlighted={active || Boolean(status)}
+              selected={selectedStage === step.stage}
+              onSelect={() => onStageChange(step.stage)}
+            />
           );
         })}
+        <CancellationStep
+          cancellation={run.cancellation}
+          selected={selectedStage === "cancellation"}
+          onSelect={() => onStageChange("cancellation")}
+        />
       </Stack>
-      <LifecycleStageDetail
-        canReview={canReview}
-        detail={
-          steps[lifecycleStages.indexOf(selectedStage)]?.detail ?? "No lifecycle detail recorded."
-        }
-        run={run}
-        stage={selectedStage}
-        value={steps[lifecycleStages.indexOf(selectedStage)]?.value}
-      />
+      {selectedStage === "cancellation" ? (
+        <CancellationDetail
+          cancellation={run.cancellation}
+          subject="Run"
+          outcome={run.outcome}
+          finishedAt={run.finishedAt}
+        />
+      ) : (
+        <LifecycleStageDetail
+          canReview={canReview}
+          detail={
+            steps[lifecycleStages.indexOf(selectedStage)]?.detail ?? "No lifecycle detail recorded."
+          }
+          run={run}
+          stage={selectedStage}
+          value={steps[lifecycleStages.indexOf(selectedStage)]?.value}
+        />
+      )}
     </Stack>
   );
 }
@@ -1287,7 +1300,6 @@ function LifecycleStageDetail({
         </Text>
         <LifecycleRelevantDetail canReview={canReview} run={run} stage={stage} />
         <LifecycleObservationDetail run={run} stage={stage} />
-        <LifecycleCancellationDetail run={run} stage={stage} />
       </Stack>
     </Paper>
   );
@@ -1371,49 +1383,6 @@ function LifecycleObservationDetail({ run, stage }: Readonly<{ run: Run; stage: 
   );
 }
 
-function LifecycleCancellationDetail({ run, stage }: Readonly<{ run: Run; stage: Run["phase"] }>) {
-  if (!run.cancellationRequestedAt) return null;
-
-  const relevantStage = run.phase === "finished" ? "finished" : run.phase;
-  if (stage !== relevantStage) return null;
-
-  const completed = run.cancellationState === "completed";
-  const overtaken = run.cancellationState === "overtaken";
-  const label = completed
-    ? "Cancellation completed"
-    : overtaken
-      ? "Cancellation overtaken"
-      : "Cancellation requested";
-
-  return (
-    <Stack gap={4}>
-      <Group gap="xs">
-        <Badge color={completed ? "green" : "yellow"} size="xs" variant="light">
-          {label}
-        </Badge>
-      </Group>
-      <Group gap={4} wrap="wrap">
-        <Text size="xs">
-          {overtaken
-            ? "This Run finished before the cancellation request completed. It was asked to stop"
-            : "This Run was asked to stop"}
-        </Text>
-        <RelativeTime size="xs" value={run.cancellationRequestedAt} />
-        {run.canceledBy ? (
-          <>
-            <Text size="xs">by</Text>
-            <Identity
-              avatarSize={20}
-              name={run.canceledBy.displayName}
-              nameProps={{ fw: 500, size: "xs" }}
-            />
-          </>
-        ) : null}
-      </Group>
-    </Stack>
-  );
-}
-
 function runOutcomeColor(outcome: NonNullable<Run["outcome"]>) {
   switch (outcome) {
     case "succeeded":
@@ -1476,7 +1445,7 @@ function finishedIcon(run: Run): TablerIcon {
   }
 }
 
-function lifecycleStageLabel(stage: Run["phase"]) {
+function lifecycleStageLabel(stage: RunLifecycleStage) {
   return `${stage.slice(0, 1).toLocaleUpperCase()}${stage.slice(1)}`;
 }
 

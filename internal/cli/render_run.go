@@ -96,13 +96,13 @@ func renderRunSource(source api.RunSource) string {
 }
 
 func renderCancellation(runRecord api.Run) string {
-	result := string(runRecord.CancellationState)
-	if runRecord.CancellationRequestedAt == nil {
+	result := string(runRecord.Cancellation.State)
+	if runRecord.Cancellation.RequestedAt == nil {
 		return result
 	}
-	result += " · requested at " + renderTime(runRecord.CancellationRequestedAt)
-	if runRecord.CanceledBy != nil {
-		result += " by " + runRecord.CanceledBy.DisplayName
+	result += " · requested at " + renderTime(runRecord.Cancellation.RequestedAt)
+	if runRecord.Cancellation.RequestedBy != nil {
+		result += " by " + runRecord.Cancellation.RequestedBy.DisplayName
 	}
 
 	return result

@@ -341,7 +341,7 @@ assert_contains "$kargo_controller_render" 'resources: \[stages\]'
 assert_contains "$kargo_controller_render" 'verbs: \[get, list, promote\]'
 assert_contains "$kargo_controller_render" 'resources: \[freights\]'
 assert_contains "$kargo_controller_render" 'resources: \[promotions\]'
-assert_contains "$kargo_controller_render" 'verbs: \[create, get, list\]'
+assert_contains "$kargo_controller_render" 'verbs: \[create, get, list, patch\]'
 assert_not_contains "$kargo_controller_render" '^kind: ClusterRole'
 
 assert_render_fails "Missing required Server configuration" \

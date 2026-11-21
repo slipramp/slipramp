@@ -215,11 +215,13 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	promotionDispatches := promotion.NewCreationDispatchService(persistence.database, gateEvaluatorProcessID)
 	promotionReconciliations := promotion.NewReconciliationService(persistence.database)
 	placementPreflights := placement.NewPreflightService(cfg.Placements, clusters, persistence.database)
+	promotionCancellations := promotion.NewCancellationService(persistence.database, controllerCommandWakeups.Notify)
 	controllerCommands := controllercommand.NewScheduler(
 		runs,
 		placementPreflights,
 		promotionDispatches,
 		promotionReconciliations,
+		promotionCancellations,
 	)
 	promotionReviews := promotion.NewReviewService(
 		cfg.KargoIntegrations, persistence.database, gateEvaluatorProcessID, gateEvaluations,
@@ -378,6 +380,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			PromotionCreations:       promotionCreations,
 			PromotionDispatches:      promotionDispatches,
 			PromotionReconciliations: promotionReconciliations,
+			PromotionCancellations:   promotionCancellations,
 			PromotionStages:          promotionStages,
 			PromotionReviews:         promotionReviews,
 			PromotionProjects:        promotionProjects,

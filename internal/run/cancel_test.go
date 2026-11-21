@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
@@ -131,26 +132,26 @@ func TestCancellationState(t *testing.T) {
 	type testCase struct {
 		name    string
 		status  CancellationStatus
-		want    CancellationState
+		want    cancellation.State
 		wantErr bool
 	}
 	tests := []testCase{
 		{
 			name:   "queued without request",
 			status: CancellationStatus{Phase: PhaseQueued, CreatedAt: createdAt},
-			want:   CancellationStateNotRequested,
+			want:   cancellation.NotRequested,
 		},
 		{
 			name:   "active before request",
 			status: CancellationStatus{Phase: PhaseRunning, CreatedAt: createdAt},
-			want:   CancellationStateNotRequested,
+			want:   cancellation.NotRequested,
 		},
 		{
 			name: "active after request",
 			status: CancellationStatus{
 				Phase: PhaseRunning, CreatedAt: createdAt, CancellationRequestedAt: &requestedAt,
 			},
-			want: CancellationStateRequested,
+			want: cancellation.Requested,
 		},
 		{
 			name: "immediate queued cancellation",
@@ -158,7 +159,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &cancelRequested,
 				CreatedAt: createdAt, FinishedAt: &sameTime, CancellationRequestedAt: &sameTime,
 			},
-			want: CancellationStateCompleted,
+			want: cancellation.Completed,
 		},
 		{
 			name: "requested cancellation completed",
@@ -166,7 +167,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &cancelRequested,
 				CreatedAt: createdAt, FinishedAt: &finishedAt, CancellationRequestedAt: &requestedAt,
 			},
-			want: CancellationStateCompleted,
+			want: cancellation.Completed,
 		},
 		{
 			name: "Git supersession",
@@ -174,7 +175,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &superseded,
 				CreatedAt: createdAt, FinishedAt: &finishedAt,
 			},
-			want: CancellationStateNotRequested,
+			want: cancellation.NotRequested,
 		},
 		{
 			name: "review rejection",
@@ -182,7 +183,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &reviewRejected,
 				CreatedAt: createdAt, FinishedAt: &finishedAt,
 			},
-			want: CancellationStateNotRequested,
+			want: cancellation.NotRequested,
 		},
 		{
 			name:    "invalid phase",
@@ -254,7 +255,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &succeeded, CreatedAt: createdAt,
 				FinishedAt: &sameTime, CancellationRequestedAt: &sameTime,
 			},
-			want: CancellationStateOvertaken,
+			want: cancellation.Overtaken,
 		},
 		{
 			name: "canceler without request",
@@ -271,7 +272,7 @@ func TestCancellationState(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &outcome, CreatedAt: createdAt,
 				FinishedAt: &finishedAt, CancellationRequestedAt: &requestedAt,
 			},
-			want: CancellationStateOvertaken,
+			want: cancellation.Overtaken,
 		})
 	}
 
@@ -309,21 +310,21 @@ func TestPlanCancellationRequest(t *testing.T) {
 	tests := []struct {
 		name      string
 		current   CancellationStatus
-		wantFrom  CancellationState
-		wantTo    CancellationState
+		wantFrom  cancellation.State
+		wantTo    cancellation.State
 		operation CancellationOperation
 		wantErr   error
 	}{
 		{
 			name:     "queued cancellation",
 			current:  CancellationStatus{Phase: PhaseQueued, CreatedAt: createdAt},
-			wantFrom: CancellationStateNotRequested, wantTo: CancellationStateCompleted,
+			wantFrom: cancellation.NotRequested, wantTo: cancellation.Completed,
 			operation: CancellationOperationFinishQueued,
 		},
 		{
 			name:     "active cancellation",
 			current:  CancellationStatus{Phase: PhaseRunning, CreatedAt: createdAt},
-			wantFrom: CancellationStateNotRequested, wantTo: CancellationStateRequested,
+			wantFrom: cancellation.NotRequested, wantTo: cancellation.Requested,
 			operation: CancellationOperationRequestActive,
 		},
 		{
@@ -331,7 +332,7 @@ func TestPlanCancellationRequest(t *testing.T) {
 			current: CancellationStatus{
 				Phase: PhaseRunning, CreatedAt: createdAt, CancellationRequestedAt: &requestedAt,
 			},
-			wantFrom: CancellationStateRequested, wantTo: CancellationStateRequested,
+			wantFrom: cancellation.Requested, wantTo: cancellation.Requested,
 			operation: CancellationOperationNone,
 		},
 		{
@@ -340,7 +341,7 @@ func TestPlanCancellationRequest(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &canceled, OutcomeReason: &cancelReason,
 				CreatedAt: createdAt, FinishedAt: &finishedAt, CancellationRequestedAt: &requestedAt,
 			},
-			wantFrom: CancellationStateCompleted, wantTo: CancellationStateCompleted,
+			wantFrom: cancellation.Completed, wantTo: cancellation.Completed,
 			operation: CancellationOperationNone,
 		},
 		{
@@ -349,7 +350,7 @@ func TestPlanCancellationRequest(t *testing.T) {
 				Phase: PhaseFinished, Outcome: &succeeded, CreatedAt: createdAt,
 				FinishedAt: &finishedAt, CancellationRequestedAt: &requestedAt,
 			},
-			wantFrom: CancellationStateOvertaken, wantTo: CancellationStateOvertaken,
+			wantFrom: cancellation.Overtaken, wantTo: cancellation.Overtaken,
 			operation: CancellationOperationNone,
 		},
 		{

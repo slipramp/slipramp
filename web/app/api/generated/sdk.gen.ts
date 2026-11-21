@@ -20,6 +20,9 @@ import type {
   BeginNativeOidcLoginErrors,
   BeginOidcLoginData,
   BeginOidcLoginErrors,
+  CancelPromotionData,
+  CancelPromotionErrors,
+  CancelPromotionResponses,
   CancelRunData,
   CancelRunErrors,
   CancelRunResponses,
@@ -1982,6 +1985,29 @@ export const getPromotion = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/promotions/{promotionId}",
+    ...options,
+  });
+
+/**
+ * Request operator cancellation of a Promotion
+ */
+export const cancelPromotion = <ThrowOnError extends boolean = false>(
+  options: Options<CancelPromotionData, ThrowOnError>,
+): RequestResult<CancelPromotionResponses, CancelPromotionErrors, ThrowOnError> =>
+  (options.client ?? client).post<CancelPromotionResponses, CancelPromotionErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions/{promotionId}/cancel",
     ...options,
   });
 

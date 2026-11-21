@@ -76,7 +76,7 @@ is no bootstrap API key or anonymous product bypass.
 | Decide Run reviews | operator | `slipramp:runs:review` |
 | Acknowledge Inbox problems | operator | `slipramp:inbox:write` |
 | Submit or poll Kargo Promotions | operator service account | `slipramp:promotions:submit` |
-| Create or decide Promotions and change Stage policy | operator | `slipramp:promotions:write` |
+| Create, decide, or cancel Promotions and change Stage policy | operator | `slipramp:promotions:write` |
 | Administer Repositories, Principals, credentials, and sessions | admin | `slipramp:admin` |
 
 Scopes intersect with the Principal's role and do not imply one another.

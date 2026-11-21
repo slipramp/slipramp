@@ -4,10 +4,10 @@ export const promotionDetailSearchParamNames = {
 } as const;
 
 export const promotionDetailViews = ["git", "argo", "details"] as const;
-export const promotionLifecycleStages = ["delivery", "preparation", "review", "execution"] as const;
 
 export type PromotionDetailView = (typeof promotionDetailViews)[number];
-export type PromotionLifecycleStage = (typeof promotionLifecycleStages)[number];
+export type PromotionPhaseStage = "delivery" | "preparation" | "review" | "execution";
+export type PromotionLifecycleStage = PromotionPhaseStage | "cancellation";
 
 export function defaultPromotionDetailView(
   gitDiffArtifactId?: string,
@@ -41,12 +41,12 @@ export function updatePromotionDetailSearchParams(
 
 export function selectedPromotionLifecycleStage(
   searchParams: URLSearchParams,
+  visibleSteps: readonly PromotionPhaseStage[],
   fallback: PromotionLifecycleStage,
 ): PromotionLifecycleStage {
   const requested = searchParams.get(promotionDetailSearchParamNames.stage);
-  return promotionLifecycleStages.includes(requested as PromotionLifecycleStage)
-    ? (requested as PromotionLifecycleStage)
-    : fallback;
+  if (requested === "cancellation" && fallback === "cancellation") return requested;
+  return visibleSteps.find((step) => step === requested) ?? fallback;
 }
 
 export function updatePromotionLifecycleSearchParams(

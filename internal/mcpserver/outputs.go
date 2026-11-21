@@ -36,7 +36,14 @@ type runListOutput struct {
 	Total  int64       `json:"total"`
 }
 
+type cancellationOutput struct {
+	State       string       `json:"state"`
+	RequestedAt *string      `json:"requestedAt,omitempty"`
+	RequestedBy *actorOutput `json:"requestedBy,omitempty"`
+}
+
 type runOutput struct {
+	Cancellation             cancellationOutput                `json:"cancellation"`
 	ID                       string                            `json:"id"`
 	Phase                    string                            `json:"phase"`
 	Outcome                  *string                           `json:"outcome,omitempty"`
@@ -54,19 +61,18 @@ type runOutput struct {
 	Source                   string                            `json:"source"`
 	IdempotencyKey           *string                           `json:"idempotencyKey,omitempty"`
 	CreatedBy                *actorOutput                      `json:"createdBy,omitempty"`
-	CanceledBy               *actorOutput                      `json:"canceledBy,omitempty"`
-	ReviewState              string                            `json:"reviewState"`
-	CreatedAt                string                            `json:"createdAt"`
-	AssignedAt               *string                           `json:"assignedAt,omitempty"`
-	PreparingAt              *string                           `json:"preparingAt,omitempty"`
-	StartedAt                *string                           `json:"startedAt,omitempty"`
-	FinishedAt               *string                           `json:"finishedAt,omitempty"`
-	LastObservedAt           *string                           `json:"lastObservedAt,omitempty"`
-	CancellationRequestedAt  *string                           `json:"cancellationRequestedAt,omitempty"`
-	CancellationState        string                            `json:"cancellationState"`
-	OutcomeReason            *string                           `json:"outcomeReason,omitempty"`
-	OutcomeMessage           *string                           `json:"outcomeMessage,omitempty"`
-	ExitCode                 *int32                            `json:"exitCode,omitempty"`
+
+	ReviewState    string  `json:"reviewState"`
+	CreatedAt      string  `json:"createdAt"`
+	AssignedAt     *string `json:"assignedAt,omitempty"`
+	PreparingAt    *string `json:"preparingAt,omitempty"`
+	StartedAt      *string `json:"startedAt,omitempty"`
+	FinishedAt     *string `json:"finishedAt,omitempty"`
+	LastObservedAt *string `json:"lastObservedAt,omitempty"`
+
+	OutcomeReason  *string `json:"outcomeReason,omitempty"`
+	OutcomeMessage *string `json:"outcomeMessage,omitempty"`
+	ExitCode       *int32  `json:"exitCode,omitempty"`
 }
 
 type runArtifactInputOutput struct {
@@ -100,6 +106,7 @@ func newRunOutput(record run.Run) (runOutput, error) {
 	}
 
 	return runOutput{
+		Cancellation:             cancellationOutput{State: string(cancellationState), RequestedAt: optionalTime(record.CancellationRequestedAt), RequestedBy: optionalActor(record.CanceledBy)},
 		ID:                       record.ID.String(),
 		Phase:                    string(record.Phase),
 		Outcome:                  optionalOutcome(record.Outcome),
@@ -117,19 +124,18 @@ func newRunOutput(record run.Run) (runOutput, error) {
 		Source:                   string(record.Source.Type),
 		IdempotencyKey:           record.IdempotencyKey,
 		CreatedBy:                optionalActor(record.CreatedBy),
-		CanceledBy:               optionalActor(record.CanceledBy),
-		ReviewState:              string(record.Review.State),
-		CreatedAt:                formatTime(record.CreatedAt),
-		AssignedAt:               optionalTime(record.AssignedAt),
-		PreparingAt:              optionalTime(record.PreparingAt),
-		StartedAt:                optionalTime(record.StartedAt),
-		FinishedAt:               optionalTime(record.FinishedAt),
-		LastObservedAt:           optionalTime(record.LastObservedAt),
-		CancellationRequestedAt:  optionalTime(record.CancellationRequestedAt),
-		CancellationState:        string(cancellationState),
-		OutcomeReason:            record.OutcomeReason,
-		OutcomeMessage:           record.OutcomeMessage,
-		ExitCode:                 record.ExitCode,
+
+		ReviewState:    string(record.Review.State),
+		CreatedAt:      formatTime(record.CreatedAt),
+		AssignedAt:     optionalTime(record.AssignedAt),
+		PreparingAt:    optionalTime(record.PreparingAt),
+		StartedAt:      optionalTime(record.StartedAt),
+		FinishedAt:     optionalTime(record.FinishedAt),
+		LastObservedAt: optionalTime(record.LastObservedAt),
+
+		OutcomeReason:  record.OutcomeReason,
+		OutcomeMessage: record.OutcomeMessage,
+		ExitCode:       record.ExitCode,
 	}, nil
 }
 

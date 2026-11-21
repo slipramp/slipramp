@@ -29,6 +29,10 @@ kargoPromotion:
           application/json:
             schema:
               $ref: ../components/promotions.yaml#/KargoPromotionResponse
+      "202":
+        description: >-
+          A claimed creation in this Stage is awaiting its admitted Kargo
+          identity. Poll again to correlate this callback.
       "400":
         $ref: "#/components/responses/BadRequest"
       "401":
@@ -89,6 +93,10 @@ promotions:
         description: Limit results by Slipramp review lifecycle.
         schema:
           $ref: ../components/promotions.yaml#/PromotionStatus
+      - name: cancellationState
+        in: query
+        schema:
+          $ref: ../components/common.yaml#/CancellationState
       - name: creationDispatch
         in: query
         description: Limit results by Slipramp-to-Kargo object delivery state.
@@ -149,6 +157,34 @@ promotion:
         $ref: "#/components/responses/Forbidden"
       "404":
         $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+cancelPromotion:
+  post:
+    operationId: cancelPromotion
+    summary: Request operator cancellation of a Promotion
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - $ref: "#/components/parameters/PromotionId"
+    responses:
+      "200":
+        description: Promotion detail with preparation and decision context.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/Promotion
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
       "500":
         $ref: "#/components/responses/InternalError"
 

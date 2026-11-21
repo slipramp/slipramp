@@ -295,7 +295,7 @@ func TestControllerPollWakesWhenCommandBecomesAvailable(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Controller poll did not perform its initial scheduling check")
 	}
-	commands.Set(controllercommand.Cancellation{Run: run.Run{
+	commands.Set(controllercommand.RunCancellation{Run: run.Run{
 		ID:    runID,
 		Phase: run.PhaseAssigned,
 		Snapshot: run.Snapshot{Placement: run.PlacementSnapshot{
@@ -396,7 +396,7 @@ func TestControllerPollReturnsCancellation(t *testing.T) {
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	jobUID := "job-uid"
-	commands := &recordingControllerCommands{command: controllercommand.Cancellation{
+	commands := &recordingControllerCommands{command: controllercommand.RunCancellation{
 		Run: run.Run{
 			ID:     runID,
 			Phase:  run.PhaseRunning,

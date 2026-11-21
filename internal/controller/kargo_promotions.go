@@ -15,6 +15,10 @@ type kargoPromotionCreator interface {
 	Ensure(context.Context, api.KargoPromotionCreationCommand) (controllerkargo.PromotionMaterialization, error)
 }
 
+type kargoPromotionCanceler interface {
+	Cancel(context.Context, api.KargoPromotionReconciliationCommand) (*controllerkargo.PromotionObservation, error)
+}
+
 type kargoPromotionReconciler interface {
 	Reconcile(
 		context.Context,
@@ -99,17 +103,27 @@ func (c *Controller) handleKargoPromotionReconciliation(
 	command api.KargoPromotionReconciliationCommand,
 ) error {
 	if c.promotionReconciler == nil {
-		c.logger.Warn(
-			"reconcile Kargo Promotion without a configured integration",
-			"promotion_id", command.ID,
-			"integration", command.Integration,
-		)
-
+		c.logger.Warn("Kargo reconciliation integration unavailable", "integration", command.Integration)
 		return nil
 	}
+	return c.observeKargoPromotion(ctx, command, c.promotionReconciler.Reconcile)
+}
 
+func (c *Controller) handleKargoPromotionCancellation(ctx context.Context, command api.KargoPromotionReconciliationCommand) error {
+	if c.promotionCanceler == nil {
+		c.logger.Warn("Kargo cancellation integration unavailable", "integration", command.Integration)
+		return nil
+	}
+	return c.observeKargoPromotion(ctx, command, c.promotionCanceler.Cancel)
+}
+
+func (c *Controller) observeKargoPromotion(
+	ctx context.Context,
+	command api.KargoPromotionReconciliationCommand,
+	observe func(context.Context, api.KargoPromotionReconciliationCommand) (*controllerkargo.PromotionObservation, error),
+) error {
 	attemptContext, cancel := context.WithTimeout(ctx, kargoPromotionOperationTimeout)
-	observation, err := c.promotionReconciler.Reconcile(attemptContext, command)
+	observation, err := observe(attemptContext, command)
 	cancel()
 	if err != nil {
 		c.logger.Warn(
@@ -122,6 +136,24 @@ func (c *Controller) handleKargoPromotionReconciliation(
 
 		return nil
 	}
+	if recovery := command.Recovery; recovery != nil {
+		report := api.KargoPromotionDispatchReport{
+			Attempt: recovery.Attempt,
+			Result:  api.KargoPromotionDispatchReportResultAbsent,
+		}
+		if observation != nil {
+			report.Result = api.KargoPromotionDispatchReportResultCreated
+			report.KargoUID = &observation.UID
+			report.KargoName = &observation.Name
+		}
+		if err := c.promotionReports.ReportKargoPromotionDispatch(ctx, command.ID, report); err != nil {
+			if permanentServerError(err) {
+				return fmt.Errorf("report Kargo Promotion %s recovery: %w", command.ID, err)
+			}
+			c.logger.Warn("report Kargo Promotion recovery", "promotion_id", command.ID, "error", err)
+		}
+		return nil
+	}
 	if observation == nil {
 		return nil
 	}
@@ -129,14 +161,19 @@ func (c *Controller) handleKargoPromotionReconciliation(
 		return nil
 	}
 
+	var acknowledged *bool
+	if observation.CancellationAcknowledged {
+		acknowledged = new(true)
+	}
 	reportErr := c.promotionReconciliationReports.ReportKargoPromotionReconciliation(
 		ctx,
 		command.ID,
 		api.KargoPromotionReconciliationReport{
-			KargoName:  observation.Name,
-			KargoUID:   observation.UID,
-			Phase:      observation.Phase,
-			Diagnostic: observation.Diagnostic,
+			KargoName:                observation.Name,
+			KargoUID:                 observation.UID,
+			Phase:                    observation.Phase,
+			CancellationAcknowledged: acknowledged,
+			Diagnostic:               observation.Diagnostic,
 		},
 	)
 	if permanentServerError(reportErr) {

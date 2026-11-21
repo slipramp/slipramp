@@ -129,6 +129,7 @@ WITH requirements AS (
         run_gates.gate_name,
         run_gates.attachment_order,
         runs.catalog_revision_id AS attached_revision_id,
+        (runs.cancellation_requested_at IS NOT NULL OR runs.outcome IS NOT DISTINCT FROM 'canceled') AS canceled,
         run_gates.released_at,
         run_gates.release_catalog_revision_id,
         run_gates.release_definition,
@@ -141,15 +142,18 @@ WITH requirements AS (
     UNION ALL
 
     SELECT
-        promotion_id, repository_id, gate_name, attachment_order, NULL::uuid,
-        released_at, release_catalog_revision_id, release_definition,
-        release_observed_value, release_evaluated_at
-    FROM promotion_gates
-    WHERE promotion_id = ANY($2::uuid[])
+        pg.promotion_id, pg.repository_id, pg.gate_name, pg.attachment_order, NULL::uuid,
+        promotions.cancellation_requested_at IS NOT NULL,
+        pg.released_at, pg.release_catalog_revision_id, pg.release_definition,
+        pg.release_observed_value, pg.release_evaluated_at
+    FROM promotion_gates AS pg
+    JOIN promotions ON promotions.id = pg.promotion_id
+    WHERE pg.promotion_id = ANY($2::uuid[])
 )
 SELECT
     requirements.subject_id,
     requirements.gate_name,
+    requirements.canceled::boolean AS canceled,
     COALESCE(COALESCE(active_gate.definition, historical_gate.definition)->'metadata'->>'title', '')::text AS title,
     (
         COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus'->'condition'
@@ -168,6 +172,7 @@ LEFT JOIN catalog_revisions AS active_revision
   ON active_revision.id = repositories.active_catalog_revision_id
  AND repositories.removed_at IS NULL
  AND requirements.released_at IS NULL
+ AND NOT requirements.canceled
 LEFT JOIN catalog_gates AS active_gate
   ON active_gate.catalog_snapshot_id = active_revision.catalog_snapshot_id
  AND active_gate.name = requirements.gate_name
@@ -193,6 +198,7 @@ type ListGateRequirementEvidenceParams struct {
 type ListGateRequirementEvidenceRow struct {
 	SubjectID             pgtype.UUID
 	GateName              string
+	Canceled              bool
 	Title                 string
 	Condition             []byte
 	ReleasedAt            pgtype.Timestamptz
@@ -217,6 +223,7 @@ func (q *Queries) ListGateRequirementEvidence(ctx context.Context, arg ListGateR
 		if err := rows.Scan(
 			&i.SubjectID,
 			&i.GateName,
+			&i.Canceled,
 			&i.Title,
 			&i.Condition,
 			&i.ReleasedAt,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
@@ -93,7 +94,7 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 		t.Fatalf("ListInboxActiveRuns() error = %v", err)
 	}
 	if len(active) != 1 || active[0].ID != runID || active[0].Status.Phase != run.PhaseRunning ||
-		active[0].Cancellation != run.CancellationStateRequested ||
+		active[0].Cancellation != cancellation.Requested ||
 		active[0].Review != run.ReviewStateNotRequired ||
 		active[0].Status.LastObservedAt == nil || !active[0].Status.LastObservedAt.Equal(observedAt) {
 		t.Errorf("active Runs = %#v", active)

@@ -124,6 +124,8 @@ paths:
     $ref: ./paths/promotions.yaml#/promotions
   /api/v1/promotions/{promotionId}:
     $ref: ./paths/promotions.yaml#/promotion
+  /api/v1/promotions/{promotionId}/cancel:
+    $ref: ./paths/promotions.yaml#/cancelPromotion
   /api/v1/promotions/{promotionId}/decision:
     $ref: ./paths/promotions.yaml#/promotionDecision
   /api/v1/promotion-projects:
@@ -290,8 +292,8 @@ components:
       $ref: ./components/runs.yaml#/RunRerun
     RunRerunMode:
       $ref: ./components/runs.yaml#/RunRerunMode
-    RunActor:
-      $ref: ./components/runs.yaml#/RunActor
+    ActorSnapshot:
+      $ref: ./components/common.yaml#/ActorSnapshot
     GateSummary:
       $ref: ./components/gates.yaml#/GateSummary
     GateSummaryState:

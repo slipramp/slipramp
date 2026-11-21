@@ -104,15 +104,6 @@ type ObservationState string
 
 type SchedulingState string
 
-type CancellationState string
-
-const (
-	CancellationStateNotRequested CancellationState = "not-requested"
-	CancellationStateRequested    CancellationState = "requested"
-	CancellationStateCompleted    CancellationState = "completed"
-	CancellationStateOvertaken    CancellationState = "overtaken"
-)
-
 const (
 	ObservationStateCurrent ObservationState = "current"
 	ObservationStatePending ObservationState = "pending"

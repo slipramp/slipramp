@@ -1,0 +1,38 @@
+.lifecycleStep {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--mantine-spacing-sm);
+  padding: 0.5rem;
+  border-radius: var(--mantine-radius-md);
+  text-align: left;
+}
+
+.lifecycleStep:hover,
+.lifecycleStep[data-selected] {
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleStep time {
+  white-space: nowrap;
+}
+
+.lifecycleStep[data-selected] {
+  box-shadow: inset 3px 0 var(--mantine-primary-color-filled);
+}
+
+.lifecycleIcon {
+  display: grid;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--mantine-color-dimmed);
+  background: var(--mantine-color-default-hover);
+}
+
+.lifecycleIcon[data-complete] {
+  color: var(--mantine-color-green-7);
+  background: var(--mantine-color-green-light);
+}

@@ -33,6 +33,7 @@ type CandidateBranchReference struct {
 	Status            LifecycleState
 	UpdatedAt         time.Time
 	KargoOutcomeAt    *time.Time
+	CanceledAt        *time.Time
 }
 
 type CandidateBranchCleanup struct {
@@ -268,8 +269,7 @@ func classifyCandidateBranch(
 		if _, ok := cleanupIntegrations[reference.Integration]; !ok {
 			return candidateBranchDecision{reason: "cleanup disabled for referencing integration"}
 		}
-		if !reference.Status.Terminal() ||
-			(reference.Status == LifecycleApproved && reference.KargoOutcomeAt == nil) {
+		if reference.CanceledAt == nil && reference.KargoOutcomeAt == nil && (!reference.Status.Terminal() || reference.Status == LifecycleApproved) {
 			return candidateBranchDecision{reason: "referenced by nonterminal Promotion"}
 		}
 	}
@@ -303,6 +303,9 @@ func candidateBranchTerminalAt(reference CandidateBranchReference) time.Time {
 		return *reference.KargoOutcomeAt
 	}
 
+	if reference.CanceledAt != nil {
+		return *reference.CanceledAt
+	}
 	return reference.UpdatedAt
 }
 

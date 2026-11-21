@@ -44,6 +44,9 @@ func (d *Database) ReleasePromotionGates(
 	if err != nil {
 		return false, err
 	}
+	if record.Cancellation.RequestedAt != nil {
+		return false, nil
+	}
 	if record.Lifecycle.State != promotion.LifecycleApproved {
 		return false, promotion.ErrTransitionConflict
 	}

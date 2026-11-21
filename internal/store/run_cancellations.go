@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
@@ -20,11 +21,6 @@ func (d *Database) CancelRun(
 	requestedAt time.Time,
 	canceledBy *productidentity.ActorSnapshot,
 ) (run.Run, error) {
-	canceledByPrincipalID, canceledBySnapshot, err := actorDatabaseFields(canceledBy)
-	if err != nil {
-		return run.Run{}, fmt.Errorf("encode Run canceler: %w", err)
-	}
-
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("begin cancel Run transaction: %w", err)
@@ -33,7 +29,28 @@ func (d *Database) CancelRun(
 		_ = transaction.Rollback(context.WithoutCancel(ctx))
 	}()
 
-	queries := d.queries.WithTx(transaction)
+	record, err := cancelRunInTransaction(ctx, d.queries.WithTx(transaction), runID, requestedAt, canceledBy)
+	if err != nil {
+		return run.Run{}, err
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return run.Run{}, fmt.Errorf("commit Run cancellation: %w", err)
+	}
+	return record, nil
+}
+
+func cancelRunInTransaction(
+	ctx context.Context,
+	queries *storedb.Queries,
+	runID uuid.UUID,
+	requestedAt time.Time,
+	canceledBy *productidentity.ActorSnapshot,
+) (run.Run, error) {
+	canceledByPrincipalID, canceledBySnapshot, err := actorDatabaseFields(canceledBy)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("encode Run canceler: %w", err)
+	}
+
 	current, err := queries.GetRunForCancel(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, run.ErrRunNotFound
@@ -51,7 +68,7 @@ func (d *Database) CancelRun(
 		return run.Run{}, err
 	}
 	if transition.Operation == run.CancellationOperationNone {
-		return commitCancelResult(ctx, transaction, current)
+		return currentRecord, nil
 	}
 
 	var updated storedb.Run
@@ -84,7 +101,7 @@ func (d *Database) CancelRun(
 		return run.Run{}, fmt.Errorf("cancel Run: %w", err)
 	}
 
-	return commitCancelResult(ctx, transaction, updated)
+	return runFromRow(updated)
 }
 
 func (d *Database) GetRunToCancelForCluster(ctx context.Context, clusterName string) (run.Run, error) {
@@ -104,24 +121,12 @@ func (d *Database) GetRunToCancelForCluster(ctx context.Context, clusterName str
 	if err != nil {
 		return run.Run{}, err
 	}
-	if state != run.CancellationStateRequested {
+	if state != cancellation.Requested {
 		return run.Run{}, fmt.Errorf(
 			"%w: cancellation command selected Run in state %q",
 			run.ErrInvalidCancellation,
 			state,
 		)
-	}
-
-	return record, nil
-}
-
-func commitCancelResult(ctx context.Context, transaction pgx.Tx, row storedb.Run) (run.Run, error) {
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
-	}
-	if err := transaction.Commit(ctx); err != nil {
-		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
 	}
 
 	return record, nil

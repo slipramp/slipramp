@@ -34,7 +34,7 @@ enum MascotActivityResolver {
             return nil
         }
 
-        if run.cancellationState == .requested {
+        if run.cancellation.state == .requested {
             return MascotActivity(
                 animation: run.phase == .queued ? .waiting : .working,
                 title: "Stopping your run",
@@ -80,6 +80,9 @@ enum MascotActivityResolver {
     }
 
     static func activity(for promotion: Promotion) -> MascotActivity {
+        if promotion.cancellation.state != .notRequested {
+            return MascotActivity(animation: .phone, title: promotion.statusLabel, description: promotion.cancellation.state == .overtaken ? "The Promotion finished before cancellation." : nil, tone: .neutral)
+        }
         switch promotion.status {
         case .creating:
             return MascotActivity(

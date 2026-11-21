@@ -10,6 +10,7 @@ import {
 } from "./promotion-status.ts";
 
 const base = {
+  cancellation: { state: "not-requested" },
   creationDispatch: { attemptCount: 0, phase: "awaiting-delivery" },
   gates: { requirements: [], state: "not-required" },
   reviewRequired: false,

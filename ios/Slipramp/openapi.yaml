@@ -3949,6 +3949,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KargoPromotionResponse'
+        '202':
+          description: A claimed creation in this Stage is awaiting its admitted Kargo identity. Poll again to correlate this callback.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4007,6 +4009,10 @@ paths:
           description: Limit results by Slipramp review lifecycle.
           schema:
             $ref: '#/components/schemas/PromotionStatus'
+        - name: cancellationState
+          in: query
+          schema:
+            $ref: '#/components/schemas/CancellationState'
         - name: creationDispatch
           in: query
           description: Limit results by Slipramp-to-Kargo object delivery state.
@@ -4067,6 +4073,34 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/promotions/{promotionId}/cancel:
+    post:
+      operationId: cancelPromotion
+      summary: Request operator cancellation of a Promotion
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Promotions
+      parameters:
+        - $ref: '#/components/parameters/PromotionId'
+      responses:
+        '200':
+          description: Promotion detail with preparation and decision context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Promotion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/promotions/{promotionId}/decision:
@@ -4621,8 +4655,8 @@ components:
           maxLength: 128
         productApiContract:
           type: integer
-          minimum: 1
-          maximum: 1
+          minimum: 2
+          maximum: 2
         authenticationMethods:
           type: array
           minItems: 1
@@ -5931,7 +5965,7 @@ components:
             - succeeded
             - failed
         requestedBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         createdAt:
           type: string
           format: date-time
@@ -6050,6 +6084,7 @@ components:
           enum:
             - run-assignment
             - cancel-run
+            - cancel-kargo-promotion
             - create-kargo-promotion
             - reconcile-kargo-promotion
             - placement-preflight
@@ -6064,7 +6099,7 @@ components:
           description: Present when type is create-kargo-promotion.
         promotionReconciliation:
           $ref: '#/components/schemas/KargoPromotionReconciliationCommand'
-          description: Present when type is reconcile-kargo-promotion.
+          description: Present for Kargo Promotion reconciliation and cancellation.
         placementPreflight:
           $ref: '#/components/schemas/PlacementPreflightCommand'
           description: Present when type is placement-preflight.
@@ -6219,7 +6254,7 @@ components:
         - artifactConsumers
         - review
         - gates
-        - cancellationState
+        - cancellation
         - createdAt
       properties:
         id:
@@ -6334,9 +6369,7 @@ components:
           $ref: '#/components/schemas/RunRerunMode'
           description: Resolution mode used to rerun the parent Run.
         createdBy:
-          $ref: '#/components/schemas/RunActor'
-        canceledBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         review:
           $ref: '#/components/schemas/RunReview'
         gates:
@@ -6371,12 +6404,8 @@ components:
           type: string
           format: date-time
           description: Time the controller most recently confirmed execution state.
-        cancellationRequestedAt:
-          type: string
-          format: date-time
-          description: Time operator cancellation intent was first persisted.
-        cancellationState:
-          $ref: '#/components/schemas/RunCancellationState'
+        cancellation:
+          $ref: '#/components/schemas/Cancellation'
         jobUid:
           type: string
           minLength: 1
@@ -6456,7 +6485,7 @@ components:
       x-enum-varnames:
         - RunRerunModeExact
         - RunRerunModeLatest
-    RunActor:
+    ActorSnapshot:
       type: object
       required:
         - principalId
@@ -6492,9 +6521,11 @@ components:
           description: Required Gates in their stable attachment order.
     GateSummaryState:
       type: string
+      description: Stopped means cancellation ended the wait before Gate release.
       enum:
         - not-required
         - waiting
+        - stopped
         - released
     GateRequirement:
       type: object
@@ -6532,11 +6563,13 @@ components:
           description: Bounded sanitized explanation for an unavailable requirement.
     GateRequirementState:
       type: string
+      description: Stopped requirements retain the attached Gate name and have no release evidence or current observation.
       enum:
         - unevaluated
         - passing
         - blocking
         - unavailable
+        - stopped
         - released
     GateOperator:
       type: string
@@ -7593,6 +7626,7 @@ components:
         - stageId
         - stageSnapshot
         - policySnapshot
+        - cancellation
         - reviewRequired
         - status
         - gates
@@ -7626,6 +7660,8 @@ components:
           $ref: '#/components/schemas/PromotionStagePolicy'
         selectedFreight:
           $ref: '#/components/schemas/PromotionFreightItem'
+        cancellation:
+          $ref: '#/components/schemas/Cancellation'
         reviewRequired:
           type: boolean
         status:
@@ -7668,7 +7704,7 @@ components:
         argoDiffArtifact:
           $ref: '#/components/schemas/Artifact'
         requestedBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         decision:
           $ref: '#/components/schemas/PromotionDecision'
         createdAt:
@@ -7699,6 +7735,7 @@ components:
       enum:
         - not-applicable
         - awaiting-delivery
+        - stopped
         - delivered
         - failed
     KargoPromotionOutcomePhase:
@@ -7930,7 +7967,7 @@ components:
           minLength: 1
           maxLength: 4096
         updatedBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         updatedAt:
           type: string
           format: date-time
@@ -9446,6 +9483,9 @@ components:
           minLength: 1
           maxLength: 200
           description: Kubernetes UID already bound to the Promotion, if observed.
+        recovery:
+          $ref: '#/components/schemas/KargoPromotionCreationCommand'
+          description: Previously claimed creation to locate by annotation when canceling before UID binding.
     KargoPromotionDispatchReport:
       type: object
       required:
@@ -9460,6 +9500,7 @@ components:
           type: string
           enum:
             - created
+            - absent
             - retryable
             - failed
         kargoUid:
@@ -9488,6 +9529,9 @@ components:
           minLength: 1
           maxLength: 253
           description: Canonical name of the observed Kargo Promotion.
+        cancellationAcknowledged:
+          type: boolean
+          description: The aborted object carries Slipramp's cancellation marker.
         kargoUid:
           type: string
           minLength: 1
@@ -9610,7 +9654,7 @@ components:
         state:
           $ref: '#/components/schemas/RunReviewState'
         decidedBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         decidedAt:
           type: string
           format: date-time
@@ -9682,14 +9726,26 @@ components:
           maxLength: 200
         input:
           $ref: '#/components/schemas/CatalogName'
-    RunCancellationState:
+    CancellationState:
       type: string
       enum:
         - not-requested
         - requested
         - completed
         - overtaken
-      description: Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
+    Cancellation:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          $ref: '#/components/schemas/CancellationState'
+        requestedAt:
+          type: string
+          format: date-time
+          description: Time the first operator request was recorded.
+        requestedBy:
+          $ref: '#/components/schemas/ActorSnapshot'
     RunReviewDecision:
       type: string
       enum:
@@ -9815,12 +9871,13 @@ components:
           pattern: ^kargo/promotion/.+$
     KargoPromotionStatus:
       type: string
-      description: Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+      description: Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
       enum:
         - creating
         - preparing
         - pending
         - gated
+        - canceling
         - approved
         - rejected
         - expired
@@ -10198,7 +10255,7 @@ components:
           minLength: 1
           maxLength: 4096
         decidedBy:
-          $ref: '#/components/schemas/RunActor'
+          $ref: '#/components/schemas/ActorSnapshot'
         decidedAt:
           type: string
           format: date-time

@@ -69,7 +69,7 @@ RunReview:
     state:
       $ref: "#/RunReviewState"
     decidedBy:
-      $ref: "#/RunActor"
+      $ref: ./common.yaml#/ActorSnapshot
     decidedAt:
       type: string
       format: date-time
@@ -137,7 +137,7 @@ Run:
     - artifactConsumers
     - review
     - gates
-    - cancellationState
+    - cancellation
     - createdAt
   properties:
     id:
@@ -269,9 +269,7 @@ Run:
       $ref: "#/RunRerunMode"
       description: Resolution mode used to rerun the parent Run.
     createdBy:
-      $ref: "#/RunActor"
-    canceledBy:
-      $ref: "#/RunActor"
+      $ref: ./common.yaml#/ActorSnapshot
     review:
       $ref: "#/RunReview"
     gates:
@@ -308,12 +306,8 @@ Run:
       type: string
       format: date-time
       description: Time the controller most recently confirmed execution state.
-    cancellationRequestedAt:
-      type: string
-      format: date-time
-      description: Time operator cancellation intent was first persisted.
-    cancellationState:
-      $ref: "#/RunCancellationState"
+    cancellation:
+      $ref: ./common.yaml#/Cancellation
     jobUid:
       type: string
       minLength: 1
@@ -339,20 +333,6 @@ RunPhase:
     - preparing
     - running
     - finished
-
-RunCancellationState:
-  type: string
-  enum:
-    - not-requested
-    - requested
-    - completed
-    - overtaken
-  description: >-
-    Derived operator-cancellation workflow state. Completed means an operator
-    request produced the terminal canceled outcome. Overtaken means the Run
-    reached another terminal outcome before cancellation completed. Canceled
-    outcomes caused by Git supersession or review rejection remain
-    not-requested.
 
 RunOutcome:
   type: string
@@ -478,28 +458,6 @@ ScheduleRunSource:
       type: string
       format: date-time
       description: UTC cron occurrence that caused the Run.
-
-RunActor:
-  type: object
-  required:
-    - principalId
-    - kind
-    - displayName
-  properties:
-    principalId:
-      type: string
-      format: uuid
-      description: Durable product principal responsible for the operation.
-    kind:
-      type: string
-      enum:
-        - user
-        - service-account
-    displayName:
-      type: string
-      minLength: 1
-      maxLength: 200
-      description: Immutable display-name snapshot captured with the operation.
 
 ParameterValue:
   oneOf:

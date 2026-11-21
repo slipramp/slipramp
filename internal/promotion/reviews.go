@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -18,18 +19,19 @@ const (
 )
 
 type PromotionListFilter struct {
-	RepositoryID     *uuid.UUID
-	CommitSHA        string
-	Status           LifecycleState
-	CreationDispatch CreationDispatchPhase
-	KargoOutcome     KargoPhase
-	Integration      string
-	Cluster          string
-	Project          string
-	Application      string
-	StageID          *uuid.UUID
-	Limit            int
-	Offset           int
+	CancellationState cancellation.State
+	RepositoryID      *uuid.UUID
+	CommitSHA         string
+	Status            LifecycleState
+	CreationDispatch  CreationDispatchPhase
+	KargoOutcome      KargoPhase
+	Integration       string
+	Cluster           string
+	Project           string
+	Application       string
+	StageID           *uuid.UUID
+	Limit             int
+	Offset            int
 }
 
 type PromotionReview struct {
@@ -153,6 +155,9 @@ func (s *ReviewService) ListPromotions(
 ) (PromotionReviewList, error) {
 	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
 		return PromotionReviewList{}, err
+	}
+	if filter.CancellationState != "" && !filter.CancellationState.Valid() {
+		return PromotionReviewList{}, fmt.Errorf("%w: invalid cancellation filter", ErrInvalid)
 	}
 	if filter.Status != "" && !filter.Status.Valid() {
 		return PromotionReviewList{}, fmt.Errorf("%w: Promotion status filter is invalid", ErrInvalid)

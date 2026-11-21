@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -17,7 +18,7 @@ type ActiveRun struct {
 	ClusterName  string
 	CreatedAt    time.Time
 	Review       run.ReviewState
-	Cancellation run.CancellationState
+	Cancellation cancellation.State
 	Status       run.ObservationStatus
 }
 

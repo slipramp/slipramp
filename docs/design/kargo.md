@@ -126,8 +126,8 @@ review-required: creating --callback--> preparing --> pending --> approved/rejec
                        `-------------------------> error
 ```
 
-The durable Promotion aggregate exposes four related state machines. They share
-one row so guarded updates remain atomic, but they are not one linear workflow:
+The Promotion stores its review, delivery, preparation, execution, and cancellation
+facts on one row. Guarded updates to these facts commit atomically.
 
 | Machine | Authoritative fields | Meaning |
 | --- | --- | --- |
@@ -135,15 +135,16 @@ one row so guarded updates remain atomic, but they are not one linear workflow:
 | Creation dispatch | attempt, next/last attempt, delivered, failed, and diagnostic fields | Slipramp-originated Kargo object delivery and its bounded retry budget |
 | Review preparation | preparation Repository, catalog revision, Run, retry, completion, and Artifact columns | Revision reservation, the single idempotent Run, validated review Artifacts, and coordination failure |
 | Kargo execution | `kargo_promotion_uid`, reconciliation timestamps, and Kargo outcome columns | Kubernetes identity binding, repeated observation, and the first terminal Kargo phase |
+| Operator cancellation | request time, requesting Principal, confirmation time, and next cancellation attempt | Independent operator intent, retry scheduling, and confirmation |
 
-Phases within the latter three machines are derived from these existing fields;
+Delivery, preparation, execution, and cancellation phases are derived from these fields;
 Slipramp does not persist parallel phase columns. Domain transition functions
 define legal changes and cross-field invariants, while SQL applies the matching
 row locks and guarded updates atomically.
 
 An operator-created automatic Promotion is `approved` as soon as its exact
 Freight and policy are durably snapshotted. Its independent creation dispatch
-may still be awaiting delivery, delivered, or terminally failed. A callback is
+can be awaiting delivery, delivered, stopped by cancellation, or terminally failed. A callback is
 not part of that path. Review-required operator creation uses `creating` while
 queued Controller delivery and callback hydration proceed. `preparing` owns one
 ordinary revision-pinned Run. `pending` accepts one operator decision or
@@ -158,16 +159,46 @@ errored, and aborted outcomes are therefore visible on an approved Promotion
 rather than being collapsed into a review failure.
 
 Product views derive one overall operator-facing state from review lifecycle,
-creation delivery, and Kargo outcome. The list uses that state for quick
+creation delivery, cancellation, and Kargo outcome. The list uses that state for quick
 scanning while retaining filters over the separate facts. Promotion detail uses
-the same overall state and shows the three underlying facts explicitly. Terminal
-creation-delivery failures and unsuccessful Kargo outcomes also enter the
-operational Inbox even when the public review lifecycle remains approved.
+the same overall state and shows the underlying facts explicitly. Creation delivery
+failures and unsuccessful Kargo outcomes enter the operational Inbox. An
+`Aborted` outcome that confirms an operator cancellation is expected and closes
+the pending work.
 
 Domain states return as domain responses; expected lifecycle errors are not
 disguised as transport failures. Callback hydration, Controller reports,
 decisions, and expiry lock the same durable Promotion so races resolve
 atomically and identical reports remain idempotent.
+
+## Operator cancellation
+
+A Principal with `slipramp:promotions:write` can cancel a creating, preparing,
+pending, or approved Promotion while work is outstanding. The Server locks the
+Promotion and records the first actor and timestamp, stops further delivery,
+preparation, review decisions, and gate release, and requests cancellation of
+any linked preparation Run in the same transaction. A recorded approval or
+decision remains available for audit. Repeated requests return the current
+Promotion. A first request after expiry or another terminal result returns 409.
+
+A Slipramp-originated Promotion whose creation was never claimed completes
+cancellation immediately. Its delivery phase becomes `stopped`. If a creation
+attempt was claimed but its receipt is missing, the Controller searches the
+snapshotted namespace for the original creation annotation and verifies the
+Stage and Freight. Confirmed absence completes the request. A late creation
+receipt binds the admitted identity and resumes cancellation of that object. An unmatched
+callback for the same Stage receives HTTP 202 while a claimed creation awaits
+its admitted identity. Kargo polls again once the Controller reports the name,
+so a lost receipt cannot turn one object into two Slipramp Promotions.
+
+For a materialized Promotion, the Controller verifies the Stage, name, and
+bound Kubernetes UID. It sends Kargo's native `terminate` abort annotation
+and a Slipramp request marker in one resource-version-guarded patch.
+The Server keeps the request outstanding until it observes a terminal Kargo
+phase. A matching marker and `Aborted` complete cancellation. A competing
+terminal phase or independent Kargo abort overtakes it. While cancellation
+is outstanding, callbacks return the non-releasing `canceling` status.
+Kargo steps that already took effect retain their effects.
 
 ## Controller materialization and reconciliation
 

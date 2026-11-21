@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/mcpserver"
@@ -41,7 +42,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	snapshotSource := &testSnapshotSource{
 		snapshot: MetricsSnapshot{
 			ActiveRuns: map[ActiveRunState]int64{
-				{Phase: run.PhaseRunning, Cancellation: run.CancellationStateNotRequested}: 2,
+				{Phase: run.PhaseRunning, Cancellation: cancellation.NotRequested}: 2,
 			},
 			PendingRunReviews:          3,
 			WaitingGateSubjects:        map[string]int64{"run": 2, "promotion": 1},

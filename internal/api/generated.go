@@ -37,6 +37,24 @@ func (e ActionTriggerReview) Valid() bool {
 	}
 }
 
+// Defines values for ActorSnapshotKind.
+const (
+	ServiceAccount ActorSnapshotKind = "service-account"
+	User           ActorSnapshotKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the ActorSnapshotKind enum.
+func (e ActorSnapshotKind) Valid() bool {
+	switch e {
+	case ServiceAccount:
+		return true
+	case User:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AnsiblePlaybookReportKind.
 const (
 	AnsiblePlaybookReportKindAnsiblePlaybook AnsiblePlaybookReportKind = "ansible-playbook"
@@ -229,6 +247,30 @@ func (e ArtifactInputSourceCompatibility) Valid() bool {
 	}
 }
 
+// Defines values for CancellationState.
+const (
+	CancellationStateCompleted    CancellationState = "completed"
+	CancellationStateNotRequested CancellationState = "not-requested"
+	CancellationStateOvertaken    CancellationState = "overtaken"
+	CancellationStateRequested    CancellationState = "requested"
+)
+
+// Valid indicates whether the value is a known member of the CancellationState enum.
+func (e CancellationState) Valid() bool {
+	switch e {
+	case CancellationStateCompleted:
+		return true
+	case CancellationStateNotRequested:
+		return true
+	case CancellationStateOvertaken:
+		return true
+	case CancellationStateRequested:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CatalogDiagnosticSeverity.
 const (
 	CatalogDiagnosticSeverityError   CatalogDiagnosticSeverity = "error"
@@ -267,6 +309,7 @@ func (e ClusterConnectionState) Valid() bool {
 
 // Defines values for ControllerCommandType.
 const (
+	ControllerCommandTypeCancelKargoPromotion    ControllerCommandType = "cancel-kargo-promotion"
 	ControllerCommandTypeCancelRun               ControllerCommandType = "cancel-run"
 	ControllerCommandTypeCreateKargoPromotion    ControllerCommandType = "create-kargo-promotion"
 	ControllerCommandTypePlacementPreflight      ControllerCommandType = "placement-preflight"
@@ -277,6 +320,8 @@ const (
 // Valid indicates whether the value is a known member of the ControllerCommandType enum.
 func (e ControllerCommandType) Valid() bool {
 	switch e {
+	case ControllerCommandTypeCancelKargoPromotion:
+		return true
 	case ControllerCommandTypeCancelRun:
 		return true
 	case ControllerCommandTypeCreateKargoPromotion:
@@ -345,6 +390,7 @@ const (
 	GateRequirementStateBlocking    GateRequirementState = "blocking"
 	GateRequirementStatePassing     GateRequirementState = "passing"
 	GateRequirementStateReleased    GateRequirementState = "released"
+	GateRequirementStateStopped     GateRequirementState = "stopped"
 	GateRequirementStateUnavailable GateRequirementState = "unavailable"
 	GateRequirementStateUnevaluated GateRequirementState = "unevaluated"
 )
@@ -357,6 +403,8 @@ func (e GateRequirementState) Valid() bool {
 	case GateRequirementStatePassing:
 		return true
 	case GateRequirementStateReleased:
+		return true
+	case GateRequirementStateStopped:
 		return true
 	case GateRequirementStateUnavailable:
 		return true
@@ -371,6 +419,7 @@ func (e GateRequirementState) Valid() bool {
 const (
 	GateSummaryStateNotRequired GateSummaryState = "not-required"
 	GateSummaryStateReleased    GateSummaryState = "released"
+	GateSummaryStateStopped     GateSummaryState = "stopped"
 	GateSummaryStateWaiting     GateSummaryState = "waiting"
 )
 
@@ -380,6 +429,8 @@ func (e GateSummaryState) Valid() bool {
 	case GateSummaryStateNotRequired:
 		return true
 	case GateSummaryStateReleased:
+		return true
+	case GateSummaryStateStopped:
 		return true
 	case GateSummaryStateWaiting:
 		return true
@@ -534,6 +585,7 @@ func (e KargoIntegrationHealthObservationState) Valid() bool {
 
 // Defines values for KargoPromotionDispatchReportResult.
 const (
+	KargoPromotionDispatchReportResultAbsent    KargoPromotionDispatchReportResult = "absent"
 	KargoPromotionDispatchReportResultCreated   KargoPromotionDispatchReportResult = "created"
 	KargoPromotionDispatchReportResultFailed    KargoPromotionDispatchReportResult = "failed"
 	KargoPromotionDispatchReportResultRetryable KargoPromotionDispatchReportResult = "retryable"
@@ -542,6 +594,8 @@ const (
 // Valid indicates whether the value is a known member of the KargoPromotionDispatchReportResult enum.
 func (e KargoPromotionDispatchReportResult) Valid() bool {
 	switch e {
+	case KargoPromotionDispatchReportResultAbsent:
+		return true
 	case KargoPromotionDispatchReportResultCreated:
 		return true
 	case KargoPromotionDispatchReportResultFailed:
@@ -604,6 +658,7 @@ func (e KargoPromotionReconciliationReportPhase) Valid() bool {
 // Defines values for KargoPromotionStatus.
 const (
 	KargoPromotionStatusApproved  KargoPromotionStatus = "approved"
+	KargoPromotionStatusCanceling KargoPromotionStatus = "canceling"
 	KargoPromotionStatusCreating  KargoPromotionStatus = "creating"
 	KargoPromotionStatusError     KargoPromotionStatus = "error"
 	KargoPromotionStatusExpired   KargoPromotionStatus = "expired"
@@ -617,6 +672,8 @@ const (
 func (e KargoPromotionStatus) Valid() bool {
 	switch e {
 	case KargoPromotionStatusApproved:
+		return true
+	case KargoPromotionStatusCanceling:
 		return true
 	case KargoPromotionStatusCreating:
 		return true
@@ -979,6 +1036,7 @@ const (
 	PromotionCreationDispatchPhaseDelivered        PromotionCreationDispatchPhase = "delivered"
 	PromotionCreationDispatchPhaseFailed           PromotionCreationDispatchPhase = "failed"
 	PromotionCreationDispatchPhaseNotApplicable    PromotionCreationDispatchPhase = "not-applicable"
+	PromotionCreationDispatchPhaseStopped          PromotionCreationDispatchPhase = "stopped"
 )
 
 // Valid indicates whether the value is a known member of the PromotionCreationDispatchPhase enum.
@@ -991,6 +1049,8 @@ func (e PromotionCreationDispatchPhase) Valid() bool {
 	case PromotionCreationDispatchPhaseFailed:
 		return true
 	case PromotionCreationDispatchPhaseNotApplicable:
+		return true
+	case PromotionCreationDispatchPhaseStopped:
 		return true
 	default:
 		return false
@@ -1480,24 +1540,6 @@ func (e RunSchedulingState) Valid() bool {
 	}
 }
 
-// Defines values for RunActorKind.
-const (
-	ServiceAccount RunActorKind = "service-account"
-	User           RunActorKind = "user"
-)
-
-// Valid indicates whether the value is a known member of the RunActorKind enum.
-func (e RunActorKind) Valid() bool {
-	switch e {
-	case ServiceAccount:
-		return true
-	case User:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RunArtifactInputRetentionState.
 const (
 	RunArtifactInputRetentionStateDeleted  RunArtifactInputRetentionState = "deleted"
@@ -1513,30 +1555,6 @@ func (e RunArtifactInputRetentionState) Valid() bool {
 	case RunArtifactInputRetentionStateExpired:
 		return true
 	case RunArtifactInputRetentionStateRetained:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RunCancellationState.
-const (
-	RunCancellationStateCompleted    RunCancellationState = "completed"
-	RunCancellationStateNotRequested RunCancellationState = "not-requested"
-	RunCancellationStateOvertaken    RunCancellationState = "overtaken"
-	RunCancellationStateRequested    RunCancellationState = "requested"
-)
-
-// Valid indicates whether the value is a known member of the RunCancellationState enum.
-func (e RunCancellationState) Valid() bool {
-	switch e {
-	case RunCancellationStateCompleted:
-		return true
-	case RunCancellationStateNotRequested:
-		return true
-	case RunCancellationStateOvertaken:
-		return true
-	case RunCancellationStateRequested:
 		return true
 	default:
 		return false
@@ -2179,6 +2197,19 @@ type ActionTrigger struct {
 // ActionTriggerReview Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
 type ActionTriggerReview string
 
+// ActorSnapshot defines model for ActorSnapshot.
+type ActorSnapshot struct {
+	// DisplayName Immutable display-name snapshot captured with the operation.
+	DisplayName string            `json:"displayName"`
+	Kind        ActorSnapshotKind `json:"kind"`
+
+	// PrincipalID Durable product principal responsible for the operation.
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+// ActorSnapshotKind defines model for ActorSnapshot.Kind.
+type ActorSnapshotKind string
+
 // AnsibleHostTotals defines model for AnsibleHostTotals.
 type AnsibleHostTotals struct {
 	Changed     int    `json:"changed"`
@@ -2388,6 +2419,17 @@ type CancelRunCommand struct {
 	JobUID *string `json:"jobUid,omitempty"`
 }
 
+// Cancellation defines model for Cancellation.
+type Cancellation struct {
+	// RequestedAt Time the first operator request was recorded.
+	RequestedAt *time.Time        `json:"requestedAt,omitempty"`
+	RequestedBy *ActorSnapshot    `json:"requestedBy,omitempty"`
+	State       CancellationState `json:"state"`
+}
+
+// CancellationState defines model for CancellationState.
+type CancellationState string
+
 // CatalogDiagnostic defines model for CatalogDiagnostic.
 type CatalogDiagnostic struct {
 	Code     string                    `json:"code"`
@@ -2495,7 +2537,7 @@ type ControllerCommand struct {
 	// Promotion Present when type is create-kargo-promotion.
 	Promotion *KargoPromotionCreationCommand `json:"promotion,omitempty"`
 
-	// PromotionReconciliation Present when type is reconcile-kargo-promotion.
+	// PromotionReconciliation Present for Kargo Promotion reconciliation and cancellation.
 	PromotionReconciliation *KargoPromotionReconciliationCommand `json:"promotionReconciliation,omitempty"`
 	Type                    ControllerCommandType                `json:"type"`
 }
@@ -2703,12 +2745,14 @@ type GateOperator string
 // GateRequirement defines model for GateRequirement.
 type GateRequirement struct {
 	// Diagnostic Bounded sanitized explanation for an unavailable requirement.
-	Diagnostic  *string              `json:"diagnostic,omitempty"`
-	EvaluatedAt *time.Time           `json:"evaluatedAt,omitempty"`
-	Name        CatalogName          `json:"name"`
-	Operator    *GateOperator        `json:"operator,omitempty"`
-	ReleasedAt  *time.Time           `json:"releasedAt,omitempty"`
-	State       GateRequirementState `json:"state"`
+	Diagnostic  *string       `json:"diagnostic,omitempty"`
+	EvaluatedAt *time.Time    `json:"evaluatedAt,omitempty"`
+	Name        CatalogName   `json:"name"`
+	Operator    *GateOperator `json:"operator,omitempty"`
+	ReleasedAt  *time.Time    `json:"releasedAt,omitempty"`
+
+	// State Stopped requirements retain the attached Gate name and have no release evidence or current observation.
+	State GateRequirementState `json:"state"`
 
 	// Threshold Finite comparison threshold from the current or released definition.
 	Threshold *float64 `json:"threshold,omitempty"`
@@ -2718,17 +2762,19 @@ type GateRequirement struct {
 	Value *float64 `json:"value,omitempty"`
 }
 
-// GateRequirementState defines model for GateRequirementState.
+// GateRequirementState Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 type GateRequirementState string
 
 // GateSummary defines model for GateSummary.
 type GateSummary struct {
 	// Requirements Required Gates in their stable attachment order.
 	Requirements []GateRequirement `json:"requirements"`
-	State        GateSummaryState  `json:"state"`
+
+	// State Stopped means cancellation ended the wait before Gate release.
+	State GateSummaryState `json:"state"`
 }
 
-// GateSummaryState defines model for GateSummaryState.
+// GateSummaryState Stopped means cancellation ended the wait before Gate release.
 type GateSummaryState string
 
 // GitCommit defines model for GitCommit.
@@ -2980,8 +3026,11 @@ type KargoPromotionReconciliationCommand struct {
 	KargoUID *string `json:"kargoUid,omitempty"`
 
 	// Project Kubernetes namespace containing the Kargo project.
-	Project CatalogName     `json:"project"`
-	Source  PromotionSource `json:"source"`
+	Project CatalogName `json:"project"`
+
+	// Recovery Previously claimed creation to locate by annotation when canceling before UID binding.
+	Recovery *KargoPromotionCreationCommand `json:"recovery,omitempty"`
+	Source   PromotionSource                `json:"source"`
 
 	// Stage Exact Kargo Stage recorded in the durable Promotion snapshot.
 	Stage string `json:"stage"`
@@ -2989,6 +3038,9 @@ type KargoPromotionReconciliationCommand struct {
 
 // KargoPromotionReconciliationReport defines model for KargoPromotionReconciliationReport.
 type KargoPromotionReconciliationReport struct {
+	// CancellationAcknowledged The aborted object carries Slipramp's cancellation marker.
+	CancellationAcknowledged *bool `json:"cancellationAcknowledged,omitempty"`
+
 	// Diagnostic Bounded sanitized terminal diagnostic, when Kargo provides one.
 	Diagnostic *string `json:"diagnostic,omitempty"`
 
@@ -3027,12 +3079,12 @@ type KargoPromotionResponse struct {
 	Message             *string            `json:"message,omitempty"`
 	ReviewRequired      bool               `json:"reviewRequired"`
 
-	// Status Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+	// Status Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
 	Status    KargoPromotionStatus `json:"status"`
 	UpdatedAt time.Time            `json:"updatedAt"`
 }
 
-// KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+// KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
 type KargoPromotionStatus string
 
 // KargoStageSnapshot defines model for KargoStageSnapshot.
@@ -3343,7 +3395,7 @@ type PlacementPreflight struct {
 	Message       *string                 `json:"message,omitempty"`
 	PlacementName CatalogName             `json:"placementName"`
 	Reason        *string                 `json:"reason,omitempty"`
-	RequestedBy   RunActor                `json:"requestedBy"`
+	RequestedBy   ActorSnapshot           `json:"requestedBy"`
 	StartedAt     *time.Time              `json:"startedAt,omitempty"`
 	State         PlacementPreflightState `json:"state"`
 }
@@ -3480,6 +3532,7 @@ type Promotion struct {
 	ArgoCdURL           *string                   `json:"argoCdUrl,omitempty"`
 	ArgoDiffArtifact    *Artifact                 `json:"argoDiffArtifact,omitempty"`
 	ArgoDiffArtifactID  *openapi_types.UUID       `json:"argoDiffArtifactId,omitempty"`
+	Cancellation        Cancellation              `json:"cancellation"`
 	CreatedAt           time.Time                 `json:"createdAt"`
 	CreationDispatch    PromotionCreationDispatch `json:"creationDispatch"`
 	DecidedAt           *time.Time                `json:"decidedAt,omitempty"`
@@ -3507,7 +3560,7 @@ type Promotion struct {
 	PreparationCompletedAt *time.Time              `json:"preparationCompletedAt,omitempty"`
 	PreparationRun         *Run                    `json:"preparationRun,omitempty"`
 	PreparationRunID       *openapi_types.UUID     `json:"preparationRunId,omitempty"`
-	RequestedBy            RunActor                `json:"requestedBy"`
+	RequestedBy            ActorSnapshot           `json:"requestedBy"`
 	ReviewContext          *PromotionReviewContext `json:"reviewContext,omitempty"`
 	ReviewRequired         bool                    `json:"reviewRequired"`
 	SelectedFreight        *PromotionFreightItem   `json:"selectedFreight,omitempty"`
@@ -3605,7 +3658,7 @@ type PromotionCreationDispatchPhase string
 type PromotionDecision struct {
 	Comment   *string                   `json:"comment,omitempty"`
 	DecidedAt time.Time                 `json:"decidedAt"`
-	DecidedBy RunActor                  `json:"decidedBy"`
+	DecidedBy ActorSnapshot             `json:"decidedBy"`
 	Decision  PromotionDecisionDecision `json:"decision"`
 }
 
@@ -3977,7 +4030,7 @@ type PromotionStagePolicy struct {
 	ExpiresAt      *time.Time          `json:"expiresAt,omitempty"`
 	Reason         *string             `json:"reason,omitempty"`
 	UpdatedAt      *time.Time          `json:"updatedAt,omitempty"`
-	UpdatedBy      *RunActor           `json:"updatedBy,omitempty"`
+	UpdatedBy      *ActorSnapshot      `json:"updatedBy,omitempty"`
 }
 
 // PromotionStagePolicyUpdate defines model for PromotionStagePolicyUpdate.
@@ -4351,19 +4404,13 @@ type Run struct {
 	AssignedAt        *time.Time                       `json:"assignedAt,omitempty"`
 
 	// BlockingRunID One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
-	BlockingRunID *openapi_types.UUID `json:"blockingRunId,omitempty"`
-	CanceledBy    *RunActor           `json:"canceledBy,omitempty"`
-
-	// CancellationRequestedAt Time operator cancellation intent was first persisted.
-	CancellationRequestedAt *time.Time `json:"cancellationRequestedAt,omitempty"`
-
-	// CancellationState Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
-	CancellationState RunCancellationState `json:"cancellationState"`
-	CatalogRevisionID openapi_types.UUID   `json:"catalogRevisionId"`
-	Cluster           CatalogName          `json:"cluster"`
-	Commit            GitCommit            `json:"commit"`
-	CreatedAt         time.Time            `json:"createdAt"`
-	CreatedBy         *RunActor            `json:"createdBy,omitempty"`
+	BlockingRunID     *openapi_types.UUID `json:"blockingRunId,omitempty"`
+	Cancellation      Cancellation        `json:"cancellation"`
+	CatalogRevisionID openapi_types.UUID  `json:"catalogRevisionId"`
+	Cluster           CatalogName         `json:"cluster"`
+	Commit            GitCommit           `json:"commit"`
+	CreatedAt         time.Time           `json:"createdAt"`
+	CreatedBy         *ActorSnapshot      `json:"createdBy,omitempty"`
 
 	// EligiblePosition One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
 	EligiblePosition *int32      `json:"eligiblePosition,omitempty"`
@@ -4431,19 +4478,6 @@ type RunObservationState string
 
 // RunSchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
 type RunSchedulingState string
-
-// RunActor defines model for RunActor.
-type RunActor struct {
-	// DisplayName Immutable display-name snapshot captured with the operation.
-	DisplayName string       `json:"displayName"`
-	Kind        RunActorKind `json:"kind"`
-
-	// PrincipalID Durable product principal responsible for the operation.
-	PrincipalID openapi_types.UUID `json:"principalId"`
-}
-
-// RunActorKind defines model for RunActor.Kind.
-type RunActorKind string
 
 // RunArtifactAccess defines model for RunArtifactAccess.
 type RunArtifactAccess struct {
@@ -4563,9 +4597,6 @@ type RunAssignmentTarget struct {
 	Path *string     `json:"path,omitempty"`
 }
 
-// RunCancellationState Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
-type RunCancellationState string
-
 // RunCreate defines model for RunCreate.
 type RunCreate struct {
 	Action CatalogName `json:"action"`
@@ -4667,7 +4698,7 @@ type RunRerunMode string
 type RunReview struct {
 	Comment   *string        `json:"comment,omitempty"`
 	DecidedAt *time.Time     `json:"decidedAt,omitempty"`
-	DecidedBy *RunActor      `json:"decidedBy,omitempty"`
+	DecidedBy *ActorSnapshot `json:"decidedBy,omitempty"`
 	State     RunReviewState `json:"state"`
 }
 
@@ -5225,7 +5256,8 @@ type ListPromotionsParams struct {
 	Application *string      `form:"application,omitempty" json:"application,omitempty"`
 
 	// Status Limit results by Slipramp review lifecycle.
-	Status *PromotionStatus `form:"status,omitempty" json:"status,omitempty"`
+	Status            *PromotionStatus   `form:"status,omitempty" json:"status,omitempty"`
+	CancellationState *CancellationState `form:"cancellationState,omitempty" json:"cancellationState,omitempty"`
 
 	// CreationDispatch Limit results by Slipramp-to-Kargo object delivery state.
 	CreationDispatch *PromotionCreationDispatchPhase `form:"creationDispatch,omitempty" json:"creationDispatch,omitempty"`
@@ -6349,6 +6381,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/promotions/{promotionId} (the `GetPromotion` operationId).
 	GetPromotion(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelPromotion Request operator cancellation of a Promotion
+	//
+	// Corresponds with POST /api/v1/promotions/{promotionId}/cancel (the `CancelPromotion` operationId).
+	CancelPromotion(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DecidePromotionWithBody Approve or reject a pending Promotion
 	//
@@ -7576,6 +7613,21 @@ func (c *Client) ListPromotions(ctx context.Context, params *ListPromotionsParam
 // Corresponds with GET /api/v1/promotions/{promotionId} (the `GetPromotion` operationId).
 func (c *Client) GetPromotion(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPromotionRequest(c.Server, promotionID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CancelPromotion Request operator cancellation of a Promotion
+//
+// Corresponds with POST /api/v1/promotions/{promotionId}/cancel (the `CancelPromotion` operationId).
+func (c *Client) CancelPromotion(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelPromotionRequest(c.Server, promotionID)
 	if err != nil {
 		return nil, err
 	}
@@ -10935,6 +10987,18 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 
 		}
 
+		if params.CancellationState != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cancellationState", *params.CancellationState, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.CreationDispatch != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "creationDispatch", *params.CreationDispatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -11048,6 +11112,40 @@ func NewGetPromotionRequest(server string, promotionID PromotionID) (*http.Reque
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCancelPromotionRequest constructs an http.Request for the CancelPromotion method
+func NewCancelPromotionRequest(server string, promotionID PromotionID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "promotionId", promotionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotions/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13410,6 +13508,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/promotions/{promotionId} (the `GetPromotion` operationId).
 	GetPromotionWithResponse(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*GetPromotionResponse, error)
+
+	// CancelPromotionWithResponse Request operator cancellation of a Promotion
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/promotions/{promotionId}/cancel (the `CancelPromotion` operationId).
+	CancelPromotionWithResponse(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*CancelPromotionResponse, error)
 
 	// DecidePromotionWithBodyWithResponse Approve or reject a pending Promotion
 	//
@@ -16979,6 +17084,82 @@ func (r GetPromotionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetPromotionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CancelPromotionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Promotion
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Unauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Forbidden
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *NotFound
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InternalError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CancelPromotionResponse) GetJSON200() *Promotion {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CancelPromotionResponse) GetApplicationProblemJSON401() *Unauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CancelPromotionResponse) GetApplicationProblemJSON403() *Forbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CancelPromotionResponse) GetApplicationProblemJSON404() *NotFound {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CancelPromotionResponse) GetApplicationProblemJSON409() *Conflict {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CancelPromotionResponse) GetApplicationProblemJSON500() *InternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CancelPromotionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelPromotionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelPromotionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CancelPromotionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20654,6 +20835,19 @@ func (c *ClientWithResponses) GetPromotionWithResponse(ctx context.Context, prom
 	return ParseGetPromotionResponse(rsp)
 }
 
+// CancelPromotionWithResponse Request operator cancellation of a Promotion
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/promotions/{promotionId}/cancel (the `CancelPromotion` operationId).
+func (c *ClientWithResponses) CancelPromotionWithResponse(ctx context.Context, promotionID PromotionID, reqEditors ...RequestEditorFn) (*CancelPromotionResponse, error) {
+	rsp, err := c.CancelPromotion(ctx, promotionID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelPromotionResponse(rsp)
+}
+
 // DecidePromotionWithBodyWithResponse Approve or reject a pending Promotion
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -22620,6 +22814,9 @@ func ParseSubmitKargoPromotionResponse(rsp *http.Response) (*SubmitKargoPromotio
 		}
 		response.JSON200 = &dest
 
+	case rsp.StatusCode == 202:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -24049,6 +24246,67 @@ func ParseGetPromotionResponse(rsp *http.Response) (*GetPromotionResponse, error
 			return nil, err
 		}
 		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelPromotionResponse parses an HTTP response from a CancelPromotionWithResponse call
+func ParseCancelPromotionResponse(rsp *http.Response) (*CancelPromotionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelPromotionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Promotion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -26652,6 +26910,9 @@ type ServerInterface interface {
 	// GetPromotion Get a Promotion
 	// (GET /api/v1/promotions/{promotionId})
 	GetPromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
+	// CancelPromotion Request operator cancellation of a Promotion
+	// (POST /api/v1/promotions/{promotionId}/cancel)
+	CancelPromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
@@ -28614,6 +28875,19 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "cancellationState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cancellationState", r.URL.Query(), &params.CancellationState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cancellationState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cancellationState", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "creationDispatch" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "creationDispatch", r.URL.Query(), &params.CreationDispatch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -28720,6 +28994,32 @@ func (siw *ServerInterfaceWrapper) GetPromotion(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPromotion(w, r, promotionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelPromotion operation middleware
+func (siw *ServerInterfaceWrapper) CancelPromotion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "promotionId" -------------
+	var promotionID PromotionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "promotionId", r.PathValue("promotionId"), &promotionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "promotionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelPromotion(w, r, promotionID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30280,6 +30580,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kargo/{integration}/promotions", wrapper.SubmitKargoPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions", wrapper.ListPromotions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/cancel", wrapper.CancelPromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-pipelines", wrapper.ListPromotionPipelines)
@@ -31972,6 +32273,14 @@ func (response SubmitKargoPromotion200JSONResponse) VisitSubmitKargoPromotionRes
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type SubmitKargoPromotion202Response struct {
+}
+
+func (response SubmitKargoPromotion202Response) VisitSubmitKargoPromotionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
 }
 
 type SubmitKargoPromotion400ApplicationProblemPlusJSONResponse struct {
@@ -34267,6 +34576,108 @@ type GetPromotion500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetPromotion500ApplicationProblemPlusJSONResponse) VisitGetPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotionRequestObject struct {
+	PromotionID PromotionID `json:"promotionId"`
+}
+
+type CancelPromotionResponseObject interface {
+	VisitCancelPromotionResponse(w http.ResponseWriter) error
+}
+
+type CancelPromotion200JSONResponse Promotion
+
+func (response CancelPromotion200JSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotion401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CancelPromotion401ApplicationProblemPlusJSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotion403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CancelPromotion403ApplicationProblemPlusJSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotion404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CancelPromotion404ApplicationProblemPlusJSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotion409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CancelPromotion409ApplicationProblemPlusJSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelPromotion500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CancelPromotion500ApplicationProblemPlusJSONResponse) VisitCancelPromotionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -38334,6 +38745,9 @@ type StrictServerInterface interface {
 	// GetPromotion Get a Promotion
 	// (GET /api/v1/promotions/{promotionId})
 	GetPromotion(ctx context.Context, request GetPromotionRequestObject) (GetPromotionResponseObject, error)
+	// CancelPromotion Request operator cancellation of a Promotion
+	// (POST /api/v1/promotions/{promotionId}/cancel)
+	CancelPromotion(ctx context.Context, request CancelPromotionRequestObject) (CancelPromotionResponseObject, error)
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(ctx context.Context, request DecidePromotionRequestObject) (DecidePromotionResponseObject, error)
@@ -39591,6 +40005,32 @@ func (sh *strictHandler) GetPromotion(w http.ResponseWriter, r *http.Request, pr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPromotionResponseObject); ok {
 		if err := validResponse.VisitGetPromotionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelPromotion operation middleware
+func (sh *strictHandler) CancelPromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID) {
+	var request CancelPromotionRequestObject
+
+	request.PromotionID = promotionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelPromotion(ctx, request.(CancelPromotionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelPromotion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelPromotionResponseObject); ok {
+		if err := validResponse.VisitCancelPromotionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

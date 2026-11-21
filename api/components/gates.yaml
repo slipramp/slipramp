@@ -14,9 +14,11 @@ GateSummary:
 
 GateSummaryState:
   type: string
+  description: Stopped means cancellation ended the wait before Gate release.
   enum:
     - not-required
     - waiting
+    - stopped
     - released
 
 GateRequirement:
@@ -56,11 +58,13 @@ GateRequirement:
 
 GateRequirementState:
   type: string
+  description: Stopped requirements retain the attached Gate name and have no release evidence or current observation.
   enum:
     - unevaluated
     - passing
     - blocking
     - unavailable
+    - stopped
     - released
 
 GateOperator:

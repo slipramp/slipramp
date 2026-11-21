@@ -35,15 +35,29 @@ policy back to `automatic`.
 
 ## Reading Promotion status
 
-A Promotion presents three independent facts:
+A Promotion shows the following facts.
 
 - Review state records automatic approval or the preparation, pending, and
   operator-decision lifecycle.
 - Creation delivery shows whether a Slipramp-originated Kargo object is waiting,
-  delivered, or terminally failed.
+  delivered, stopped by cancellation, or terminally failed.
 - Kargo execution reports reconciliation and the exact terminal `Succeeded`,
   `Failed`, `Errored`, or `Aborted` phase.
+- Cancellation records who requested it, when, and whether it completed or was
+  overtaken by another outcome.
 
 A failed Kargo execution does not rewrite an automatic approval as a review
 failure. A native Promotion without review context also omits Repository,
 branch, and preview sections instead of displaying placeholder values.
+
+## Canceling a Promotion
+
+Open the Promotion and choose **Cancel Promotion**. This stops pending review
+and gate work and asks any linked preparation Run to cancel. If delivery has
+never started, the Promotion shows **Canceled** immediately. An active Kargo
+Promotion shows **Canceling** while the Controller requests an abort and waits
+for Kargo's result. If Kargo finishes first, Slipramp shows its actual outcome
+alongside the cancellation request.
+
+Cancellation preserves earlier decisions and any changes Kargo steps already
+made. The exact Kargo outcome remains available in the Promotion detail.

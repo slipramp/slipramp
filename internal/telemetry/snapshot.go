@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	dbconv "go.opentelemetry.io/otel/semconv/v1.43.0/dbconv"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -34,7 +35,7 @@ type MetricsSnapshot struct {
 
 type ActiveRunState struct {
 	Phase        run.Phase
-	Cancellation run.CancellationState
+	Cancellation cancellation.State
 }
 
 type DatabasePoolMetrics struct {
@@ -298,9 +299,9 @@ func (p *snapshotPublisher) observe(instruments snapshotInstruments) metric.Call
 	return func(_ context.Context, observer metric.Observer) error {
 		snapshot := p.published.Load()
 		for _, phase := range []run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning} {
-			for _, cancellation := range []run.CancellationState{
-				run.CancellationStateNotRequested,
-				run.CancellationStateRequested,
+			for _, cancellation := range []cancellation.State{
+				cancellation.NotRequested,
+				cancellation.Requested,
 			} {
 				observer.ObserveInt64(
 					instruments.activeRuns,

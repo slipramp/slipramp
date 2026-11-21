@@ -97,7 +97,8 @@ export function CommitReference({
 export function CommitDetails({
   commit,
   repositoryId,
-}: Readonly<{ commit: GitCommit; repositoryId?: string }>) {
+  label = "Git commit",
+}: Readonly<{ commit: GitCommit; repositoryId?: string; label?: string }>) {
   const title = commit.title ?? `Commit ${shortIdentifier(commit.sha, 12)}`;
   const detailsURL = repositoryId ? commitPath(repositoryId, commit.sha) : undefined;
 
@@ -108,7 +109,7 @@ export function CommitDetails({
           <Group gap="xs">
             <IconGitCommit aria-hidden size={18} />
             <Text c="dimmed" fw={650} size="xs" tt="uppercase">
-              Git commit
+              {label}
             </Text>
           </Group>
           <Title lineClamp={2} order={2} style={{ overflowWrap: "anywhere" }} title={title}>

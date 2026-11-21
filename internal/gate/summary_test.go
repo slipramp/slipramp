@@ -90,3 +90,20 @@ func TestRequirementAt(t *testing.T) {
 		})
 	}
 }
+
+func TestCanceledGateSummaryPreservesOnlyReleaseEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	evidence := RequirementEvidence{
+		Name: "idle", Canceled: true, Condition: &Condition{Operator: OperatorEqual},
+		EvaluatedAt: &now, Observation: Observation{State: ObservationPassing, Value: new(0.0)},
+	}
+	stopped := Summary{evidence.RequirementAt(uuid.Nil, now)}
+	if stopped.State() != SummaryStopped || stopped[0] != (Requirement{Name: "idle", State: RequirementStopped}) {
+		t.Fatalf("unreleased cancellation = %#v", stopped)
+	}
+	evidence.ReleasedAt = &now
+	released := Summary{evidence.RequirementAt(uuid.Nil, now)}
+	if released.State() != SummaryReleased || released[0].Value != evidence.Observation.Value || released[0].ReleasedAt != &now {
+		t.Fatalf("released cancellation = %#v", released)
+	}
+}

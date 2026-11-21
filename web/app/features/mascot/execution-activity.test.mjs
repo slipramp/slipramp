@@ -310,7 +310,7 @@ test("recorded terminal outcomes take precedence over stale observations and can
         phase: "finished",
         outcome,
         observationState: "unknown",
-        cancellationRequestedAt: "2026-10-24T00:00:00Z",
+        cancellation: { state: "requested", requestedAt: "2026-10-24T00:00:00Z" },
       }),
       runResultActivity({ phase: "finished", outcome }),
       outcome,
@@ -373,11 +373,11 @@ test("unknown observations never claim current execution activity", () => {
 
 test("cancellation intent shows stopping until the Run finishes", () => {
   for (const phase of ["assigned", "preparing", "running"]) {
-    const activity = runActivity({ cancellationState: "requested", phase });
+    const activity = runActivity({ cancellation: { state: "requested" }, phase });
     assert.equal(activity.title, "Stopping your run", phase);
     assert.equal(activity.animation, "working", phase);
   }
-  assert.equal(runActivity({ cancellationState: "completed", phase: "finished" }), undefined);
+  assert.equal(runActivity({ cancellation: { state: "completed" }, phase: "finished" }), undefined);
 });
 
 test("active Promotions show creation, preparation, and post-approval Kargo work", () => {

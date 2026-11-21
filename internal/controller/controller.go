@@ -112,6 +112,7 @@ type Controller struct {
 	stageObservers                 []*kargoStageObserver
 	promotions                     kargoPromotionCreator
 	promotionReconciler            kargoPromotionReconciler
+	promotionCanceler              kargoPromotionCanceler
 	workers                        sync.WaitGroup
 	preflightMutex                 sync.Mutex
 	activePreflights               map[uuid.UUID]struct{}
@@ -200,6 +201,7 @@ func New(
 		promotionManager := controllerkargo.NewPromotionManager(kargoConfig, dynamicClient)
 		controller.promotions = promotionManager
 		controller.promotionReconciler = promotionManager
+		controller.promotionCanceler = promotionManager
 	}
 
 	return controller, nil
@@ -381,6 +383,11 @@ func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCo
 		}
 
 		return c.handleKargoPromotionCreation(ctx, *command.Promotion)
+	case api.ControllerCommandTypeCancelKargoPromotion:
+		if command.PromotionReconciliation == nil {
+			return invalidServerResponse("poll Controller command", "Promotion cancellation payload is missing")
+		}
+		return c.handleKargoPromotionCancellation(ctx, *command.PromotionReconciliation)
 	case api.ControllerCommandTypeReconcileKargoPromotion:
 		if command.PromotionReconciliation == nil {
 			return invalidServerResponse("poll Controller command", "Promotion reconciliation payload is missing")

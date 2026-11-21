@@ -108,6 +108,11 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/promotions/{promotionId}`.
     /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/get(getPromotion)`.
     func getPromotion(_ input: Operations.GetPromotion.Input) async throws -> Operations.GetPromotion.Output
+    /// Request operator cancellation of a Promotion
+    ///
+    /// - Remark: HTTP `POST /api/v1/promotions/{promotionId}/cancel`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)`.
+    func cancelPromotion(_ input: Operations.CancelPromotion.Input) async throws -> Operations.CancelPromotion.Output
     /// Approve or reject a pending Promotion
     ///
     /// - Remark: HTTP `PUT /api/v1/promotions/{promotionId}/decision`.
@@ -322,6 +327,19 @@ extension APIProtocol {
         headers: Operations.GetPromotion.Input.Headers = .init()
     ) async throws -> Operations.GetPromotion.Output {
         try await getPromotion(Operations.GetPromotion.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Request operator cancellation of a Promotion
+    ///
+    /// - Remark: HTTP `POST /api/v1/promotions/{promotionId}/cancel`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)`.
+    internal func cancelPromotion(
+        path: Operations.CancelPromotion.Input.Path,
+        headers: Operations.CancelPromotion.Input.Headers = .init()
+    ) async throws -> Operations.CancelPromotion.Output {
+        try await cancelPromotion(Operations.CancelPromotion.Input(
             path: path,
             headers: headers
         ))
@@ -1249,9 +1267,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/Run/rerunMode`.
             internal var rerunMode: Components.Schemas.RunRerunMode?
             /// - Remark: Generated from `#/components/schemas/Run/createdBy`.
-            internal var createdBy: Components.Schemas.RunActor?
-            /// - Remark: Generated from `#/components/schemas/Run/canceledBy`.
-            internal var canceledBy: Components.Schemas.RunActor?
+            internal var createdBy: Components.Schemas.ActorSnapshot?
             /// - Remark: Generated from `#/components/schemas/Run/review`.
             internal var review: Components.Schemas.RunReview
             /// - Remark: Generated from `#/components/schemas/Run/gates`.
@@ -1314,12 +1330,8 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Run/lastObservedAt`.
             internal var lastObservedAt: Foundation.Date?
-            /// Time operator cancellation intent was first persisted.
-            ///
-            /// - Remark: Generated from `#/components/schemas/Run/cancellationRequestedAt`.
-            internal var cancellationRequestedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/Run/cancellationState`.
-            internal var cancellationState: Components.Schemas.RunCancellationState
+            /// - Remark: Generated from `#/components/schemas/Run/cancellation`.
+            internal var cancellation: Components.Schemas.Cancellation
             /// Kubernetes UID of the materialized Job.
             ///
             /// - Remark: Generated from `#/components/schemas/Run/jobUid`.
@@ -1362,7 +1374,6 @@ internal enum Components {
             ///   - rerunOfRunId: Immediate parent Run when this Run was created by a rerun operation.
             ///   - rerunMode: Resolution mode used to rerun the parent Run.
             ///   - createdBy:
-            ///   - canceledBy:
             ///   - review:
             ///   - gates:
             ///   - inputs:
@@ -1373,8 +1384,7 @@ internal enum Components {
             ///   - startedAt:
             ///   - finishedAt:
             ///   - lastObservedAt: Time the controller most recently confirmed execution state.
-            ///   - cancellationRequestedAt: Time operator cancellation intent was first persisted.
-            ///   - cancellationState:
+            ///   - cancellation:
             ///   - jobUid: Kubernetes UID of the materialized Job.
             ///   - images:
             ///   - outcomeReason:
@@ -1407,8 +1417,7 @@ internal enum Components {
                 source: Components.Schemas.RunSource,
                 rerunOfRunId: Swift.String? = nil,
                 rerunMode: Components.Schemas.RunRerunMode? = nil,
-                createdBy: Components.Schemas.RunActor? = nil,
-                canceledBy: Components.Schemas.RunActor? = nil,
+                createdBy: Components.Schemas.ActorSnapshot? = nil,
                 review: Components.Schemas.RunReview,
                 gates: Components.Schemas.GateSummary,
                 inputs: Components.Schemas.Run.InputsPayload,
@@ -1419,8 +1428,7 @@ internal enum Components {
                 startedAt: Foundation.Date? = nil,
                 finishedAt: Foundation.Date? = nil,
                 lastObservedAt: Foundation.Date? = nil,
-                cancellationRequestedAt: Foundation.Date? = nil,
-                cancellationState: Components.Schemas.RunCancellationState,
+                cancellation: Components.Schemas.Cancellation,
                 jobUid: Swift.String? = nil,
                 images: Components.Schemas.ExecutionImages? = nil,
                 outcomeReason: Swift.String? = nil,
@@ -1454,7 +1462,6 @@ internal enum Components {
                 self.rerunOfRunId = rerunOfRunId
                 self.rerunMode = rerunMode
                 self.createdBy = createdBy
-                self.canceledBy = canceledBy
                 self.review = review
                 self.gates = gates
                 self.inputs = inputs
@@ -1465,8 +1472,7 @@ internal enum Components {
                 self.startedAt = startedAt
                 self.finishedAt = finishedAt
                 self.lastObservedAt = lastObservedAt
-                self.cancellationRequestedAt = cancellationRequestedAt
-                self.cancellationState = cancellationState
+                self.cancellation = cancellation
                 self.jobUid = jobUid
                 self.images = images
                 self.outcomeReason = outcomeReason
@@ -1501,7 +1507,6 @@ internal enum Components {
                 case rerunOfRunId
                 case rerunMode
                 case createdBy
-                case canceledBy
                 case review
                 case gates
                 case inputs
@@ -1512,8 +1517,7 @@ internal enum Components {
                 case startedAt
                 case finishedAt
                 case lastObservedAt
-                case cancellationRequestedAt
-                case cancellationState
+                case cancellation
                 case jobUid
                 case images
                 case outcomeReason
@@ -1665,24 +1669,24 @@ internal enum Components {
             case exact = "exact"
             case latest = "latest"
         }
-        /// - Remark: Generated from `#/components/schemas/RunActor`.
-        internal struct RunActor: Codable, Hashable, Sendable {
+        /// - Remark: Generated from `#/components/schemas/ActorSnapshot`.
+        internal struct ActorSnapshot: Codable, Hashable, Sendable {
             /// Durable product principal responsible for the operation.
             ///
-            /// - Remark: Generated from `#/components/schemas/RunActor/principalId`.
+            /// - Remark: Generated from `#/components/schemas/ActorSnapshot/principalId`.
             internal var principalId: Swift.String
-            /// - Remark: Generated from `#/components/schemas/RunActor/kind`.
+            /// - Remark: Generated from `#/components/schemas/ActorSnapshot/kind`.
             internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case user = "user"
                 case serviceAccount = "service-account"
             }
-            /// - Remark: Generated from `#/components/schemas/RunActor/kind`.
-            internal var kind: Components.Schemas.RunActor.KindPayload
+            /// - Remark: Generated from `#/components/schemas/ActorSnapshot/kind`.
+            internal var kind: Components.Schemas.ActorSnapshot.KindPayload
             /// Immutable display-name snapshot captured with the operation.
             ///
-            /// - Remark: Generated from `#/components/schemas/RunActor/displayName`.
+            /// - Remark: Generated from `#/components/schemas/ActorSnapshot/displayName`.
             internal var displayName: Swift.String
-            /// Creates a new `RunActor`.
+            /// Creates a new `ActorSnapshot`.
             ///
             /// - Parameters:
             ///   - principalId: Durable product principal responsible for the operation.
@@ -1690,7 +1694,7 @@ internal enum Components {
             ///   - displayName: Immutable display-name snapshot captured with the operation.
             internal init(
                 principalId: Swift.String,
-                kind: Components.Schemas.RunActor.KindPayload,
+                kind: Components.Schemas.ActorSnapshot.KindPayload,
                 displayName: Swift.String
             ) {
                 self.principalId = principalId
@@ -1728,10 +1732,13 @@ internal enum Components {
                 case requirements
             }
         }
+        /// Stopped means cancellation ended the wait before Gate release.
+        ///
         /// - Remark: Generated from `#/components/schemas/GateSummaryState`.
         internal enum GateSummaryState: String, Codable, Hashable, Sendable, CaseIterable {
             case notRequired = "not-required"
             case waiting = "waiting"
+            case stopped = "stopped"
             case released = "released"
         }
         /// - Remark: Generated from `#/components/schemas/GateRequirement`.
@@ -1805,12 +1812,15 @@ internal enum Components {
                 case diagnostic
             }
         }
+        /// Stopped requirements retain the attached Gate name and have no release evidence or current observation.
+        ///
         /// - Remark: Generated from `#/components/schemas/GateRequirementState`.
         internal enum GateRequirementState: String, Codable, Hashable, Sendable, CaseIterable {
             case unevaluated = "unevaluated"
             case passing = "passing"
             case blocking = "blocking"
             case unavailable = "unavailable"
+            case stopped = "stopped"
             case released = "released"
         }
         /// - Remark: Generated from `#/components/schemas/GateOperator`.
@@ -2943,6 +2953,8 @@ internal enum Components {
             internal var policySnapshot: Components.Schemas.PromotionStagePolicy
             /// - Remark: Generated from `#/components/schemas/Promotion/selectedFreight`.
             internal var selectedFreight: Components.Schemas.PromotionFreightItem?
+            /// - Remark: Generated from `#/components/schemas/Promotion/cancellation`.
+            internal var cancellation: Components.Schemas.Cancellation
             /// - Remark: Generated from `#/components/schemas/Promotion/reviewRequired`.
             internal var reviewRequired: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/Promotion/status`.
@@ -2978,7 +2990,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/Promotion/argoDiffArtifact`.
             internal var argoDiffArtifact: Components.Schemas.Artifact?
             /// - Remark: Generated from `#/components/schemas/Promotion/requestedBy`.
-            internal var requestedBy: Components.Schemas.RunActor
+            internal var requestedBy: Components.Schemas.ActorSnapshot
             /// - Remark: Generated from `#/components/schemas/Promotion/decision`.
             internal var decision: Components.Schemas.PromotionDecision?
             /// - Remark: Generated from `#/components/schemas/Promotion/createdAt`.
@@ -3012,6 +3024,7 @@ internal enum Components {
             ///   - reviewContext:
             ///   - policySnapshot:
             ///   - selectedFreight:
+            ///   - cancellation:
             ///   - reviewRequired:
             ///   - status:
             ///   - gates:
@@ -3047,6 +3060,7 @@ internal enum Components {
                 reviewContext: Components.Schemas.PromotionReviewContext? = nil,
                 policySnapshot: Components.Schemas.PromotionStagePolicy,
                 selectedFreight: Components.Schemas.PromotionFreightItem? = nil,
+                cancellation: Components.Schemas.Cancellation,
                 reviewRequired: Swift.Bool,
                 status: Components.Schemas.PromotionStatus,
                 gates: Components.Schemas.GateSummary,
@@ -3062,7 +3076,7 @@ internal enum Components {
                 gitDiffArtifact: Components.Schemas.Artifact? = nil,
                 argoDiffArtifactId: Swift.String? = nil,
                 argoDiffArtifact: Components.Schemas.Artifact? = nil,
-                requestedBy: Components.Schemas.RunActor,
+                requestedBy: Components.Schemas.ActorSnapshot,
                 decision: Components.Schemas.PromotionDecision? = nil,
                 createdAt: Foundation.Date,
                 preparationCompletedAt: Foundation.Date? = nil,
@@ -3082,6 +3096,7 @@ internal enum Components {
                 self.reviewContext = reviewContext
                 self.policySnapshot = policySnapshot
                 self.selectedFreight = selectedFreight
+                self.cancellation = cancellation
                 self.reviewRequired = reviewRequired
                 self.status = status
                 self.gates = gates
@@ -3118,6 +3133,7 @@ internal enum Components {
                 case reviewContext
                 case policySnapshot
                 case selectedFreight
+                case cancellation
                 case reviewRequired
                 case status
                 case gates
@@ -3185,6 +3201,10 @@ internal enum Components {
                     Components.Schemas.PromotionFreightItem.self,
                     forKey: .selectedFreight
                 )
+                self.cancellation = try container.decode(
+                    Components.Schemas.Cancellation.self,
+                    forKey: .cancellation
+                )
                 self.reviewRequired = try container.decode(
                     Swift.Bool.self,
                     forKey: .reviewRequired
@@ -3246,7 +3266,7 @@ internal enum Components {
                     forKey: .argoDiffArtifact
                 )
                 self.requestedBy = try container.decode(
-                    Components.Schemas.RunActor.self,
+                    Components.Schemas.ActorSnapshot.self,
                     forKey: .requestedBy
                 )
                 self.decision = try container.decodeIfPresent(
@@ -3292,6 +3312,7 @@ internal enum Components {
                     "reviewContext",
                     "policySnapshot",
                     "selectedFreight",
+                    "cancellation",
                     "reviewRequired",
                     "status",
                     "gates",
@@ -3323,6 +3344,7 @@ internal enum Components {
         internal enum PromotionCreationDispatchPhase: String, Codable, Hashable, Sendable, CaseIterable {
             case notApplicable = "not-applicable"
             case awaitingDelivery = "awaiting-delivery"
+            case stopped = "stopped"
             case delivered = "delivered"
             case failed = "failed"
         }
@@ -3404,7 +3426,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/PromotionStagePolicy/reason`.
             internal var reason: Swift.String?
             /// - Remark: Generated from `#/components/schemas/PromotionStagePolicy/updatedBy`.
-            internal var updatedBy: Components.Schemas.RunActor?
+            internal var updatedBy: Components.Schemas.ActorSnapshot?
             /// - Remark: Generated from `#/components/schemas/PromotionStagePolicy/updatedAt`.
             internal var updatedAt: Foundation.Date?
             /// Creates a new `PromotionStagePolicy`.
@@ -3421,7 +3443,7 @@ internal enum Components {
                 effectiveMode: Components.Schemas.PromotionPolicyMode,
                 expiresAt: Foundation.Date? = nil,
                 reason: Swift.String? = nil,
-                updatedBy: Components.Schemas.RunActor? = nil,
+                updatedBy: Components.Schemas.ActorSnapshot? = nil,
                 updatedAt: Foundation.Date? = nil
             ) {
                 self.configuredMode = configuredMode
@@ -3458,7 +3480,7 @@ internal enum Components {
                     forKey: .reason
                 )
                 self.updatedBy = try container.decodeIfPresent(
-                    Components.Schemas.RunActor.self,
+                    Components.Schemas.ActorSnapshot.self,
                     forKey: .updatedBy
                 )
                 self.updatedAt = try container.decodeIfPresent(
@@ -4654,7 +4676,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/RunReview/state`.
             internal var state: Components.Schemas.RunReviewState
             /// - Remark: Generated from `#/components/schemas/RunReview/decidedBy`.
-            internal var decidedBy: Components.Schemas.RunActor?
+            internal var decidedBy: Components.Schemas.ActorSnapshot?
             /// - Remark: Generated from `#/components/schemas/RunReview/decidedAt`.
             internal var decidedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/RunReview/comment`.
@@ -4668,7 +4690,7 @@ internal enum Components {
             ///   - comment:
             internal init(
                 state: Components.Schemas.RunReviewState,
-                decidedBy: Components.Schemas.RunActor? = nil,
+                decidedBy: Components.Schemas.ActorSnapshot? = nil,
                 decidedAt: Foundation.Date? = nil,
                 comment: Swift.String? = nil
             ) {
@@ -4798,14 +4820,43 @@ internal enum Components {
                 case input
             }
         }
-        /// Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
-        ///
-        /// - Remark: Generated from `#/components/schemas/RunCancellationState`.
-        internal enum RunCancellationState: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/CancellationState`.
+        internal enum CancellationState: String, Codable, Hashable, Sendable, CaseIterable {
             case notRequested = "not-requested"
             case requested = "requested"
             case completed = "completed"
             case overtaken = "overtaken"
+        }
+        /// - Remark: Generated from `#/components/schemas/Cancellation`.
+        internal struct Cancellation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Cancellation/state`.
+            internal var state: Components.Schemas.CancellationState
+            /// Time the first operator request was recorded.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Cancellation/requestedAt`.
+            internal var requestedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Cancellation/requestedBy`.
+            internal var requestedBy: Components.Schemas.ActorSnapshot?
+            /// Creates a new `Cancellation`.
+            ///
+            /// - Parameters:
+            ///   - state:
+            ///   - requestedAt: Time the first operator request was recorded.
+            ///   - requestedBy:
+            internal init(
+                state: Components.Schemas.CancellationState,
+                requestedAt: Foundation.Date? = nil,
+                requestedBy: Components.Schemas.ActorSnapshot? = nil
+            ) {
+                self.state = state
+                self.requestedAt = requestedAt
+                self.requestedBy = requestedBy
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case state
+                case requestedAt
+                case requestedBy
+            }
         }
         /// - Remark: Generated from `#/components/schemas/RunReviewDecision`.
         internal enum RunReviewDecision: String, Codable, Hashable, Sendable, CaseIterable {
@@ -5917,7 +5968,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/PromotionDecision/comment`.
             internal var comment: Swift.String?
             /// - Remark: Generated from `#/components/schemas/PromotionDecision/decidedBy`.
-            internal var decidedBy: Components.Schemas.RunActor
+            internal var decidedBy: Components.Schemas.ActorSnapshot
             /// - Remark: Generated from `#/components/schemas/PromotionDecision/decidedAt`.
             internal var decidedAt: Foundation.Date
             /// Creates a new `PromotionDecision`.
@@ -5930,7 +5981,7 @@ internal enum Components {
             internal init(
                 decision: Components.Schemas.PromotionDecision.DecisionPayload,
                 comment: Swift.String? = nil,
-                decidedBy: Components.Schemas.RunActor,
+                decidedBy: Components.Schemas.ActorSnapshot,
                 decidedAt: Foundation.Date
             ) {
                 self.decision = decision
@@ -5955,7 +6006,7 @@ internal enum Components {
                     forKey: .comment
                 )
                 self.decidedBy = try container.decode(
-                    Components.Schemas.RunActor.self,
+                    Components.Schemas.ActorSnapshot.self,
                     forKey: .decidedBy
                 )
                 self.decidedAt = try container.decode(
@@ -11634,6 +11685,8 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/status`.
                 internal var status: Components.Schemas.PromotionStatus?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/cancellationState`.
+                internal var cancellationState: Components.Schemas.CancellationState?
                 /// Limit results by Slipramp-to-Kargo object delivery state.
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/creationDispatch`.
@@ -11659,6 +11712,7 @@ internal enum Operations {
                 ///   - project:
                 ///   - application:
                 ///   - status: Limit results by Slipramp review lifecycle.
+                ///   - cancellationState:
                 ///   - creationDispatch: Limit results by Slipramp-to-Kargo object delivery state.
                 ///   - kargoOutcome: Limit results by exact terminal phase reported by Kargo.
                 ///   - cluster:
@@ -11672,6 +11726,7 @@ internal enum Operations {
                     project: Components.Schemas.CatalogName? = nil,
                     application: Swift.String? = nil,
                     status: Components.Schemas.PromotionStatus? = nil,
+                    cancellationState: Components.Schemas.CancellationState? = nil,
                     creationDispatch: Components.Schemas.PromotionCreationDispatchPhase? = nil,
                     kargoOutcome: Components.Schemas.KargoPromotionOutcomePhase? = nil,
                     cluster: Components.Schemas.CatalogName? = nil,
@@ -11685,6 +11740,7 @@ internal enum Operations {
                     self.project = project
                     self.application = application
                     self.status = status
+                    self.cancellationState = cancellationState
                     self.creationDispatch = creationDispatch
                     self.kargoOutcome = kargoOutcome
                     self.cluster = cluster
@@ -12069,6 +12125,255 @@ internal enum Operations {
             /// The operation could not be completed.
             ///
             /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/get(getPromotion)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Components.Responses.InternalError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// Request operator cancellation of a Promotion
+    ///
+    /// - Remark: HTTP `POST /api/v1/promotions/{promotionId}/cancel`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)`.
+    internal enum CancelPromotion {
+        internal static let id: Swift.String = "cancelPromotion"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/promotions/{promotionId}/cancel/POST/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/promotions/{promotionId}/cancel/POST/path/promotionId`.
+                internal var promotionId: Components.Parameters.PromotionId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - promotionId:
+                internal init(promotionId: Components.Parameters.PromotionId) {
+                    self.promotionId = promotionId
+                }
+            }
+            internal var path: Operations.CancelPromotion.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/promotions/{promotionId}/cancel/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CancelPromotion.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CancelPromotion.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.CancelPromotion.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            internal init(
+                path: Operations.CancelPromotion.Input.Path,
+                headers: Operations.CancelPromotion.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/promotions/{promotionId}/cancel/POST/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/promotions/{promotionId}/cancel/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Promotion)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.Promotion {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CancelPromotion.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CancelPromotion.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Promotion detail with preparation and decision context.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.CancelPromotion.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.CancelPromotion.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// A valid credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The authenticated principal lacks the required role or scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The requested integration, Stage, or Promotion does not exist.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            internal var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with durable Promotion state.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            internal var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The operation could not be completed.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/cancel/post(cancelPromotion)/responses/500`.
             ///
             /// HTTP response code: `500 internalServerError`.
             case internalServerError(Components.Responses.InternalError)

@@ -27,7 +27,7 @@ func runReviewItem(record ActiveRun) Item {
 
 func promotionItem(record PromotionState) (Item, error) {
 	destination := Destination{Type: DestinationPromotion, ID: record.ID.String()}
-	if record.Status == promotion.LifecyclePending {
+	if record.Status == promotion.LifecyclePending && record.KargoOutcome == nil && record.CreationDispatch.FailedAt == nil {
 		title := "Promotion awaits review"
 		if record.StageName != "" {
 			title = fmt.Sprintf("Promotion to %s awaits review", record.StageName)

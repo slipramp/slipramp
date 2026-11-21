@@ -266,7 +266,7 @@ PlacementPreflight:
         - succeeded
         - failed
     requestedBy:
-      $ref: ./runs.yaml#/RunActor
+      $ref: ./common.yaml#/ActorSnapshot
     createdAt:
       type: string
       format: date-time

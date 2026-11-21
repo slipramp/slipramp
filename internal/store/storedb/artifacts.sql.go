@@ -190,7 +190,8 @@ WITH candidates AS (
       AND NOT EXISTS (
           SELECT 1
           FROM promotions
-          WHERE promotions.status IN ('preparing', 'pending')
+          WHERE promotions.cancellation_requested_at IS NULL
+            AND promotions.status IN ('preparing', 'pending')
             AND artifacts.id IN (
                 promotions.git_diff_artifact_id,
                 promotions.argo_diff_artifact_id
@@ -204,6 +205,7 @@ WITH candidates AS (
                promotion_run.source->'promotion'->>'promotionId'
           WHERE promotion_run.id = artifacts.run_id
             AND promotion_run.source->>'type' = 'promotion'
+            AND promotions.cancellation_requested_at IS NULL
             AND promotions.status IN ('preparing', 'pending')
       )
     ORDER BY artifacts.sealed_at, artifacts.id

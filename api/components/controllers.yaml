@@ -153,6 +153,7 @@ ControllerCommand:
       enum:
         - run-assignment
         - cancel-run
+        - cancel-kargo-promotion
         - create-kargo-promotion
         - reconcile-kargo-promotion
         - placement-preflight
@@ -167,7 +168,7 @@ ControllerCommand:
       description: Present when type is create-kargo-promotion.
     promotionReconciliation:
       $ref: "#/KargoPromotionReconciliationCommand"
-      description: Present when type is reconcile-kargo-promotion.
+      description: Present for Kargo Promotion reconciliation and cancellation.
     placementPreflight:
       $ref: "#/PlacementPreflightCommand"
       description: Present when type is placement-preflight.
@@ -313,6 +314,7 @@ KargoPromotionDispatchReport:
       type: string
       enum:
         - created
+        - absent
         - retryable
         - failed
     kargoUid:
@@ -368,6 +370,10 @@ KargoPromotionReconciliationCommand:
       maxLength: 200
       description: Kubernetes UID already bound to the Promotion, if observed.
 
+    recovery:
+      $ref: "#/KargoPromotionCreationCommand"
+      description: Previously claimed creation to locate by annotation when canceling before UID binding.
+
 KargoPromotionReconciliationReport:
   type: object
   required:
@@ -379,6 +385,9 @@ KargoPromotionReconciliationReport:
       minLength: 1
       maxLength: 253
       description: Canonical name of the observed Kargo Promotion.
+    cancellationAcknowledged:
+      type: boolean
+      description: The aborted object carries Slipramp's cancellation marker.
     kargoUid:
       type: string
       minLength: 1

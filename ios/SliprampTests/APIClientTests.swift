@@ -24,7 +24,7 @@ final class APIClientTests: XCTestCase {
                 """
                 {
                   "serverVersion": "test-version",
-                  "productApiContract": 1,
+                  "productApiContract": 2,
                   "authenticationMethods": ["api-key"],
                   "kargoEnabled": false
                 }
@@ -39,14 +39,14 @@ final class APIClientTests: XCTestCase {
 
         let incompatible = ServerCompatibility(
             serverVersion: "future-version",
-            productApiContract: 2,
+            productApiContract: 3,
             authenticationMethods: ["api-key"],
             kargoEnabled: false
         )
         XCTAssertThrowsError(try ClientCompatibilityPolicy.validate(incompatible)) { error in
             XCTAssertEqual(
                 error as? SliprampAPIError,
-                .incompatibleProductAPIContract(server: 2)
+                .incompatibleProductAPIContract(server: 3)
             )
         }
     }
@@ -959,7 +959,7 @@ final class APIClientTests: XCTestCase {
             {
               "id": "\(id)",
               "phase": "\(phase)"\(outcomeField)\(rerunFields),
-              "cancellationState": "not-requested",
+              "cancellation": {"state": "not-requested"},
               "targetId": "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
               "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
               "catalogRevisionId": "ced99dba-bb0b-4a8a-a9be-a5ef9875b945",
@@ -1048,6 +1048,7 @@ final class APIClientTests: XCTestCase {
               "source": "kargo",
               "integration": "kargo-primary",
               "externalPromotionId": "promote-production-42",
+              "cancellation": {"state": "not-requested"},
               "stageId": "281ba55d-fb9f-4f4e-862c-8c060c50b46c",
               "stageSnapshot": {
                 "id": "281ba55d-fb9f-4f4e-862c-8c060c50b46c",

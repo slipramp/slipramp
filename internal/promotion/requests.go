@@ -55,7 +55,10 @@ type PromotionAcceptance struct {
 
 type KargoResponseStatus string
 
-const KargoResponseStatusGated KargoResponseStatus = "gated"
+const (
+	KargoResponseStatusGated     KargoResponseStatus = "gated"
+	KargoResponseStatusCanceling KargoResponseStatus = "canceling"
+)
 
 type KargoSubmission struct {
 	Promotion Promotion
@@ -247,6 +250,9 @@ func (s *RequestService) SubmitKargoPromotion(
 		defer s.gateEvaluations.Notify()
 	}
 
+	if record.Cancellation.RequestedAt != nil {
+		return KargoSubmission{Promotion: record, Status: KargoResponseStatusCanceling}, nil
+	}
 	status := KargoResponseStatus(record.Lifecycle.State)
 	if record.Lifecycle.State == LifecycleApproved && len(record.StageSnapshot.Gates) > 0 {
 		released, releaseErr := s.requests.ReleasePromotionGates(

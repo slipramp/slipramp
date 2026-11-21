@@ -7,6 +7,7 @@ import {
   type KargoPromotionOutcomePhase,
   type PromotionCreationDispatchPhase,
   type PromotionStatus,
+  type CancellationState,
 } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
@@ -32,6 +33,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const application = optionalValue(url.searchParams.get("application"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const status = optionalStatus(url.searchParams.get("status"));
+  const cancellationState = optionalCancellationState(url.searchParams.get("cancellationState"));
   const creationDispatch = optionalCreationDispatch(url.searchParams.get("creationDispatch"));
   const kargoOutcome = optionalKargoOutcome(url.searchParams.get("kargoOutcome"));
   const stageId = optionalValue(url.searchParams.get("stageId"));
@@ -42,6 +44,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     query: {
       application,
       cluster,
+      cancellationState,
       creationDispatch,
       integration,
       kargoOutcome,
@@ -67,6 +70,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     filters: {
       application,
       cluster,
+      cancellationState,
       creationDispatch,
       integration,
       kargoOutcome,
@@ -126,6 +130,7 @@ function PromotionFilters({
   filters: {
     application?: string;
     cluster?: string;
+    cancellationState?: CancellationState;
     creationDispatch?: PromotionCreationDispatchPhase;
     integration?: string;
     kargoOutcome?: KargoPromotionOutcomePhase;
@@ -139,6 +144,20 @@ function PromotionFilters({
       clearTo="/promotions"
       filters={[
         ...promotionScopeFilters(filters),
+        {
+          active: Boolean(filters.cancellationState),
+          kind: "select",
+          name: "cancellationState",
+          label: "Cancellation",
+          value: filters.cancellationState,
+          data: [
+            { label: "All", value: "" },
+            { label: "Not requested", value: "not-requested" },
+            { label: "Canceling", value: "requested" },
+            { label: "Canceled", value: "completed" },
+            { label: "Overtaken", value: "overtaken" },
+          ],
+        },
         {
           active: Boolean(filters.cluster),
           kind: "text",
@@ -169,6 +188,7 @@ function PromotionFilters({
             { label: "All delivery states", value: "" },
             { label: "Awaiting delivery", value: "awaiting-delivery" },
             { label: "Delivered", value: "delivered" },
+            { label: "Stopped", value: "stopped" },
             { label: "Delivery failed", value: "failed" },
             { label: "Kargo-originated", value: "not-applicable" },
           ],
@@ -224,6 +244,7 @@ function optionalCreationDispatch(
   switch (value) {
     case "not-applicable":
     case "awaiting-delivery":
+    case "stopped":
     case "delivered":
     case "failed":
       return value;
@@ -251,4 +272,16 @@ function setPage(url: URL, page: number) {
 
 function optionalValue(value: string | null) {
   return value?.trim() || undefined;
+}
+
+function optionalCancellationState(value: string | null): CancellationState | undefined {
+  switch (value) {
+    case "not-requested":
+    case "requested":
+    case "completed":
+    case "overtaken":
+      return value;
+    default:
+      return undefined;
+  }
 }

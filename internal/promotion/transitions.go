@@ -53,8 +53,24 @@ func TransitionCreationDispatchReport(
 		return Promotion{}, false, ErrCreationDispatchConflict
 	}
 
+	// After cancellation, only an identified object or a recovery observation of
+	// its absence can resolve an outstanding creation attempt.
+	if current.Cancellation.RequestedAt != nil &&
+		(report.Result == CreationDispatchFailed || report.Result == CreationDispatchRetryable) {
+		return current, false, nil
+	}
+
 	transitioned := current
 	switch report.Result {
+	case CreationDispatchAbsent:
+		if current.Cancellation.RequestedAt == nil {
+			return Promotion{}, false, ErrCreationDispatchConflict
+		}
+		if current.KargoExecution.PromotionUID != nil || current.Cancellation.ConfirmedAt != nil ||
+			current.CreationDispatch.FailedAt != nil || report.Attempt != current.CreationDispatch.AttemptCount {
+			return current, false, nil
+		}
+		transitioned.Cancellation.ConfirmedAt = new(report.ReportedAt)
 	case CreationDispatchCreated:
 		if current.CreationDispatch.FailedAt != nil {
 			return current, false, nil
@@ -66,12 +82,13 @@ func TransitionCreationDispatchReport(
 			}
 			return current, false, nil
 		}
+		transitioned.Cancellation.ConfirmedAt = nil
 		transitioned.ExternalPromotionID = *report.KargoName
 		transitioned.CreationDispatch.NextAttemptAt = nil
 		transitioned.CreationDispatch.DispatchedAt = new(report.ReportedAt)
 		transitioned.CreationDispatch.Diagnostic = nil
 		transitioned.KargoExecution.PromotionUID = new(*report.KargoUID)
-		if transitioned.KargoExecution.Outcome == nil &&
+		if current.Cancellation.RequestedAt == nil && transitioned.KargoExecution.Outcome == nil &&
 			(transitioned.Lifecycle.State == LifecycleCreating ||
 				transitioned.Lifecycle.State == LifecycleApproved) {
 			transitioned.KargoExecution.NextReconciliationAt = new(report.ReportedAt)
@@ -337,7 +354,10 @@ func TransitionReconciliationReport(
 		}
 		transition.Promotion.KargoExecution.NextReconciliationAt = nil
 		transition.OutcomeRecorded = true
-		if transition.Promotion.ReviewRequired && transition.Promotion.Lifecycle.State == LifecycleCreating &&
+		if report.CancellationAcknowledged && current.Cancellation.RequestedAt != nil {
+			transition.Promotion.Cancellation.ConfirmedAt = new(report.ObservedAt)
+		}
+		if current.Cancellation.RequestedAt == nil && transition.Promotion.ReviewRequired && transition.Promotion.Lifecycle.State == LifecycleCreating &&
 			transition.Promotion.RequestDigest == (RequestDigest{}) {
 			lifecycle, err := TransitionLifecycle(
 				transition.Promotion.Lifecycle,

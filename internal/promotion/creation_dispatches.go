@@ -26,6 +26,7 @@ var defaultCreationDispatchRetryDelays = []time.Duration{
 type CreationDispatchResult string
 
 const (
+	CreationDispatchAbsent    CreationDispatchResult = "absent"
 	CreationDispatchCreated   CreationDispatchResult = "created"
 	CreationDispatchRetryable CreationDispatchResult = "retryable"
 	CreationDispatchFailed    CreationDispatchResult = "failed"
@@ -101,12 +102,27 @@ func (s *CreationDispatchService) Next(ctx context.Context, clusterName string) 
 		return CreationCommand{}, err
 	}
 
+	command, err := creationCommand(record)
+	if err != nil {
+		return CreationCommand{}, err
+	}
+	if err := command.Validate(); err != nil {
+		return CreationCommand{}, err
+	}
+	if record.StageSnapshot.ClusterName != clusterName {
+		return CreationCommand{}, fmt.Errorf("%w: claimed Promotion belongs to another cluster", ErrInvalid)
+	}
+
+	return command, nil
+}
+
+func creationCommand(record Promotion) (CreationCommand, error) {
 	stage := record.StageSnapshot
 	freight := record.SelectedFreightSnapshot
 	if freight == nil {
 		return CreationCommand{}, fmt.Errorf("%w: claimed Promotion has no selected Freight", ErrInvalid)
 	}
-	command := CreationCommand{
+	return CreationCommand{
 		PromotionID:  record.ID,
 		Attempt:      record.CreationDispatch.AttemptCount,
 		ExternalName: record.ExternalPromotionID,
@@ -115,15 +131,7 @@ func (s *CreationDispatchService) Next(ctx context.Context, clusterName string) 
 		Stage:        stage.Name,
 		StageUID:     stage.KubernetesUID,
 		Freight:      freight.Name,
-	}
-	if err := command.Validate(); err != nil {
-		return CreationCommand{}, err
-	}
-	if stage.ClusterName != clusterName {
-		return CreationCommand{}, fmt.Errorf("%w: claimed Promotion belongs to another cluster", ErrInvalid)
-	}
-
-	return command, nil
+	}, nil
 }
 
 func (s *CreationDispatchService) Report(
@@ -193,6 +201,11 @@ func (r CreationDispatchReport) Validate() error {
 		return fmt.Errorf("%w: dispatch report time is required", ErrInvalid)
 	}
 	switch r.Result {
+	case CreationDispatchAbsent:
+		if r.KargoName != nil || r.KargoUID != nil || r.Diagnostic != nil {
+			return fmt.Errorf("%w: absent dispatch cannot carry object details", ErrInvalid)
+		}
+		return nil
 	case CreationDispatchCreated:
 		if r.KargoName == nil || r.KargoUID == nil || r.Diagnostic != nil {
 			return fmt.Errorf("%w: created dispatch requires only the Kargo name and UID", ErrInvalid)

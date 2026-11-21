@@ -20,8 +20,7 @@ func TestRunCancelPrintsCanonicalState(t *testing.T) {
 			return
 		}
 		response := runResponse("running", nil)
-		response["cancellationRequestedAt"] = "2026-10-25T12:00:30Z"
-		response["cancellationState"] = "requested"
+		response["cancellation"] = map[string]any{"state": "requested", "requestedAt": "2026-10-25T12:00:30Z"}
 		writeJSON(t, writer, http.StatusOK, response)
 	}))
 	defer server.Close()
@@ -38,7 +37,7 @@ func TestRunCancelPrintsCanonicalState(t *testing.T) {
 		server,
 		"run", "cancel", testRunID, "--format", "json",
 	)
-	if code != cli.ExitValid || stderr != "" || !strings.Contains(output, `"cancellationRequestedAt"`) {
+	if code != cli.ExitValid || stderr != "" || !strings.Contains(output, `"requestedAt"`) {
 		t.Fatalf("JSON exit = %d, stdout = %q, stderr = %q", code, output, stderr)
 	}
 }

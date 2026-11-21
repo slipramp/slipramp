@@ -54,9 +54,9 @@ SELECT
     created_at,
     updated_at
 FROM promotions
-WHERE status IN ('pending', 'error')
+WHERE (cancellation_requested_at IS NULL AND status IN ('pending', 'error'))
    OR dispatch_failed_at IS NOT NULL
-   OR kargo_outcome_phase IN ('Failed', 'Errored', 'Aborted')
+   OR (cancellation_confirmed_at IS NULL AND kargo_outcome_phase IN ('Failed', 'Errored', 'Aborted'))
 ORDER BY created_at DESC, id DESC;
 
 -- name: ListInboxFailedGitTriggerDeliveries :many

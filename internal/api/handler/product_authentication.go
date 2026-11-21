@@ -71,6 +71,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"CreatePromotion":                productidentity.PermissionPromotionsWrite,
 	"ListPromotions":                 productidentity.PermissionRead,
 	"GetPromotion":                   productidentity.PermissionRead,
+	"CancelPromotion":                productidentity.PermissionPromotionsWrite,
 	"DecidePromotion":                productidentity.PermissionPromotionsWrite,
 	"ListPromotionProjects":          productidentity.PermissionRead,
 	"ListPromotionPipelines":         productidentity.PermissionRead,

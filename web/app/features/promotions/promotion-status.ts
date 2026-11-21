@@ -2,6 +2,7 @@ import type { Promotion } from "~/api/generated";
 
 type PromotionState = Pick<
   Promotion,
+  | "cancellation"
   | "creationDispatch"
   | "decidedAt"
   | "gates"
@@ -19,13 +20,15 @@ export type PromotionStatusPresentation = {
 };
 
 export function promotionIsActive(promotion: PromotionState) {
+  if (promotion.cancellation.state !== "not-requested")
+    return promotion.cancellation.state === "requested";
+  if (promotion.kargoOutcome || promotion.creationDispatch.phase === "failed") return false;
   switch (promotion.status) {
     case "creating":
     case "preparing":
     case "pending":
-      return true;
     case "approved":
-      return !promotion.kargoOutcome && promotion.creationDispatch.phase !== "failed";
+      return true;
     case "rejected":
     case "expired":
     case "error":
@@ -34,6 +37,20 @@ export function promotionIsActive(promotion: PromotionState) {
 }
 
 export function promotionOverallStatus(promotion: PromotionState): PromotionStatusPresentation {
+  if (promotion.cancellation.state === "requested")
+    return {
+      label: "Canceling",
+      color: "yellow",
+      description: "Waiting for the Controller to confirm cancellation",
+      recordedAt: promotion.cancellation.requestedAt,
+    };
+  if (promotion.cancellation.state === "completed")
+    return {
+      label: "Canceled",
+      color: "gray",
+      description: "Promotion cancellation completed",
+      recordedAt: promotion.kargoOutcome?.observedAt,
+    };
   if (promotion.creationDispatch.phase === "failed") {
     return {
       color: "red",
@@ -116,6 +133,16 @@ export function promotionOverallStatus(promotion: PromotionState): PromotionStat
 }
 
 export function promotionReviewStatus(promotion: PromotionState): PromotionStatusPresentation {
+  if (
+    promotion.cancellation.state !== "not-requested" &&
+    promotion.reviewRequired &&
+    !promotion.decidedAt
+  )
+    return {
+      color: "gray",
+      label: "Closed",
+      description: "Review closed when cancellation was requested",
+    };
   if (!promotion.reviewRequired) {
     return {
       color: "gray",
@@ -181,6 +208,12 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
       label: "Not required",
     };
   }
+  if (dispatch.phase === "stopped")
+    return {
+      color: "gray",
+      label: promotion.cancellation.state === "requested" ? "Checking delivery" : "Stopped",
+      description: "Creation dispatch stopped on cancellation",
+    };
   if (dispatch.phase === "failed") {
     return {
       color: "red",
@@ -227,7 +260,7 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
   if (promotion.kargoOutcome) {
     const succeeded = promotion.kargoOutcome.phase === "Succeeded";
     return {
-      color: succeeded ? "green" : "red",
+      color: succeeded ? "green" : promotion.cancellation.state === "completed" ? "gray" : "red",
       description: succeeded
         ? "Configured Kargo steps completed"
         : `Kargo reported ${promotion.kargoOutcome.phase.toLowerCase()}`,
@@ -235,6 +268,14 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
       recordedAt: promotion.kargoOutcome.observedAt,
     };
   }
+  if (promotion.cancellation.state === "completed")
+    return { color: "gray", label: "Skipped", description: "Canceled before Kargo execution" };
+  if (promotion.cancellation.state === "requested")
+    return {
+      color: "yellow",
+      label: "Canceling",
+      description: "Waiting for the Controller to confirm the outcome",
+    };
   if (promotion.status === "approved" && promotion.gates.state === "waiting") {
     return {
       color: "yellow",

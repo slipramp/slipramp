@@ -30,16 +30,17 @@ func (d *Database) ListPromotionReviews(
 	queries := d.queries.WithTx(transaction)
 
 	countParams := storedb.CountPromotionReviewsParams{
-		RepositoryID:     optionalDatabaseUUID(filter.RepositoryID),
-		CommitSha:        nullableText(filter.CommitSHA),
-		Status:           nullableText(string(filter.Status)),
-		CreationDispatch: nullableText(string(filter.CreationDispatch)),
-		KargoOutcome:     nullableText(string(filter.KargoOutcome)),
-		Integration:      nullableText(filter.Integration),
-		StageID:          optionalDatabaseUUID(filter.StageID),
-		ClusterName:      nullableText(filter.Cluster),
-		Project:          nullableText(filter.Project),
-		Application:      nullableText(filter.Application),
+		CancellationState: nullableText(string(filter.CancellationState)),
+		RepositoryID:      optionalDatabaseUUID(filter.RepositoryID),
+		CommitSha:         nullableText(filter.CommitSHA),
+		Status:            nullableText(string(filter.Status)),
+		CreationDispatch:  nullableText(string(filter.CreationDispatch)),
+		KargoOutcome:      nullableText(string(filter.KargoOutcome)),
+		Integration:       nullableText(filter.Integration),
+		StageID:           optionalDatabaseUUID(filter.StageID),
+		ClusterName:       nullableText(filter.Cluster),
+		Project:           nullableText(filter.Project),
+		Application:       nullableText(filter.Application),
 	}
 	total, err := queries.CountPromotionReviews(ctx, countParams)
 	if err != nil {
@@ -47,18 +48,19 @@ func (d *Database) ListPromotionReviews(
 	}
 
 	rows, err := queries.ListPromotionReviews(ctx, storedb.ListPromotionReviewsParams{
-		RepositoryID:     countParams.RepositoryID,
-		CommitSha:        countParams.CommitSha,
-		Status:           countParams.Status,
-		CreationDispatch: countParams.CreationDispatch,
-		KargoOutcome:     countParams.KargoOutcome,
-		Integration:      countParams.Integration,
-		StageID:          countParams.StageID,
-		ClusterName:      countParams.ClusterName,
-		Project:          countParams.Project,
-		Application:      countParams.Application,
-		ResultLimit:      int32(filter.Limit),
-		ResultOffset:     int64(filter.Offset),
+		CancellationState: countParams.CancellationState,
+		RepositoryID:      countParams.RepositoryID,
+		CommitSha:         countParams.CommitSha,
+		Status:            countParams.Status,
+		CreationDispatch:  countParams.CreationDispatch,
+		KargoOutcome:      countParams.KargoOutcome,
+		Integration:       countParams.Integration,
+		StageID:           countParams.StageID,
+		ClusterName:       countParams.ClusterName,
+		Project:           countParams.Project,
+		Application:       countParams.Application,
+		ResultLimit:       int32(filter.Limit),
+		ResultOffset:      int64(filter.Offset),
 	})
 	if err != nil {
 		return promotion.PromotionReviewPage{}, fmt.Errorf("list Promotion reviews: %w", err)

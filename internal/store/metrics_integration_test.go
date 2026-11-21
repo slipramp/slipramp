@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -178,7 +179,7 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 		t.Fatalf("LoadMetricsSnapshot() error = %v", err)
 	}
 	assignedState := telemetry.ActiveRunState{
-		Phase: run.PhaseAssigned, Cancellation: run.CancellationStateRequested,
+		Phase: run.PhaseAssigned, Cancellation: cancellation.Requested,
 	}
 	if snapshot.ActiveRuns[assignedState] != 1 {
 		t.Errorf("assigned Runs = %d, want 1", snapshot.ActiveRuns[assignedState])

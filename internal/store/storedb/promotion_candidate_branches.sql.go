@@ -42,6 +42,7 @@ SELECT
     candidate_revision,
     status,
     updated_at,
+    cancellation_confirmed_at,
     kargo_outcome_observed_at
 FROM promotions
 WHERE repository_id = $1
@@ -50,14 +51,15 @@ ORDER BY candidate_branch COLLATE "C", updated_at DESC, id DESC
 `
 
 type ListPromotionCandidateBranchReferencesRow struct {
-	PromotionID            pgtype.UUID
-	Integration            string
-	RepositoryID           pgtype.UUID
-	CandidateBranch        *string
-	CandidateRevision      *string
-	Status                 string
-	UpdatedAt              pgtype.Timestamptz
-	KargoOutcomeObservedAt pgtype.Timestamptz
+	PromotionID             pgtype.UUID
+	Integration             string
+	RepositoryID            pgtype.UUID
+	CandidateBranch         *string
+	CandidateRevision       *string
+	Status                  string
+	UpdatedAt               pgtype.Timestamptz
+	CancellationConfirmedAt pgtype.Timestamptz
+	KargoOutcomeObservedAt  pgtype.Timestamptz
 }
 
 func (q *Queries) ListPromotionCandidateBranchReferences(ctx context.Context, repositoryID pgtype.UUID) ([]ListPromotionCandidateBranchReferencesRow, error) {
@@ -77,6 +79,7 @@ func (q *Queries) ListPromotionCandidateBranchReferences(ctx context.Context, re
 			&i.CandidateRevision,
 			&i.Status,
 			&i.UpdatedAt,
+			&i.CancellationConfirmedAt,
 			&i.KargoOutcomeObservedAt,
 		); err != nil {
 			return nil, err

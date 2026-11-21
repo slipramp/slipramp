@@ -393,11 +393,12 @@ func (h *Handler) ReportKargoPromotionReconciliation(
 		ctx,
 		principal.ClusterName,
 		promotion.ReconciliationReport{
-			PromotionID: request.PromotionID,
-			KargoName:   request.Body.KargoName,
-			KargoUID:    request.Body.KargoUID,
-			Phase:       optionalKargoPhase(request.Body.Phase),
-			Diagnostic:  request.Body.Diagnostic,
+			PromotionID:              request.PromotionID,
+			KargoName:                request.Body.KargoName,
+			KargoUID:                 request.Body.KargoUID,
+			Phase:                    optionalKargoPhase(request.Body.Phase),
+			CancellationAcknowledged: request.Body.CancellationAcknowledged != nil && *request.Body.CancellationAcknowledged,
+			Diagnostic:               request.Body.Diagnostic,
 		},
 	)
 	if err != nil {
@@ -536,8 +537,15 @@ func optionalKargoPhase(value *api.KargoPromotionReconciliationReportPhase) *pro
 
 func (h *Handler) controllerCommandResponse(command controllercommand.Command) (api.ControllerCommand, error) {
 	switch selected := command.(type) {
-	case controllercommand.Cancellation:
+	case controllercommand.RunCancellation:
 		return cancelRunCommand(selected.Run), nil
+	case controllercommand.PromotionCancellation:
+		cmd := reconcileKargoPromotionCommand(selected.Command)
+		cmd.Type = api.ControllerCommandTypeCancelKargoPromotion
+		if selected.Command.Recovery != nil {
+			cmd.PromotionReconciliation.Recovery = createKargoPromotionCommand(*selected.Command.Recovery).Promotion
+		}
+		return cmd, nil
 	case controllercommand.PromotionCreation:
 		return createKargoPromotionCommand(selected.Command), nil
 	case controllercommand.PromotionReconciliation:

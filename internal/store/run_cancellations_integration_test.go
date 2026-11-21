@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -56,11 +57,11 @@ func TestRunCancellationRaceWithAssignmentIntegration(t *testing.T) {
 	}
 	switch {
 	case errors.Is(claim.err, run.ErrNoRunAssignment):
-		if state != run.CancellationStateCompleted || stored.Phase != run.PhaseFinished {
+		if state != cancellation.Completed || stored.Phase != run.PhaseFinished {
 			t.Errorf("cancel-won Run = %#v, state %q", stored, state)
 		}
 	case claim.err == nil:
-		if claim.record.ID != record.ID || state != run.CancellationStateRequested ||
+		if claim.record.ID != record.ID || state != cancellation.Requested ||
 			stored.Phase != run.PhaseAssigned {
 			t.Errorf("assignment-won Run = %#v, state %q", stored, state)
 		}
@@ -166,10 +167,10 @@ func TestRunCancellationRaceWithTerminalObservationIntegration(t *testing.T) {
 		t.Fatalf("terminal Run = %#v", stored)
 	}
 	if cancelErr == nil {
-		if state != run.CancellationStateOvertaken {
+		if state != cancellation.Overtaken {
 			t.Errorf("cancellation state = %q, want overtaken", state)
 		}
-	} else if !errors.Is(cancelErr, run.ErrRunFinished) || state != run.CancellationStateNotRequested {
+	} else if !errors.Is(cancelErr, run.ErrRunFinished) || state != cancellation.NotRequested {
 		t.Errorf("cancellation race = error %v, state %q", cancelErr, state)
 	}
 	if _, err := database.GetRunToCancelForCluster(ctx, "colo"); !errors.Is(err, run.ErrNoRunToCancel) {
@@ -200,7 +201,7 @@ func TestQueuedRunCancellationIsAtomicAndIdempotentIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CancellationState() error = %v", err)
 	}
-	if state != run.CancellationStateCompleted || first.Phase != run.PhaseFinished ||
+	if state != cancellation.Completed || first.Phase != run.PhaseFinished ||
 		first.FinishedAt == nil || !first.FinishedAt.Equal(at) {
 		t.Errorf("queued cancellation = %#v, state %q", first, state)
 	}
@@ -276,7 +277,7 @@ func TestActiveRunCancellationSurvivesDatabaseReopenIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CancellationState() error = %v", err)
 	}
-	if state != run.CancellationStateCompleted || completed.FinishedAt == nil ||
+	if state != cancellation.Completed || completed.FinishedAt == nil ||
 		!completed.FinishedAt.Equal(finishedAt) {
 		t.Errorf("completed cancellation = %#v, state %q", completed, state)
 	}

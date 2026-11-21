@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/repository"
@@ -216,7 +217,7 @@ func buildSnapshot(query Query, generatedAt time.Time, source projectionSource) 
 	unknownRuns := make([]ActiveRun, 0)
 	unknownRunCounts := make(map[string]int)
 	for _, record := range source.runs {
-		if record.Cancellation == run.CancellationStateRequested {
+		if record.Cancellation == cancellation.Requested {
 			result.Activity.Canceling++
 		} else {
 			switch record.Status.Phase {

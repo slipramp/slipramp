@@ -48,10 +48,11 @@ type PromotionMaterialization struct {
 }
 
 type PromotionObservation struct {
-	Name       string
-	UID        string
-	Phase      *api.KargoPromotionReconciliationReportPhase
-	Diagnostic *string
+	CancellationAcknowledged bool
+	Name                     string
+	UID                      string
+	Phase                    *api.KargoPromotionReconciliationReportPhase
+	Diagnostic               *string
 }
 
 type PromotionManager struct {
@@ -160,6 +161,14 @@ func (c *PromotionManager) Reconcile(
 	ctx context.Context,
 	command api.KargoPromotionReconciliationCommand,
 ) (*PromotionObservation, error) {
+	return c.observe(ctx, command, false)
+}
+
+func (c *PromotionManager) Cancel(ctx context.Context, command api.KargoPromotionReconciliationCommand) (*PromotionObservation, error) {
+	return c.observe(ctx, command, true)
+}
+
+func (c *PromotionManager) observe(ctx context.Context, command api.KargoPromotionReconciliationCommand, cancelRequested bool) (*PromotionObservation, error) {
 	integration := string(command.Integration)
 	namespace := string(command.Project)
 	if !slices.Contains(c.allowedNamespaces[integration], namespace) {
@@ -170,6 +179,21 @@ func (c *PromotionManager) Reconcile(
 		)
 	}
 
+	if recovery := command.Recovery; recovery != nil {
+		if !cancelRequested || command.Source != api.Slipramp || command.KargoUID != nil || recovery.ID != command.ID ||
+			recovery.Project != command.Project || recovery.Integration != command.Integration || recovery.Stage != command.Stage {
+			return nil, errors.New("invalid Promotion cancellation recovery identity")
+		}
+		object, err := c.findKargoPromotion(ctx, namespace, *recovery)
+		if err != nil || object == nil {
+			return nil, err
+		}
+		identity, err := kargoPromotionIdentity(object, false)
+		if err != nil {
+			return nil, err
+		}
+		return &PromotionObservation{Name: identity.Name, UID: identity.UID}, nil
+	}
 	object, err := c.promotions.Namespace(namespace).Get(ctx, command.KargoName, metav1.GetOptions{})
 	if err != nil {
 		return nil, classifyKargoPromotionAPIError("get Kargo Promotion for reconciliation", err)
@@ -216,10 +240,18 @@ func (c *PromotionManager) Reconcile(
 		return nil, fmt.Errorf("read Kargo Promotion %s/%s phase: %w", namespace, command.KargoName, err)
 	}
 	if !foundPhase || !terminalKargoPromotionPhase(phase) {
+		// Bind a Kargo-originated object's UID on the Server before mutating it.
+		if cancelRequested && command.KargoUID != nil {
+			if err := c.requestAbort(ctx, object, command.ID.String()); err != nil {
+				return nil, err
+			}
+		}
 		return observation, nil
 	}
 	terminalPhase := api.KargoPromotionReconciliationReportPhase(phase)
 	observation.Phase = &terminalPhase
+	observation.CancellationAcknowledged = terminalPhase == api.KargoPromotionReconciliationReportPhaseAborted &&
+		object.GetAnnotations()[cancellationAnnotation] == command.ID.String()
 	message, _, err := unstructured.NestedString(object.Object, "status", "message")
 	if err != nil {
 		return nil, fmt.Errorf("read Kargo Promotion %s/%s message: %w", namespace, command.KargoName, err)

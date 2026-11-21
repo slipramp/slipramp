@@ -21,7 +21,7 @@ const (
 
 func (p CreationDispatchPhase) Valid() bool {
 	switch p {
-	case CreationDispatchNotApplicable, CreationDispatchAwaitingDelivery,
+	case CreationDispatchNotApplicable, CreationDispatchAwaitingDelivery, CreationDispatchStopped,
 		CreationDispatchDelivered, CreationDispatchPhaseFailed:
 		return true
 	default:
@@ -116,6 +116,7 @@ func (l PromotionLifecycle) Validate(reviewRequired bool, createdAt time.Time) e
 type CreationDispatchPhase string
 
 const (
+	CreationDispatchStopped          CreationDispatchPhase = "stopped"
 	CreationDispatchNotApplicable    CreationDispatchPhase = "not-applicable"
 	CreationDispatchAwaitingDelivery CreationDispatchPhase = "awaiting-delivery"
 	CreationDispatchDelivered        CreationDispatchPhase = "delivered"
@@ -143,10 +144,13 @@ func (s CreationDispatchState) Phase(source PromotionSource) CreationDispatchPha
 	if s.FailedAt != nil {
 		return CreationDispatchPhaseFailed
 	}
+	if s.NextAttemptAt == nil {
+		return CreationDispatchStopped
+	}
 	return CreationDispatchAwaitingDelivery
 }
 
-func (s CreationDispatchState) Validate(source PromotionSource, lifecycle LifecycleState, createdAt time.Time) error {
+func (s CreationDispatchState) Validate(source PromotionSource, cancelRequested bool, createdAt time.Time) error {
 	if source == SourceKargo {
 		if s != (CreationDispatchState{}) {
 			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
@@ -162,7 +166,7 @@ func (s CreationDispatchState) Validate(source PromotionSource, lifecycle Lifecy
 	if s.DispatchedAt != nil && s.FailedAt != nil {
 		return fmt.Errorf("%w: Promotion delivery cannot be both delivered and failed", ErrInvalid)
 	}
-	if s.NextAttemptAt == nil && s.DispatchedAt == nil && s.FailedAt == nil {
+	if !cancelRequested && s.NextAttemptAt == nil && s.DispatchedAt == nil && s.FailedAt == nil {
 		return fmt.Errorf("%w: Slipramp-originated Promotion requires delivery state", ErrInvalid)
 	}
 	if s.Diagnostic != nil {
@@ -314,6 +318,7 @@ func (s KargoExecutionState) Validate(
 	source PromotionSource,
 	lifecycle LifecycleState,
 	creation CreationDispatchState,
+	cancelRequested bool,
 	createdAt time.Time,
 ) error {
 	if s.PromotionUID != nil {
@@ -324,7 +329,7 @@ func (s KargoExecutionState) Validate(
 			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
 		}
 	}
-	reconciliationEligible := s.Outcome == nil && ((source == SourceKargo && lifecycle == LifecycleApproved) ||
+	reconciliationEligible := !cancelRequested && s.Outcome == nil && ((source == SourceKargo && lifecycle == LifecycleApproved) ||
 		(source == SourceSlipramp && creation.DispatchedAt != nil && s.PromotionUID != nil &&
 			(lifecycle == LifecycleCreating || lifecycle == LifecycleApproved)))
 	if s.NextReconciliationAt != nil && !reconciliationEligible {

@@ -3,6 +3,8 @@ package run
 import (
 	"fmt"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/cancellation"
 )
 
 // CancellationStatus contains the authoritative Run facts that determine the
@@ -29,8 +31,8 @@ const (
 // request. Storage applies the operation under the same lock used to read the
 // current facts.
 type CancellationTransition struct {
-	From      CancellationState
-	To        CancellationState
+	From      cancellation.State
+	To        cancellation.State
 	Operation CancellationOperation
 }
 
@@ -48,11 +50,11 @@ func (r Run) CancellationStatus() CancellationStatus {
 
 // CancellationState derives operator-cancellation state without adding a
 // persisted status alongside phase, outcome, reason, and request time.
-func (r Run) CancellationState() (CancellationState, error) {
+func (r Run) CancellationState() (cancellation.State, error) {
 	return r.CancellationStatus().CancellationState()
 }
 
-func (s CancellationStatus) CancellationState() (CancellationState, error) {
+func (s CancellationStatus) CancellationState() (cancellation.State, error) {
 	if err := s.validateLifecycle(); err != nil {
 		return "", err
 	}
@@ -74,7 +76,7 @@ func (s CancellationStatus) CancellationState() (CancellationState, error) {
 			return "", invalidCancellation("CancelRequested reason requires a cancellation request")
 		}
 
-		return CancellationStateNotRequested, nil
+		return cancellation.NotRequested, nil
 	}
 
 	if s.CancellationRequestedAt.IsZero() {
@@ -89,7 +91,7 @@ func (s CancellationStatus) CancellationState() (CancellationState, error) {
 
 	switch s.Phase {
 	case PhaseAssigned, PhasePreparing, PhaseRunning:
-		return CancellationStateRequested, nil
+		return cancellation.Requested, nil
 	case PhaseQueued:
 		return "", invalidCancellation("queued cancellation must finish atomically")
 	case PhaseFinished:
@@ -100,13 +102,13 @@ func (s CancellationStatus) CancellationState() (CancellationState, error) {
 				)
 			}
 
-			return CancellationStateCompleted, nil
+			return cancellation.Completed, nil
 		}
 		if reasonIs(s.OutcomeReason, ReasonCancelRequested) {
 			return "", invalidCancellation("overtaken cancellation cannot use the CancelRequested reason")
 		}
 
-		return CancellationStateOvertaken, nil
+		return cancellation.Overtaken, nil
 	default:
 		panic("cancellation lifecycle validation accepted an unknown phase")
 	}
@@ -155,16 +157,16 @@ func PlanCancellationRequest(current CancellationStatus, requestedAt time.Time) 
 	}
 
 	transition := CancellationTransition{From: from, To: from, Operation: CancellationOperationNone}
-	if from != CancellationStateNotRequested {
+	if from != cancellation.NotRequested {
 		return transition, nil
 	}
 
 	switch current.Phase {
 	case PhaseQueued:
-		transition.To = CancellationStateCompleted
+		transition.To = cancellation.Completed
 		transition.Operation = CancellationOperationFinishQueued
 	case PhaseAssigned, PhasePreparing, PhaseRunning:
-		transition.To = CancellationStateRequested
+		transition.To = cancellation.Requested
 		transition.Operation = CancellationOperationRequestActive
 	case PhaseFinished:
 		return CancellationTransition{}, ErrRunFinished
@@ -191,17 +193,17 @@ func ValidateCancellationTransition(current, next CancellationStatus) error {
 		return nil
 	}
 	switch from {
-	case CancellationStateNotRequested:
-		if to == CancellationStateRequested && current.Phase != PhaseFinished {
+	case cancellation.NotRequested:
+		if to == cancellation.Requested && current.Phase != PhaseFinished {
 			return nil
 		}
-		if to == CancellationStateCompleted && current.Phase == PhaseQueued &&
+		if to == cancellation.Completed && current.Phase == PhaseQueued &&
 			next.Phase == PhaseFinished && next.CancellationRequestedAt != nil &&
 			next.FinishedAt != nil && next.CancellationRequestedAt.Equal(*next.FinishedAt) {
 			return nil
 		}
-	case CancellationStateRequested:
-		if to == CancellationStateCompleted || to == CancellationStateOvertaken {
+	case cancellation.Requested:
+		if to == cancellation.Completed || to == cancellation.Overtaken {
 			return nil
 		}
 	}

@@ -604,7 +604,7 @@ export type PlacementPreflight = {
   configurationChecksum: string;
   state: "queued" | "running" | "succeeded" | "failed";
   cleanupState: "pending" | "not-required" | "succeeded" | "failed";
-  requestedBy: RunActor;
+  requestedBy: ActorSnapshot;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
@@ -667,6 +667,7 @@ export type ControllerCommand = {
   type:
     | "run-assignment"
     | "cancel-run"
+    | "cancel-kargo-promotion"
     | "create-kargo-promotion"
     | "reconcile-kargo-promotion"
     | "placement-preflight";
@@ -683,7 +684,7 @@ export type ControllerCommand = {
    */
   promotion?: KargoPromotionCreationCommand;
   /**
-   * Present when type is reconcile-kargo-promotion.
+   * Present for Kargo Promotion reconciliation and cancellation.
    */
   promotionReconciliation?: KargoPromotionReconciliationCommand;
   /**
@@ -834,8 +835,7 @@ export type Run = {
    * Resolution mode used to rerun the parent Run.
    */
   rerunMode?: RunRerunMode;
-  createdBy?: RunActor;
-  canceledBy?: RunActor;
+  createdBy?: ActorSnapshot;
   review: RunReview;
   gates: GateSummary;
   inputs: {
@@ -856,11 +856,7 @@ export type Run = {
    * Time the controller most recently confirmed execution state.
    */
   lastObservedAt?: string;
-  /**
-   * Time operator cancellation intent was first persisted.
-   */
-  cancellationRequestedAt?: string;
-  cancellationState: RunCancellationState;
+  cancellation: Cancellation;
   /**
    * Kubernetes UID of the materialized Job.
    */
@@ -916,7 +912,7 @@ export type RunRerun = {
 
 export type RunRerunMode = "exact" | "latest";
 
-export type RunActor = {
+export type ActorSnapshot = {
   /**
    * Durable product principal responsible for the operation.
    */
@@ -936,7 +932,10 @@ export type GateSummary = {
   requirements: Array<GateRequirement>;
 };
 
-export type GateSummaryState = "not-required" | "waiting" | "released";
+/**
+ * Stopped means cancellation ended the wait before Gate release.
+ */
+export type GateSummaryState = "not-required" | "waiting" | "stopped" | "released";
 
 export type GateRequirement = {
   name: CatalogName;
@@ -959,11 +958,15 @@ export type GateRequirement = {
   diagnostic?: string;
 };
 
+/**
+ * Stopped requirements retain the attached Gate name and have no release evidence or current observation.
+ */
 export type GateRequirementState =
   | "unevaluated"
   | "passing"
   | "blocking"
   | "unavailable"
+  | "stopped"
   | "released";
 
 export type GateOperator =
@@ -1325,6 +1328,7 @@ export type Promotion = {
   reviewContext?: PromotionReviewContext;
   policySnapshot: PromotionStagePolicy;
   selectedFreight?: PromotionFreightItem;
+  cancellation: Cancellation;
   reviewRequired: boolean;
   status: PromotionStatus;
   gates: GateSummary;
@@ -1346,7 +1350,7 @@ export type Promotion = {
   gitDiffArtifact?: Artifact;
   argoDiffArtifactId?: string;
   argoDiffArtifact?: Artifact;
-  requestedBy: RunActor;
+  requestedBy: ActorSnapshot;
   decision?: PromotionDecision;
   createdAt: string;
   preparationCompletedAt?: string;
@@ -1366,6 +1370,7 @@ export type Promotion = {
 export type PromotionCreationDispatchPhase =
   | "not-applicable"
   | "awaiting-delivery"
+  | "stopped"
   | "delivered"
   | "failed";
 
@@ -1456,7 +1461,7 @@ export type PromotionStagePolicy = {
   effectiveMode: PromotionPolicyMode;
   expiresAt?: string;
   reason?: string;
-  updatedBy?: RunActor;
+  updatedBy?: ActorSnapshot;
   updatedAt?: string;
 };
 
@@ -2193,6 +2198,10 @@ export type KargoPromotionReconciliationCommand = {
    * Kubernetes UID already bound to the Promotion, if observed.
    */
   kargoUid?: string;
+  /**
+   * Previously claimed creation to locate by annotation when canceling before UID binding.
+   */
+  recovery?: KargoPromotionCreationCommand;
 };
 
 export type KargoPromotionDispatchReport = {
@@ -2200,7 +2209,7 @@ export type KargoPromotionDispatchReport = {
    * Dispatch attempt from the creation command.
    */
   attempt: number;
-  result: "created" | "retryable" | "failed";
+  result: "created" | "absent" | "retryable" | "failed";
   /**
    * Kubernetes UID; required when result is created.
    */
@@ -2220,6 +2229,10 @@ export type KargoPromotionReconciliationReport = {
    * Canonical name of the observed Kargo Promotion.
    */
   kargoName: string;
+  /**
+   * The aborted object carries Slipramp's cancellation marker.
+   */
+  cancellationAcknowledged?: boolean;
   /**
    * Kubernetes UID of the observed Kargo Promotion.
    */
@@ -2293,7 +2306,7 @@ export type RunSource = {
 
 export type RunReview = {
   state: RunReviewState;
-  decidedBy?: RunActor;
+  decidedBy?: ActorSnapshot;
   decidedAt?: string;
   comment?: string;
 };
@@ -2321,10 +2334,16 @@ export type RunArtifactConsumer = {
   input: CatalogName;
 };
 
-/**
- * Derived operator-cancellation workflow state. Completed means an operator request produced the terminal canceled outcome. Overtaken means the Run reached another terminal outcome before cancellation completed. Canceled outcomes caused by Git supersession or review rejection remain not-requested.
- */
-export type RunCancellationState = "not-requested" | "requested" | "completed" | "overtaken";
+export type CancellationState = "not-requested" | "requested" | "completed" | "overtaken";
+
+export type Cancellation = {
+  state: CancellationState;
+  /**
+   * Time the first operator request was recorded.
+   */
+  requestedAt?: string;
+  requestedBy?: ActorSnapshot;
+};
 
 export type RunReviewDecision = "approved" | "rejected";
 
@@ -2390,13 +2409,14 @@ export type KargoPromotionRequest = {
 };
 
 /**
- * Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution.
+ * Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
  */
 export type KargoPromotionStatus =
   | "creating"
   | "preparing"
   | "pending"
   | "gated"
+  | "canceling"
   | "approved"
   | "rejected"
   | "expired"
@@ -2547,7 +2567,7 @@ export type KargoPromotionOutcome = {
 export type PromotionDecision = {
   decision: "approved" | "rejected";
   comment?: string;
-  decidedBy: RunActor;
+  decidedBy: ActorSnapshot;
   decidedAt: string;
 };
 
@@ -5924,6 +5944,10 @@ export type SubmitKargoPromotionResponses = {
    * The durable Promotion identity and effective callback status. Gated keeps the Kargo PromotionTask polling without changing the persisted Promotion lifecycle.
    */
   200: KargoPromotionResponse;
+  /**
+   * A claimed creation in this Stage is awaiting its admitted Kargo identity. Poll again to correlate this callback.
+   */
+  202: unknown;
 };
 
 export type SubmitKargoPromotionResponse =
@@ -5948,6 +5972,7 @@ export type ListPromotionsData = {
      * Limit results by Slipramp review lifecycle.
      */
     status?: PromotionStatus;
+    cancellationState?: CancellationState;
     /**
      * Limit results by Slipramp-to-Kargo object delivery state.
      */
@@ -6032,6 +6057,49 @@ export type GetPromotionResponses = {
 };
 
 export type GetPromotionResponse = GetPromotionResponses[keyof GetPromotionResponses];
+
+export type CancelPromotionData = {
+  body?: never;
+  path: {
+    promotionId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotions/{promotionId}/cancel";
+};
+
+export type CancelPromotionErrors = {
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type CancelPromotionError = CancelPromotionErrors[keyof CancelPromotionErrors];
+
+export type CancelPromotionResponses = {
+  /**
+   * Promotion detail with preparation and decision context.
+   */
+  200: Promotion;
+};
+
+export type CancelPromotionResponse = CancelPromotionResponses[keyof CancelPromotionResponses];
 
 export type DecidePromotionData = {
   body: PromotionDecisionUpdate;

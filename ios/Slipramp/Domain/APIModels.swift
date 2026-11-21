@@ -22,7 +22,7 @@ typealias ActionParameter = Components.Schemas.Parameter
 typealias ActionParameterValue = Components.Schemas.ParameterValue
 
 enum ClientCompatibilityPolicy {
-    static let productAPIContract = 1
+    static let productAPIContract = 2
 
     static func validate(_ compatibility: ServerCompatibility) throws {
         guard compatibility.productApiContract == productAPIContract else {
@@ -85,13 +85,21 @@ extension Components.Schemas.Run: Identifiable {
     }
 
     var canCancel: Bool {
-        phase != .finished && cancellationState == .notRequested
+        phase != .finished && cancellation.state == .notRequested
     }
 }
 
 extension Components.Schemas.Promotion: Identifiable {
+    var canCancel: Bool {
+        cancellation.state == .notRequested && kargoOutcome == nil && creationDispatch.phase != .failed &&
+            [.creating, .preparing, .pending, .approved].contains(status)
+    }
+
     var statusLabel: String {
-        switch status {
+        if cancellation.state == .requested { return "Canceling" }
+        if cancellation.state == .completed { return "Canceled" }
+        if let kargoOutcome { return kargoOutcome.phase.rawValue }
+        return switch status {
         case .creating:
             "Creating in Kargo"
         case .preparing:
@@ -99,17 +107,11 @@ extension Components.Schemas.Promotion: Identifiable {
         case .pending:
             "Pending review"
         case .approved:
-            if let outcome = kargoOutcome {
-                outcome.phase.rawValue
-            } else {
-                switch creationDispatch.phase {
-                case .awaitingDelivery:
-                    "Awaiting Kargo delivery"
-                case .failed:
-                    "Kargo delivery failed"
-                case .notApplicable, .delivered:
-                    "Kargo running"
-                }
+            switch creationDispatch.phase {
+            case .stopped: "Delivery stopped"
+            case .awaitingDelivery: "Awaiting Kargo delivery"
+            case .failed: "Kargo delivery failed"
+            case .notApplicable, .delivered: "Kargo running"
             }
         case .rejected:
             "Rejected"
@@ -121,7 +123,7 @@ extension Components.Schemas.Promotion: Identifiable {
     }
 
     var canDecide: Bool {
-        status == .pending && decision == nil
+        status == .pending && decision == nil && canCancel
     }
 }
 

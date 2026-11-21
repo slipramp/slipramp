@@ -1,3 +1,5 @@
+import { LifecycleStep } from "~/shared/lifecycle-step";
+import { CancellationDetail, CancellationStep } from "~/shared/cancellation-detail";
 import {
   Accordion,
   Alert,
@@ -9,14 +11,12 @@ import {
   Code,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Tabs,
   Text,
   Textarea,
   TextInput,
   Title,
-  UnstyledButton,
 } from "@mantine/core";
 import {
   IconDownload,
@@ -30,15 +30,15 @@ import {
   IconTruckDelivery,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo } from "react";
 import { Form, Link, useNavigation, useSearchParams } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
 import {
+  cancelPromotion,
   decidePromotion,
   getPromotion,
-  type GitCommit,
   type ProductPrincipal,
   type Promotion,
   type PromotionFreightItem,
@@ -47,8 +47,8 @@ import { getProductPrincipal } from "~/features/auth/product-authentication.serv
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
-import { CommitReference } from "~/features/commits/git-commit";
-import { ContextValue } from "~/shared/context-value";
+import { CommitDetails } from "~/features/commits/git-commit";
+import { DetailFact, DetailGrid } from "~/shared/context-value";
 import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
@@ -57,6 +57,7 @@ import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
+  promotionIsActive,
   promotionOverallStatus,
   promotionReviewStatus,
   type PromotionStatusPresentation,
@@ -82,12 +83,12 @@ import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import {
   defaultPromotionDetailView,
   promotionDetailSearchParamNames,
-  promotionLifecycleStages,
   selectedPromotionDetailView,
   selectedPromotionLifecycleStage,
   updatePromotionDetailSearchParams,
   updatePromotionLifecycleSearchParams,
   type PromotionDetailView,
+  type PromotionPhaseStage,
   type PromotionLifecycleStage,
 } from "~/features/promotions/promotion-detail-url-state";
 import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
@@ -147,6 +148,18 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  if (formValue(formData, "intent") === "cancel") {
+    const result = await cancelPromotion({
+      client: createServerAPIClient(request, context),
+      path: { promotionId: params.promotionId },
+    });
+    return result.data
+      ? { message: "Cancellation recorded." }
+      : {
+          error:
+            result.error?.detail ?? result.error?.title ?? "The Promotion could not be canceled.",
+        };
+  }
   const decision = formValue(formData, "decision");
   if (decision !== "approved" && decision !== "rejected") {
     return { error: "Choose approve or reject." };
@@ -167,7 +180,8 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 }
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
-  useActionSuccessToast(actionData, "Decision recorded", actionData?.message);
+  const navigation = useNavigation();
+  useActionSuccessToast(actionData, "Promotion updated", actionData?.message);
 
   const canReadDiffs = canReadSensitiveArtifacts(loaderData.principal);
   const preparedDiffsLoaded =
@@ -191,14 +205,34 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   const promotion = loaderData.promotion;
   const canWrite = canWritePromotions(loaderData.principal);
+  const canCancel =
+    canWrite && promotionIsActive(promotion) && promotion.cancellation.state === "not-requested";
   const overallStatus = promotionOverallStatus(promotion);
 
   return (
     <Stack gap="lg">
       <PageHeader
         actions={
-          promotion.kargoUrl || promotion.argoCdUrl ? (
+          canCancel || promotion.kargoUrl || promotion.argoCdUrl ? (
             <Group gap="sm">
+              {canCancel ? (
+                <Form method="post">
+                  <Button
+                    type="submit"
+                    name="intent"
+                    value="cancel"
+                    size="compact-md"
+                    color="red"
+                    variant="light"
+                    loading={
+                      navigation.state === "submitting" &&
+                      navigation.formData?.get("intent") === "cancel"
+                    }
+                  >
+                    Cancel promotion
+                  </Button>
+                </Form>
+              ) : null}
               {promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : null}
               {promotion.argoCdUrl ? (
                 <Button
@@ -245,7 +279,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       />
 
       {actionData?.error ? (
-        <Alert color="red" title="Decision failed">
+        <Alert color="red" title="Promotion update failed">
           {actionData.error}
         </Alert>
       ) : null}
@@ -254,7 +288,9 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           {promotion.message}
         </Alert>
       ) : null}
-      {promotion.status === "creating" ? (
+      {promotion.status === "creating" &&
+      promotion.cancellation.state === "not-requested" &&
+      !promotion.kargoOutcome ? (
         <Alert className={styles.creationNotice} color="cyan" title="Waiting for review context">
           Kargo has not submitted the Git context required to prepare this review yet.
         </Alert>
@@ -275,15 +311,19 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
 function SelectedFreight({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
   return (
-    <Stack component="section" gap="md">
+    <Stack component="section" gap="lg">
       <SectionHeader title="Selected Freight" />
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-        <Fact label="Freight ID" value={<FreightIdentifier freight={freight} />} />
-        <Fact label="Warehouse" value={freightOriginLabel(freight.origin)} />
+      <DetailGrid>
+        <DetailFact label="Freight ID">
+          <FreightIdentifier freight={freight} />
+        </DetailFact>
+        <DetailFact label="Warehouse">{freightOriginLabel(freight.origin)}</DetailFact>
         <Box style={{ gridColumn: "1 / -1" }}>
-          <Fact label="Contents" value={<FreightContents freight={freight} />} />
+          <DetailFact label="Contents">
+            <FreightContents freight={freight} />
+          </DetailFact>
         </Box>
-      </SimpleGrid>
+      </DetailGrid>
     </Stack>
   );
 }
@@ -300,7 +340,12 @@ function CreationDispatchNotice({ promotion }: Readonly<{ promotion: Promotion }
 }
 
 function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
-  if (!promotion.kargoOutcome || promotion.kargoOutcome.phase === "Succeeded") return null;
+  if (
+    !promotion.kargoOutcome ||
+    promotion.kargoOutcome.phase === "Succeeded" ||
+    promotion.cancellation.state === "completed"
+  )
+    return null;
 
   return (
     <Alert color="red" title={`Kargo Promotion ${promotion.kargoOutcome.phase.toLowerCase()}`}>
@@ -327,7 +372,7 @@ type PromotionLifecycleStep = {
   detail: string;
   icon: TablerIcon;
   label: string;
-  stage: PromotionLifecycleStage;
+  stage: PromotionPhaseStage;
   state: PromotionLifecycleState;
   status: PromotionLifecycleStatus;
   value?: string;
@@ -347,7 +392,7 @@ function PromotionLifecycle({
   steps: PromotionLifecycleStep[];
 }>) {
   const activeStage = currentPromotionLifecycleStage(steps);
-  const selectedStep = steps[promotionLifecycleStages.indexOf(selectedStage)] ?? steps[0]!;
+  const selectedStep = steps.find((step) => step.stage === selectedStage);
 
   return (
     <Stack gap="md">
@@ -374,95 +419,91 @@ function PromotionLifecycle({
                 : "Waiting";
           const stateColor = terminal ? step.status.color : active ? "lilac" : "gray";
           return (
-            <UnstyledButton
-              aria-current={selectedStage === step.stage ? "step" : undefined}
-              className={styles.lifecycleStep}
-              data-selected={selectedStage === step.stage || undefined}
+            <LifecycleStep
               key={step.stage}
-              onClick={() => onStageChange(step.stage)}
-            >
-              <Box className={styles.lifecycleIcon} data-complete={complete || undefined}>
-                <Icon aria-hidden size={15} stroke={2.2} />
-              </Box>
-              <Stack gap={0} style={{ flex: 1 }}>
-                <Text fw={650} size="sm">
-                  {step.label}
-                </Text>
-                <Text c="dimmed" size="xs">
-                  {step.value ? (
-                    <Timestamp value={step.value} />
-                  ) : active ? (
-                    "In progress"
-                  ) : (
-                    "Not reached"
-                  )}
-                </Text>
-              </Stack>
-              <Badge
-                color={stateColor}
-                size="xs"
-                variant={active || terminal ? "light" : "outline"}
-              >
-                {stateLabel}
-              </Badge>
-            </UnstyledButton>
+              icon={Icon}
+              label={step.label}
+              time={step.value}
+              status={stateLabel}
+              color={stateColor}
+              complete={complete}
+              highlighted={active || terminal}
+              selected={selectedStage === step.stage}
+              onSelect={() => onStageChange(step.stage)}
+              missingTime={active ? "In progress" : "Not reached"}
+            />
           );
         })}
+        <CancellationStep
+          cancellation={promotion.cancellation}
+          selected={selectedStage === "cancellation"}
+          onSelect={() => onStageChange("cancellation")}
+        />
       </Stack>
-      <PromotionLifecycleStageDetail
-        detail={selectedStep.detail}
-        promotion={promotion}
-        stage={selectedStep.stage}
-        status={selectedStep.status}
-        value={selectedStep.value}
-      />
+      {selectedStep ? (
+        <PromotionLifecycleStageDetail
+          detail={selectedStep.detail}
+          promotion={promotion}
+          stage={selectedStep.stage}
+          status={selectedStep.status}
+          value={selectedStep.value}
+        />
+      ) : (
+        <CancellationDetail
+          cancellation={promotion.cancellation}
+          subject="Promotion"
+          outcome={promotion.kargoOutcome?.phase}
+          finishedAt={promotion.kargoOutcome?.observedAt}
+        />
+      )}
     </Stack>
   );
 }
 
 function promotionLifecycleSteps(promotion: Promotion): PromotionLifecycleStep[] {
-  const preparation = promotionPreparationStep(promotion);
-  const reviewStatus = promotionReviewStatus(promotion);
-  const deliveryStatus = promotionDeliveryStatus(promotion);
-  const executionStatus = promotionExecutionStatus(promotion);
-  const reviewWaiting =
-    promotion.status === "creating" ||
-    promotion.status === "preparing" ||
-    preparation.state === "error";
-
-  return [
+  const delivery = promotionDeliveryStatus(promotion);
+  const steps: PromotionLifecycleStep[] = [
     {
-      detail: deliveryStatus.description,
+      detail: delivery.description,
       icon: IconTruckDelivery,
       label: "Kargo delivery",
       stage: "delivery",
-      state: promotionLifecycleState(deliveryStatus),
-      status: deliveryStatus,
-      value: deliveryStatus.recordedAt,
+      state: promotionLifecycleState(delivery),
+      status: delivery,
+      value: delivery.recordedAt,
     },
-    preparation,
-    {
-      detail: reviewStatus.description,
+  ];
+
+  if (promotion.reviewRequired) {
+    const preparation = promotionPreparationStep(promotion);
+    const review = promotionReviewStatus(promotion);
+    const waiting =
+      promotion.cancellation.state === "not-requested" &&
+      (promotion.status === "creating" ||
+        promotion.status === "preparing" ||
+        preparation.state === "error");
+    steps.push(preparation, {
+      detail: review.description,
       icon: IconChecklist,
       label: "Review",
       stage: "review",
-      state: reviewWaiting ? "waiting" : promotionLifecycleState(reviewStatus),
-      status: reviewStatus,
-      value:
-        reviewStatus.recordedAt ??
-        promotion.preparationCompletedAt ??
-        (!promotion.reviewRequired ? promotion.createdAt : undefined),
-    },
-    {
-      detail: executionStatus.description,
-      icon: IconPlayerPlay,
-      label: "Kargo execution",
-      stage: "execution",
-      state: promotionLifecycleState(executionStatus),
-      status: executionStatus,
-      value: executionStatus.recordedAt,
-    },
-  ];
+      state: waiting ? "waiting" : promotionLifecycleState(review),
+      status: review,
+      value: review.recordedAt ?? promotion.preparationCompletedAt,
+    });
+  }
+
+  const execution = promotionExecutionStatus(promotion);
+  steps.push({
+    detail: execution.description,
+    icon: IconPlayerPlay,
+    label: "Kargo execution",
+    stage: "execution",
+    state: promotionLifecycleState(execution),
+    status: execution,
+    value: execution.recordedAt,
+  });
+  return steps;
 }
 
 function currentPromotionLifecycleStage(
@@ -587,11 +628,24 @@ function promotionLifecycleStageLabel(stage: PromotionLifecycleStage) {
       return "Kargo delivery";
     case "execution":
       return "Kargo execution";
+    case "cancellation":
+      return "Cancellation";
   }
 }
 
 function promotionPreparationStep(promotion: Promotion): PromotionLifecycleStep {
   const run = promotion.preparationRun;
+  if (!run && promotion.cancellation.state !== "not-requested" && promotion.reviewRequired) {
+    const detail = "Cancellation stopped review preparation before a Run started.";
+    return {
+      detail,
+      icon: IconLoader2,
+      label: "Review preparation",
+      stage: "preparation",
+      state: "terminal",
+      status: { color: "gray", description: detail, label: "Stopped" },
+    };
+  }
   if (!run) {
     const deliveryComplete =
       promotion.source === "kargo" || promotion.creationDispatch.phase === "delivered";
@@ -648,7 +702,8 @@ function promotionPreparationStep(promotion: Promotion): PromotionLifecycleStep 
 
 function promotionLifecycleState(status: PromotionStatusPresentation): PromotionLifecycleState {
   if (status.color === "red") return "error";
-  if (status.label === "Expired") return "terminal";
+  if (["Expired", "Stopped", "Closed", "Aborted", "Skipped"].includes(status.label))
+    return "terminal";
   if (status.label === "Not required") return "complete";
   if (status.color === "green") return "complete";
   if (status.color === "blue" || status.color === "cyan" || status.color === "yellow") {
@@ -657,93 +712,88 @@ function promotionLifecycleState(status: PromotionStatusPresentation): Promotion
   return "waiting";
 }
 
-function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
+function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stage = promotion.stageSnapshot;
   const enrichment = stage.enrichment;
   const review = promotion.reviewContext;
-  const policy = promotion.policySnapshot;
-
+  const git = review?.git;
   return (
-    <Stack gap="md">
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-        <Fact
-          label="Integration"
-          value={
+    <Stack gap="lg">
+      {review && git && (
+        <DetailGrid>
+          <CommitDetails
+            label="Base revision"
+            commit={git.baseCommit}
+            repositoryId={review.repositoryId}
+          />
+          <CommitDetails
+            label="Candidate revision"
+            commit={git.candidateCommit}
+            repositoryId={review.repositoryId}
+          />
+        </DetailGrid>
+      )}
+      <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
+      {promotion.selectedFreight && <SelectedFreight freight={promotion.selectedFreight} />}
+      <Stack component="section" gap="lg">
+        <SectionHeader title="Promotion context" />
+        <DetailGrid>
+          <DetailFact label="Integration">
             <Anchor
               component={Link}
               to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
             >
               {promotion.integration}
             </Anchor>
-          }
-        />
-        <Fact label="Project" value={<PromotionProjectLink fw={400} project={stage} />} />
-        <Fact label="Stage" value={<PromotionStageLink fw={400} stage={stage} />} />
-        <Fact label="Policy snapshot" value={policy.effectiveMode} />
-        {promotion.expiresAt ? (
-          <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
-        ) : null}
-      </SimpleGrid>
-      {enrichment ? (
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-          {enrichment.application ? (
-            <Fact
-              label="Application"
-              value={
-                <Anchor
-                  component={Link}
-                  to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
-                >
-                  {enrichment.application}
-                </Anchor>
-              }
-            />
-          ) : null}
-          {enrichment.environment ? (
-            <Fact label="Environment" value={enrichment.environment} />
-          ) : null}
-        </SimpleGrid>
-      ) : null}
-      {review ? (
-        <>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-            <Fact
-              label="Repository"
-              value={
+          </DetailFact>
+          <DetailFact label="Project">
+            <PromotionProjectLink fw={400} project={stage} />
+          </DetailFact>
+          <DetailFact label="Stage">
+            <PromotionStageLink fw={400} stage={stage} />
+          </DetailFact>
+          <DetailFact label="Policy snapshot">{promotion.policySnapshot.effectiveMode}</DetailFact>
+          {promotion.expiresAt && (
+            <DetailFact label="Review deadline">
+              <Timestamp value={promotion.expiresAt} />
+            </DetailFact>
+          )}
+          {enrichment?.application && (
+            <DetailFact label="Application">
+              <Anchor
+                component={Link}
+                to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
+              >
+                {enrichment.application}
+              </Anchor>
+            </DetailFact>
+          )}
+          {enrichment?.environment && (
+            <DetailFact label="Environment">{enrichment.environment}</DetailFact>
+          )}
+          {review && (
+            <>
+              <DetailFact label="Repository">
                 <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
                   {review.repositorySnapshot.name}
                 </Anchor>
-              }
-            />
-            <Fact label="Target branch" value={review.targetBranch} />
-            <Box style={{ gridColumn: "1 / -1" }}>
-              <Fact
-                label="Candidate branch"
-                value={review.git?.candidateBranch ?? "Waiting for Kargo"}
-              />
-            </Box>
-          </SimpleGrid>
-          {review.git ? (
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-              <Revision
-                commit={review.git.baseCommit}
-                label="Base revision"
-                repositoryId={review.repositoryId}
-              />
-              <Revision
-                commit={review.git.candidateCommit}
-                label="Candidate revision"
-                repositoryId={review.repositoryId}
-              />
-            </SimpleGrid>
-          ) : null}
-        </>
-      ) : (
-        <Alert color="blue" title="Kargo-native Promotion">
-          This Promotion has no Slipramp Repository review context. Kargo received only the exact
-          Stage and Freight identity.
-        </Alert>
-      )}
+              </DetailFact>
+              <DetailFact label="Target branch">{review.targetBranch}</DetailFact>
+              <DetailFact label="Candidate branch">
+                {git?.candidateBranch ??
+                  (promotionIsActive(promotion) && promotion.cancellation.state === "not-requested"
+                    ? "Waiting for Kargo"
+                    : "Not recorded")}
+              </DetailFact>
+            </>
+          )}
+        </DetailGrid>
+        {!review && (
+          <Text size="sm" c="dimmed">
+            This Kargo-native Promotion uses the Stage and Freight directly.
+          </Text>
+        )}
+      </Stack>
     </Stack>
   );
 }
@@ -769,14 +819,19 @@ function PromotionWorkspace({
   const activeView = selectedPromotionDetailView(searchParams, automaticView);
   const requestedView = searchParams.get(promotionDetailSearchParamNames.view);
   const lifecycleSteps = promotionLifecycleSteps(promotion);
-  const activeLifecycleStage = currentPromotionLifecycleStage(lifecycleSteps);
+  const activeLifecycleStage =
+    promotion.cancellation.state === "not-requested"
+      ? currentPromotionLifecycleStage(lifecycleSteps)
+      : "cancellation";
   const selectedLifecycleStage = selectedPromotionLifecycleStage(
     searchParams,
+    lifecycleSteps.map((step) => step.stage),
     activeLifecycleStage,
   );
   const requestedLifecycleStage = searchParams.get(promotionDetailSearchParamNames.stage);
-  const selectedLifecycleStep =
-    lifecycleSteps[promotionLifecycleStages.indexOf(selectedLifecycleStage)] ?? lifecycleSteps[0]!;
+  const selectedLifecycleStep = lifecycleSteps.find(
+    (step) => step.stage === selectedLifecycleStage,
+  );
 
   useEffect(() => {
     if (requestedView === null || requestedView === activeView) return;
@@ -825,7 +880,13 @@ function PromotionWorkspace({
           <Accordion.Control>
             <Group justify="space-between" pr="sm" wrap="nowrap">
               <Text fw={650}>Lifecycle</Text>
-              <Badge color={selectedLifecycleStep.status.color} variant="light">
+              <Badge
+                color={
+                  selectedLifecycleStep?.status.color ??
+                  (promotion.cancellation.state === "requested" ? "yellow" : "gray")
+                }
+                variant="light"
+              >
                 {promotionLifecycleStageLabel(selectedLifecycleStage)}
               </Badge>
             </Group>
@@ -907,14 +968,7 @@ function PromotionWorkspace({
           </Tabs.Panel>
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
-            <Stack gap="lg">
-              <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
-              {promotion.selectedFreight ? (
-                <SelectedFreight freight={promotion.selectedFreight} />
-              ) : null}
-              <SectionHeader title="Promotion details" />
-              <PromotionContext promotion={promotion} />
-            </Stack>
+            <PromotionDetails promotion={promotion} />
           </Tabs.Panel>
         </Tabs>
       </Paper>
@@ -930,7 +984,10 @@ function PromotionWorkspace({
 }
 
 function DiffPending({ kind, promotion }: Readonly<{ kind: string; promotion: Promotion }>) {
-  const preparing = promotion.status === "creating" || promotion.status === "preparing";
+  const preparing =
+    promotion.cancellation.state === "not-requested" &&
+    !promotion.kargoOutcome &&
+    (promotion.status === "creating" || promotion.status === "preparing");
   return (
     <Text c="dimmed">
       {preparing
@@ -1015,7 +1072,13 @@ function DecisionPanel({
   promotion,
 }: Readonly<{ canWrite: boolean; promotion: Promotion }>) {
   const navigation = useNavigation();
-  if (!promotion.decision && promotion.status !== "pending") return null;
+  if (
+    !promotion.decision &&
+    (promotion.status !== "pending" ||
+      promotion.cancellation.state !== "not-requested" ||
+      promotion.kargoOutcome)
+  )
+    return null;
 
   return (
     <Paper p="md" withBorder>
@@ -1077,38 +1140,6 @@ function DecisionPanel({
         )}
       </Stack>
     </Paper>
-  );
-}
-
-function Fact({ label, value }: Readonly<{ label: string; value: ReactNode }>) {
-  return (
-    <Stack gap={0}>
-      <Text c="dimmed" size="xs">
-        {label}
-      </Text>
-      <ContextValue>{value}</ContextValue>
-    </Stack>
-  );
-}
-
-function Revision({
-  commit,
-  label,
-  repositoryId,
-}: Readonly<{ commit?: GitCommit; label: string; repositoryId: string }>) {
-  return (
-    <Stack gap={2}>
-      <Text c="dimmed" size="xs">
-        {label}
-      </Text>
-      <ContextValue>
-        {commit ? (
-          <CommitReference commit={commit} repositoryId={repositoryId} />
-        ) : (
-          "Waiting for Kargo"
-        )}
-      </ContextValue>
-    </Stack>
   );
 }
 

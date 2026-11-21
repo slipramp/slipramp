@@ -130,7 +130,7 @@ func (s *suite) testCancellation(t *testing.T) {
 	s.assertCLIWaitOutcome(t, queuedRun.ID, api.RunOutcomeCanceled)
 
 	runningCancel := s.cancelRun(t, s.canceledRunID)
-	if runningCancel.CancellationRequestedAt == nil {
+	if runningCancel.Cancellation.RequestedAt == nil {
 		t.Fatalf("running cancellation response = %#v", runningCancel)
 	}
 	s.waitForRunOutcome(t, s.canceledRunID, api.RunOutcomeCanceled)
@@ -230,8 +230,8 @@ func (s *suite) testCancellationDuringRustFSOutage(t *testing.T) {
 
 	firstCancel := s.cancelRun(t, run.ID)
 	secondCancel := s.cancelRun(t, run.ID)
-	if firstCancel.CancellationRequestedAt == nil || secondCancel.CancellationRequestedAt == nil ||
-		!firstCancel.CancellationRequestedAt.Equal(*secondCancel.CancellationRequestedAt) {
+	if firstCancel.Cancellation.RequestedAt == nil || secondCancel.Cancellation.RequestedAt == nil ||
+		!firstCancel.Cancellation.RequestedAt.Equal(*secondCancel.Cancellation.RequestedAt) {
 		t.Fatalf("repeated cancellation changed the recorded request: first=%#v second=%#v", firstCancel, secondCancel)
 	}
 	s.waitForRunCancellationRequest(t, run.ID)

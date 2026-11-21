@@ -82,6 +82,16 @@ func (d *Database) acceptPromotionRequest(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
+	// Kargo admission can rename an object before its Controller receipt arrives.
+	// Wait for the admitted identity before treating an unmatched callback as a new Promotion.
+	unidentified, err := queries.HasUnidentifiedPromotionCreation(ctx, stageRow.ID)
+	if err != nil {
+		return promotion.Promotion{}, fmt.Errorf("check outstanding Promotion creation: %w", err)
+	}
+	if unidentified {
+		return promotion.Promotion{}, promotion.ErrCreationIdentityPending
+	}
+
 	if stage.ArchivedAt != nil {
 		return promotion.Promotion{}, promotion.ErrStageArchived
 	}
@@ -198,6 +208,13 @@ func finishExistingPromotionRequest(
 	gitContext, err := acceptance.Request.GitContext()
 	if err != nil {
 		return promotion.Promotion{}, err
+	}
+	if existing.Cancellation.RequestedAt != nil {
+		if existing.StageSnapshot.Project != acceptance.Request.Project || existing.StageSnapshot.Name != acceptance.Request.Stage ||
+			(existing.RequestDigest != (promotion.RequestDigest{}) && existing.RequestDigest != acceptance.RequestDigest) {
+			return promotion.Promotion{}, promotion.ErrIdentityConflict
+		}
+		return existing, nil
 	}
 	if existing.RequestDigest != (promotion.RequestDigest{}) {
 		if existing.RequestDigest != acceptance.RequestDigest {

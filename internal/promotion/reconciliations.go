@@ -21,6 +21,7 @@ type ReconciliationClaim struct {
 }
 
 type ReconciliationCommand struct {
+	Recovery    *CreationCommand
 	PromotionID uuid.UUID
 	Source      PromotionSource
 	Integration string
@@ -31,13 +32,14 @@ type ReconciliationCommand struct {
 }
 
 type ReconciliationReport struct {
-	PromotionID uuid.UUID
-	ClusterName string
-	KargoName   string
-	KargoUID    string
-	Phase       *KargoPhase
-	Diagnostic  *string
-	ObservedAt  time.Time
+	CancellationAcknowledged bool
+	PromotionID              uuid.UUID
+	ClusterName              string
+	KargoName                string
+	KargoUID                 string
+	Phase                    *KargoPhase
+	Diagnostic               *string
+	ObservedAt               time.Time
 }
 
 type ReconciliationStore interface {
@@ -76,8 +78,23 @@ func (s *ReconciliationService) Next(
 		return ReconciliationCommand{}, err
 	}
 
+	command := reconciliationCommand(record)
+	if err := command.Validate(); err != nil {
+		return ReconciliationCommand{}, err
+	}
+	if record.StageSnapshot.ClusterName != clusterName {
+		return ReconciliationCommand{}, fmt.Errorf(
+			"%w: claimed Promotion belongs to another cluster",
+			ErrInvalid,
+		)
+	}
+
+	return command, nil
+}
+
+func reconciliationCommand(record Promotion) ReconciliationCommand {
 	stage := record.StageSnapshot
-	command := ReconciliationCommand{
+	return ReconciliationCommand{
 		PromotionID: record.ID,
 		Source:      record.Source,
 		Integration: record.Integration,
@@ -86,17 +103,6 @@ func (s *ReconciliationService) Next(
 		KargoName:   record.ExternalPromotionID,
 		KargoUID:    record.KargoExecution.PromotionUID,
 	}
-	if err := command.Validate(); err != nil {
-		return ReconciliationCommand{}, err
-	}
-	if stage.ClusterName != clusterName {
-		return ReconciliationCommand{}, fmt.Errorf(
-			"%w: claimed Promotion belongs to another cluster",
-			ErrInvalid,
-		)
-	}
-
-	return command, nil
 }
 
 func (s *ReconciliationService) Report(
@@ -144,6 +150,13 @@ func (c ReconciliationCommand) Validate() error {
 	if err := kubevalidate.DNSSubdomain("Kargo Promotion name", c.KargoName); err != nil {
 		return invalid(err)
 	}
+	if recovery := c.Recovery; recovery != nil {
+		if c.Source != SourceSlipramp || c.KargoUID != nil || recovery.PromotionID != c.PromotionID ||
+			recovery.Project != c.Project || recovery.Integration != c.Integration || recovery.Stage != c.Stage {
+			return fmt.Errorf("%w: cancellation recovery identity does not match the Promotion", ErrInvalid)
+		}
+		return recovery.Validate()
+	}
 	if c.KargoUID == nil {
 		if c.Source != SourceKargo {
 			return fmt.Errorf("%w: Slipramp-originated reconciliation requires a Kargo UID", ErrInvalid)
@@ -169,6 +182,9 @@ func (r ReconciliationReport) Validate() error {
 	}
 	if r.ObservedAt.IsZero() {
 		return fmt.Errorf("%w: reconciliation report time is required", ErrInvalid)
+	}
+	if r.CancellationAcknowledged && (r.Phase == nil || *r.Phase != KargoPhaseAborted) {
+		return fmt.Errorf("%w: cancellation acknowledgment requires an aborted Promotion", ErrInvalid)
 	}
 	if r.Phase == nil {
 		if r.Diagnostic != nil {

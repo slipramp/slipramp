@@ -7,6 +7,7 @@ SELECT
     candidate_revision,
     status,
     updated_at,
+    cancellation_confirmed_at,
     kargo_outcome_observed_at
 FROM promotions
 WHERE repository_id = $1

@@ -42,10 +42,23 @@ test("updates the view without losing filters and omits the default", () => {
 });
 
 test("lifecycle selection validates stages and preserves review state", () => {
-  const current = new URLSearchParams("view=argo&stage=delivery&resourceQuery=deployment");
-  assert.equal(selectedPromotionLifecycleStage(current, "review"), "delivery");
+  const reviewed = ["delivery", "preparation", "review", "execution"];
+  const automatic = ["delivery", "execution"];
+  for (const stage of ["preparation", "review"]) {
+    const requested = new URLSearchParams({ stage });
+    assert.equal(selectedPromotionLifecycleStage(requested, reviewed, "delivery"), stage);
+    assert.equal(selectedPromotionLifecycleStage(requested, automatic, "delivery"), "delivery");
+  }
+  const cancellation = new URLSearchParams("stage=cancellation");
   assert.equal(
-    selectedPromotionLifecycleStage(new URLSearchParams("stage=unknown"), "execution"),
+    selectedPromotionLifecycleStage(cancellation, automatic, "cancellation"),
+    "cancellation",
+  );
+  assert.equal(selectedPromotionLifecycleStage(cancellation, reviewed, "review"), "review");
+  const current = new URLSearchParams("view=argo&stage=delivery&resourceQuery=deployment");
+  assert.equal(selectedPromotionLifecycleStage(current, reviewed, "review"), "delivery");
+  assert.equal(
+    selectedPromotionLifecycleStage(new URLSearchParams("stage=unknown"), automatic, "execution"),
     "execution",
   );
 

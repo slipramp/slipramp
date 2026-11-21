@@ -176,16 +176,16 @@ private struct PromotionRow: View {
 
 extension Components.Schemas.Promotion {
     var statusTone: SliprampTone {
+        if cancellation.state == .completed { return .neutral }
+        if cancellation.state == .requested { return .warning }
+        if let kargoOutcome { return kargoOutcome.phase == .succeeded ? .success : .danger }
         switch status {
         case .creating, .preparing:
             return .info
         case .pending:
             return .warning
         case .approved:
-            guard let kargoOutcome else {
-                return .info
-            }
-            return kargoOutcome.phase == .succeeded ? .success : .danger
+            return .info
         case .rejected, .error:
             return .danger
         case .expired:
@@ -194,17 +194,15 @@ extension Components.Schemas.Promotion {
     }
 
     var statusSymbol: String {
+        if cancellation.state == .completed || cancellation.state == .requested { return "stop.circle" }
+        if let kargoOutcome { return kargoOutcome.phase == .succeeded ? "checkmark.circle.fill" : "xmark.octagon.fill" }
         switch status {
         case .creating, .preparing:
             return "arrow.triangle.2.circlepath"
         case .pending:
             return "checkmark.shield.fill"
         case .approved:
-            guard let kargoOutcome else {
-                return "arrow.triangle.2.circlepath"
-            }
-            return kargoOutcome.phase == .succeeded
-                ? "checkmark.circle.fill" : "xmark.octagon.fill"
+            return "arrow.triangle.2.circlepath"
         case .rejected, .error:
             return "xmark.octagon.fill"
         case .expired:

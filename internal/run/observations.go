@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/cancellation"
 )
 
 type ObservationStore interface {
@@ -63,8 +65,8 @@ func ValidateObservationTransition(current ObservationTransitionState, observati
 	if err := validateObservation(observation); err != nil {
 		return err
 	}
-	cancellation := current.cancellationStatus()
-	cancellationState, err := cancellation.CancellationState()
+	currentCancellation := current.cancellationStatus()
+	cancellationState, err := currentCancellation.CancellationState()
 	if err != nil {
 		return ErrObservationConflict
 	}
@@ -75,14 +77,14 @@ func ValidateObservationTransition(current ObservationTransitionState, observati
 		return ErrObservationConflict
 	}
 	if observation.Outcome != nil && *observation.Outcome == OutcomeCanceled {
-		if (cancellationState != CancellationStateRequested &&
-			cancellationState != CancellationStateCompleted) ||
+		if (cancellationState != cancellation.Requested &&
+			cancellationState != cancellation.Completed) ||
 			!reasonIs(observation.Reason, ReasonCancelRequested) {
 			return ErrObservationConflict
 		}
 	}
 
-	nextCancellation := cancellation
+	nextCancellation := currentCancellation
 	nextCancellation.Phase = observation.Phase
 	nextCancellation.Outcome = observation.Outcome
 	if current.Phase != PhaseFinished && observation.Phase == PhaseFinished {
@@ -91,7 +93,7 @@ func ValidateObservationTransition(current ObservationTransitionState, observati
 			nextCancellation.FinishedAt = &observation.ObservedAt
 		}
 	}
-	if err := ValidateCancellationTransition(cancellation, nextCancellation); err != nil {
+	if err := ValidateCancellationTransition(currentCancellation, nextCancellation); err != nil {
 		return ErrObservationConflict
 	}
 

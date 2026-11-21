@@ -14,12 +14,13 @@ KargoPromotionStatus:
   description: >-
     Effective status returned to the polling Kargo PromotionTask. Gated means
     the durable Promotion is approved but its repository-defined Gates have not
-    released execution.
+    released execution. Canceling keeps the callback waiting for the Kargo abort.
   enum:
     - creating
     - preparing
     - pending
     - gated
+    - canceling
     - approved
     - rejected
     - expired
@@ -1057,7 +1058,7 @@ PromotionStagePolicy:
       minLength: 1
       maxLength: 4096
     updatedBy:
-      $ref: ./runs.yaml#/RunActor
+      $ref: ./common.yaml#/ActorSnapshot
     updatedAt:
       type: string
       format: date-time
@@ -1096,7 +1097,7 @@ PromotionDecision:
       minLength: 1
       maxLength: 4096
     decidedBy:
-      $ref: ./runs.yaml#/RunActor
+      $ref: ./common.yaml#/ActorSnapshot
     decidedAt:
       type: string
       format: date-time
@@ -1273,6 +1274,7 @@ PromotionCreationDispatchPhase:
   enum:
     - not-applicable
     - awaiting-delivery
+    - stopped
     - delivered
     - failed
 
@@ -1315,6 +1317,7 @@ Promotion:
     - stageId
     - stageSnapshot
     - policySnapshot
+    - cancellation
     - reviewRequired
     - status
     - gates
@@ -1348,6 +1351,8 @@ Promotion:
       $ref: "#/PromotionStagePolicy"
     selectedFreight:
       $ref: "#/PromotionFreightItem"
+    cancellation:
+      $ref: ./common.yaml#/Cancellation
     reviewRequired:
       type: boolean
     status:
@@ -1392,7 +1397,7 @@ Promotion:
     argoDiffArtifact:
       $ref: ./artifacts.yaml#/Artifact
     requestedBy:
-      $ref: ./runs.yaml#/RunActor
+      $ref: ./common.yaml#/ActorSnapshot
     decision:
       $ref: "#/PromotionDecision"
     createdAt:

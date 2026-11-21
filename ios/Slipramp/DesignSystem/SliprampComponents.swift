@@ -330,3 +330,21 @@ struct SliprampMascot: View {
         .accessibilityHidden(true)
     }
 }
+
+struct CancellationTimelineRows: View {
+    let cancellation: Components.Schemas.Cancellation
+
+    var body: some View {
+        if cancellation.state != .notRequested {
+            LabeledContent("Cancellation", value: cancellation.state.rawValue.capitalized)
+            if let requestedAt = cancellation.requestedAt {
+                LabeledContent("Requested") {
+                    Text(requestedAt, format: .dateTime.month().day().hour().minute().second())
+                }
+            }
+            if let actor = cancellation.requestedBy {
+                LabeledContent("Requested by", value: actor.displayName)
+            }
+        }
+    }
+}

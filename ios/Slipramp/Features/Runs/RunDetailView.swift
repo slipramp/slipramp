@@ -285,17 +285,6 @@ struct RunDetailView: View {
             if let state = run.observationState {
                 LabeledContent("Observation", value: display(state.rawValue))
             }
-            LabeledContent("Cancellation", value: display(run.cancellationState.rawValue))
-            if let requestedAt = run.cancellationRequestedAt {
-                LabeledContent("Requested") {
-                    Text(requestedAt, style: .relative)
-                        .foregroundStyle(
-                            run.cancellationState == .completed
-                                ? SliprampTone.success.color
-                                : SliprampTone.warning.color
-                        )
-                }
-            }
             if let operationError = model.operationError {
                 SliprampCallout(message: operationError, tone: .danger)
             }
@@ -572,6 +561,7 @@ struct RunDetailView: View {
             TimestampRow(label: "Assigned", date: run.assignedAt)
             TimestampRow(label: "Preparing", date: run.preparingAt)
             TimestampRow(label: "Started", date: run.startedAt)
+            CancellationTimelineRows(cancellation: run.cancellation)
             TimestampRow(label: "Finished", date: run.finishedAt)
         }
     }

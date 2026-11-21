@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/cancellation"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -37,7 +38,7 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 		"connected",
 		at.Add(-30*time.Second),
 	)
-	cancelingRun.Cancellation = run.CancellationStateRequested
+	cancelingRun.Cancellation = cancellation.Requested
 	store := &serviceStore{
 		repositories: []repository.Repository{
 			failedRepository(uuid.MustParse("00000000-0000-0000-0000-000000000201"), "infrastructure", at.Add(-10*time.Minute)),
@@ -367,7 +368,7 @@ func activeRun(id uuid.UUID, phase run.Phase, clusterName string, observedAt tim
 		ActionName:   "sync",
 		ClusterName:  clusterName,
 		CreatedAt:    observedAt.Add(-time.Minute),
-		Cancellation: run.CancellationStateNotRequested,
+		Cancellation: cancellation.NotRequested,
 		Status: run.ObservationStatus{
 			Phase: phase,
 		},

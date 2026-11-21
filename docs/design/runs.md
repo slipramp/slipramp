@@ -70,6 +70,10 @@ idempotent and cannot move a Run or Target checkpoint backward.
 
 ## Operator cancellation
 
+Runs and Promotions both expose a `cancellation` object with `state` and, once
+requested, `requestedAt` and the original `requestedBy` actor snapshot.
+Posting to the resource's `/cancel` endpoint requires its write permission.
+
 Operator cancellation is derived from lifecycle phase, terminal outcome and
 reason, and `cancellation_requested_at`; it is not another persisted status or
 execution phase. The derived states are:

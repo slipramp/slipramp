@@ -322,6 +322,14 @@ SELECT *
 FROM promotions
 WHERE id = sqlc.arg(id);
 
+-- name: HasUnidentifiedPromotionCreation :one
+SELECT EXISTS (
+    SELECT 1 FROM promotions
+    WHERE stage_id = sqlc.arg(stage_id)
+      AND source = 'slipramp' AND dispatch_attempt_count > 0
+      AND dispatched_at IS NULL AND dispatch_failed_at IS NULL AND cancellation_confirmed_at IS NULL
+);
+
 -- name: LockPromotionByExternalIdentity :one
 SELECT *
 FROM promotions
@@ -351,7 +359,8 @@ SET request_digest = sqlc.arg(request_digest),
     END,
     message = NULL,
     updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at)::timestamptz)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND source = 'slipramp'
   AND ((review_required AND status = 'creating') OR (NOT review_required AND status = 'approved'))
   AND request_digest IS NULL
@@ -360,7 +369,8 @@ RETURNING *;
 -- name: LockNextPromotionCreationDispatch :one
 SELECT *
 FROM promotions
-WHERE source = 'slipramp'
+WHERE cancellation_requested_at IS NULL
+  AND source = 'slipramp'
   AND next_dispatch_at <= sqlc.arg(due_at)
   AND dispatched_at IS NULL
   AND dispatch_failed_at IS NULL
@@ -421,7 +431,8 @@ FOR UPDATE;
 
 -- name: UpdatePromotionCreationDispatch :one
 UPDATE promotions
-SET external_promotion_id = sqlc.arg(external_promotion_id),
+SET cancellation_confirmed_at = sqlc.narg(cancellation_confirmed_at),
+    external_promotion_id = sqlc.arg(external_promotion_id),
     status = sqlc.arg(status),
     message = sqlc.narg(message),
     next_dispatch_at = sqlc.narg(next_dispatch_at),
@@ -441,7 +452,8 @@ RETURNING *;
 -- name: LockNextPromotionReconciliation :one
 SELECT *
 FROM promotions
-WHERE next_reconciliation_at <= sqlc.arg(due_at)
+WHERE cancellation_requested_at IS NULL
+  AND next_reconciliation_at <= sqlc.arg(due_at)
   AND kargo_outcome_phase IS NULL
   AND (
       (status = 'approved' AND (source = 'kargo' OR kargo_promotion_uid IS NOT NULL))
@@ -467,7 +479,8 @@ RETURNING *;
 
 -- name: UpdatePromotionReconciliation :one
 UPDATE promotions
-SET status = sqlc.arg(status),
+SET cancellation_confirmed_at = sqlc.narg(cancellation_confirmed_at),
+    status = sqlc.arg(status),
     message = sqlc.narg(message),
     kargo_promotion_uid = sqlc.narg(kargo_promotion_uid),
     next_reconciliation_at = sqlc.narg(next_reconciliation_at),
@@ -490,6 +503,11 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR base_revision = sqlc.narg(commit_sha)
       OR candidate_revision = sqlc.narg(commit_sha)
   )
+  AND (sqlc.narg(cancellation_state)::text IS NULL OR sqlc.narg(cancellation_state) = CASE
+      WHEN cancellation_requested_at IS NULL THEN 'not-requested'
+      WHEN cancellation_confirmed_at IS NOT NULL THEN 'completed'
+      WHEN kargo_outcome_phase IS NOT NULL OR dispatch_failed_at IS NOT NULL THEN 'overtaken'
+      ELSE 'requested' END)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (
       sqlc.narg(creation_dispatch)::text IS NULL
@@ -497,9 +515,12 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR (
           sqlc.narg(creation_dispatch) = 'awaiting-delivery'
           AND source = 'slipramp'
+          AND next_dispatch_at IS NOT NULL
           AND dispatched_at IS NULL
           AND dispatch_failed_at IS NULL
       )
+      OR (sqlc.narg(creation_dispatch) = 'stopped' AND source = 'slipramp' AND next_dispatch_at IS NULL
+          AND dispatched_at IS NULL AND dispatch_failed_at IS NULL)
       OR (sqlc.narg(creation_dispatch) = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
       OR (sqlc.narg(creation_dispatch) = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
   )
@@ -519,6 +540,11 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR base_revision = sqlc.narg(commit_sha)
       OR candidate_revision = sqlc.narg(commit_sha)
   )
+  AND (sqlc.narg(cancellation_state)::text IS NULL OR sqlc.narg(cancellation_state) = CASE
+      WHEN cancellation_requested_at IS NULL THEN 'not-requested'
+      WHEN cancellation_confirmed_at IS NOT NULL THEN 'completed'
+      WHEN kargo_outcome_phase IS NOT NULL OR dispatch_failed_at IS NOT NULL THEN 'overtaken'
+      ELSE 'requested' END)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (
       sqlc.narg(creation_dispatch)::text IS NULL
@@ -526,9 +552,12 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
       OR (
           sqlc.narg(creation_dispatch) = 'awaiting-delivery'
           AND source = 'slipramp'
+          AND next_dispatch_at IS NOT NULL
           AND dispatched_at IS NULL
           AND dispatch_failed_at IS NULL
       )
+      OR (sqlc.narg(creation_dispatch) = 'stopped' AND source = 'slipramp' AND next_dispatch_at IS NULL
+          AND dispatched_at IS NULL AND dispatch_failed_at IS NULL)
       OR (sqlc.narg(creation_dispatch) = 'delivered' AND source = 'slipramp' AND dispatched_at IS NOT NULL)
       OR (sqlc.narg(creation_dispatch) = 'failed' AND source = 'slipramp' AND dispatch_failed_at IS NOT NULL)
   )
@@ -538,21 +567,23 @@ WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repos
   AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
   AND (sqlc.narg(project)::text IS NULL OR stage_snapshot->>'project' = sqlc.narg(project))
   AND (sqlc.narg(application)::text IS NULL OR stage_snapshot #>> '{enrichment,application}' = sqlc.narg(application))
-ORDER BY (status = 'pending') DESC, created_at DESC, id DESC
+ORDER BY (status = 'pending' AND cancellation_requested_at IS NULL) DESC, created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset)::bigint;
 
 -- name: CountPendingPromotionsByStage :many
 SELECT stage_id, count(*) AS pending_promotion_count
 FROM promotions
-WHERE status = 'pending'
+WHERE cancellation_requested_at IS NULL
+  AND status = 'pending'
   AND stage_id = ANY(sqlc.arg(stage_ids)::uuid[])
 GROUP BY stage_id;
 
 -- name: GetPromotionAwaitingDispatch :one
 SELECT *
 FROM promotions
-WHERE review_required
+WHERE cancellation_requested_at IS NULL
+  AND review_required
   AND status = 'preparing'
   AND repository_id IS NOT NULL
   AND repository_snapshot IS NOT NULL
@@ -570,7 +601,8 @@ UPDATE promotions
 SET preparation_repository_id = sqlc.arg(preparation_repository_id),
     preparation_catalog_revision_id = sqlc.arg(preparation_catalog_revision_id),
     updated_at = sqlc.arg(updated_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND review_required
   AND status = 'preparing'
   AND preparation_run_id IS NULL
@@ -587,7 +619,8 @@ RETURNING *;
 SELECT promotions.*
 FROM promotions
 JOIN runs ON runs.id = promotions.preparation_run_id
-WHERE promotions.review_required
+WHERE promotions.cancellation_requested_at IS NULL
+  AND promotions.review_required
   AND promotions.status = 'preparing'
   AND promotions.repository_id IS NOT NULL
   AND promotions.repository_snapshot IS NOT NULL
@@ -609,7 +642,8 @@ SET preparation_failure_count = sqlc.arg(preparation_failure_count),
     preparation_completed_at = sqlc.narg(preparation_completed_at),
     message = sqlc.arg(message)::text,
     updated_at = sqlc.arg(updated_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND review_required
   AND status = sqlc.arg(expected_status)
   AND preparation_failure_count = sqlc.arg(expected_failure_count)
@@ -624,7 +658,8 @@ SET preparation_run_id = sqlc.arg(preparation_run_id),
     next_preparation_attempt_at = NULL,
     message = NULL,
     updated_at = sqlc.arg(created_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND review_required
   AND status = 'preparing'
   AND preparation_repository_id = sqlc.arg(repository_id)
@@ -643,7 +678,8 @@ SET status = 'pending',
     argo_diff_artifact_id = sqlc.arg(argo_diff_artifact_id),
     preparation_completed_at = sqlc.arg(preparation_completed_at),
     updated_at = sqlc.arg(updated_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND review_required
   AND status = 'preparing'
   AND preparation_run_id = sqlc.arg(preparation_run_id)
@@ -656,7 +692,8 @@ SET status = 'error',
     message = sqlc.arg(message),
     preparation_completed_at = sqlc.arg(preparation_completed_at),
     updated_at = sqlc.arg(updated_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND review_required
   AND status = 'preparing'
   AND preparation_run_id = sqlc.arg(preparation_run_id)
@@ -665,7 +702,8 @@ RETURNING *;
 -- name: LockPendingPromotion :one
 SELECT *
 FROM promotions
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND status = 'pending'
 FOR UPDATE;
 
@@ -680,7 +718,8 @@ SET status = sqlc.arg(status),
         ELSE NULL
     END,
     updated_at = sqlc.arg(decided_at)::timestamptz
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND status = 'pending'
 RETURNING *;
 
@@ -712,7 +751,8 @@ UPDATE promotions
 SET status = 'expired',
     message = 'The review window expired before a decision was recorded.',
     updated_at = sqlc.arg(expired_at)
-WHERE status = 'pending'
+WHERE cancellation_requested_at IS NULL
+  AND status = 'pending'
   AND expires_at <= sqlc.arg(expired_at)
 RETURNING *;
 
@@ -721,7 +761,36 @@ UPDATE promotions
 SET status = 'expired',
     message = 'The review window expired before a decision was recorded.',
     updated_at = sqlc.arg(expired_at)
-WHERE id = sqlc.arg(id)
+WHERE cancellation_requested_at IS NULL
+  AND id = sqlc.arg(id)
   AND status = 'pending'
   AND expires_at <= sqlc.arg(expired_at)
+RETURNING *;
+
+-- name: RequestPromotionCancellation :one
+UPDATE promotions
+SET next_dispatch_at = NULL,
+    next_preparation_attempt_at = NULL,
+    next_reconciliation_at = NULL,
+    cancellation_requested_at = sqlc.arg(requested_at),
+    cancellation_requested_by_id = sqlc.arg(actor_id),
+    cancellation_requested_by_snapshot = sqlc.arg(actor_snapshot),
+    cancellation_confirmed_at = sqlc.narg(confirmed_at),
+    next_cancel_attempt_at = sqlc.arg(requested_at),
+    updated_at = GREATEST(updated_at, sqlc.arg(requested_at)::timestamptz)
+WHERE id = sqlc.arg(id) AND cancellation_requested_at IS NULL
+RETURNING *;
+
+-- name: ClaimPromotionCancellation :one
+UPDATE promotions
+SET next_cancel_attempt_at = sqlc.arg(next_attempt_at)
+WHERE id = (
+    SELECT p.id FROM promotions AS p
+    WHERE p.stage_snapshot->>'cluster' = sqlc.arg(cluster_name)::text
+      AND p.next_cancel_attempt_at <= sqlc.arg(due_at)
+      AND p.cancellation_confirmed_at IS NULL
+      AND p.kargo_outcome_phase IS NULL AND p.dispatch_failed_at IS NULL
+    ORDER BY p.next_cancel_attempt_at, p.id
+    FOR UPDATE SKIP LOCKED LIMIT 1
+)
 RETURNING *;

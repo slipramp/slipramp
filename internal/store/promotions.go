@@ -652,6 +652,10 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("decode Promotion requesting actor: %w", err)
 	}
+	canceler, err := actorFromDatabase(row.CancellationRequestedByID, row.CancellationRequestedBySnapshot)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
 	digest, err := promotionRequestDigest(row.RequestDigest)
 	if err != nil {
 		return promotion.Promotion{}, err
@@ -670,7 +674,8 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 			DecidedAt: applicationTime(row.DecidedAt),
 			ExpiresAt: applicationTime(row.ExpiresAt),
 		},
-		Message: row.Message,
+		Cancellation: promotion.Cancellation{RequestedAt: applicationTime(row.CancellationRequestedAt), RequestedBy: canceler, ConfirmedAt: applicationTime(row.CancellationConfirmedAt)},
+		Message:      row.Message,
 		CreationDispatch: promotion.CreationDispatchState{
 			AttemptCount:  int(row.DispatchAttemptCount),
 			NextAttemptAt: applicationTime(row.NextDispatchAt),

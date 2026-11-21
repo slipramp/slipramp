@@ -452,29 +452,27 @@ func runResponse(
 		Source:                 apiRunSource(record.Source),
 		RerunOfRunID:           record.RerunOfRunID,
 		RerunMode:              apiRerunMode(record.RerunMode),
-		CreatedBy:              apiRunActor(record.CreatedBy),
-		CanceledBy:             apiRunActor(record.CanceledBy),
+		CreatedBy:              apiActorSnapshot(record.CreatedBy),
 		Review: api.RunReview{
 			State:     api.RunReviewState(record.Review.State),
-			DecidedBy: apiRunActor(record.Review.DecidedBy),
+			DecidedBy: apiActorSnapshot(record.Review.DecidedBy),
 			DecidedAt: record.Review.DecidedAt,
 			Comment:   record.Review.Comment,
 		},
-		Inputs:                  runInputResponse(record.Snapshot, commits),
-		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
-		CreatedAt:               record.CreatedAt,
-		AssignedAt:              record.AssignedAt,
-		PreparingAt:             record.PreparingAt,
-		StartedAt:               record.StartedAt,
-		FinishedAt:              record.FinishedAt,
-		LastObservedAt:          record.LastObservedAt,
-		CancellationRequestedAt: record.CancellationRequestedAt,
-		CancellationState:       api.RunCancellationState(cancellationState),
-		JobUID:                  record.JobUID,
-		Images:                  apiExecutionImages(record.Images),
-		OutcomeReason:           record.OutcomeReason,
-		OutcomeMessage:          record.OutcomeMessage,
-		ExitCode:                record.ExitCode,
+		Inputs:            runInputResponse(record.Snapshot, commits),
+		ArtifactConsumers: runArtifactConsumers(record.Snapshot),
+		CreatedAt:         record.CreatedAt,
+		AssignedAt:        record.AssignedAt,
+		PreparingAt:       record.PreparingAt,
+		StartedAt:         record.StartedAt,
+		FinishedAt:        record.FinishedAt,
+		LastObservedAt:    record.LastObservedAt,
+		Cancellation:      cancellationResponse(cancellationState, record.CancellationRequestedAt, record.CanceledBy),
+		JobUID:            record.JobUID,
+		Images:            apiExecutionImages(record.Images),
+		OutcomeReason:     record.OutcomeReason,
+		OutcomeMessage:    record.OutcomeMessage,
+		ExitCode:          record.ExitCode,
 	}, nil
 }
 
@@ -521,18 +519,6 @@ func apiRunSource(source run.Source) api.RunSource {
 	}
 
 	return response
-}
-
-func apiRunActor(value *productidentity.ActorSnapshot) *api.RunActor {
-	if value == nil {
-		return nil
-	}
-
-	return &api.RunActor{
-		PrincipalID: value.PrincipalID,
-		Kind:        api.RunActorKind(value.Kind),
-		DisplayName: value.DisplayName,
-	}
 }
 
 func (h *Handler) runResponse(ctx context.Context, record run.Run) (api.Run, error) {

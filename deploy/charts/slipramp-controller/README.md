@@ -100,10 +100,10 @@ must appear under exactly one integration. The Controller rejects overlapping
 namespace ownership at startup.
 
 For every configured Stage namespace, the chart creates a dedicated Role and
-RoleBinding. It can get, list, and promote
-`kargo.akuity.io/v1alpha1` Stage resources, get and list Freight resources, and
-create, get, and list Promotion resources for idempotent operator-started
-Promotions. No cluster-wide Kargo permission is created.
+RoleBinding. It can get, list, and promote `kargo.akuity.io/v1alpha1` Stages,
+get and list Freight, and create, get, and list Promotions. It can also patch
+Promotions to request cancellation. These permissions apply only within the
+configured namespace.
 
 ```yaml
 kargo:

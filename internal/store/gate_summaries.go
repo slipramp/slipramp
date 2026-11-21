@@ -46,6 +46,7 @@ func (d *Database) listGateSummaries(
 	summaries := make(map[uuid.UUID]gate.Summary)
 	for _, row := range rows {
 		evidence := gate.RequirementEvidence{
+			Canceled:           row.Canceled,
 			Name:               row.GateName,
 			Title:              row.Title,
 			EvaluatedAt:        applicationTime(row.EvaluatedAt),

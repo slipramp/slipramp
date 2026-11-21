@@ -30,6 +30,7 @@ func (d *Database) ListPromotionCandidateBranchReferences(
 			Status:            promotion.LifecycleState(row.Status),
 			UpdatedAt:         row.UpdatedAt.Time.UTC(),
 			KargoOutcomeAt:    applicationTime(row.KargoOutcomeObservedAt),
+			CanceledAt:        applicationTime(row.CancellationConfirmedAt),
 		})
 	}
 

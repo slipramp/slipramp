@@ -21,6 +21,7 @@ export function ReleaseGateDetails({
   const badge = gateSummaryBadges[gates.state];
   const description = gateSummaryDescription(gates.state, subject);
   const showLastEvaluated = gates.state === "waiting";
+  const showEvidence = gates.state !== "stopped";
 
   return (
     <Stack gap="md">
@@ -33,14 +34,21 @@ export function ReleaseGateDetails({
         description={description}
         title={subject === "Promotion" ? "Promotion gates" : "Release gates"}
       />
-      <Table.ScrollContainer minWidth={showLastEvaluated ? 600 : 480} type="native">
+      <Table.ScrollContainer
+        minWidth={showLastEvaluated ? 600 : showEvidence ? 480 : 260}
+        type="native"
+      >
         <Table aria-label="Gate evaluations" verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Gate</Table.Th>
               <Table.Th>Status</Table.Th>
-              <Table.Th>Current</Table.Th>
-              <Table.Th>Expected</Table.Th>
+              {showEvidence && (
+                <>
+                  <Table.Th>{gates.state === "released" ? "Value at release" : "Current"}</Table.Th>
+                  <Table.Th>Expected</Table.Th>
+                </>
+              )}
               {showLastEvaluated ? <Table.Th>Last evaluated</Table.Th> : null}
             </Table.Tr>
           </Table.Thead>
@@ -68,7 +76,12 @@ export function ReleaseGateDetails({
 }
 
 function gateSummaryDescription(state: GateSummary["state"], subject: GateSubject) {
-  if (subject !== "Run") return undefined;
+  if (subject === "Promotion") {
+    return state === "released"
+      ? "Every required gate passed when this Promotion was released."
+      : undefined;
+  }
+  if (state === "stopped") return "Cancellation ended the gate wait before this Run was released.";
   if (state === "waiting") {
     return "Run assignment requires every attached Gate to pass in the same release check.";
   }
@@ -103,16 +116,20 @@ function GateRequirementRow({
           ) : null}
         </Stack>
       </Table.Td>
-      <Table.Td>
-        {requirement.value === undefined ? (
-          <Text c="dimmed" size="sm">
-            No observation
-          </Text>
-        ) : (
-          <Code>{requirement.value}</Code>
-        )}
-      </Table.Td>
-      <Table.Td>{gateConditionLabel(requirement)}</Table.Td>
+      {requirement.state !== "stopped" && (
+        <>
+          <Table.Td>
+            {requirement.value === undefined ? (
+              <Text c="dimmed" size="sm">
+                No observation
+              </Text>
+            ) : (
+              <Code>{requirement.value}</Code>
+            )}
+          </Table.Td>
+          <Table.Td>{gateConditionLabel(requirement)}</Table.Td>
+        </>
+      )}
       {showLastEvaluated ? (
         <Table.Td>
           {requirement.evaluatedAt ? (

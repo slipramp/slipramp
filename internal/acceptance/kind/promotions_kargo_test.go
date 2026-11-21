@@ -35,7 +35,7 @@ func (s *suite) testNativeKargoPromotion(t *testing.T) {
 		t.Fatalf("native Stage = %#v", stage)
 	}
 	created := s.createKargoPromotion(t, stage.ID, freight)
-	final := s.waitForPromotionKargoOutcome(t, created.ID)
+	final := s.waitForPromotionKargoOutcome(t, created.ID, api.KargoPromotionOutcomePhaseSucceeded)
 	if final.ReviewRequired || final.ReviewContext != nil || final.PreparationRunID != nil || final.KargoPromotionUID == nil {
 		t.Fatalf("native Promotion = %#v", final)
 	}
@@ -53,6 +53,20 @@ func (s *suite) testReviewedKargoPromotion(t *testing.T) {
 		t.Fatalf("require review for Kargo Stage: %v", err)
 	}
 	requireStatus(t, policyResponse.StatusCode(), policyResponse.Body, http.StatusOK)
+
+	// Hold a real Kargo Promotion in its review callback while exercising the
+	// chart's namespaced patch permission and the observed abort outcome.
+	toCancel := s.createKargoPromotion(t, stage.ID, freightName)
+	s.waitForKargoCallbackAndPendingPromotion(t, toCancel.ID)
+	canceled, err := s.productClient.CancelPromotionWithResponse(t.Context(), toCancel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireStatus(t, canceled.StatusCode(), canceled.Body, http.StatusOK)
+	stopped := s.waitForPromotionKargoOutcome(t, toCancel.ID, api.KargoPromotionOutcomePhaseAborted)
+	if stopped.Cancellation.State != api.CancellationStateCompleted || stopped.Decision != nil {
+		t.Fatalf("canceled review = %#v, decision = %#v", stopped.Cancellation, stopped.Decision)
+	}
 
 	promotion := s.createKargoPromotion(t, stage.ID, freightName)
 	if promotion.Status != api.PromotionStatusCreating {
@@ -88,7 +102,7 @@ func (s *suite) testReviewedKargoPromotion(t *testing.T) {
 		t.Fatalf("approved Kargo Promotion = %#v", decisionResponse.JSON200)
 	}
 
-	final := s.waitForPromotionKargoOutcome(t, promotion.ID)
+	final := s.waitForPromotionKargoOutcome(t, promotion.ID, api.KargoPromotionOutcomePhaseSucceeded)
 	targetCommit := strings.TrimSpace(string(s.kubectl(t, "-n", systemNamespace, "exec",
 		"deployment/acceptance-git", "-c", "git", "--",
 		"git", "--git-dir=/srv/repository.git", "rev-parse", "refs/heads/stage/acceptance/acceptance")))
@@ -253,7 +267,7 @@ func (s *suite) waitForKargoCallbackAndPendingPromotion(t *testing.T, promotionI
 	return api.Promotion{}
 }
 
-func (s *suite) waitForPromotionKargoOutcome(t *testing.T, promotionID uuid.UUID) api.Promotion {
+func (s *suite) waitForPromotionKargoOutcome(t *testing.T, promotionID uuid.UUID, expected api.KargoPromotionOutcomePhase) api.Promotion {
 	t.Helper()
 
 	deadline := time.Now().Add(s.timeout)
@@ -262,14 +276,14 @@ func (s *suite) waitForPromotionKargoOutcome(t *testing.T, promotionID uuid.UUID
 		response, err := s.productClient.GetPromotionWithResponse(t.Context(), promotionID)
 		if err == nil && response.JSON200 != nil {
 			last = *response.JSON200
-			if last.Status != api.PromotionStatusApproved {
+			if expected == api.KargoPromotionOutcomePhaseSucceeded && last.Status != api.PromotionStatusApproved {
 				t.Fatalf("approved Promotion %s moved to %s: %#v", promotionID, last.Status, last)
 			}
 			if last.KargoOutcome == nil {
 				wait(t, time.Second)
 				continue
 			}
-			if last.KargoOutcome.Phase != api.KargoPromotionOutcomePhaseSucceeded {
+			if last.KargoOutcome.Phase != expected {
 				diagnostic := ""
 				if last.KargoOutcome.Diagnostic != nil {
 					diagnostic = *last.KargoOutcome.Diagnostic

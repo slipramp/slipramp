@@ -281,7 +281,7 @@ Freight identity; Kargo populates the Stage promotion template and expands
 Approval records permission for Kargo to continue; it is not a success result.
 An operator-created automatic Promotion is approved immediately and does not
 require a Kargo callback. Creation delivery remains separately awaiting,
-delivered, or failed. Automatic callbacks are optional and idempotent; their Git
+delivered, stopped by cancellation, or failed. Automatic callbacks are optional and idempotent; their Git
 audit fields may be omitted together when no Repository context applies.
 After approval, the responsible Controller keeps observing the exact Kargo
 Promotion until `Succeeded`, `Failed`, `Errored`, or `Aborted`, then reports the
@@ -376,7 +376,10 @@ Cluster. Optional Kargo observers submit complete Stage snapshots only after
 all configured namespace listings and Stage normalization succeed. Each Kargo
 Stage namespace belongs to exactly one integration in the complete observer
 configuration. The same configured Kargo access is used by ordinary outbound
-Controller commands to create and observe Promotions;
+Controller commands to create, observe, and cancel Promotions. In each configured
+Stage namespace, grant `patch` on `promotions.kargo.akuity.io` for cancellation
+alongside the existing Stage `promote` permission. The Controller chart supplies
+these permissions. As with creation,
 the Server never receives Kubernetes credentials. Kargo-originated Promotions
 bind their exact namespace, name, Stage, and first observed UID before terminal
 reporting, while Slipramp-originated Promotions also require their stable

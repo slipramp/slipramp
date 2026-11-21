@@ -118,7 +118,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 	if automaticRetry.ID != automatic.ID || automaticRetry.Status != api.KargoPromotionStatusApproved {
 		t.Fatalf("automatic Promotion retry = %#v", automaticRetry)
 	}
-	automaticFinal := s.waitForPromotionKargoOutcome(t, automatic.ID)
+	automaticFinal := s.waitForPromotionKargoOutcome(t, automatic.ID, api.KargoPromotionOutcomePhaseSucceeded)
 	if automaticFinal.KargoPromotionUID == nil {
 		t.Fatalf("automatic Promotion terminal outcome omitted its Kargo UID: %#v", automaticFinal)
 	}

@@ -272,9 +272,9 @@ func placementPreflightResponse(record placement.Preflight) api.PlacementPreflig
 		ConfigurationChecksum: record.Snapshot.ConfigurationChecksum,
 		State:                 api.PlacementPreflightState(record.State),
 		CleanupState:          api.PlacementPreflightCleanupState(record.CleanupState),
-		RequestedBy: api.RunActor{
+		RequestedBy: api.ActorSnapshot{
 			PrincipalID: record.RequestedBy.PrincipalID,
-			Kind:        api.RunActorKind(record.RequestedBy.Kind),
+			Kind:        api.ActorSnapshotKind(record.RequestedBy.Kind),
 			DisplayName: record.RequestedBy.DisplayName,
 		},
 		CreatedAt:   record.CreatedAt,

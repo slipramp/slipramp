@@ -70,6 +70,34 @@ private final class PromotionDetailViewModel: ObservableObject {
         }
     }
 
+    func cancel() async -> Bool {
+        guard !isMutating else { return false }
+        isMutating = true
+        operationError = nil
+        defer { isMutating = false }
+        do {
+            promotion = try await client.cancelPromotion(id: promotionID)
+            return true
+        } catch {
+            operationError = error.localizedDescription
+            if case let SliprampAPIError.http(status, _, _) = error, status == 409 { await load() }
+            return false
+        }
+    }
+
+    func observeCancellation() async {
+        while promotion?.cancellation.state == .requested {
+            do {
+                try await Task.sleep(for: .seconds(3))
+                let latest = try await client.getPromotion(id: promotionID)
+                try Task.checkCancellation()
+                promotion = latest
+            } catch {
+                return
+            }
+        }
+    }
+
     func clearOperationError() {
         operationError = nil
     }
@@ -129,6 +157,7 @@ private func loadArtifactText(client: SliprampAPIClient, id: String?) async -> A
 
 struct PromotionDetailView: View {
     @StateObject private var model: PromotionDetailViewModel
+    @State private var confirmCancel = false
     @State private var showDecisionSheet = false
 
     private let client: SliprampAPIClient
@@ -163,9 +192,11 @@ struct PromotionDetailView: View {
                     contextSection(promotion)
                     revisionSection(promotion)
                     freightSection(promotion)
-                    preparationSection(promotion)
-                    diffsSection(promotion)
-                    decisionSection(promotion)
+                    if promotion.reviewRequired {
+                        preparationSection(promotion)
+                        diffsSection(promotion)
+                        decisionSection(promotion)
+                    }
                     timelineSection(promotion)
                 }
                 .scrollContentBackground(.hidden)
@@ -199,6 +230,11 @@ struct PromotionDetailView: View {
         .task {
             await model.load()
         }
+        .task(id: model.promotion?.cancellation.state) {
+            guard model.promotion?.cancellation.state == .requested else { return }
+            await model.observeCancellation()
+            if model.promotion?.cancellation.state != .requested { onPromotionChanged() }
+        }
         .sheet(isPresented: $showDecisionSheet) {
             PromotionDecisionSheet(model: model) {
                 onPromotionChanged()
@@ -215,6 +251,20 @@ struct PromotionDetailView: View {
                     tone: promotion.statusTone,
                     symbol: promotion.statusSymbol
                 )
+            }
+            if promotion.canCancel {
+                Button("Cancel Promotion", role: .destructive) { confirmCancel = true }
+                    .disabled(model.isMutating)
+                    .confirmationDialog("Cancel this Promotion?", isPresented: $confirmCancel) {
+                        Button("Cancel Promotion", role: .destructive) {
+                            Task { if await model.cancel() { onPromotionChanged() } }
+                        }
+                    }
+            }
+            if let operationError = model.operationError {
+                Label(operationError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(SliprampTone.danger.color)
             }
             LabeledContent("Source", value: promotion.source.displayLabel)
             LabeledContent("Requested by", value: promotion.requestedBy.displayName)
@@ -293,8 +343,8 @@ struct PromotionDetailView: View {
         switch promotion.creationDispatch.phase {
         case .notApplicable:
             return "Not applicable"
-        case .awaitingDelivery:
-            return "Awaiting delivery"
+        case .awaitingDelivery: return "Awaiting delivery"
+        case .stopped: return promotion.cancellation.state == .requested ? "Checking delivery" : "Stopped"
         case .delivered:
             return "Delivered"
         case .failed:
@@ -435,11 +485,7 @@ struct PromotionDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let operationError = model.operationError {
-                Label(operationError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(SliprampTone.danger.color)
-            }
+
         }
     }
 
@@ -447,11 +493,15 @@ struct PromotionDetailView: View {
     private func timelineSection(_ promotion: Promotion) -> some View {
         Section("Timeline") {
             PromotionTimestampRow(label: "Created", date: promotion.createdAt)
-            if let completedAt = promotion.preparationCompletedAt {
+            if promotion.reviewRequired, let completedAt = promotion.preparationCompletedAt {
                 PromotionTimestampRow(label: "Prepared", date: completedAt)
             }
-            if let decidedAt = promotion.decidedAt {
+            if promotion.reviewRequired, let decidedAt = promotion.decidedAt {
                 PromotionTimestampRow(label: "Decided", date: decidedAt)
+            }
+            CancellationTimelineRows(cancellation: promotion.cancellation)
+            if let outcome = promotion.kargoOutcome {
+                PromotionTimestampRow(label: "Kargo " + outcome.phase.rawValue, date: outcome.observedAt)
             }
             PromotionTimestampRow(label: "Updated", date: promotion.updatedAt)
         }
@@ -467,7 +517,8 @@ struct PromotionDetailView: View {
     }
 
     private func diffUnavailableExplanation(_ promotion: Promotion) -> String {
-        switch promotion.status {
+        if promotion.cancellation.state != .notRequested { return "This Promotion has no prepared diff artifacts." }
+        return switch promotion.status {
         case .creating, .preparing:
             "The diff artifacts are still being prepared. Pull to refresh."
         default:
@@ -476,7 +527,8 @@ struct PromotionDetailView: View {
     }
 
     private func decisionExplanation(_ promotion: Promotion) -> String {
-        switch promotion.status {
+        if promotion.cancellation.state != .notRequested { return "The review closed when cancellation was requested." }
+        return switch promotion.status {
         case .expired:
             "The review window expired before a decision was recorded."
         case .creating, .preparing:

@@ -58,6 +58,7 @@ var (
 	ErrStaleSnapshot              = errors.New("kargo Stage snapshot is stale")
 	ErrPromotionNotFound          = errors.New("promotion not found")
 	ErrNoPreparationWork          = errors.New("no Promotion preparation work is available")
+	ErrCreationIdentityPending    = errors.New("awaiting admitted Kargo Promotion identity")
 	ErrIdentityConflict           = errors.New("external Promotion identity already exists")
 	ErrTransitionConflict         = errors.New("promotion state transition conflicts with current state")
 	ErrDecisionConflict           = errors.New("promotion already has a different decision")
@@ -163,6 +164,7 @@ type Promotion struct {
 	ReviewRequired          bool
 	Lifecycle               PromotionLifecycle
 	Message                 *string
+	Cancellation            Cancellation
 	CreationDispatch        CreationDispatchState
 	Preparation             PreparationState
 	KargoExecution          KargoExecutionState
@@ -456,13 +458,13 @@ func (p Promotion) Validate() error {
 	if err := p.Lifecycle.Validate(p.ReviewRequired, p.CreatedAt); err != nil {
 		return err
 	}
-	if err := p.CreationDispatch.Validate(p.Source, p.Lifecycle.State, p.CreatedAt); err != nil {
+	if err := p.CreationDispatch.Validate(p.Source, p.Cancellation.RequestedAt != nil, p.CreatedAt); err != nil {
 		return err
 	}
 	if err := p.Preparation.Validate(p.ReviewRequired, p.Lifecycle.State, p.CreatedAt); err != nil {
 		return err
 	}
-	if err := p.KargoExecution.Validate(p.Source, p.Lifecycle.State, p.CreationDispatch, p.CreatedAt); err != nil {
+	if err := p.KargoExecution.Validate(p.Source, p.Lifecycle.State, p.CreationDispatch, p.Cancellation.RequestedAt != nil, p.CreatedAt); err != nil {
 		return err
 	}
 

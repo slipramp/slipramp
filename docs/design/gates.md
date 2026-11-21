@@ -270,7 +270,12 @@ PostgreSQL reads the evidence for Run and Promotion summaries through one
 projection. The Gate package turns each row into a requirement state using the
 current evaluator process and observation validity window.
 
-A subject Gate summary is `not-required`, `waiting`, or `released`. Individual
+Cancellation before Gate release changes the subject summary and its unreleased
+requirements to `stopped`. The detail retains the attached Gate names and omits
+live observations. Cancellation after release preserves the release values,
+conditions, and timestamps. Ungated subjects remain `not-required`.
+
+Other subject summaries are `waiting` or `released`. Their individual
 requirements project `unevaluated`, `passing`, `blocking`, `unavailable`, or
 `released`, along with the Gate name and title, finite observed value when
 present, operator and threshold, evaluation time, release time, and sanitized
