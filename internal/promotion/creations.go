@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -56,7 +57,7 @@ type OperatorPromotionStore interface {
 type CreationService struct {
 	integrations    IntegrationSet
 	store           OperatorPromotionStore
-	gateEvaluations GateEvaluationNotifier
+	gateEvaluations gate.EvaluationNotifier
 	newID           func() uuid.UUID
 	now             func() time.Time
 }
@@ -64,7 +65,7 @@ type CreationService struct {
 func NewCreationService(
 	integrations IntegrationSet,
 	store OperatorPromotionStore,
-	gateEvaluations GateEvaluationNotifier,
+	gateEvaluations gate.EvaluationNotifier,
 ) *CreationService {
 	return &CreationService{
 		integrations:    integrations,

@@ -154,7 +154,7 @@ values; it never publishes a partially refreshed view.
 | `slipramp.run.active` | `slipramp_run_active` | observable gauge / `{run}` | `phase=assigned|preparing|running`, `cancellation_state=not-requested|requested` | Active Runs by execution phase and orthogonal operator-cancellation state. |
 | `slipramp.run.review.pending` | `slipramp_run_review_pending` | observable gauge / `{run}` | none | Queued Runs awaiting review. |
 | `slipramp.gate.waiting` | `slipramp_gate_waiting` | observable gauge / `{subject}` | `subject_type=run|promotion` | Runs and Promotions with at least one unreleased Gate. |
-| `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest review-eligible queued Run whose Target has available capacity. Absent when none is eligible. |
+| `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest queued Run that meets dispatch's review and Gate requirements and whose Target has available capacity. Absent when none qualifies. |
 | `slipramp.controller.connected` | `slipramp_controller_connected` | observable gauge / `{controller}` | none | Controllers whose latest contact is within the connection window. |
 | `slipramp.controller.last_seen.time` | `slipramp_controller_last_seen_time_seconds` | observable gauge / `s` | none | Unix time of the latest Controller contact. Absent until one has been seen. |
 | `slipramp.repository.refresh.state` | `slipramp_repository_refresh_state` | observable gauge / `{repository}` | `state=pending|succeeded|failed` | Active Repositories in each durable refresh state. |
@@ -163,8 +163,9 @@ values; it never publishes a partially refreshed view.
 | `slipramp.metrics.snapshot.last_success.time` | `slipramp_metrics_snapshot_last_success_time_seconds` | observable gauge / `s` | none | Unix time of the last successful refresh. Absent before the first success. |
 
 Every metric in this table is a Slipramp-specific convention. Queue age uses
-the same eligibility predicate and FIFO timestamp as dispatch: queued,
-review-not-required or approved, and below the Target's active Run limit.
+the Run creation time and the same Gate eligibility check as dispatch. Each
+unreleased Gate needs fresh passing evidence for its active definition from
+the current Server process at the instant the snapshot is taken.
 
 ## Slipramp operation metrics
 

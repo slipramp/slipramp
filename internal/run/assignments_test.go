@@ -44,7 +44,7 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 	}
 	service := &Service{assignments: runs}
 	gateEvaluatorProcessID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
-	service.gateProcessID = gateEvaluatorProcessID
+	service.gateEvaluatorProcessID = gateEvaluatorProcessID
 	location := time.FixedZone("test", -6*60*60)
 	claimedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return claimedAt }

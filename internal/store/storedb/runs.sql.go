@@ -25,32 +25,7 @@ WITH active_runs AS (
     WHERE queued.cluster_name = $2
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
-      AND NOT EXISTS (
-          SELECT 1
-          FROM run_gates
-          WHERE run_gates.run_id = queued.id
-            AND run_gates.released_at IS NULL
-            AND NOT EXISTS (
-                SELECT 1
-                FROM repositories
-                JOIN catalog_revisions
-                  ON catalog_revisions.id = repositories.active_catalog_revision_id
-                JOIN catalog_gates
-                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
-                 AND catalog_gates.name = run_gates.gate_name
-                JOIN gate_observations
-                  ON gate_observations.repository_id = run_gates.repository_id
-                 AND gate_observations.gate_name = run_gates.gate_name
-                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
-                 AND gate_observations.definition_digest = catalog_gates.definition_digest
-                 AND gate_observations.evaluator_process_id = $3
-                 AND gate_observations.state = 'passing'
-                 AND gate_observations.evaluated_at <= $1
-                 AND gate_observations.valid_until > $1
-                WHERE repositories.id = run_gates.repository_id
-                  AND repositories.removed_at IS NULL
-            )
-      )
+      AND run_gates_allow_dispatch(queued.id, $3::uuid, $1::timestamptz)
       AND (
           SELECT count(*)
           FROM active_runs
@@ -754,6 +729,7 @@ JOIN targets AS target_state
   ON target_state.id = queued.target_id
 WHERE queued.phase = 'queued'
   AND queued.review_state IN ('not-required', 'approved')
+  AND run_gates_allow_dispatch(queued.id, $1::uuid, $2::timestamptz)
   AND (
       SELECT count(*)
       FROM runs AS active
@@ -762,8 +738,13 @@ WHERE queued.phase = 'queued'
   ) < target_state.maximum_active_runs
 `
 
-func (q *Queries) GetOldestEligibleRunCreatedAt(ctx context.Context) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, getOldestEligibleRunCreatedAt)
+type GetOldestEligibleRunCreatedAtParams struct {
+	EvaluatorProcessID pgtype.UUID
+	CheckedAt          pgtype.Timestamptz
+}
+
+func (q *Queries) GetOldestEligibleRunCreatedAt(ctx context.Context, arg GetOldestEligibleRunCreatedAtParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getOldestEligibleRunCreatedAt, arg.EvaluatorProcessID, arg.CheckedAt)
 	var created_at pgtype.Timestamptz
 	err := row.Scan(&created_at)
 	return created_at, err
@@ -1322,33 +1303,6 @@ func (q *Queries) ListActiveRunStatesForMetrics(ctx context.Context) ([]ListActi
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listRunGateNames = `-- name: ListRunGateNames :many
-SELECT gate_name
-FROM run_gates
-WHERE run_id = $1
-ORDER BY attachment_order
-`
-
-func (q *Queries) ListRunGateNames(ctx context.Context, runID pgtype.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, listRunGateNames, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var gate_name string
-		if err := rows.Scan(&gate_name); err != nil {
-			return nil, err
-		}
-		items = append(items, gate_name)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

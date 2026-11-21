@@ -1,8 +1,7 @@
 package gate_test
 
 import (
-	"os"
-	"path/filepath"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -11,43 +10,35 @@ import (
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
-func TestDecodeSourceFileAppliesDefaults(t *testing.T) {
+func TestDecodeSourceFile(t *testing.T) {
 	t.Parallel()
 
-	sources, err := gate.DecodeSourceFile(strings.NewReader(`
-apiVersion: slipramp.com/v1alpha1
+	const header = `apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
-sources:
+`
+	for _, test := range []struct {
+		name  string
+		input string
+		want  gate.SourceSet
+	}{
+		{name: "no sources", input: "sources: {}\n", want: gate.SourceSet{}},
+		{
+			name: "defaults",
+			input: `sources:
   homelab:
     prometheus:
       url: http://prometheus:9090
-`))
-	if err != nil {
-		t.Fatalf("DecodeSourceFile() error = %v", err)
-	}
-
-	source, ok := sources.Lookup("homelab")
-	if !ok {
-		t.Fatal("homelab source not found")
-	}
-	if source.Prometheus.URL != "http://prometheus:9090" ||
-		source.Prometheus.EvaluationInterval != gate.DefaultEvaluationInterval ||
-		source.Prometheus.Timeout != gate.DefaultRequestTimeout ||
-		source.Prometheus.MaximumConcurrency != gate.DefaultMaximumConcurrency {
-		t.Errorf("Prometheus source = %#v", source.Prometheus)
-	}
-	if len(sources.Names()) != 1 || sources.Names()[0] != "homelab" {
-		t.Errorf("source names = %v", sources.Names())
-	}
-}
-
-func TestDecodeSourceFileReadsTransportConfiguration(t *testing.T) {
-	t.Parallel()
-
-	sources, err := gate.DecodeSourceFile(strings.NewReader(`
-apiVersion: slipramp.com/v1alpha1
-kind: GateSourceConfig
-sources:
+`,
+			want: gate.SourceSet{"homelab": {Prometheus: gate.PrometheusSource{
+				URL:                "http://prometheus:9090",
+				EvaluationInterval: gate.DefaultEvaluationInterval,
+				Timeout:            gate.DefaultRequestTimeout,
+				MaximumConcurrency: gate.DefaultMaximumConcurrency,
+			}}},
+		},
+		{
+			name: "explicit polling and transport settings",
+			input: `sources:
   production:
     prometheus:
       url: https://prometheus.example.com/metrics
@@ -59,23 +50,32 @@ sources:
         caFile: /var/run/slipramp/gates/ca.crt
         clientCertificateFile: /var/run/slipramp/gates/tls.crt
         clientKeyFile: /var/run/slipramp/gates/tls.key
-`))
-	if err != nil {
-		t.Fatalf("DecodeSourceFile() error = %v", err)
-	}
+`,
+			want: gate.SourceSet{"production": {Prometheus: gate.PrometheusSource{
+				URL:                "https://prometheus.example.com/metrics",
+				EvaluationInterval: 30 * time.Second,
+				Timeout:            8 * time.Second,
+				MaximumConcurrency: 7,
+				BearerTokenFile:    "/var/run/slipramp/gates/token",
+				TLS: gate.TLSConfig{
+					CAFile:                "/var/run/slipramp/gates/ca.crt",
+					ClientCertificateFile: "/var/run/slipramp/gates/tls.crt",
+					ClientKeyFile:         "/var/run/slipramp/gates/tls.key",
+				},
+			}}},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	source, ok := sources.Lookup("production")
-	if !ok {
-		t.Fatal("production source not found")
-	}
-	prometheus := source.Prometheus
-	if prometheus.EvaluationInterval != 30*time.Second || prometheus.Timeout != 8*time.Second ||
-		prometheus.MaximumConcurrency != 7 ||
-		prometheus.BearerTokenFile != "/var/run/slipramp/gates/token" ||
-		prometheus.TLS.CAFile != "/var/run/slipramp/gates/ca.crt" ||
-		prometheus.TLS.ClientCertificateFile != "/var/run/slipramp/gates/tls.crt" ||
-		prometheus.TLS.ClientKeyFile != "/var/run/slipramp/gates/tls.key" {
-		t.Errorf("Prometheus source = %#v", prometheus)
+			sources, err := gate.DecodeSourceFile(strings.NewReader(header + test.input))
+			if err != nil {
+				t.Fatalf("DecodeSourceFile() error = %v", err)
+			}
+			if !maps.Equal(sources, test.want) {
+				t.Errorf("sources = %#v, want %#v", sources, test.want)
+			}
+		})
 	}
 }
 
@@ -213,33 +213,5 @@ sources:
 			_, err := gate.DecodeSourceFile(strings.NewReader(test.configure(valid)))
 			testcheck.ErrorContains(t, err, test.wantError)
 		})
-	}
-}
-
-func TestLoadSourceFileReportsReadFailure(t *testing.T) {
-	t.Parallel()
-
-	_, err := gate.LoadSourceFile(filepath.Join(t.TempDir(), "missing.yaml"))
-	testcheck.ErrorContains(t, err, "read Gate source configuration")
-}
-
-func TestLoadSourceFile(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "gate-sources.yaml")
-	if err := os.WriteFile(path, []byte(`
-apiVersion: slipramp.com/v1alpha1
-kind: GateSourceConfig
-sources: {}
-`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	sources, err := gate.LoadSourceFile(path)
-	if err != nil {
-		t.Fatalf("LoadSourceFile() error = %v", err)
-	}
-	if len(sources) != 0 {
-		t.Errorf("sources = %v, want empty", sources)
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
+
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -38,7 +40,7 @@ type RunService interface {
 		ctx context.Context,
 		records []run.Run,
 		at time.Time,
-	) (map[uuid.UUID]run.GateSummary, error)
+	) (map[uuid.UUID]gate.Summary, error)
 }
 
 func (h *Handler) DecideRunReview(
@@ -617,33 +619,6 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 	}
 
 	return items, nil
-}
-
-func gateSummaryResponse(summary run.GateSummary) api.GateSummary {
-	requirements := make([]api.GateRequirement, 0, len(summary.Requirements))
-	for _, requirement := range summary.Requirements {
-		var operator *api.GateOperator
-		if requirement.Operator != nil {
-			value := api.GateOperator(*requirement.Operator)
-			operator = &value
-		}
-		requirements = append(requirements, api.GateRequirement{
-			Name:        api.CatalogName(requirement.Name),
-			Title:       optionalString(requirement.Title),
-			State:       api.GateRequirementState(requirement.State),
-			Value:       requirement.Value,
-			Operator:    operator,
-			Threshold:   requirement.Threshold,
-			EvaluatedAt: requirement.EvaluatedAt,
-			ReleasedAt:  requirement.ReleasedAt,
-			Diagnostic:  optionalString(requirement.Diagnostic),
-		})
-	}
-
-	return api.GateSummary{
-		State:        api.GateSummaryState(summary.State),
-		Requirements: requirements,
-	}
 }
 
 func optionalCommit(

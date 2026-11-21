@@ -76,3 +76,11 @@ func applicationUUID(value pgtype.UUID) *uuid.UUID {
 
 	return &converted
 }
+
+func databaseUUIDs(ids []uuid.UUID) []pgtype.UUID {
+	result := make([]pgtype.UUID, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, databaseUUID(id))
+	}
+	return result
+}

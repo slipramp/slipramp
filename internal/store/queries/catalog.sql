@@ -79,7 +79,6 @@ INSERT INTO catalog_gates (
     source_path,
     source_document,
     definition,
-    normalized_definition,
     definition_digest
 ) VALUES (
     sqlc.arg(catalog_snapshot_id),
@@ -87,7 +86,6 @@ INSERT INTO catalog_gates (
     sqlc.arg(source_path),
     sqlc.arg(source_document),
     sqlc.arg(definition),
-    sqlc.arg(normalized_definition),
     sqlc.arg(definition_digest)
 );
 

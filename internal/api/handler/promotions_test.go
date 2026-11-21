@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
+
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -36,7 +38,7 @@ type recordingPromotionReviewService struct {
 	promotions      promotion.PromotionReviewList
 	review          promotion.PromotionReview
 	policy          promotion.PromotionPolicySnapshot
-	gates           map[uuid.UUID]promotion.GateSummary
+	gates           map[uuid.UUID]gate.Summary
 	err             error
 }
 
@@ -94,19 +96,10 @@ func (s *recordingPromotionReviewService) Decide(
 
 func (s *recordingPromotionReviewService) GateSummaries(
 	_ context.Context,
-	records []promotion.Promotion,
+	_ []promotion.Promotion,
 	_ time.Time,
-) (map[uuid.UUID]promotion.GateSummary, error) {
-	if s.gates != nil {
-		return s.gates, s.err
-	}
-
-	result := make(map[uuid.UUID]promotion.GateSummary, len(records))
-	for _, record := range records {
-		result[record.ID] = notRequiredPromotionGates()
-	}
-
-	return result, s.err
+) (map[uuid.UUID]gate.Summary, error) {
+	return s.gates, s.err
 }
 
 func (s *recordingPromotionService) SubmitKargoPromotion(
@@ -268,7 +261,7 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		promotion.PromotionReview{Promotion: record},
 		nil,
 		integrations,
-		notRequiredPromotionGates(),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("promotionResponse() error = %v", err)
@@ -287,7 +280,7 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		promotion.PromotionReview{Promotion: record},
 		nil,
 		integrations,
-		notRequiredPromotionGates(),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("dispatched promotionResponse() error = %v", err)
@@ -326,7 +319,7 @@ func TestPromotionResponseOmitsUnavailableReviewContext(t *testing.T) {
 		promotion.PromotionReview{Promotion: record},
 		nil,
 		nil,
-		notRequiredPromotionGates(),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("promotionResponse() error = %v", err)
@@ -491,13 +484,12 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 			Limit:  10,
 			Offset: 2,
 		},
-		gates: map[uuid.UUID]promotion.GateSummary{
+		gates: map[uuid.UUID]gate.Summary{
 			promotionID: {
-				State: promotion.GateSummaryStateWaiting,
-				Requirements: []promotion.GateRequirement{{
+				{
 					Name: "network-idle", Title: "Network idle",
-					State: promotion.GateRequirementStateBlocking,
-				}},
+					State: gate.RequirementBlocking,
+				},
 			},
 		},
 	}
@@ -560,13 +552,6 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
 		}
-	}
-}
-
-func notRequiredPromotionGates() promotion.GateSummary {
-	return promotion.GateSummary{
-		State:        promotion.GateSummaryStateNotRequired,
-		Requirements: []promotion.GateRequirement{},
 	}
 }
 

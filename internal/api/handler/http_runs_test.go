@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
+
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -789,14 +791,13 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 				QueueAge: 90 * time.Second, SnapshotAt: snapshotAt,
 			},
 		},
-		gates: map[uuid.UUID]run.GateSummary{
+		gates: map[uuid.UUID]gate.Summary{
 			runID: {
-				State: run.GateSummaryStateWaiting,
-				Requirements: []run.GateRequirement{{
+				{
 					Name: "network-idle", Title: "Network idle",
-					State: run.GateRequirementStateBlocking, Value: &observedValue,
-					Operator: &operator, Threshold: &threshold, EvaluatedAt: &snapshotAt,
-				}},
+					State: gate.RequirementBlocking, Value: &observedValue,
+					Condition: &gate.Condition{Operator: operator, Value: threshold}, EvaluatedAt: &snapshotAt,
+				},
 			},
 		},
 	}
@@ -906,7 +907,7 @@ type recordingRunService struct {
 	reviewed      run.Run
 	reviewError   error
 	scheduling    map[uuid.UUID]run.Scheduling
-	gates         map[uuid.UUID]run.GateSummary
+	gates         map[uuid.UUID]gate.Summary
 }
 
 func (s *recordingRunService) DecideRunReview(
@@ -966,20 +967,8 @@ func (s *recordingRunService) Scheduling(
 
 func (s *recordingRunService) GateSummaries(
 	_ context.Context,
-	records []run.Run,
+	_ []run.Run,
 	_ time.Time,
-) (map[uuid.UUID]run.GateSummary, error) {
-	if s.gates != nil {
-		return s.gates, nil
-	}
-
-	result := make(map[uuid.UUID]run.GateSummary, len(records))
-	for _, record := range records {
-		result[record.ID] = run.GateSummary{
-			State:        run.GateSummaryStateNotRequired,
-			Requirements: []run.GateRequirement{},
-		}
-	}
-
-	return result, nil
+) (map[uuid.UUID]gate.Summary, error) {
+	return s.gates, nil
 }

@@ -1,6 +1,8 @@
 // Package catalog discovers and decodes repository-defined Slipramp resources.
 package catalog
 
+import "github.com/slipramp/slipramp/internal/gate"
+
 const (
 	Directory  = ".slipramp"
 	APIVersion = "slipramp.com/v1alpha1"
@@ -56,26 +58,11 @@ type RuntimeCredential struct {
 }
 
 type Gate struct {
-	APIVersion string   `json:"apiVersion" yaml:"apiVersion"`
-	Kind       string   `json:"kind"       yaml:"kind"`
-	Metadata   Metadata `json:"metadata"   yaml:"metadata"`
-	Spec       GateSpec `json:"spec"       yaml:"spec"`
-	Source     Source   `json:"source"     yaml:"-"`
-}
-
-type GateSpec struct {
-	Prometheus PrometheusGate `json:"prometheus" yaml:"prometheus"`
-}
-
-type PrometheusGate struct {
-	Source    string        `json:"source"    yaml:"source"`
-	Query     string        `json:"query"     yaml:"query"`
-	Condition GateCondition `json:"condition" yaml:"condition"`
-}
-
-type GateCondition struct {
-	Operator string  `json:"operator" yaml:"operator"`
-	Value    float64 `json:"value"    yaml:"value"`
+	APIVersion string          `json:"apiVersion" yaml:"apiVersion"`
+	Kind       string          `json:"kind"       yaml:"kind"`
+	Metadata   Metadata        `json:"metadata"   yaml:"metadata"`
+	Spec       gate.Definition `json:"spec"       yaml:"spec"`
+	Source     Source          `json:"source"     yaml:"-"`
 }
 
 type CredentialInjection struct {

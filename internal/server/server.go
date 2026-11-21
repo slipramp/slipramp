@@ -67,9 +67,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	if err != nil {
 		return nil, err
 	}
+	gateEvaluatorProcessID := uuid.New()
 	metrics, err := telemetry.New(ctx, telemetry.Config{
 		ServiceVersion: serviceVersion,
-		Source:         persistence.database,
+		Source:         persistence.database.MetricsSnapshotSource(gateEvaluatorProcessID),
 		Logger:         logger,
 	})
 	if err != nil {
@@ -85,29 +86,16 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database, cfg.Placements, cfg.GateSources)
-	var gateEvaluations *gate.Coordinator
-	if len(cfg.GateSources) > 0 {
-		gateEvaluations, err = gate.NewCoordinator(
-			persistence.database,
-			cfg.GateSources,
-			logger,
-			gate.WithEvaluationObserver(metrics),
-		)
-		if err != nil {
-			closeInitialization()
-
-			return nil, fmt.Errorf("initialize Gate evaluation: %w", err)
-		}
-	}
-	repositoryRefresherOptions := []repository.RefresherOption{
-		repository.WithGateSources(cfg.GateSources),
-		repository.WithRefreshObserver(metrics),
-	}
-	if gateEvaluations != nil {
-		repositoryRefresherOptions = append(
-			repositoryRefresherOptions,
-			repository.WithGateEvaluationNotifier(gateEvaluations),
-		)
+	gateEvaluations, err := gate.NewCoordinator(
+		persistence.database,
+		cfg.GateSources,
+		gateEvaluatorProcessID,
+		logger,
+		metrics,
+	)
+	if err != nil {
+		closeInitialization()
+		return nil, fmt.Errorf("initialize Gate evaluation: %w", err)
 	}
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
@@ -116,7 +104,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
-		repositoryRefresherOptions...,
+		repository.WithGateSources(cfg.GateSources),
+		repository.WithRefreshObserver(metrics),
+		repository.WithGateEvaluationNotifier(gateEvaluations),
 	)
 	repositories := repository.NewService(
 		persistence.database,
@@ -134,26 +124,22 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		return nil, fmt.Errorf("initialize notifications: %w", err)
 	}
 	controllerCommandWakeups := controllercommand.NewWakeups()
-	var gateProcessID uuid.UUID
-	if gateEvaluations != nil {
-		gateProcessID = gateEvaluations.ProcessID()
-	}
 	runs := run.NewService(run.Dependencies{
-		Creation:           persistence.database,
-		History:            persistence.database,
-		Scheduling:         persistence.database,
-		Gates:              persistence.database,
-		Assignments:        persistence.database,
-		Cancellations:      persistence.database,
-		Reviews:            persistence.database,
-		Observations:       persistence.database,
-		ControllerCommands: controllerCommandWakeups,
-		GateEvaluations:    gateEvaluations,
-		GateProcessID:      gateProcessID,
-		Repositories:       repositories,
-		Catalogs:           catalogs,
-		Placements:         cfg.Placements,
-		Notifications:      notificationService,
+		Creation:               persistence.database,
+		History:                persistence.database,
+		Scheduling:             persistence.database,
+		Gates:                  persistence.database,
+		Assignments:            persistence.database,
+		Cancellations:          persistence.database,
+		Reviews:                persistence.database,
+		Observations:           persistence.database,
+		ControllerCommands:     controllerCommandWakeups,
+		GateEvaluations:        gateEvaluations,
+		GateEvaluatorProcessID: gateEvaluatorProcessID,
+		Repositories:           repositories,
+		Catalogs:               catalogs,
+		Placements:             cfg.Placements,
+		Notifications:          notificationService,
 	})
 	artifacts := artifact.NewService(artifact.Dependencies{
 		Runs:           persistence.database,
@@ -222,11 +208,11 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	promotionRequests := promotion.NewRequestService(
 		cfg.KargoIntegrations,
 		persistence.database,
-		gateProcessID,
+		gateEvaluatorProcessID,
 		gateEvaluations,
 	)
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database, gateEvaluations)
-	promotionDispatches := promotion.NewCreationDispatchService(persistence.database, gateProcessID)
+	promotionDispatches := promotion.NewCreationDispatchService(persistence.database, gateEvaluatorProcessID)
 	promotionReconciliations := promotion.NewReconciliationService(persistence.database)
 	placementPreflights := placement.NewPreflightService(cfg.Placements, clusters, persistence.database)
 	controllerCommands := controllercommand.NewScheduler(
@@ -235,7 +221,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		promotionDispatches,
 		promotionReconciliations,
 	)
-	promotionReviews := promotion.NewReviewService(cfg.KargoIntegrations, persistence.database, gateProcessID)
+	promotionReviews := promotion.NewReviewService(
+		cfg.KargoIntegrations, persistence.database, gateEvaluatorProcessID, gateEvaluations,
+	)
 	promotionProjects := projection.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionBranchDrift := projection.NewBranchDriftService(
 		cfg.KargoIntegrations,
@@ -269,6 +257,17 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		notification.WithDeliveryObserver(metrics),
 	)
 	maintenanceJobs := []maintenance.Job{
+		{
+			Name:       "gate_observation_retention",
+			Interval:   gate.DefaultObservationCleanupInterval,
+			Timeout:    maintenance.DefaultJobTimeout,
+			RunOnStart: true,
+			Run: func(ctx context.Context) error {
+				cutoff := time.Now().UTC().Add(-gate.DefaultInactiveObservationRetention)
+				_, err := persistence.database.DeleteInactiveGateObservations(ctx, cutoff)
+				return err
+			},
+		},
 		{
 			Name:       "artifact_retention",
 			Interval:   cfg.ArtifactReconcileInterval,
@@ -352,7 +351,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			run:  metricsServer.Run,
 		},
 	}
-	if gateEvaluations != nil {
+	if len(cfg.GateSources) > 0 {
 		workers = append(workers, newServerWorker("Gate evaluation", gateEvaluations.Run))
 	}
 	if promotionPreparations != nil {

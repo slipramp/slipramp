@@ -5,16 +5,25 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/store/storedb"
 	"github.com/slipramp/slipramp/internal/telemetry"
 )
 
-var _ telemetry.SnapshotSource = (*Database)(nil)
+type metricsSnapshotSource struct {
+	*Database
+	gateEvaluatorProcessID uuid.UUID
+}
 
-func (d *Database) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telemetry.MetricsSnapshot, error) {
+func (d *Database) MetricsSnapshotSource(gateEvaluatorProcessID uuid.UUID) telemetry.SnapshotSource {
+	return metricsSnapshotSource{Database: d, gateEvaluatorProcessID: gateEvaluatorProcessID}
+}
+
+func (d metricsSnapshotSource) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telemetry.MetricsSnapshot, error) {
 	transaction, err := d.pool.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel:   pgx.RepeatableRead,
 		AccessMode: pgx.ReadOnly,
@@ -67,7 +76,10 @@ func (d *Database) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telem
 		snapshot.WaitingGateSubjects[row.SubjectType] = row.SubjectCount
 	}
 
-	oldestEligible, err := queries.GetOldestEligibleRunCreatedAt(ctx)
+	oldestEligible, err := queries.GetOldestEligibleRunCreatedAt(ctx, storedb.GetOldestEligibleRunCreatedAtParams{
+		EvaluatorProcessID: databaseUUID(d.gateEvaluatorProcessID),
+		CheckedAt:          databaseTime(at),
+	})
 	if err != nil {
 		return telemetry.MetricsSnapshot{}, fmt.Errorf("get oldest eligible Run: %w", err)
 	}

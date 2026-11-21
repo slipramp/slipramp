@@ -4,9 +4,11 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"reflect"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,35 +19,28 @@ func TestCoordinatorReconcilesDemandAtDefinitionCadence(t *testing.T) {
 
 	now := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
 	definition := testEvaluationDefinition("network_active_changes")
-	first := EvaluationTarget{
+	first := EvaluationDemand{
 		RepositoryID:      uuid.New(),
 		GateName:          "network-idle",
 		CatalogRevisionID: uuid.New(),
 		Definition:        definition,
 	}
-	second := EvaluationTarget{
+	second := EvaluationDemand{
 		RepositoryID:      uuid.New(),
 		GateName:          "change-window",
 		CatalogRevisionID: uuid.New(),
 		Definition:        definition,
 	}
-	store := &recordingEvaluationStore{targets: []EvaluationTarget{first, second}}
+	store := &recordingEvaluationStore{targets: []EvaluationDemand{first, second}}
 	evaluator := &recordingDefinitionEvaluator{
 		observation: Observation{State: ObservationPassing, Value: new(float64)},
 	}
-	coordinator := newCoordinator(
-		store,
-		testEvaluationSources(),
-		map[string]definitionEvaluator{"homelab": evaluator},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
-	processID := uuid.New()
-	coordinator.processID = processID
+	coordinator := testCoordinator(t, store, testEvaluationSources(), evaluator)
+	processID := coordinator.processID
 	coordinator.now = func() time.Time { return now }
-	coordinator.jitter = func(interval time.Duration) time.Duration { return interval }
 
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab error = %v", err)
 	}
 	if len(evaluator.calls) != 1 {
 		t.Fatalf("definition evaluations = %d, want 1", len(evaluator.calls))
@@ -62,8 +57,8 @@ func TestCoordinatorReconcilesDemandAtDefinitionCadence(t *testing.T) {
 	}
 
 	now = now.Add(14 * time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() before interval error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab before interval error = %v", err)
 	}
 	if len(evaluator.calls) != 1 || len(store.observations) != 2 {
 		t.Errorf("early reconciliation evaluated %d times and recorded %d observations",
@@ -71,8 +66,8 @@ func TestCoordinatorReconcilesDemandAtDefinitionCadence(t *testing.T) {
 	}
 
 	now = now.Add(time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() at interval error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab at interval error = %v", err)
 	}
 	if len(evaluator.calls) != 2 || len(store.observations) != 4 {
 		t.Errorf("due reconciliation evaluated %d times and recorded %d observations",
@@ -84,79 +79,121 @@ func TestCoordinatorReconcilesDemandAtDefinitionCadence(t *testing.T) {
 	third.GateName = "maintenance-idle"
 	store.targets = append(store.targets, third)
 	now = now.Add(time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() with new waiter error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab with new waiter error = %v", err)
 	}
 	if len(evaluator.calls) != 3 || len(store.observations) != 7 {
 		t.Errorf("new waiter reconciliation evaluated %d times and recorded %d observations",
 			len(evaluator.calls), len(store.observations))
 	}
 
-	store.targets = nil
-	now = now.Add(time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() without waiters error = %v", err)
+	// A second waiter and a review decision can change demand for the same catalog entry.
+	store.targets[0].WaiterCount++
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatal(err)
 	}
-	if len(coordinator.states) != 0 || len(evaluator.calls) != 3 {
-		t.Errorf("idle coordinator states = %d, evaluations = %d", len(coordinator.states), len(evaluator.calls))
+	store.targets[0].LastRequestedAt = now
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatal(err)
+	}
+	if len(evaluator.calls) != 5 {
+		t.Errorf("evaluations after attachment and approval = %d, want 5", len(evaluator.calls))
 	}
 
-	store.targets = []EvaluationTarget{first}
+	store.targets = nil
 	now = now.Add(time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() with returning waiter error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab without waiters error = %v", err)
 	}
-	if len(evaluator.calls) != 4 {
-		t.Errorf("returning waiter evaluations = %d, want 4", len(evaluator.calls))
+	if len(coordinator.sources["homelab"].states) != 0 || len(evaluator.calls) != 5 {
+		t.Errorf("idle coordinator states = %d, evaluations = %d", len(coordinator.sources["homelab"].states), len(evaluator.calls))
+	}
+
+	store.targets = []EvaluationDemand{first}
+	now = now.Add(time.Second)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab with returning waiter error = %v", err)
+	}
+	if len(evaluator.calls) != 6 {
+		t.Errorf("returning waiter evaluations = %d, want 6", len(evaluator.calls))
 	}
 }
 
-func TestCoordinatorSeparatesDistinctDefinitions(t *testing.T) {
+func TestCoordinatorKeepsPollingHealthySourceWhileAnotherIsBusy(t *testing.T) {
 	t.Parallel()
 
-	first := EvaluationTarget{
-		RepositoryID:      uuid.New(),
-		GateName:          "network-idle",
-		CatalogRevisionID: uuid.New(),
-		Definition:        testEvaluationDefinition("network_active_changes"),
-	}
-	second := first
-	second.GateName = "change-window"
-	second.Definition = testEvaluationDefinition("change_window_open")
-	store := &recordingEvaluationStore{targets: []EvaluationTarget{first, second}}
-	evaluator := &recordingDefinitionEvaluator{
-		observation: Observation{State: ObservationUnavailable, Diagnostic: "Prometheus request timed out."},
-	}
-	coordinator := newCoordinator(
-		store,
-		testEvaluationSources(),
-		map[string]definitionEvaluator{"homelab": evaluator},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
-	coordinator.now = func() time.Time {
-		return time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
-	}
-	coordinator.jitter = func(interval time.Duration) time.Duration { return interval }
+	synctest.Test(t, func(t *testing.T) {
+		healthy := EvaluationDemand{
+			RepositoryID:      uuid.New(),
+			GateName:          "healthy",
+			CatalogRevisionID: uuid.New(),
+			Definition:        testEvaluationDefinition("healthy"),
+		}
+		slow := healthy
+		slow.GateName = "slow"
+		slow.Definition.Prometheus.Source = "slow"
+		removed := healthy
+		removed.GateName = "removed"
+		removed.Definition.Prometheus.Source = "removed"
+		store := &recordingEvaluationStore{targets: []EvaluationDemand{healthy, slow, removed}}
 
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
-	}
-	if len(evaluator.calls) != 2 || len(store.observations) != 2 {
-		t.Fatalf("evaluations = %d, observations = %d, want 2 each",
-			len(evaluator.calls), len(store.observations))
-	}
-	if !reflect.DeepEqual(store.observations[0].Observation, evaluator.observation) ||
-		!reflect.DeepEqual(store.observations[1].Observation, evaluator.observation) {
-		t.Errorf("unavailable observations were not persisted")
-	}
+		healthyEvaluator := &recordingDefinitionEvaluator{
+			observation: Observation{State: ObservationPassing, Value: new(0.0)},
+		}
+		slowEvaluator := &blockingDefinitionEvaluator{
+			started: make(chan struct{}, 1),
+			release: make(chan struct{}),
+		}
+		sources := testEvaluationSources()
+		sources["slow"] = sources["homelab"]
+		coordinator := testCoordinator(t, store, sources, healthyEvaluator)
+		coordinator.sources["slow"].evaluator = slowEvaluator
+		assertHealthyObservations := func(want int) {
+			t.Helper()
+			store.mu.Lock()
+			defer store.mu.Unlock()
+
+			if len(store.observations) != want || store.observations[want-1].GateName != healthy.GateName ||
+				!store.observations[want-1].EvaluatedAt.Equal(time.Now()) {
+				t.Fatalf("observations while the slow source is busy = %#v, want %d from the healthy source",
+					store.observations, want)
+			}
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			coordinator.Run(ctx)
+		}()
+
+		synctest.Wait()
+		select {
+		case <-slowEvaluator.started:
+		default:
+			t.Fatal("slow source did not start")
+		}
+		assertHealthyObservations(1)
+
+		time.Sleep(sources["homelab"].Prometheus.EvaluationInterval)
+		synctest.Wait()
+		assertHealthyObservations(2)
+		if len(slowEvaluator.started) != 0 {
+			t.Error("a second slow query started while the first was busy")
+		}
+
+		cancel()
+		<-stopped
+	})
 }
 
 func TestCoordinatorBoundsEvaluationConcurrencyPerSource(t *testing.T) {
 	t.Parallel()
 
-	targets := make([]EvaluationTarget, 0, 4)
+	targets := make([]EvaluationDemand, 0, 4)
 	for _, query := range []string{"first", "second", "third", "fourth"} {
-		targets = append(targets, EvaluationTarget{
+		targets = append(targets, EvaluationDemand{
 			RepositoryID:      uuid.New(),
 			GateName:          query,
 			CatalogRevisionID: uuid.New(),
@@ -172,17 +209,13 @@ func TestCoordinatorBoundsEvaluationConcurrencyPerSource(t *testing.T) {
 	source := sources["homelab"]
 	source.Prometheus.MaximumConcurrency = 2
 	sources["homelab"] = source
-	coordinator := newCoordinator(
-		store,
-		sources,
-		map[string]definitionEvaluator{"homelab": evaluator},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
-	coordinator.jitter = func(interval time.Duration) time.Duration { return interval }
+	coordinator := testCoordinator(t, store, sources, evaluator)
+	var clockSeconds atomic.Int64
+	coordinator.now = func() time.Time { return time.Unix(clockSeconds.Load(), 0).UTC() }
 
 	finished := make(chan error, 1)
 	go func() {
-		finished <- coordinator.Reconcile(t.Context())
+		finished <- reconcileTestSource(t.Context(), coordinator)
 	}()
 
 	for range 2 {
@@ -197,12 +230,22 @@ func TestCoordinatorBoundsEvaluationConcurrencyPerSource(t *testing.T) {
 		t.Fatal("source concurrency limit was exceeded")
 	case <-time.After(25 * time.Millisecond):
 	}
+	clockSeconds.Store(60)
 	close(evaluator.release)
 	if err := <-finished; err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+		t.Fatalf("reconcile homelab error = %v", err)
 	}
 	if evaluator.maximumActive != 2 {
 		t.Errorf("maximum concurrent evaluations = %d, want 2", evaluator.maximumActive)
+	}
+	var laterQueries int
+	for _, observation := range store.observations {
+		if observation.EvaluatedAt.Unix() == 60 {
+			laterQueries++
+		}
+	}
+	if laterQueries != 2 {
+		t.Errorf("queries timestamped after waiting for capacity = %d, want 2", laterQueries)
 	}
 }
 
@@ -210,30 +253,24 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
-	target := EvaluationTarget{
+	target := EvaluationDemand{
 		RepositoryID:      uuid.New(),
 		GateName:          "network-idle",
 		CatalogRevisionID: uuid.New(),
 		Definition:        testEvaluationDefinition("network_active_changes"),
 	}
-	store := &recordingEvaluationStore{targets: []EvaluationTarget{target}}
+	store := &recordingEvaluationStore{targets: []EvaluationDemand{target}}
 	zero := float64(0)
 	evaluator := &sequenceDefinitionEvaluator{observations: []Observation{
 		{State: ObservationUnavailable, Diagnostic: "Prometheus request timed out."},
 		{State: ObservationUnavailable, Diagnostic: "Prometheus request timed out."},
 		{State: ObservationPassing, Value: &zero},
 	}}
-	coordinator := newCoordinator(
-		store,
-		testEvaluationSources(),
-		map[string]definitionEvaluator{"homelab": evaluator},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
+	coordinator := testCoordinator(t, store, testEvaluationSources(), evaluator)
 	coordinator.now = func() time.Time { return now }
-	coordinator.jitter = func(interval time.Duration) time.Duration { return interval }
 
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("first reconcile homelab error = %v", err)
 	}
 	state := onlyEvaluationState(t, coordinator)
 	if state.failures != 1 || !state.next.Equal(now.Add(15*time.Second)) {
@@ -241,8 +278,8 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	}
 
 	now = now.Add(15 * time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("second reconcile homelab error = %v", err)
 	}
 	state = onlyEvaluationState(t, coordinator)
 	if state.failures != 2 || !state.next.Equal(now.Add(30*time.Second)) {
@@ -250,16 +287,16 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	}
 
 	now = now.Add(29 * time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("Reconcile() during backoff error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("reconcile homelab during backoff error = %v", err)
 	}
 	if evaluator.calls != 2 {
 		t.Fatalf("evaluations during backoff = %d, want 2", evaluator.calls)
 	}
 
 	now = now.Add(time.Second)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("recovery Reconcile() error = %v", err)
+	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
+		t.Fatalf("recovery reconcile homelab error = %v", err)
 	}
 	state = onlyEvaluationState(t, coordinator)
 	if state.failures != 0 || !state.next.Equal(now.Add(15*time.Second)) {
@@ -267,68 +304,21 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	}
 }
 
-func TestCoordinatorCleansInactiveObservationsOnMaintenanceCadence(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
-	store := &recordingEvaluationStore{}
-	coordinator := newCoordinator(
-		store,
-		testEvaluationSources(),
-		map[string]definitionEvaluator{"homelab": &recordingDefinitionEvaluator{}},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
-	coordinator.now = func() time.Time { return now }
-
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("initial Reconcile() error = %v", err)
+func testCoordinator(t *testing.T, store EvaluationStore, sources SourceSet, evaluator definitionEvaluator) *Coordinator {
+	t.Helper()
+	coordinator, err := NewCoordinator(store, sources, uuid.New(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(store.cleanups, []time.Time{now.Add(-24 * time.Hour)}) {
-		t.Fatalf("initial cleanup cutoffs = %v", store.cleanups)
-	}
-
-	now = now.Add(59 * time.Minute)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("early Reconcile() error = %v", err)
-	}
-	if len(store.cleanups) != 1 {
-		t.Fatalf("early cleanup calls = %d, want 1", len(store.cleanups))
-	}
-
-	now = now.Add(time.Minute)
-	if err := coordinator.Reconcile(t.Context()); err != nil {
-		t.Fatalf("due Reconcile() error = %v", err)
-	}
-	if !reflect.DeepEqual(store.cleanups, []time.Time{
-		now.Add(-25 * time.Hour),
-		now.Add(-24 * time.Hour),
-	}) {
-		t.Errorf("cleanup cutoffs = %v", store.cleanups)
-	}
+	coordinator.sources["homelab"].evaluator = evaluator
+	coordinator.jitter = func(interval time.Duration) time.Duration { return interval }
+	return coordinator
 }
 
-func TestCoordinatorNotifyCoalescesWakeups(t *testing.T) {
-	t.Parallel()
-
-	coordinator := newCoordinator(
-		&recordingEvaluationStore{},
-		testEvaluationSources(),
-		map[string]definitionEvaluator{"homelab": &recordingDefinitionEvaluator{}},
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	)
-	coordinator.Notify()
-	coordinator.Notify()
-
-	select {
-	case <-coordinator.wakeups:
-	default:
-		t.Fatal("Notify() did not queue a wakeup")
-	}
-	select {
-	case <-coordinator.wakeups:
-		t.Fatal("Notify() did not coalesce wakeups")
-	default:
-	}
+func reconcileTestSource(ctx context.Context, coordinator *Coordinator) error {
+	coordinator.refreshDemand(ctx)
+	source := coordinator.sources["homelab"]
+	return coordinator.reconcileSource(ctx, source, <-source.demand)
 }
 
 func testEvaluationDefinition(query string) Definition {
@@ -353,10 +343,10 @@ func testEvaluationSources() SourceSet {
 
 func onlyEvaluationState(t *testing.T, coordinator *Coordinator) evaluationState {
 	t.Helper()
-	if len(coordinator.states) != 1 {
-		t.Fatalf("evaluation states = %d, want 1", len(coordinator.states))
+	if len(coordinator.sources["homelab"].states) != 1 {
+		t.Fatalf("evaluation states = %d, want 1", len(coordinator.sources["homelab"].states))
 	}
-	for _, state := range coordinator.states {
+	for _, state := range coordinator.sources["homelab"].states {
 		return state
 	}
 
@@ -365,16 +355,23 @@ func onlyEvaluationState(t *testing.T, coordinator *Coordinator) evaluationState
 
 type recordingEvaluationStore struct {
 	mu           sync.Mutex
-	targets      []EvaluationTarget
+	targets      []EvaluationDemand
 	observations []CurrentObservation
-	cleanups     []time.Time
 }
 
-func (s *recordingEvaluationStore) ListGateEvaluationTargets(context.Context) ([]EvaluationTarget, error) {
+func (s *recordingEvaluationStore) ListGateEvaluationDemand(context.Context) ([]EvaluationDemand, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return slicesClone(s.targets), nil
+	demand := slices.Clone(s.targets)
+	for i := range demand {
+		digest, err := demand[i].Definition.Digest()
+		if err != nil {
+			return nil, err
+		}
+		demand[i].DefinitionDigest = digest
+	}
+	return demand, nil
 }
 
 func (s *recordingEvaluationStore) UpsertGateObservation(_ context.Context, observation CurrentObservation) error {
@@ -384,15 +381,6 @@ func (s *recordingEvaluationStore) UpsertGateObservation(_ context.Context, obse
 	s.observations = append(s.observations, observation)
 
 	return nil
-}
-
-func (s *recordingEvaluationStore) DeleteInactiveGateObservations(_ context.Context, before time.Time) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.cleanups = append(s.cleanups, before)
-
-	return 0, nil
 }
 
 type recordingDefinitionEvaluator struct {
@@ -410,7 +398,7 @@ type blockingDefinitionEvaluator struct {
 }
 
 func (e *blockingDefinitionEvaluator) Evaluate(
-	_ context.Context,
+	ctx context.Context,
 	_ Definition,
 	_ time.Time,
 ) Observation {
@@ -418,11 +406,17 @@ func (e *blockingDefinitionEvaluator) Evaluate(
 	e.active++
 	e.maximumActive = max(e.maximumActive, e.active)
 	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		e.active--
+		e.mu.Unlock()
+	}()
 	e.started <- struct{}{}
-	<-e.release
-	e.mu.Lock()
-	e.active--
-	e.mu.Unlock()
+	select {
+	case <-e.release:
+	case <-ctx.Done():
+		return Observation{State: ObservationUnavailable, Diagnostic: "Prometheus request was canceled."}
+	}
 
 	value := float64(0)
 
@@ -456,8 +450,4 @@ func (e *recordingDefinitionEvaluator) Evaluate(
 	e.calls = append(e.calls, definition)
 
 	return e.observation
-}
-
-func slicesClone[T any](values []T) []T {
-	return append([]T(nil), values...)
 }

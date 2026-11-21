@@ -62,12 +62,6 @@ INSERT INTO run_gates (
     sqlc.arg(attachment_order)
 );
 
--- name: ListRunGateNames :many
-SELECT gate_name
-FROM run_gates
-WHERE run_id = sqlc.arg(run_id)
-ORDER BY attachment_order;
-
 -- name: GetRunByIdempotencyKey :one
 SELECT *
 FROM runs
@@ -224,6 +218,7 @@ JOIN targets AS target_state
   ON target_state.id = queued.target_id
 WHERE queued.phase = 'queued'
   AND queued.review_state IN ('not-required', 'approved')
+  AND run_gates_allow_dispatch(queued.id, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
   AND (
       SELECT count(*)
       FROM runs AS active
@@ -426,32 +421,7 @@ WITH active_runs AS (
     WHERE queued.cluster_name = sqlc.arg(cluster_name)
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
-      AND NOT EXISTS (
-          SELECT 1
-          FROM run_gates
-          WHERE run_gates.run_id = queued.id
-            AND run_gates.released_at IS NULL
-            AND NOT EXISTS (
-                SELECT 1
-                FROM repositories
-                JOIN catalog_revisions
-                  ON catalog_revisions.id = repositories.active_catalog_revision_id
-                JOIN catalog_gates
-                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
-                 AND catalog_gates.name = run_gates.gate_name
-                JOIN gate_observations
-                  ON gate_observations.repository_id = run_gates.repository_id
-                 AND gate_observations.gate_name = run_gates.gate_name
-                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
-                 AND gate_observations.definition_digest = catalog_gates.definition_digest
-                 AND gate_observations.evaluator_process_id = sqlc.arg(evaluator_process_id)
-                 AND gate_observations.state = 'passing'
-                 AND gate_observations.evaluated_at <= sqlc.arg(assigned_at)
-                 AND gate_observations.valid_until > sqlc.arg(assigned_at)
-                WHERE repositories.id = run_gates.repository_id
-                  AND repositories.removed_at IS NULL
-            )
-      )
+      AND run_gates_allow_dispatch(queued.id, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(assigned_at)::timestamptz)
       AND (
           SELECT count(*)
           FROM active_runs

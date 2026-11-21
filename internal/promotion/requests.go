@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -66,15 +67,11 @@ type PromotionRequestStore interface {
 	ReleasePromotionGates(context.Context, uuid.UUID, uuid.UUID, time.Time) (bool, error)
 }
 
-type GateEvaluationNotifier interface {
-	Notify()
-}
-
 type RequestService struct {
 	integrations           IntegrationSet
 	requests               PromotionRequestStore
 	gateEvaluatorProcessID uuid.UUID
-	gateEvaluations        GateEvaluationNotifier
+	gateEvaluations        gate.EvaluationNotifier
 	newID                  func() uuid.UUID
 	now                    func() time.Time
 }
@@ -83,7 +80,7 @@ func NewRequestService(
 	integrations IntegrationSet,
 	requests PromotionRequestStore,
 	gateEvaluatorProcessID uuid.UUID,
-	gateEvaluations GateEvaluationNotifier,
+	gateEvaluations gate.EvaluationNotifier,
 ) *RequestService {
 	return &RequestService{
 		integrations:           integrations,

@@ -1,13 +1,13 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -21,88 +21,6 @@ import (
 	"github.com/slipramp/slipramp/internal/run"
 )
 
-func TestGateObservationPersistenceIntegration(t *testing.T) {
-	ctx, _, database := openIntegrationDatabase(t)
-	defer database.Close()
-
-	repositoryID := uuid.New()
-	revisionID := uuid.New()
-	evaluatedAt := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
-	createGateTestRepository(t, database, repositoryID, revisionID, evaluatedAt)
-
-	definition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
-	digest, err := definition.Digest()
-	if err != nil {
-		t.Fatalf("digest Gate definition: %v", err)
-	}
-	_, err = database.GetGateObservation(
-		ctx,
-		repositoryID,
-		"network-idle",
-		revisionID,
-		digest,
-	)
-	if !errors.Is(err, gate.ErrObservationNotFound) {
-		t.Fatalf("missing observation error = %v", err)
-	}
-
-	observedValue := 0.0
-	passing := gate.CurrentObservation{
-		RepositoryID:       repositoryID,
-		GateName:           "network-idle",
-		CatalogRevisionID:  revisionID,
-		DefinitionDigest:   digest,
-		EvaluatorProcessID: uuid.New(),
-		Observation: gate.Observation{
-			State: gate.ObservationPassing,
-			Value: &observedValue,
-		},
-		EvaluatedAt: evaluatedAt,
-		ValidUntil:  evaluatedAt.Add(45 * time.Second),
-	}
-	if err := database.UpsertGateObservation(ctx, passing); err != nil {
-		t.Fatalf("UpsertGateObservation() error = %v", err)
-	}
-	stored, err := database.GetGateObservation(
-		ctx,
-		repositoryID,
-		passing.GateName,
-		revisionID,
-		digest,
-	)
-	if err != nil {
-		t.Fatalf("GetGateObservation() error = %v", err)
-	}
-	if !reflect.DeepEqual(stored, passing) {
-		t.Errorf("stored observation = %#v, want %#v", stored, passing)
-	}
-
-	unavailable := passing
-	unavailable.EvaluatorProcessID = uuid.New()
-	unavailable.Observation = gate.Observation{
-		State:      gate.ObservationUnavailable,
-		Diagnostic: "Prometheus request timed out.",
-	}
-	unavailable.EvaluatedAt = evaluatedAt.Add(time.Minute)
-	unavailable.ValidUntil = unavailable.EvaluatedAt.Add(45 * time.Second)
-	if err := database.UpsertGateObservation(ctx, unavailable); err != nil {
-		t.Fatalf("replace Gate observation: %v", err)
-	}
-	stored, err = database.GetGateObservation(
-		ctx,
-		repositoryID,
-		passing.GateName,
-		revisionID,
-		digest,
-	)
-	if err != nil {
-		t.Fatalf("get replaced Gate observation: %v", err)
-	}
-	if !reflect.DeepEqual(stored, unavailable) {
-		t.Errorf("replaced observation = %#v, want %#v", stored, unavailable)
-	}
-}
-
 func TestInactiveGateObservationCleanupPreservesActiveDemandIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
@@ -112,7 +30,7 @@ func TestInactiveGateObservationCleanupPreservesActiveDemandIntegration(t *testi
 	now := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
 	createGateTestRepository(t, database, repositoryID, oldRevisionID, now.Add(-2*time.Hour))
 
-	definition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	definition := persistedCatalog("1.14.3").Gates[0].Spec
 	digest, err := definition.Digest()
 	if err != nil {
 		t.Fatalf("digest Gate definition: %v", err)
@@ -157,23 +75,14 @@ func TestInactiveGateObservationCleanupPreservesActiveDemandIntegration(t *testi
 	if deleted != 1 {
 		t.Fatalf("deleted Gate observations = %d, want 1", deleted)
 	}
-	if _, err := database.GetGateObservation(
-		ctx,
-		repositoryID,
-		"network-idle",
-		oldRevisionID,
-		digest,
-	); !errors.Is(err, gate.ErrObservationNotFound) {
-		t.Errorf("old Gate observation error = %v, want not found", err)
+	summaries, err := database.ListRunGateSummaries(ctx, []uuid.UUID{record.ID}, activeObservation.EvaluatorProcessID, now)
+	if err != nil {
+		t.Fatalf("read retained Gate evidence: %v", err)
 	}
-	if _, err := database.GetGateObservation(
-		ctx,
-		repositoryID,
-		"network-idle",
-		activeRevisionID,
-		digest,
-	); err != nil {
-		t.Errorf("active Gate observation error = %v", err)
+	requirements := summaries[record.ID]
+	if len(requirements) != 1 || requirements[0].State != gate.RequirementUnavailable ||
+		requirements[0].EvaluatedAt == nil || !requirements[0].EvaluatedAt.Equal(activeObservation.EvaluatedAt) {
+		t.Errorf("active observation after cleanup = %#v", requirements)
 	}
 }
 
@@ -203,36 +112,26 @@ func TestPrometheusGateEvaluationRecoversAndRequiresCurrentProcessIntegration(t 
 		t.Fatalf("create gated Run: %v", err)
 	}
 
-	blocking := newPrometheusGateCoordinator(t, database, source.URL)
-	if err := blocking.Reconcile(ctx); err != nil {
-		t.Fatalf("evaluate blocking Gate: %v", err)
-	}
-	assertNoGateRunAssignment(t, database, blocking.ProcessID(), time.Now().UTC())
+	firstProcess := uuid.New()
+	evaluatePrometheusGate(t, ctx, database, source.URL, firstProcess, gate.ObservationBlocking)
+	assertNoGateRunAssignment(t, database, firstProcess, time.Now().UTC())
 
 	sourceState.Store(1)
-	passing := newPrometheusGateCoordinator(t, database, source.URL)
-	if err := passing.Reconcile(ctx); err != nil {
-		t.Fatalf("evaluate passing Gate: %v", err)
-	}
-	restarted := newPrometheusGateCoordinator(t, database, source.URL)
-	assertNoGateRunAssignment(t, database, restarted.ProcessID(), time.Now().UTC())
+	evaluatePrometheusGate(t, ctx, database, source.URL, firstProcess, gate.ObservationPassing)
+	restartedProcess := uuid.New()
+	assertNoGateRunAssignment(t, database, restartedProcess, time.Now().UTC())
 
 	sourceState.Store(2)
-	if err := restarted.Reconcile(ctx); err != nil {
-		t.Fatalf("evaluate unavailable Gate: %v", err)
-	}
-	assertNoGateRunAssignment(t, database, restarted.ProcessID(), time.Now().UTC())
+	evaluatePrometheusGate(t, ctx, database, source.URL, restartedProcess, gate.ObservationUnavailable)
+	assertNoGateRunAssignment(t, database, restartedProcess, time.Now().UTC())
 
 	sourceState.Store(1)
-	recovered := newPrometheusGateCoordinator(t, database, source.URL)
-	if err := recovered.Reconcile(ctx); err != nil {
-		t.Fatalf("evaluate recovered Gate: %v", err)
-	}
+	evaluatePrometheusGate(t, ctx, database, source.URL, restartedProcess, gate.ObservationPassing)
 	assigned, err := database.ClaimQueuedRun(
 		ctx,
 		"colo",
 		testSchedulingCapacity(),
-		recovered.ProcessID(),
+		restartedProcess,
 		time.Now().UTC(),
 	)
 	if err != nil {
@@ -243,24 +142,68 @@ func TestPrometheusGateEvaluationRecoversAndRequiresCurrentProcessIntegration(t 
 	}
 }
 
-func newPrometheusGateCoordinator(t *testing.T, database *Database, sourceURL string) *gate.Coordinator {
+func evaluatePrometheusGate(
+	t *testing.T,
+	ctx context.Context,
+	database *Database,
+	sourceURL string,
+	processID uuid.UUID,
+	wantState gate.ObservationState,
+) {
 	t.Helper()
 
+	store := recordingGateStore{Database: database, observations: make(chan gate.CurrentObservation, 1)}
 	coordinator, err := gate.NewCoordinator(
-		database,
+		store,
 		gate.SourceSet{"homelab": {Prometheus: gate.PrometheusSource{
 			URL:                sourceURL,
 			EvaluationInterval: 15 * time.Second,
 			Timeout:            5 * time.Second,
 			MaximumConcurrency: 2,
 		}}},
+		processID,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("NewCoordinator() error = %v", err)
 	}
 
-	return coordinator
+	runContext, cancel := context.WithCancel(ctx)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		coordinator.Run(runContext)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+
+	select {
+	case observation := <-store.observations:
+		if observation.Observation.State != wantState {
+			t.Fatalf("recorded observation = %#v, want state %q", observation, wantState)
+		}
+	case <-ctx.Done():
+		t.Fatalf("wait for Gate observation: %v", ctx.Err())
+	}
+}
+
+type recordingGateStore struct {
+	*Database
+	observations chan gate.CurrentObservation
+}
+
+func (s recordingGateStore) UpsertGateObservation(ctx context.Context, observation gate.CurrentObservation) error {
+	if err := s.Database.UpsertGateObservation(ctx, observation); err != nil {
+		return err
+	}
+	select {
+	case s.observations <- observation:
+	case <-ctx.Done():
+	}
+	return nil
 }
 
 func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
@@ -277,32 +220,48 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, record, nil); err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
 	}
-	names, err := database.queries.ListRunGateNames(ctx, databaseUUID(record.ID))
+	summaries, err := database.ListRunGateSummaries(ctx, []uuid.UUID{record.ID}, uuid.New(), createdAt)
 	if err != nil {
-		t.Fatalf("list Run Gates: %v", err)
+		t.Fatalf("read Run Gate evidence: %v", err)
 	}
-	if !reflect.DeepEqual(names, record.Snapshot.Action.Gates) {
-		t.Errorf("Run Gates = %v, want %v", names, record.Snapshot.Action.Gates)
+	requirements := summaries[record.ID]
+	wantDefinition := persistedCatalog("1.14.3").Gates[0].Spec
+	if requirements.State() != gate.SummaryWaiting || len(requirements) != 2 ||
+		requirements[0].Name != "network-idle" || requirements[0].State != gate.RequirementUnevaluated ||
+		requirements[0].Condition == nil || *requirements[0].Condition != wantDefinition.Prometheus.Condition ||
+		requirements[1].Name != "change-window" || requirements[1].State != gate.RequirementUnavailable ||
+		requirements[1].Condition != nil {
+		t.Fatalf("ordered Run Gate requirements = %#v", requirements)
 	}
-	targets, err := database.ListGateEvaluationTargets(ctx)
+	targets, err := database.ListGateEvaluationDemand(ctx)
 	if err != nil {
-		t.Fatalf("ListGateEvaluationTargets() error = %v", err)
+		t.Fatalf("ListGateEvaluationDemand() error = %v", err)
 	}
-	wantDefinition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
 	if len(targets) != 1 || targets[0].RepositoryID != repositoryID ||
 		targets[0].GateName != "network-idle" || targets[0].CatalogRevisionID != revisionID ||
-		!reflect.DeepEqual(targets[0].Definition, wantDefinition) {
-		t.Errorf("Gate evaluation targets = %#v", targets)
+		targets[0].WaiterCount != 1 || !targets[0].LastRequestedAt.Equal(createdAt) ||
+		targets[0].Definition != wantDefinition {
+		t.Errorf("Gate evaluation demand = %#v", targets)
 	}
+	metricsSource := database.MetricsSnapshotSource(uuid.Nil)
+	metrics, err := metricsSource.LoadMetricsSnapshot(ctx, createdAt)
+	if err != nil || metrics.WaitingGateSubjects["run"] != 1 {
+		t.Fatalf("waiting Runs with two Gate requirements = %v, error = %v", metrics.WaitingGateSubjects, err)
+	}
+
 	if _, err := database.CancelRun(ctx, record.ID, createdAt.Add(time.Second), nil); err != nil {
 		t.Fatalf("cancel queued Run: %v", err)
 	}
-	targets, err = database.ListGateEvaluationTargets(ctx)
+	targets, err = database.ListGateEvaluationDemand(ctx)
 	if err != nil {
-		t.Fatalf("ListGateEvaluationTargets() after cancellation error = %v", err)
+		t.Fatalf("ListGateEvaluationDemand() after cancellation error = %v", err)
 	}
 	if len(targets) != 0 {
-		t.Errorf("Gate evaluation targets after cancellation = %#v", targets)
+		t.Errorf("Gate evaluation demand after cancellation = %#v", targets)
+	}
+	metrics, err = metricsSource.LoadMetricsSnapshot(ctx, createdAt.Add(time.Second))
+	if err != nil || metrics.WaitingGateSubjects["run"] != 0 {
+		t.Errorf("waiting Runs after cancellation = %v, error = %v", metrics.WaitingGateSubjects, err)
 	}
 
 	invalid := gateTestRun(t, database, repositoryID, revisionID, createdAt.Add(time.Minute))
@@ -327,17 +286,6 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	record := gateTestRun(t, database, repositoryID, revisionID, createdAt)
 	if _, err := database.CreateRun(ctx, record, nil); err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
-	}
-	projections, err := database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
-	if err != nil {
-		t.Fatalf("ListRunGateProjections() error = %v", err)
-	}
-	wantDefinition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
-	if len(projections) != 1 || projections[0].RunID != record.ID ||
-		projections[0].Name != "network-idle" || projections[0].ActiveDefinition == nil ||
-		!reflect.DeepEqual(*projections[0].ActiveDefinition, wantDefinition) ||
-		projections[0].CurrentObservation != nil || projections[0].ReleasedAt != nil {
-		t.Errorf("unreleased Run Gate projection = %#v", projections)
 	}
 	ungated := gateTestRun(t, database, repositoryID, revisionID, createdAt.Add(time.Second))
 	ungated.Snapshot.Action.Gates = nil
@@ -375,7 +323,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	evaluatorID := uuid.New()
 	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
 
-	definition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	definition := persistedCatalog("1.14.3").Gates[0].Spec
 	digest, err := definition.Digest()
 	if err != nil {
 		t.Fatalf("digest Gate definition: %v", err)
@@ -404,13 +352,6 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 		State: gate.ObservationPassing,
 		Value: &observedValue,
 	}
-	observation.EvaluatorProcessID = uuid.New()
-	if err := database.UpsertGateObservation(ctx, observation); err != nil {
-		t.Fatalf("record prior-process Gate observation: %v", err)
-	}
-	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
-
-	observation.EvaluatorProcessID = evaluatorID
 	observation.EvaluatedAt = assignedAt.Add(-time.Minute)
 	observation.ValidUntil = assignedAt
 	if err := database.UpsertGateObservation(ctx, observation); err != nil {
@@ -423,17 +364,20 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	if err := database.UpsertGateObservation(ctx, observation); err != nil {
 		t.Fatalf("record passing Gate observation: %v", err)
 	}
-	projections, err = database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
+	waiting, err := database.ListRunGateSummaries(ctx, []uuid.UUID{record.ID}, evaluatorID, assignedAt)
 	if err != nil {
 		t.Fatalf("list observed Run Gate projection: %v", err)
 	}
-	if len(projections) != 1 || projections[0].CurrentObservation == nil ||
-		!reflect.DeepEqual(*projections[0].CurrentObservation, observation) {
-		t.Errorf("observed Run Gate projection = %#v", projections)
+	requirements := waiting[record.ID]
+	if len(requirements) != 1 || requirements[0].State != gate.RequirementPassing ||
+		requirements[0].Value == nil || *requirements[0].Value != observedValue ||
+		requirements[0].EvaluatedAt == nil || !requirements[0].EvaluatedAt.Equal(observation.EvaluatedAt) {
+		t.Errorf("observed Run Gate projection = %#v", requirements)
 	}
 
 	releaseRevisionID := uuid.New()
 	releaseCatalog := persistedCatalog("1.14.4")
+	releaseCatalog.Gates[0].Metadata.Title = "Release window"
 	releaseCatalog.Gates[0].Spec.Prometheus.Condition.Value = 2
 	refresh := successfulCatalogRefresh(
 		strings.Repeat("c", 40),
@@ -446,7 +390,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	assertNoGateRunAssignment(t, database, evaluatorID, assignedAt)
 
-	definition = releaseCatalog.Gates[0].NormalizedDefinition()
+	definition = releaseCatalog.Gates[0].Spec
 	digest, err = definition.Digest()
 	if err != nil {
 		t.Fatalf("digest changed Gate definition: %v", err)
@@ -515,7 +459,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	if !releasedAt.Equal(assignedAt) ||
 		uuid.UUID(releaseCatalogRevisionID.Bytes) != releaseRevisionID ||
-		!reflect.DeepEqual(releasedDefinition, definition) ||
+		releasedDefinition != definition ||
 		releaseDefinitionDigest != digest ||
 		uuid.UUID(releaseEvaluatorID.Bytes) != evaluatorID ||
 		releaseObservedValue != observedValue ||
@@ -524,22 +468,27 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 		t.Errorf("released Gate evidence does not match current observation")
 	}
 
-	targets, err := database.ListGateEvaluationTargets(ctx)
+	targets, err := database.ListGateEvaluationDemand(ctx)
 	if err != nil {
-		t.Fatalf("ListGateEvaluationTargets() after release error = %v", err)
+		t.Fatalf("ListGateEvaluationDemand() after release error = %v", err)
 	}
 	if len(targets) != 0 {
-		t.Errorf("Gate evaluation targets after release = %#v", targets)
+		t.Errorf("Gate evaluation demand after release = %#v", targets)
 	}
-	projections, err = database.ListRunGateProjections(ctx, []uuid.UUID{record.ID})
+	service := run.NewService(run.Dependencies{Gates: database, GateEvaluatorProcessID: evaluatorID})
+	summaries, err := service.GateSummaries(ctx, []run.Run{claimed, ungated}, assignedAt)
 	if err != nil {
-		t.Fatalf("list released Run Gate projection: %v", err)
+		t.Fatalf("read released Run Gate summary: %v", err)
 	}
-	if len(projections) != 1 || projections[0].ReleasedAt == nil ||
-		!projections[0].ReleasedAt.Equal(assignedAt) || projections[0].ReleaseDefinition == nil ||
-		!reflect.DeepEqual(*projections[0].ReleaseDefinition, definition) ||
-		projections[0].ReleaseValue == nil || *projections[0].ReleaseValue != observedValue {
-		t.Errorf("released Run Gate projection = %#v", projections)
+	summary := summaries[claimed.ID]
+	if summary.State() != gate.SummaryReleased || len(summary) != 1 ||
+		summary[0].Title != "Release window" || summary[0].ReleasedAt == nil || !summary[0].ReleasedAt.Equal(assignedAt) ||
+		summary[0].Condition == nil || *summary[0].Condition != definition.Prometheus.Condition ||
+		summary[0].Value == nil || *summary[0].Value != observedValue {
+		t.Errorf("released Run Gate summary = %#v", summary)
+	}
+	if got := summaries[ungated.ID].State(); got != gate.SummaryNotRequired {
+		t.Errorf("ungated Run summary state = %q", got)
 	}
 }
 

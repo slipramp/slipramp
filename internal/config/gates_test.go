@@ -35,7 +35,7 @@ sources:
 	if err != nil {
 		t.Fatalf("LoadServer() error = %v", err)
 	}
-	source, ok := cfg.GateSources.Lookup("homelab")
+	source, ok := cfg.GateSources["homelab"]
 	if !ok || source.Prometheus.EvaluationInterval != 20*time.Second ||
 		source.Prometheus.Timeout != 4*time.Second {
 		t.Errorf("GateSources[homelab] = %#v, %t", source, ok)

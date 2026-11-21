@@ -8,6 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ActivePassingGateEvidence struct {
+	RepositoryID       pgtype.UUID
+	GateName           string
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   string
+	Spec               []byte
+	EvaluatorProcessID pgtype.UUID
+	Value              *float64
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
+}
+
 type ApiKey struct {
 	ID                   pgtype.UUID
 	PrincipalID          pgtype.UUID
@@ -63,13 +75,12 @@ type ArtifactReport struct {
 }
 
 type CatalogGate struct {
-	CatalogSnapshotID    string
-	Name                 string
-	SourcePath           string
-	SourceDocument       int32
-	Definition           []byte
-	NormalizedDefinition []byte
-	DefinitionDigest     string
+	CatalogSnapshotID string
+	Name              string
+	SourcePath        string
+	SourceDocument    int32
+	Definition        []byte
+	DefinitionDigest  string
 }
 
 type CatalogRevision struct {
@@ -111,6 +122,16 @@ type ControllerCredential struct {
 	ClusterName string
 	Sha256      string
 	EnrolledAt  pgtype.Timestamptz
+}
+
+type GateEvaluationDemand struct {
+	RepositoryID      pgtype.UUID
+	GateName          string
+	WaiterCount       int64
+	LastRequestedAt   pgtype.Timestamptz
+	CatalogRevisionID pgtype.UUID
+	Spec              []byte
+	DefinitionDigest  string
 }
 
 type GateObservation struct {
@@ -484,6 +505,14 @@ type Target struct {
 	LastAttemptedSyncRunID  pgtype.UUID
 	LastSuccessfulSyncRunID pgtype.UUID
 	MaximumActiveRuns       int32
+}
+
+type WaitingGateRequirement struct {
+	SubjectType  string
+	SubjectID    pgtype.UUID
+	RepositoryID pgtype.UUID
+	GateName     string
+	RequestedAt  interface{}
 }
 
 type WebSession struct {

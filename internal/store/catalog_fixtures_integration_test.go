@@ -32,10 +32,10 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 			APIVersion: catalog.APIVersion,
 			Kind:       catalog.GateKind,
 			Metadata:   catalog.Metadata{Name: "network-idle"},
-			Spec: catalog.GateSpec{Prometheus: catalog.PrometheusGate{
+			Spec: gate.Definition{Prometheus: gate.PrometheusDefinition{
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
-				Condition: catalog.GateCondition{
+				Condition: gate.Condition{
 					Operator: gate.OperatorEqual,
 					Value:    0,
 				},

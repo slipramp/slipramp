@@ -22,15 +22,6 @@ func TestDefinitionDigest(t *testing.T) {
 		t.Fatalf("Digest() = %q, want %q", digest, expectedDigest)
 	}
 
-	same := definition
-	sameDigest, err := same.Digest()
-	if err != nil {
-		t.Fatalf("same Digest() error = %v", err)
-	}
-	if sameDigest != digest {
-		t.Errorf("same Digest() = %q, want %q", sameDigest, digest)
-	}
-
 	changed := definition
 	changed.Prometheus.Query = "active_sessions > 0"
 	changedDigest, err := changed.Digest()
@@ -40,26 +31,10 @@ func TestDefinitionDigest(t *testing.T) {
 	if changedDigest == digest {
 		t.Errorf("changed Digest() = %q, want a different digest", changedDigest)
 	}
-}
-
-func TestDefinitionDigestNormalizesNegativeZero(t *testing.T) {
-	t.Parallel()
-
-	positive := validDefinition()
-	positive.Prometheus.Condition.Value = 0
-	negative := positive
-	negative.Prometheus.Condition.Value = math.Copysign(0, -1)
-
-	positiveDigest, err := positive.Digest()
-	if err != nil {
-		t.Fatalf("positive Digest() error = %v", err)
-	}
-	negativeDigest, err := negative.Digest()
-	if err != nil {
-		t.Fatalf("negative Digest() error = %v", err)
-	}
-	if negativeDigest != positiveDigest {
-		t.Errorf("negative zero digest = %q, want %q", negativeDigest, positiveDigest)
+	negativeZero := definition
+	negativeZero.Prometheus.Condition.Value = math.Copysign(0, -1)
+	if got, err := negativeZero.Digest(); err != nil || got != digest {
+		t.Errorf("negative zero digest = %q, %v, want %q", got, err, digest)
 	}
 }
 

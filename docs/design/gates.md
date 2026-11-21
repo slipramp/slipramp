@@ -7,9 +7,8 @@ execution steps, approvals, terminal outcomes, or a Server-owned authorization
 boundary.
 
 The initial evaluator reads numeric observations from administrator-configured
-Prometheus sources. The feature is introduced in vertical slices: Run release
-first, then Promotion release. The same Gate semantics and evidence model apply
-to both subjects.
+Prometheus sources. Runs and Promotions share the same Gate semantics and
+evidence model.
 
 ## Repository contract
 
@@ -131,9 +130,9 @@ encrypted network already protects the transport.
 
 The focused `internal/gate` package owns normalized definitions, source and
 condition validation, definition digests, comparison semantics, Prometheus
-response normalization, evaluation coordination, and bounded diagnostics.
-Run and Promotion packages retain ownership of their release decisions; Gates
-do not introduce a generic subject or workflow abstraction.
+response normalization, evaluation coordination, bounded diagnostics, and the
+shared Run and Promotion Gate summary. The Run and Promotion packages own
+their respective release decisions.
 
 An observation has one of three states:
 
@@ -164,6 +163,8 @@ Promotions:
 - Re-evaluate on the source interval while waiters remain.
 - Query once per unique normalized definition digest even when many subjects
   share it.
+- Read evaluation demand once per reconciliation and let each configured source
+  process its latest demand independently.
 - Bound concurrency per source, add small jitter, and apply bounded failure
   backoff up to one minute.
 - Reset backoff after a successful query and stop scheduling when no waiters
@@ -173,7 +174,9 @@ A passing observation remains fresh for three normal source intervals. Release
 requires evidence from the current evaluator process, the current active
 definition, and an unexpired validity window. The Server generates a new
 evaluator process identity at startup, preventing evidence obtained with old
-endpoint or credential configuration from releasing work after restart.
+endpoint or credential configuration from releasing work after restart. If the
+active catalog still references a removed source, its Gates remain unevaluated
+while Gates using configured sources continue polling.
 
 One fresh passing observation is sufficient. Conditions that must hold for a
 duration express that duration in PromQL rather than adding a second Gate
@@ -189,9 +192,12 @@ The current-observation projection is keyed by Repository, Gate name, active
 catalog revision, and normalized definition digest. It stores evaluator process
 identity, state, optional finite value, optional bounded diagnostic, evaluation
 time, and validity time. Evaluations update the projection in place rather than
-retaining every poll indefinitely. Hourly maintenance removes observations
-that expired at least 24 hours earlier and have no matching unreleased
-requirement; immutable release evidence remains on the Run or Promotion.
+retaining every poll indefinitely. Each hour the Server maintenance coordinator
+removes observations that expired at least 24 hours earlier and have no matching
+unreleased requirement. The Run or Promotion retains its release evidence.
+Evaluation demand and waiting counts share the same set of queued Runs and
+in-flight Promotions with unreleased requirements. Only demand depends on
+whether a Gate currently resolves in the active catalog.
 
 `run_gates` and `promotion_gates` store the subject, Repository, Gate name,
 stable attachment order, optional release time, and optional immutable
@@ -260,11 +266,17 @@ repository-defined Gates.
 
 ## Product projection
 
+PostgreSQL reads the evidence for Run and Promotion summaries through one
+projection. The Gate package turns each row into a requirement state using the
+current evaluator process and observation validity window.
+
 A subject Gate summary is `not-required`, `waiting`, or `released`. Individual
 requirements project `unevaluated`, `passing`, `blocking`, `unavailable`, or
 `released`, along with the Gate name and title, finite observed value when
 present, operator and threshold, evaluation time, release time, and sanitized
-diagnostic.
+diagnostic. Released requirements use the title and condition from the release
+revision. While waiting, a Run whose Gate definition has disappeared uses the
+title from its attached revision.
 
 The product API never exposes Prometheus endpoints, credentials, response
 labels, queries, or raw responses. Run scheduling details use

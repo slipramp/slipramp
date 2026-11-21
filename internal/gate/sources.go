@@ -46,12 +46,6 @@ func (s SourceSet) Names() []string {
 	return slices.Sorted(maps.Keys(s))
 }
 
-func (s SourceSet) Lookup(name string) (Source, bool) {
-	source, ok := s[name]
-
-	return source, ok
-}
-
 func (s SourceSet) Validate() error {
 	for _, name := range s.Names() {
 		if err := kubevalidate.DNSLabel("Gate source name", name); err != nil {

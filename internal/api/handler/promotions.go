@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
+
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -60,7 +62,7 @@ type PromotionReviewService interface {
 		context.Context,
 		[]promotion.Promotion,
 		time.Time,
-	) (map[uuid.UUID]promotion.GateSummary, error)
+	) (map[uuid.UUID]gate.Summary, error)
 }
 
 func (h *Handler) SubmitKargoPromotion(
@@ -505,7 +507,7 @@ func promotionResponse(
 	review promotion.PromotionReview,
 	commits map[repository.CommitKey]api.GitCommit,
 	integrations promotion.IntegrationSet,
-	gates promotion.GateSummary,
+	gates gate.Summary,
 ) (api.Promotion, error) {
 	record := review.Promotion
 	requestedBy := apiRunActor(&record.RequestedBySnapshot)
@@ -548,7 +550,7 @@ func promotionResponse(
 		SelectedFreight:     selectedFreight,
 		ReviewRequired:      record.ReviewRequired,
 		Status:              api.PromotionStatus(record.Lifecycle.State),
-		Gates:               promotionGateSummaryResponse(gates),
+		Gates:               gateSummaryResponse(gates),
 		Message:             record.Message,
 		CreationDispatch: api.PromotionCreationDispatch{
 			Phase:         api.PromotionCreationDispatchPhase(record.CreationDispatch.Phase(record.Source)),
@@ -694,33 +696,6 @@ func (h *Handler) promotionDetailResponse(
 	}
 
 	return body, nil
-}
-
-func promotionGateSummaryResponse(summary promotion.GateSummary) api.GateSummary {
-	requirements := make([]api.GateRequirement, 0, len(summary.Requirements))
-	for _, requirement := range summary.Requirements {
-		var operator *api.GateOperator
-		if requirement.Operator != nil {
-			value := api.GateOperator(*requirement.Operator)
-			operator = &value
-		}
-		requirements = append(requirements, api.GateRequirement{
-			Name:        api.CatalogName(requirement.Name),
-			Title:       optionalString(requirement.Title),
-			State:       api.GateRequirementState(requirement.State),
-			Value:       requirement.Value,
-			Operator:    operator,
-			Threshold:   requirement.Threshold,
-			EvaluatedAt: requirement.EvaluatedAt,
-			ReleasedAt:  requirement.ReleasedAt,
-			Diagnostic:  optionalString(requirement.Diagnostic),
-		})
-	}
-
-	return api.GateSummary{
-		State:        api.GateSummaryState(summary.State),
-		Requirements: requirements,
-	}
 }
 
 func valueOrNilUUID(value *uuid.UUID) uuid.UUID {

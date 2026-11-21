@@ -142,10 +142,10 @@ func validCatalog() catalog.Catalog {
 	return catalog.Catalog{
 		Gates: []catalog.Gate{{
 			Metadata: catalog.Metadata{Name: "network-idle"},
-			Spec: catalog.GateSpec{Prometheus: catalog.PrometheusGate{
+			Spec: gate.Definition{Prometheus: gate.PrometheusDefinition{
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
-				Condition: catalog.GateCondition{
+				Condition: gate.Condition{
 					Operator: gate.OperatorEqual,
 					Value:    0,
 				},

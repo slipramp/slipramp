@@ -186,9 +186,9 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 	}
 	assertNoPromotionCreationDispatch(t, fixture, claim)
 
-	targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx)
+	targets, err := fixture.database.ListGateEvaluationDemand(fixture.ctx)
 	if err != nil || len(targets) != 1 {
-		t.Fatalf("Promotion Gate evaluation targets = %#v, %v", targets, err)
+		t.Fatalf("Promotion Gate evaluation demand = %#v, %v", targets, err)
 	}
 	target := targets[0]
 	digest, err := target.Definition.Digest()
@@ -294,8 +294,8 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 	if err != nil || retry.ID != record.ID || retry.CreationDispatch.AttemptCount != 2 {
 		t.Fatalf("claim released Promotion retry = %#v, %v", retry, err)
 	}
-	if targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx); err != nil || len(targets) != 0 {
-		t.Errorf("Gate evaluation targets after Promotion release = %#v, %v", targets, err)
+	if targets, err := fixture.database.ListGateEvaluationDemand(fixture.ctx); err != nil || len(targets) != 0 {
+		t.Errorf("Gate evaluation demand after Promotion release = %#v, %v", targets, err)
 	}
 }
 

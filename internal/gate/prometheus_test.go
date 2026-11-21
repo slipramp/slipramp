@@ -2,7 +2,6 @@ package gate_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,13 +28,13 @@ func TestPrometheusEvaluator(t *testing.T) {
 			name:      "passing scalar",
 			response:  `{"status":"success","data":{"resultType":"scalar","result":[1730000000,"0"]}}`,
 			wantState: gate.ObservationPassing,
-			wantValue: float64Pointer(0),
+			wantValue: new(0.0),
 		},
 		{
 			name:      "blocking vector",
 			response:  `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"secret":"not exposed"},"value":[1730000000,"2"]}]}}`,
 			wantState: gate.ObservationBlocking,
-			wantValue: float64Pointer(2),
+			wantValue: new(2.0),
 		},
 		{
 			name:           "empty vector",
@@ -54,6 +53,18 @@ func TestPrometheusEvaluator(t *testing.T) {
 			response:       `{"status":"success","data":{"resultType":"matrix","result":[]}}`,
 			wantState:      gate.ObservationUnavailable,
 			wantDiagnostic: "unsupported",
+		},
+		{
+			name:           "null sample timestamp",
+			response:       `{"status":"success","data":{"resultType":"scalar","result":[null,"0"]}}`,
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "scalar result was invalid",
+		},
+		{
+			name:           "oversized response",
+			response:       strings.Repeat("x", gate.MaximumPrometheusResponseSize+1),
+			wantState:      gate.ObservationUnavailable,
+			wantDiagnostic: "size limit",
 		},
 		{
 			name:           "non-finite value",
@@ -129,22 +140,6 @@ func TestPrometheusEvaluator(t *testing.T) {
 	}
 }
 
-func TestPrometheusEvaluatorRejectsOversizedResponse(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		_, _ = fmt.Fprint(writer, strings.Repeat("x", gate.MaximumPrometheusResponseSize+1))
-	}))
-	defer server.Close()
-
-	evaluator := newTestPrometheusEvaluator(t, server.URL)
-	observation := evaluator.Evaluate(context.Background(), validDefinition(), time.Now())
-	if observation.State != gate.ObservationUnavailable ||
-		!strings.Contains(observation.Diagnostic, "size limit") {
-		t.Errorf("observation = %#v", observation)
-	}
-}
-
 func TestPrometheusEvaluatorUsesConfiguredPathAndBearerToken(t *testing.T) {
 	t.Parallel()
 
@@ -212,8 +207,4 @@ func validPrometheusSource(sourceURL string) gate.PrometheusSource {
 		Timeout:            5 * time.Second,
 		MaximumConcurrency: 1,
 	}
-}
-
-func float64Pointer(value float64) *float64 {
-	return new(value)
 }

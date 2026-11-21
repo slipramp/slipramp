@@ -361,17 +361,16 @@ func createCatalogRevision(
 
 const catalogSnapshotManifestVersion = 2
 
-// catalogSnapshotManifest is the durable content identity contract. Keep it in
-// sync with the migration backfill before changing persisted catalog fields.
 type catalogSnapshotDefinition struct {
-	Name                 string          `json:"name"`
-	SourcePath           string          `json:"sourcePath"`
-	SourceDocument       int32           `json:"sourceDocument"`
-	Definition           json.RawMessage `json:"definition"`
-	NormalizedDefinition json.RawMessage `json:"-"`
-	DefinitionDigest     string          `json:"-"`
+	Name             string          `json:"name"`
+	SourcePath       string          `json:"sourcePath"`
+	SourceDocument   int32           `json:"sourceDocument"`
+	Definition       json.RawMessage `json:"definition"`
+	DefinitionDigest string          `json:"-"`
 }
 
+// catalogSnapshotManifest is the durable content identity contract. Keep it in
+// sync with the migration backfill before changing persisted catalog fields.
 type catalogSnapshotManifest struct {
 	Version  int                         `json:"version"`
 	Runtimes []catalogSnapshotDefinition `json:"runtimes"`
@@ -430,16 +429,7 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 				err,
 			)
 		}
-		normalized := gate.NormalizedDefinition()
-		normalizedDefinition, err := json.Marshal(normalized)
-		if err != nil {
-			return catalogSnapshotManifest{}, fmt.Errorf(
-				"marshal normalized catalog Gate %q: %w",
-				gate.Metadata.Name,
-				err,
-			)
-		}
-		definitionDigest, err := normalized.Digest()
+		definitionDigest, err := gate.Spec.Digest()
 		if err != nil {
 			return catalogSnapshotManifest{}, fmt.Errorf(
 				"digest catalog Gate %q: %w",
@@ -448,12 +438,11 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 			)
 		}
 		manifest.Gates = append(manifest.Gates, catalogSnapshotDefinition{
-			Name:                 gate.Metadata.Name,
-			SourcePath:           gate.Source.Path,
-			SourceDocument:       int32(gate.Source.Document),
-			Definition:           definition,
-			NormalizedDefinition: normalizedDefinition,
-			DefinitionDigest:     definitionDigest,
+			Name:             gate.Metadata.Name,
+			SourcePath:       gate.Source.Path,
+			SourceDocument:   int32(gate.Source.Document),
+			Definition:       definition,
+			DefinitionDigest: definitionDigest,
 		})
 	}
 
@@ -512,13 +501,12 @@ func createCatalogSnapshotDefinitions(
 		err := queries.CreateCatalogGate(
 			ctx,
 			storedb.CreateCatalogGateParams{
-				CatalogSnapshotID:    snapshotID,
-				Name:                 gate.Name,
-				SourcePath:           gate.SourcePath,
-				SourceDocument:       gate.SourceDocument,
-				Definition:           gate.Definition,
-				NormalizedDefinition: gate.NormalizedDefinition,
-				DefinitionDigest:     gate.DefinitionDigest,
+				CatalogSnapshotID: snapshotID,
+				Name:              gate.Name,
+				SourcePath:        gate.SourcePath,
+				SourceDocument:    gate.SourceDocument,
+				Definition:        gate.Definition,
+				DefinitionDigest:  gate.DefinitionDigest,
 			},
 		)
 		if err != nil {

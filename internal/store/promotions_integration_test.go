@@ -247,10 +247,10 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	if err != nil || len(gateNames) != 1 || gateNames[0] != "network-idle" {
 		t.Errorf("persisted operator Promotion Gates = %v, %v", gateNames, err)
 	}
-	targets, err := fixture.database.ListGateEvaluationTargets(fixture.ctx)
+	targets, err := fixture.database.ListGateEvaluationDemand(fixture.ctx)
 	if err != nil || len(targets) != 1 || targets[0].GateName != "network-idle" ||
 		targets[0].RepositoryID != fixture.repositoryID {
-		t.Errorf("Promotion Gate evaluation targets = %#v, %v", targets, err)
+		t.Errorf("Promotion Gate evaluation demand = %#v, %v", targets, err)
 	}
 	if record.Source != promotion.SourceSlipramp || record.Lifecycle.State != promotion.LifecycleCreating ||
 		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
@@ -1389,7 +1389,7 @@ func TestPromotionReviewStateSurvivesStoreRestartIntegration(t *testing.T) {
 		t.Fatalf("Open() after restart error = %v", err)
 	}
 	t.Cleanup(reopened.Close)
-	reviewService := promotion.NewReviewService(nil, reopened, uuid.Nil)
+	reviewService := promotion.NewReviewService(nil, reopened, uuid.Nil, nil)
 	review, err := reviewService.GetPromotion(fixture.ctx, pending.ID)
 	if err != nil {
 		t.Fatalf("GetPromotion() after restart error = %v", err)

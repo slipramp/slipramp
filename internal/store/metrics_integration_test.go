@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/telemetry"
@@ -94,6 +95,22 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 		t.Fatalf("create eligible queued Run: %v", err)
 	}
 
+	olderGated := queuedTestRun(
+		uuid.New(),
+		storageTargetID,
+		repositoryID,
+		revisionID,
+		refresh.Commit.SHA,
+		run.SourceTypeManual,
+		now.Add(-7*time.Minute-30*time.Second),
+		"f",
+	)
+	olderGated.TargetName = "storage"
+	olderGated.Snapshot.Action.Gates = []string{"network-idle"}
+	if _, err := database.CreateRun(ctx, olderGated, nil); err != nil {
+		t.Fatalf("create gated queued Run: %v", err)
+	}
+
 	pendingReviewID := uuid.New()
 	pendingDeliveryID := uuid.New()
 	_, err = database.pool.Exec(ctx, `
@@ -154,7 +171,9 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 		t.Fatalf("create notification delivery: %v", err)
 	}
 
-	snapshot, err := database.LoadMetricsSnapshot(ctx, now)
+	processID := uuid.New()
+	source := database.MetricsSnapshotSource(processID)
+	snapshot, err := source.LoadMetricsSnapshot(ctx, now)
 	if err != nil {
 		t.Fatalf("LoadMetricsSnapshot() error = %v", err)
 	}
@@ -167,8 +186,8 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	if snapshot.PendingRunReviews != 1 {
 		t.Errorf("pending Run reviews = %d, want 1", snapshot.PendingRunReviews)
 	}
-	if snapshot.WaitingGateSubjects["run"] != 0 || snapshot.WaitingGateSubjects["promotion"] != 0 {
-		t.Errorf("waiting Gate subjects = %v, want zero", snapshot.WaitingGateSubjects)
+	if snapshot.WaitingGateSubjects["run"] != 1 || snapshot.WaitingGateSubjects["promotion"] != 0 {
+		t.Errorf("waiting Gate subjects = %v, want one Run", snapshot.WaitingGateSubjects)
 	}
 	if snapshot.OldestEligibleRunCreatedAt == nil ||
 		!snapshot.OldestEligibleRunCreatedAt.Equal(eligible.CreatedAt) {
@@ -191,5 +210,56 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	}
 	if snapshot.NotificationDeliveryStates["pending"] != 1 {
 		t.Errorf("notification delivery states = %v", snapshot.NotificationDeliveryStates)
+	}
+
+	digest, err := catalogState.Gates[0].Spec.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	passing := gate.CurrentObservation{
+		RepositoryID:       repositoryID,
+		GateName:           "network-idle",
+		CatalogRevisionID:  revisionID,
+		DefinitionDigest:   digest,
+		EvaluatorProcessID: processID,
+		Observation:        gate.Observation{State: gate.ObservationPassing, Value: new(0.0)},
+		EvaluatedAt:        now,
+		ValidUntil:         now.Add(time.Minute),
+	}
+	blocking := passing
+	blocking.Observation = gate.Observation{State: gate.ObservationBlocking, Value: new(1.0)}
+	stale := passing
+	stale.EvaluatedAt, stale.ValidUntil = now.Add(-time.Minute), now
+	future := passing
+	future.EvaluatedAt = now.Add(time.Second)
+	previousProcess := passing
+	previousProcess.EvaluatorProcessID = uuid.New()
+	for _, tc := range []struct {
+		name        string
+		observation gate.CurrentObservation
+		oldest      run.Run
+	}{
+		{"blocking", blocking, eligible},
+		{"stale", stale, eligible},
+		{"future", future, eligible},
+		{"previous process", previousProcess, eligible},
+		{"fresh passing", passing, olderGated},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := database.UpsertGateObservation(ctx, tc.observation); err != nil {
+				t.Fatalf("record Gate observation: %v", err)
+			}
+			snapshot, err := source.LoadMetricsSnapshot(ctx, now)
+			if err != nil {
+				t.Fatalf("load metrics snapshot: %v", err)
+			}
+			if snapshot.OldestEligibleRunCreatedAt == nil || !snapshot.OldestEligibleRunCreatedAt.Equal(tc.oldest.CreatedAt) {
+				t.Errorf("oldest eligible Run = %v, want %s", snapshot.OldestEligibleRunCreatedAt, tc.oldest.CreatedAt)
+			}
+		})
+	}
+	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), processID, now)
+	if err != nil || claimed.ID != olderGated.ID {
+		t.Fatalf("dispatch picked Run %s, want %s, error = %v", claimed.ID, olderGated.ID, err)
 	}
 }

@@ -2,43 +2,17 @@ package gate
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/slipramp/slipramp/internal/auth"
 )
 
-const (
-	MaximumPrometheusResponseSize = 1 << 20
-	maximumCredentialFileSize     = 1 << 20
-)
-
-type ObservationState string
-
-const (
-	ObservationPassing     ObservationState = "passing"
-	ObservationBlocking    ObservationState = "blocking"
-	ObservationUnavailable ObservationState = "unavailable"
-)
-
-// Observation contains only the normalized value and a bounded diagnostic.
-// Prometheus labels and response bodies never leave the evaluator.
-type Observation struct {
-	State      ObservationState
-	Value      *float64
-	Diagnostic string
-}
+const MaximumPrometheusResponseSize = 1 << 20
 
 type PrometheusEvaluator struct {
 	endpoint    *url.URL
@@ -127,86 +101,6 @@ func (e *PrometheusEvaluator) Evaluate(
 	return Observation{State: state, Value: &value}
 }
 
-func prometheusTransport(source PrometheusSource) (*http.Transport, string, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-
-	bearerToken := ""
-	if source.BearerTokenFile != "" {
-		contents, err := readConfigurationFile(source.BearerTokenFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("read Prometheus bearer token file: %w", err)
-		}
-		bearerToken = strings.TrimSpace(string(contents))
-		if err := auth.ValidateBearerToken(bearerToken); err != nil {
-			return nil, "", errors.New( //nolint:staticcheck // Prometheus is a product name.
-				"Prometheus bearer token file contains an invalid token",
-			)
-		}
-	}
-
-	if source.TLS == (TLSConfig{}) {
-		return transport, bearerToken, nil
-	}
-
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if source.TLS.CAFile != "" {
-		contents, err := readConfigurationFile(source.TLS.CAFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("read Prometheus TLS CA file: %w", err)
-		}
-		rootCAs, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, "", errors.New("load system certificate pool for Prometheus")
-		}
-		if !rootCAs.AppendCertsFromPEM(contents) {
-			return nil, "", errors.New( //nolint:staticcheck // Prometheus is a product name.
-				"Prometheus TLS CA file does not contain a certificate",
-			)
-		}
-		tlsConfig.RootCAs = rootCAs
-	}
-	if source.TLS.ClientCertificateFile != "" {
-		certificatePEM, err := readConfigurationFile(source.TLS.ClientCertificateFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("read Prometheus TLS client certificate file: %w", err)
-		}
-		keyPEM, err := readConfigurationFile(source.TLS.ClientKeyFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("read Prometheus TLS client key file: %w", err)
-		}
-		certificate, err := tls.X509KeyPair(certificatePEM, keyPEM)
-		if err != nil {
-			return nil, "", errors.New( //nolint:staticcheck // Prometheus is a product name.
-				"Prometheus TLS client certificate or key is invalid",
-			)
-		}
-		tlsConfig.Certificates = []tls.Certificate{certificate}
-	}
-	transport.TLSClientConfig = tlsConfig
-
-	return transport, bearerToken, nil
-}
-
-func readConfigurationFile(path string) ([]byte, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	contents, oversized, err := readBounded(file, maximumCredentialFileSize)
-	if err != nil {
-		return nil, err
-	}
-	if oversized {
-		return nil, errors.New("file exceeds the size limit")
-	}
-
-	return contents, nil
-}
-
 func readBounded(reader io.Reader, maximum int64) ([]byte, bool, error) {
 	contents, err := io.ReadAll(io.LimitReader(reader, maximum+1))
 	if err != nil {
@@ -284,8 +178,8 @@ func prometheusSampleValue(raw json.RawMessage) (float64, error) {
 		return 0, errors.New("invalid sample")
 	}
 
-	var timestamp float64
-	if err := json.Unmarshal(sample[0], &timestamp); err != nil || !isFinite(timestamp) {
+	var timestamp *float64
+	if err := json.Unmarshal(sample[0], &timestamp); err != nil || timestamp == nil || !isFinite(*timestamp) {
 		return 0, errors.New("invalid sample timestamp")
 	}
 	var encodedValue string

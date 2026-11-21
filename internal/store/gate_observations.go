@@ -3,42 +3,39 @@ package store
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gate"
-	"github.com/slipramp/slipramp/internal/promotion"
-	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
-func (d *Database) ListGateEvaluationTargets(ctx context.Context) ([]gate.EvaluationTarget, error) {
-	rows, err := d.queries.ListGateEvaluationTargets(ctx)
+func (d *Database) ListGateEvaluationDemand(ctx context.Context) ([]gate.EvaluationDemand, error) {
+	rows, err := d.queries.ListGateEvaluationDemand(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list Gate evaluation targets: %w", err)
+		return nil, fmt.Errorf("list Gate evaluation demand: %w", err)
 	}
 
-	targets := make([]gate.EvaluationTarget, 0, len(rows))
+	demand := make([]gate.EvaluationDemand, 0, len(rows))
 	for _, row := range rows {
 		var definition gate.Definition
-		if err := json.Unmarshal(row.NormalizedDefinition, &definition); err != nil {
-			return nil, fmt.Errorf("decode Gate evaluation target %q: %w", row.GateName, err)
+		if err := json.Unmarshal(row.Spec, &definition); err != nil {
+			return nil, fmt.Errorf("decode Gate definition for %q: %w", row.GateName, err)
 		}
-		targets = append(targets, gate.EvaluationTarget{
+		demand = append(demand, gate.EvaluationDemand{
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			GateName:          row.GateName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
 			Definition:        definition,
+			DefinitionDigest:  row.DefinitionDigest,
+			WaiterCount:       row.WaiterCount,
+			LastRequestedAt:   row.LastRequestedAt.Time.UTC(),
 		})
 	}
 
-	return targets, nil
+	return demand, nil
 }
 
 func (d *Database) UpsertGateObservation(
@@ -49,10 +46,6 @@ func (d *Database) UpsertGateObservation(
 		return fmt.Errorf("validate Gate observation: %w", err)
 	}
 
-	var diagnostic *string
-	if record.Observation.Diagnostic != "" {
-		diagnostic = &record.Observation.Diagnostic
-	}
 	err := d.queries.UpsertGateObservation(ctx, storedb.UpsertGateObservationParams{
 		RepositoryID:       databaseUUID(record.RepositoryID),
 		GateName:           record.GateName,
@@ -60,8 +53,8 @@ func (d *Database) UpsertGateObservation(
 		DefinitionDigest:   record.DefinitionDigest,
 		EvaluatorProcessID: databaseUUID(record.EvaluatorProcessID),
 		State:              string(record.Observation.State),
-		Value:              cloneFloat64Pointer(record.Observation.Value),
-		Diagnostic:         diagnostic,
+		Value:              record.Observation.Value,
+		Diagnostic:         nullableText(record.Observation.Diagnostic),
 		EvaluatedAt:        databaseTime(record.EvaluatedAt.UTC()),
 		ValidUntil:         databaseTime(record.ValidUntil.UTC()),
 	})
@@ -72,47 +65,6 @@ func (d *Database) UpsertGateObservation(
 	return nil
 }
 
-func (d *Database) GetGateObservation(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-	gateName string,
-	catalogRevisionID uuid.UUID,
-	definitionDigest string,
-) (gate.CurrentObservation, error) {
-	row, err := d.queries.GetGateObservation(ctx, storedb.GetGateObservationParams{
-		RepositoryID:      databaseUUID(repositoryID),
-		GateName:          gateName,
-		CatalogRevisionID: databaseUUID(catalogRevisionID),
-		DefinitionDigest:  definitionDigest,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return gate.CurrentObservation{}, gate.ErrObservationNotFound
-	}
-	if err != nil {
-		return gate.CurrentObservation{}, fmt.Errorf("get Gate observation: %w", err)
-	}
-
-	diagnostic := ""
-	if row.Diagnostic != nil {
-		diagnostic = *row.Diagnostic
-	}
-
-	return gate.CurrentObservation{
-		RepositoryID:       uuid.UUID(row.RepositoryID.Bytes),
-		GateName:           row.GateName,
-		CatalogRevisionID:  uuid.UUID(row.CatalogRevisionID.Bytes),
-		DefinitionDigest:   row.DefinitionDigest,
-		EvaluatorProcessID: uuid.UUID(row.EvaluatorProcessID.Bytes),
-		Observation: gate.Observation{
-			State:      gate.ObservationState(row.State),
-			Value:      cloneFloat64Pointer(row.Value),
-			Diagnostic: diagnostic,
-		},
-		EvaluatedAt: row.EvaluatedAt.Time.UTC(),
-		ValidUntil:  row.ValidUntil.Time.UTC(),
-	}, nil
-}
-
 func (d *Database) DeleteInactiveGateObservations(ctx context.Context, inactiveBefore time.Time) (int64, error) {
 	deleted, err := d.queries.DeleteInactiveGateObservations(ctx, databaseTime(inactiveBefore))
 	if err != nil {
@@ -120,184 +72,4 @@ func (d *Database) DeleteInactiveGateObservations(ctx context.Context, inactiveB
 	}
 
 	return deleted, nil
-}
-
-func (d *Database) ListRunGateProjections(
-	ctx context.Context,
-	runIDs []uuid.UUID,
-) ([]run.GateProjection, error) {
-	databaseIDs := make([]pgtype.UUID, 0, len(runIDs))
-	for _, runID := range runIDs {
-		databaseIDs = append(databaseIDs, databaseUUID(runID))
-	}
-
-	rows, err := d.queries.ListRunGateProjections(ctx, databaseIDs)
-	if err != nil {
-		return nil, fmt.Errorf("list Run Gate projections: %w", err)
-	}
-
-	projections := make([]run.GateProjection, 0, len(rows))
-	for _, row := range rows {
-		var attached catalog.Gate
-		if err := json.Unmarshal(row.AttachedDefinition, &attached); err != nil {
-			return nil, fmt.Errorf("decode attached Run Gate %q: %w", row.GateName, err)
-		}
-
-		projection := run.GateProjection{
-			RunID:              uuid.UUID(row.RunID.Bytes),
-			Name:               row.GateName,
-			AttachedTitle:      attached.Metadata.Title,
-			ReleasedAt:         applicationTime(row.ReleasedAt),
-			ReleaseValue:       cloneFloat64Pointer(row.ReleaseObservedValue),
-			ReleaseEvaluatedAt: applicationTime(row.ReleaseEvaluatedAt),
-		}
-		if row.ActiveGateDefinition != nil {
-			var active catalog.Gate
-			if err := json.Unmarshal(row.ActiveGateDefinition, &active); err != nil {
-				return nil, fmt.Errorf("decode active Run Gate %q: %w", row.GateName, err)
-			}
-			projection.ActiveTitle = active.Metadata.Title
-
-			var definition gate.Definition
-			if err := json.Unmarshal(row.ActiveNormalizedDefinition, &definition); err != nil {
-				return nil, fmt.Errorf("decode active Run Gate definition %q: %w", row.GateName, err)
-			}
-			projection.ActiveDefinition = &definition
-		}
-		if row.ObservationState != nil {
-			if row.ActiveDefinitionDigest == nil || !row.ActiveCatalogRevisionID.Valid ||
-				!row.EvaluatorProcessID.Valid || !row.ObservationEvaluatedAt.Valid ||
-				!row.ObservationValidUntil.Valid {
-				return nil, fmt.Errorf("run Gate observation %q is incomplete", row.GateName)
-			}
-			diagnostic := ""
-			if row.ObservationDiagnostic != nil {
-				diagnostic = *row.ObservationDiagnostic
-			}
-			projection.CurrentObservation = &gate.CurrentObservation{
-				RepositoryID:       uuid.UUID(row.RepositoryID.Bytes),
-				GateName:           row.GateName,
-				CatalogRevisionID:  uuid.UUID(row.ActiveCatalogRevisionID.Bytes),
-				DefinitionDigest:   *row.ActiveDefinitionDigest,
-				EvaluatorProcessID: uuid.UUID(row.EvaluatorProcessID.Bytes),
-				Observation: gate.Observation{
-					State:      gate.ObservationState(*row.ObservationState),
-					Value:      cloneFloat64Pointer(row.ObservationValue),
-					Diagnostic: diagnostic,
-				},
-				EvaluatedAt: row.ObservationEvaluatedAt.Time.UTC(),
-				ValidUntil:  row.ObservationValidUntil.Time.UTC(),
-			}
-		}
-		if projection.ReleasedAt != nil {
-			if row.ReleaseDefinition == nil || projection.ReleaseValue == nil ||
-				projection.ReleaseEvaluatedAt == nil {
-				return nil, fmt.Errorf("run Gate release evidence %q is incomplete", row.GateName)
-			}
-			var definition gate.Definition
-			if err := json.Unmarshal(row.ReleaseDefinition, &definition); err != nil {
-				return nil, fmt.Errorf("decode released Run Gate definition %q: %w", row.GateName, err)
-			}
-			projection.ReleaseDefinition = &definition
-		}
-
-		projections = append(projections, projection)
-	}
-
-	return projections, nil
-}
-
-func (d *Database) ListPromotionGateProjections(
-	ctx context.Context,
-	promotionIDs []uuid.UUID,
-) ([]promotion.GateProjection, error) {
-	databaseIDs := make([]pgtype.UUID, 0, len(promotionIDs))
-	for _, promotionID := range promotionIDs {
-		databaseIDs = append(databaseIDs, databaseUUID(promotionID))
-	}
-
-	rows, err := d.queries.ListPromotionGateProjections(ctx, databaseIDs)
-	if err != nil {
-		return nil, fmt.Errorf("list Promotion Gate projections: %w", err)
-	}
-
-	projections := make([]promotion.GateProjection, 0, len(rows))
-	for _, row := range rows {
-		projection := promotion.GateProjection{
-			PromotionID:        uuid.UUID(row.PromotionID.Bytes),
-			Name:               row.GateName,
-			ReleasedAt:         applicationTime(row.ReleasedAt),
-			ReleaseValue:       cloneFloat64Pointer(row.ReleaseObservedValue),
-			ReleaseEvaluatedAt: applicationTime(row.ReleaseEvaluatedAt),
-		}
-		if row.ActiveGateDefinition != nil {
-			var active catalog.Gate
-			if err := json.Unmarshal(row.ActiveGateDefinition, &active); err != nil {
-				return nil, fmt.Errorf("decode active Promotion Gate %q: %w", row.GateName, err)
-			}
-			projection.ActiveTitle = active.Metadata.Title
-
-			var definition gate.Definition
-			if err := json.Unmarshal(row.ActiveNormalizedDefinition, &definition); err != nil {
-				return nil, fmt.Errorf("decode active Promotion Gate definition %q: %w", row.GateName, err)
-			}
-			projection.ActiveDefinition = &definition
-		}
-		if row.ObservationState != nil {
-			if row.ActiveDefinitionDigest == nil || !row.ActiveCatalogRevisionID.Valid ||
-				!row.EvaluatorProcessID.Valid || !row.ObservationEvaluatedAt.Valid ||
-				!row.ObservationValidUntil.Valid {
-				return nil, fmt.Errorf("promotion Gate observation %q is incomplete", row.GateName)
-			}
-			diagnostic := ""
-			if row.ObservationDiagnostic != nil {
-				diagnostic = *row.ObservationDiagnostic
-			}
-			projection.CurrentObservation = &gate.CurrentObservation{
-				RepositoryID:       uuid.UUID(row.RepositoryID.Bytes),
-				GateName:           row.GateName,
-				CatalogRevisionID:  uuid.UUID(row.ActiveCatalogRevisionID.Bytes),
-				DefinitionDigest:   *row.ActiveDefinitionDigest,
-				EvaluatorProcessID: uuid.UUID(row.EvaluatorProcessID.Bytes),
-				Observation: gate.Observation{
-					State:      gate.ObservationState(*row.ObservationState),
-					Value:      cloneFloat64Pointer(row.ObservationValue),
-					Diagnostic: diagnostic,
-				},
-				EvaluatedAt: row.ObservationEvaluatedAt.Time.UTC(),
-				ValidUntil:  row.ObservationValidUntil.Time.UTC(),
-			}
-		}
-		if projection.ReleasedAt != nil {
-			if row.ReleaseGateDefinition == nil || row.ReleaseDefinition == nil ||
-				projection.ReleaseValue == nil || projection.ReleaseEvaluatedAt == nil {
-				return nil, fmt.Errorf("promotion Gate release evidence %q is incomplete", row.GateName)
-			}
-			var released catalog.Gate
-			if err := json.Unmarshal(row.ReleaseGateDefinition, &released); err != nil {
-				return nil, fmt.Errorf("decode released Promotion Gate %q: %w", row.GateName, err)
-			}
-			projection.ReleaseTitle = released.Metadata.Title
-
-			var definition gate.Definition
-			if err := json.Unmarshal(row.ReleaseDefinition, &definition); err != nil {
-				return nil, fmt.Errorf("decode released Promotion Gate definition %q: %w", row.GateName, err)
-			}
-			projection.ReleaseDefinition = &definition
-		}
-
-		projections = append(projections, projection)
-	}
-
-	return projections, nil
-}
-
-func cloneFloat64Pointer(value *float64) *float64 {
-	if value == nil {
-		return nil
-	}
-
-	cloned := *value
-
-	return &cloned
 }

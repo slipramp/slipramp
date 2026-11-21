@@ -42,7 +42,7 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		ctx,
 		clusterName,
 		s.AssignmentCapacity(clusterName),
-		s.gateProcessID,
+		s.gateEvaluatorProcessID,
 		s.now().UTC(),
 	)
 	if err != nil {

@@ -13,9 +13,27 @@ import (
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
-const MaximumDiagnosticLength = 512
+const (
+	MaximumDiagnosticLength             = 512
+	DefaultObservationCleanupInterval   = time.Hour
+	DefaultInactiveObservationRetention = 24 * time.Hour
+)
 
-var ErrObservationNotFound = errors.New("Gate observation not found") //nolint:staticcheck // Gate is a domain name.
+type ObservationState string
+
+const (
+	ObservationPassing     ObservationState = "passing"
+	ObservationBlocking    ObservationState = "blocking"
+	ObservationUnavailable ObservationState = "unavailable"
+)
+
+// Observation contains only the normalized value and a bounded diagnostic.
+// Prometheus labels and response bodies never leave the evaluator.
+type Observation struct {
+	State      ObservationState
+	Value      *float64
+	Diagnostic string
+}
 
 // CurrentObservation is the replaceable evidence for one active Gate
 // definition. Release also requires the evaluator process identity and

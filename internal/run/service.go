@@ -5,75 +5,72 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
 type Service struct {
-	creation           CreationStore
-	history            HistoryStore
-	scheduling         SchedulingStore
-	gates              GateStore
-	assignments        AssignmentStore
-	cancellations      CancellationStore
-	reviews            ReviewStore
-	observations       ObservationStore
-	controllerCommands ControllerCommandNotifier
-	gateEvaluations    GateEvaluationNotifier
-	gateProcessID      uuid.UUID
-	repositories       RepositoryService
-	catalogs           CatalogService
-	placements         placement.Set
-	notifications      CreationNotifications
-	newID              func() uuid.UUID
-	now                func() time.Time
+	creation               CreationStore
+	history                HistoryStore
+	scheduling             SchedulingStore
+	gates                  GateStore
+	assignments            AssignmentStore
+	cancellations          CancellationStore
+	reviews                ReviewStore
+	observations           ObservationStore
+	controllerCommands     ControllerCommandNotifier
+	gateEvaluations        gate.EvaluationNotifier
+	gateEvaluatorProcessID uuid.UUID
+	repositories           RepositoryService
+	catalogs               CatalogService
+	placements             placement.Set
+	notifications          CreationNotifications
+	newID                  func() uuid.UUID
+	now                    func() time.Time
 }
 
 type Dependencies struct {
-	Creation           CreationStore
-	History            HistoryStore
-	Scheduling         SchedulingStore
-	Gates              GateStore
-	Assignments        AssignmentStore
-	Cancellations      CancellationStore
-	Reviews            ReviewStore
-	Observations       ObservationStore
-	ControllerCommands ControllerCommandNotifier
-	GateEvaluations    GateEvaluationNotifier
-	GateProcessID      uuid.UUID
-	Repositories       RepositoryService
-	Catalogs           CatalogService
-	Placements         placement.Set
-	Notifications      CreationNotifications
+	Creation               CreationStore
+	History                HistoryStore
+	Scheduling             SchedulingStore
+	Gates                  GateStore
+	Assignments            AssignmentStore
+	Cancellations          CancellationStore
+	Reviews                ReviewStore
+	Observations           ObservationStore
+	ControllerCommands     ControllerCommandNotifier
+	GateEvaluations        gate.EvaluationNotifier
+	GateEvaluatorProcessID uuid.UUID
+	Repositories           RepositoryService
+	Catalogs               CatalogService
+	Placements             placement.Set
+	Notifications          CreationNotifications
 }
 
 func NewService(dependencies Dependencies) *Service {
 	return &Service{
-		creation:           dependencies.Creation,
-		history:            dependencies.History,
-		scheduling:         dependencies.Scheduling,
-		gates:              dependencies.Gates,
-		assignments:        dependencies.Assignments,
-		cancellations:      dependencies.Cancellations,
-		reviews:            dependencies.Reviews,
-		observations:       dependencies.Observations,
-		controllerCommands: dependencies.ControllerCommands,
-		gateEvaluations:    dependencies.GateEvaluations,
-		gateProcessID:      dependencies.GateProcessID,
-		repositories:       dependencies.Repositories,
-		catalogs:           dependencies.Catalogs,
-		placements:         dependencies.Placements,
-		notifications:      dependencies.Notifications,
-		newID:              uuid.New,
-		now:                time.Now,
+		creation:               dependencies.Creation,
+		history:                dependencies.History,
+		scheduling:             dependencies.Scheduling,
+		gates:                  dependencies.Gates,
+		assignments:            dependencies.Assignments,
+		cancellations:          dependencies.Cancellations,
+		reviews:                dependencies.Reviews,
+		observations:           dependencies.Observations,
+		controllerCommands:     dependencies.ControllerCommands,
+		gateEvaluations:        dependencies.GateEvaluations,
+		gateEvaluatorProcessID: dependencies.GateEvaluatorProcessID,
+		repositories:           dependencies.Repositories,
+		catalogs:               dependencies.Catalogs,
+		placements:             dependencies.Placements,
+		notifications:          dependencies.Notifications,
+		newID:                  uuid.New,
+		now:                    time.Now,
 	}
 }
 
 type ControllerCommandNotifier interface {
 	Notify(clusterName string)
-}
-
-type GateEvaluationNotifier interface {
-	Notify()
 }
 
 func (s *Service) notifyController(record Run) {

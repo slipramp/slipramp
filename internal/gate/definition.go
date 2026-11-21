@@ -28,18 +28,18 @@ const (
 // Presentation metadata and the Gate name are deliberately excluded so
 // equivalent definitions share one evaluation.
 type Definition struct {
-	Prometheus PrometheusDefinition `json:"prometheus"`
+	Prometheus PrometheusDefinition `json:"prometheus" yaml:"prometheus"`
 }
 
 type PrometheusDefinition struct {
-	Source    string    `json:"source"`
-	Query     string    `json:"query"`
-	Condition Condition `json:"condition"`
+	Source    string    `json:"source" yaml:"source"`
+	Query     string    `json:"query" yaml:"query"`
+	Condition Condition `json:"condition" yaml:"condition"`
 }
 
 type Condition struct {
-	Operator string  `json:"operator"`
-	Value    float64 `json:"value"`
+	Operator string  `json:"operator" yaml:"operator"`
+	Value    float64 `json:"value" yaml:"value"`
 }
 
 func (d Definition) Validate() error {
@@ -98,7 +98,11 @@ func (c Condition) Validate() error {
 	if err := ValidateOperator(c.Operator); err != nil {
 		return err
 	}
-	if !isFinite(c.Value) {
+	return ValidateThreshold(c.Value)
+}
+
+func ValidateThreshold(value float64) error {
+	if !isFinite(value) {
 		return errors.New("Gate condition value must be finite") //nolint:staticcheck // Gate is a domain name.
 	}
 

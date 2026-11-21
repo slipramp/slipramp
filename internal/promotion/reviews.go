@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
@@ -62,7 +63,7 @@ type DecisionRequest struct {
 }
 
 type ReviewStore interface {
-	GateStore
+	ListPromotionGateSummaries(context.Context, []uuid.UUID, uuid.UUID, time.Time) (map[uuid.UUID]gate.Summary, error)
 	GetPromotionStage(context.Context, uuid.UUID) (Stage, error)
 	UpsertPromotionStagePolicy(context.Context, StagePolicy) (StagePolicy, error)
 	ListPromotionReviews(context.Context, PromotionListFilter) (PromotionReviewPage, error)
@@ -73,22 +74,25 @@ type ReviewStore interface {
 }
 
 type ReviewService struct {
-	integrations  IntegrationSet
-	store         ReviewStore
-	gateProcessID uuid.UUID
-	now           func() time.Time
+	integrations           IntegrationSet
+	store                  ReviewStore
+	gateEvaluatorProcessID uuid.UUID
+	gateEvaluations        gate.EvaluationNotifier
+	now                    func() time.Time
 }
 
 func NewReviewService(
 	integrations IntegrationSet,
 	store ReviewStore,
-	gateProcessID uuid.UUID,
+	gateEvaluatorProcessID uuid.UUID,
+	gateEvaluations gate.EvaluationNotifier,
 ) *ReviewService {
 	return &ReviewService{
-		integrations:  integrations,
-		store:         store,
-		gateProcessID: gateProcessID,
-		now:           time.Now,
+		integrations:           integrations,
+		store:                  store,
+		gateEvaluatorProcessID: gateEvaluatorProcessID,
+		gateEvaluations:        gateEvaluations,
+		now:                    time.Now,
 	}
 }
 
@@ -230,6 +234,9 @@ func (s *ReviewService) Decide(
 		return PromotionReview{}, err
 	}
 
+	if updated.Lifecycle.State == LifecycleApproved && len(updated.StageSnapshot.Gates) > 0 && s.gateEvaluations != nil {
+		s.gateEvaluations.Notify()
+	}
 	return PromotionReview{Promotion: updated, Decision: &decision}, nil
 }
 

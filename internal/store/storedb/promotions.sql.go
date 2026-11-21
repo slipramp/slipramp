@@ -1812,23 +1812,12 @@ WHERE source = 'slipramp'
             AND promotion_gates.released_at IS NULL
             AND NOT EXISTS (
                 SELECT 1
-                FROM repositories
-                JOIN catalog_revisions
-                  ON catalog_revisions.id = repositories.active_catalog_revision_id
-                JOIN catalog_gates
-                  ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
-                 AND catalog_gates.name = promotion_gates.gate_name
-                JOIN gate_observations
-                  ON gate_observations.repository_id = promotion_gates.repository_id
-                 AND gate_observations.gate_name = promotion_gates.gate_name
-                 AND gate_observations.catalog_revision_id = repositories.active_catalog_revision_id
-                 AND gate_observations.definition_digest = catalog_gates.definition_digest
-                 AND gate_observations.evaluator_process_id = $3
-                 AND gate_observations.state = 'passing'
-                 AND gate_observations.evaluated_at <= $1
-                 AND gate_observations.valid_until > $1
-                WHERE repositories.id = promotion_gates.repository_id
-                  AND repositories.removed_at IS NULL
+                FROM active_passing_gate_evidence AS evidence
+                WHERE evidence.repository_id = promotion_gates.repository_id
+                  AND evidence.gate_name = promotion_gates.gate_name
+                  AND evidence.evaluator_process_id = $3
+                  AND evidence.evaluated_at <= $1
+                  AND evidence.valid_until > $1
             )
       )
   )

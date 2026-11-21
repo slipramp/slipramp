@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/gate"
+
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/productidentity"
@@ -21,14 +23,15 @@ type reviewStore struct {
 	promotionFilter PromotionListFilter
 	promotionCalls  int
 	promotionReadAt time.Time
-	gateProjections []GateProjection
 }
 
-func (s *reviewStore) ListPromotionGateProjections(
+func (s *reviewStore) ListPromotionGateSummaries(
 	_ context.Context,
 	_ []uuid.UUID,
-) ([]GateProjection, error) {
-	return s.gateProjections, nil
+	_ uuid.UUID,
+	_ time.Time,
+) (map[uuid.UUID]gate.Summary, error) {
+	return nil, nil
 }
 
 func (s *reviewStore) GetPromotionStage(_ context.Context, id uuid.UUID) (Stage, error) {
@@ -139,7 +142,7 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policies:  map[uuid.UUID]StagePolicy{},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(reviewIntegrationSet(), store, uuid.Nil)
+	service := NewReviewService(reviewIntegrationSet(), store, uuid.Nil, nil)
 	service.now = func() time.Time { return now }
 
 	if _, err := service.UpdateStagePolicy(
@@ -166,7 +169,7 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 		policy.UpdatedBy.PrincipalID != principal.ID || policy.Reason == nil || *policy.Reason != reason {
 		t.Errorf("updated policy = %#v", policy)
 	}
-	withoutPreparation := NewReviewService(IntegrationSet{"prod": {ClusterName: "colo"}}, store, uuid.Nil)
+	withoutPreparation := NewReviewService(IntegrationSet{"prod": {ClusterName: "colo"}}, store, uuid.Nil, nil)
 	withoutPreparation.now = func() time.Time { return now }
 	if _, err := withoutPreparation.UpdateStagePolicy(
 		t.Context(),
@@ -213,7 +216,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 		promotions:    []Promotion{record},
 		promotionPage: PromotionReviewPage{Items: []Promotion{expired}, Total: 5},
 	}
-	service := NewReviewService(nil, store, uuid.Nil)
+	service := NewReviewService(nil, store, uuid.Nil, nil)
 	service.now = func() time.Time { return now }
 	filter := PromotionListFilter{
 		RepositoryID:     new(uuid.New()),
@@ -249,7 +252,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 	t.Parallel()
 
-	service := NewReviewService(nil, &reviewStore{}, uuid.Nil)
+	service := NewReviewService(nil, &reviewStore{}, uuid.Nil, nil)
 	_, err := service.ListPromotions(t.Context(), PromotionListFilter{
 		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
 		Limit:     DefaultListLimit,
@@ -262,7 +265,7 @@ func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
 func TestReviewServiceRejectsInvalidOperationalFilters(t *testing.T) {
 	t.Parallel()
 
-	service := NewReviewService(nil, &reviewStore{}, uuid.Nil)
+	service := NewReviewService(nil, &reviewStore{}, uuid.Nil, nil)
 	for _, filter := range []PromotionListFilter{
 		{CreationDispatch: CreationDispatchPhase("missing"), Limit: DefaultListLimit},
 		{KargoOutcome: KargoPhase("Running"), Limit: DefaultListLimit},
@@ -282,14 +285,16 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 	store := &reviewStore{
 		policies: map[uuid.UUID]StagePolicy{},
 		promotions: []Promotion{{
-			ID:        promotionID,
-			Lifecycle: PromotionLifecycle{State: LifecyclePending},
-			CreatedAt: now.Add(-time.Hour),
-			UpdatedAt: now.Add(-time.Hour),
+			ID:            promotionID,
+			StageSnapshot: PromotionStageSnapshot{Gates: []string{"idle"}},
+			Lifecycle:     PromotionLifecycle{State: LifecyclePending},
+			CreatedAt:     now.Add(-time.Hour),
+			UpdatedAt:     now.Add(-time.Hour),
 		}},
 		decisions: map[uuid.UUID]Decision{},
 	}
-	service := NewReviewService(nil, store, uuid.Nil)
+	notifier := &recordingPromotionGateNotifier{}
+	service := NewReviewService(nil, store, uuid.Nil, notifier)
 	service.now = func() time.Time { return now }
 	comment := "Validated the RBAC changes"
 
@@ -309,6 +314,9 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 		review.Decision.DecidedByPrincipalID != principal.ID ||
 		review.Decision.DecidedBySnapshot.DisplayName != principal.DisplayName {
 		t.Errorf("Decide() = %#v", review)
+	}
+	if notifier.calls != 1 {
+		t.Errorf("Gate evaluator notifications = %d, want 1", notifier.calls)
 	}
 }
 

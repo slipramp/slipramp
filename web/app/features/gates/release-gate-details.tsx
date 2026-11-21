@@ -4,10 +4,8 @@ import type { ReactNode } from "react";
 import type { GateRequirement, GateSummary } from "~/api/generated";
 import {
   gateConditionLabel,
-  gateRequirementStateColor,
-  gateRequirementStateLabel,
-  gateSummaryStateColor,
-  gateSummaryStateLabel,
+  gateRequirementBadges,
+  gateSummaryBadges,
 } from "~/features/gates/gate-presentation";
 import { SectionHeader } from "~/shared/page";
 import { Timestamp } from "~/shared/display-values";
@@ -20,14 +18,15 @@ export function ReleaseGateDetails({
 }: Readonly<{ gates: GateSummary; subject: GateSubject }>) {
   if (gates.state === "not-required") return null;
 
+  const badge = gateSummaryBadges[gates.state];
   const description = gateSummaryDescription(gates.state, subject);
 
   return (
     <Stack gap="md">
       <SectionHeader
         actions={
-          <Badge color={gateSummaryStateColor(gates.state)} variant="light">
-            {gateSummaryStateLabel(gates.state)}
+          <Badge color={badge.color} variant="light">
+            {badge.label}
           </Badge>
         }
         description={description}
@@ -43,9 +42,9 @@ export function ReleaseGateDetails({
 function gateSummaryDescription(state: GateSummary["state"], subject: GateSubject) {
   if (state === "waiting") {
     if (subject === "Run") {
-      return "This Run remains queued until every required Gate passes in the same release check.";
+      return "Run assignment requires every attached Gate to pass in the same release check.";
     }
-    return "This Promotion cannot continue in Kargo until every required Gate passes in the same release check.";
+    return "Kargo execution requires every attached Gate to pass in the same release check.";
   }
 
   if (subject === "Run") {
@@ -55,6 +54,8 @@ function gateSummaryDescription(state: GateSummary["state"], subject: GateSubjec
 }
 
 function GateRequirementDetails({ requirement }: Readonly<{ requirement: GateRequirement }>) {
+  const badge = gateRequirementBadges[requirement.state];
+
   return (
     <Paper p="md" withBorder>
       <Stack gap="md">
@@ -67,8 +68,8 @@ function GateRequirementDetails({ requirement }: Readonly<{ requirement: GateReq
               </Text>
             ) : null}
           </Stack>
-          <Badge color={gateRequirementStateColor(requirement.state)} variant="light">
-            {gateRequirementStateLabel(requirement.state)}
+          <Badge color={badge.color} variant="light">
+            {badge.label}
           </Badge>
         </Group>
 
