@@ -60,3 +60,18 @@ test("Stage Freight pagination validates and clamps the requested page", () => {
     "view=branch-drift&policy=stage-1",
   );
 });
+
+test("Stage Gates can be opened directly or from a paginated Freight view", () => {
+  const current = new URLSearchParams("policy=stage-1&freightPage=2");
+  const selected = updatePromotionStageView(current, "gates");
+  assert.equal(selected.toString(), "policy=stage-1&view=gates");
+  assert.equal(selectedPromotionStageView(selected), "gates");
+  assert.equal(
+    canonicalPromotionStageSearchParams(
+      new URLSearchParams("view=gates&freightPage=2"),
+      20,
+    ).toString(),
+    "view=gates",
+  );
+  assert.equal(updatePromotionStageView(selected, "freight").toString(), "policy=stage-1");
+});

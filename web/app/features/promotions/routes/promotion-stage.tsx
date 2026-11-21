@@ -5,6 +5,7 @@ import {
   Button,
   Code,
   Group,
+  List,
   SimpleGrid,
   Stack,
   Tabs,
@@ -33,6 +34,8 @@ import {
   type PromotionStatus,
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
+import { GatesTab } from "~/features/gates/gates-tab";
+import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
 import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
@@ -312,6 +315,7 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
               ) : null}
             </Group>
           </Tabs.Tab>
+          <GatesTab count={stage.gates.length} />
           <Tabs.Tab
             leftSection={<IconInfoCircle aria-hidden size={16} />}
             style={{ flexShrink: 0 }}
@@ -359,6 +363,14 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
           />
         </Tabs.Panel>
 
+        <Tabs.Panel pt="lg" value="gates">
+          <StageGates
+            promotions={loaderData.activePromotions}
+            promotionsAvailable={loaderData.activePromotionsAvailable}
+            stage={stage}
+          />
+        </Tabs.Panel>
+
         <Tabs.Panel pt="lg" value="details">
           <Stack gap="lg">
             <ObservationDetails stage={stage} />
@@ -376,6 +388,75 @@ type BranchDriftSummary = {
   repository: PromotionBranchDriftRepository;
   stage: PromotionBranchDriftStage;
 };
+
+function StageGates({
+  promotions,
+  promotionsAvailable,
+  stage,
+}: Readonly<{
+  promotions: Promotion[];
+  promotionsAvailable: boolean;
+  stage: PromotionProjectStage;
+}>) {
+  const gatedPromotions = promotions.filter((promotion) => promotion.gates.requirements.length > 0);
+
+  return (
+    <Stack gap="lg">
+      <Stack gap="sm">
+        <SectionHeader
+          actions={
+            <Anchor
+              component={Link}
+              size="sm"
+              to={`/promotions?stageId=${encodeURIComponent(stage.id)}`}
+            >
+              Promotion history
+            </Anchor>
+          }
+          title="Configured gates"
+        />
+        {stage.gates.length > 0 ? (
+          <List size="sm" spacing="xs">
+            {stage.gates.map((name) => (
+              <List.Item key={name}>
+                <Code>{name}</Code>
+              </List.Item>
+            ))}
+          </List>
+        ) : (
+          <Text c="dimmed">No gates configured for this Stage.</Text>
+        )}
+      </Stack>
+      {!promotionsAvailable ? (
+        <Alert color="red" title="Promotion evaluations unavailable">
+          Evaluations could not be loaded for all active Promotions.
+        </Alert>
+      ) : null}
+      {gatedPromotions.map((promotion) => (
+        <ReleaseGateDetails
+          gates={promotion.gates}
+          key={promotion.id}
+          subject="Promotion"
+          title={
+            <Anchor
+              component={Link}
+              inherit
+              style={{ overflowWrap: "anywhere" }}
+              to={`/promotions/${encodeURIComponent(promotion.id)}?view=gates`}
+            >
+              Promotion {promotion.externalPromotionId}
+            </Anchor>
+          }
+        />
+      ))}
+      {promotionsAvailable && stage.gates.length > 0 && gatedPromotions.length === 0 ? (
+        <Text c="dimmed" size="sm">
+          No active Promotions require gates.
+        </Text>
+      ) : null}
+    </Stack>
+  );
+}
 
 function ActivePromotions({
   available,

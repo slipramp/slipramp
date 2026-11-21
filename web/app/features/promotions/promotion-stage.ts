@@ -2,7 +2,7 @@ import { pageFromSearchParam } from "../../shared/search-params.ts";
 
 export const promotionStageFreightPageSize = 10;
 
-export type PromotionStageView = "freight" | "details" | "branch-drift";
+export type PromotionStageView = "freight" | "details" | "branch-drift" | "gates";
 
 export function promotionStagePath(stageId: string) {
   return `/promotion-stages/${encodeURIComponent(stageId)}`;
@@ -10,7 +10,9 @@ export function promotionStagePath(stageId: string) {
 
 export function selectedPromotionStageView(searchParams: URLSearchParams): PromotionStageView {
   const requested = searchParams.get("view");
-  return requested === "details" || requested === "branch-drift" ? requested : "freight";
+  return requested === "details" || requested === "branch-drift" || requested === "gates"
+    ? requested
+    : "freight";
 }
 
 export function promotionStageFreightPage(searchParams: URLSearchParams, total: number) {

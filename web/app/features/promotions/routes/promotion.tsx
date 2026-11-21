@@ -53,6 +53,7 @@ import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
+import { GatesTab } from "~/features/gates/gates-tab";
 import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
@@ -841,13 +842,14 @@ function PromotionWorkspace({
 
       <Paper className={styles.reviewCard} withBorder>
         <Tabs keepMounted={false} onChange={changeView} value={activeView}>
-          <Tabs.List className={styles.reviewTabs}>
+          <Tabs.List aria-label="Promotion views" className={styles.reviewTabs}>
             <Tabs.Tab leftSection={<IconGitCompare aria-hidden size={16} />} value="git">
               Git diff
             </Tabs.Tab>
             <Tabs.Tab leftSection={<IconStack2 aria-hidden size={16} />} value="argo">
               Argo CD
             </Tabs.Tab>
+            <GatesTab count={promotion.gates.requirements.length} />
             <Tabs.Tab leftSection={<IconInfoCircle aria-hidden size={16} />} value="details">
               Promotion details
             </Tabs.Tab>
@@ -909,9 +911,12 @@ function PromotionWorkspace({
             ) : null}
           </Tabs.Panel>
 
+          <Tabs.Panel className={styles.reviewPanel} value="gates">
+            <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
+          </Tabs.Panel>
+
           <Tabs.Panel className={styles.reviewPanel} value="details">
             <Stack gap="lg">
-              <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
               {promotion.selectedFreight ? (
                 <SelectedFreight freight={promotion.selectedFreight} />
               ) : null}
