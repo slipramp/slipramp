@@ -71,6 +71,8 @@ code, fixtures, and documentation together.
   outputs, generation, and licensing boundaries.
 - [Metrics](docs/METRICS.md): Prometheus endpoints, metric catalog, labels,
   and scrape guidance.
+- [Release Gates](docs/GATES.md): Prometheus sources, safe rollout, and
+  troubleshooting for waiting Runs and Promotions.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
   diagnostics.
 - [iOS preview](ios/README.md): native SwiftUI setup, connection, and tests.

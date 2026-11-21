@@ -1,0 +1,15 @@
+server:
+  gates:
+    sources:
+      production:
+        prometheus:
+          url: https://prometheus.example.com
+          evaluationInterval: 15s
+          timeout: 5s
+          maximumConcurrency: 4
+          credentials:
+            secretName: prometheus-gate
+            bearerTokenKey: bearer-token
+            caKey: ca.crt
+            clientCertificateKey: tls.crt
+            clientKeyKey: tls.key

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "slipramp.serverName" . }}-gates
+  labels:
+    {{- include "slipramp.labels" . | nindent 4 }}
+    {{- include "slipramp.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
+data:
+  gate-sources.yaml: |
+    apiVersion: slipramp.com/v1alpha1
+    kind: GateSourceConfig
+    sources:
+      {{- if .Values.server.gates.sources }}
+      {{- range $name, $source := .Values.server.gates.sources }}
+      {{ $name }}:
+        prometheus:
+          url: {{ $source.prometheus.url | quote }}
+          {{- with $source.prometheus.evaluationInterval }}
+          evaluationInterval: {{ . | quote }}
+          {{- end }}
+          {{- with $source.prometheus.timeout }}
+          timeout: {{ . | quote }}
+          {{- end }}
+          {{- with $source.prometheus.maximumConcurrency }}
+          maximumConcurrency: {{ . }}
+          {{- end }}
+          {{- with $source.prometheus.credentials }}
+          {{- with .bearerTokenKey }}
+          bearerTokenFile: /var/run/slipramp/gate-sources/{{ $name }}/bearer-token
+          {{- end }}
+          {{- if or .caKey .clientCertificateKey }}
+          tls:
+            {{- with .caKey }}
+            caFile: /var/run/slipramp/gate-sources/{{ $name }}/ca.crt
+            {{- end }}
+            {{- with .clientCertificateKey }}
+            clientCertificateFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.crt
+            clientKeyFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.key
+            {{- end }}
+          {{- end }}
+          {{- end }}
+      {{- end }}
+      {{- else }} {}
+      {{- end }}

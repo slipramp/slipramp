@@ -211,6 +211,9 @@ catalog contract. Repository refresh rejects a Gate whose source name is not
 present in the Server's current source configuration; an unreachable configured
 source does not invalidate the catalog.
 
+See [Release Gates](./GATES.md) for attachment examples, rollout order,
+operational metrics, recovery behavior, and troubleshooting.
+
 ### Kargo integrations
 
 Kargo integrations are loaded from the file named by

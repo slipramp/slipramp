@@ -5,10 +5,10 @@ does not install PostgreSQL, RustFS, or any other S3-compatible service. The
 operator must provision the PostgreSQL database and artifact bucket first.
 
 The Server deliberately has `automountServiceAccountToken: false`; this chart
-creates no ServiceAccount, Role, or RoleBinding for it. Placements and Kargo
-integrations are ordinary Server configuration in versioned files backed by
-ConfigMaps, never CRDs. Each ConfigMap checksum is attached to the Server Pod
-template so either configuration change rolls the Deployment.
+creates no ServiceAccount, Role, or RoleBinding for it. Placements, Gate
+sources, and Kargo integrations are ordinary Server configuration in versioned
+files backed by ConfigMaps, never CRDs. Each ConfigMap checksum is attached to
+the Server Pod template so a configuration change rolls the Deployment.
 
 ## Required configuration
 
@@ -82,6 +82,35 @@ server:
 
 The resulting Git config path is
 `/var/run/slipramp/repository-credentials/github-readonly/gitconfig`.
+
+Optional Gate sources are static Server configuration. The chart renders
+`server.gates.sources` as a strict `slipramp.com/v1alpha1`
+`GateSourceConfig`, sets `SLIPRAMP_GATE_SOURCES_FILE`, and rolls the Server when
+the source configuration changes:
+
+```yaml
+server:
+  gates:
+    sources:
+      production:
+        prometheus:
+          url: https://prometheus.example.com
+          evaluationInterval: 15s
+          timeout: 5s
+          maximumConcurrency: 4
+          credentials:
+            secretName: prometheus-gate
+            bearerTokenKey: bearer-token
+            caKey: ca.crt
+            clientCertificateKey: tls.crt
+            clientKeyKey: tls.key
+```
+
+Credential fields are optional and select keys from one operator-managed
+Secret per source. Bearer-token, CA, and mutual-TLS files are mounted read-only
+under `/var/run/slipramp/gate-sources/<source>`; their contents never enter the
+rendered ConfigMap. Client certificate and key fields must be configured
+together. See [Release Gates](../../../docs/GATES.md) for rollout and recovery.
 
 Optional Kargo integrations are static Server configuration. Each integration
 selects a registered Cluster and Stage freshness limit, which is enough for

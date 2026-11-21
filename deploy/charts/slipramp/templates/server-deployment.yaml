@@ -22,6 +22,7 @@ spec:
   template:
     metadata:
       annotations:
+        checksum/gates: {{ include (print $.Template.BasePath "/gates-configmap.yaml") . | sha256sum }}
         checksum/kargo: {{ include (print $.Template.BasePath "/kargo-configmap.yaml") . | sha256sum }}
         checksum/placements: {{ include (print $.Template.BasePath "/placements-configmap.yaml") . | sha256sum }}
       labels:
@@ -155,6 +156,8 @@ spec:
               value: {{ $credentials | toJson | quote }}
             - name: SLIPRAMP_KARGO_INTEGRATIONS_FILE
               value: /etc/slipramp/kargo-integrations.yaml
+            - name: SLIPRAMP_GATE_SOURCES_FILE
+              value: /etc/slipramp/gate-sources.yaml
             - name: SLIPRAMP_NOTIFICATIONS_PUBLIC_URL
               value: {{ .Values.server.notifications.publicUrl | quote }}
             - name: SLIPRAMP_NOTIFICATIONS_DESTINATIONS
@@ -215,6 +218,13 @@ spec:
               mountPath: /var/run/slipramp/repository-credentials
               readOnly: true
             {{- end }}
+            {{- range $name, $source := .Values.server.gates.sources }}
+            {{- with $source.prometheus.credentials }}
+            - name: gate-source-{{ sha256sum $name | trunc 12 }}
+              mountPath: /var/run/slipramp/gate-sources/{{ $name }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
             {{- range $name, $_ := .Values.server.notifications.destinations }}
             - name: notification-{{ sha256sum $name | trunc 12 }}
               mountPath: /var/run/slipramp/notification-secrets/{{ $name }}
@@ -231,6 +241,11 @@ spec:
                   items:
                     - key: integrations.yaml
                       path: kargo-integrations.yaml
+              - configMap:
+                  name: {{ include "slipramp.serverName" . }}-gates
+                  items:
+                    - key: gate-sources.yaml
+                      path: gate-sources.yaml
         - name: temporary
           emptyDir: {}
         {{- range $name, $credential := .Values.server.repositoryRefresh.credentials }}
@@ -242,6 +257,31 @@ spec:
         {{- if .Values.server.repositoryRefresh.credentials }}
         - name: repository-credentials
           emptyDir: {}
+        {{- end }}
+        {{- range $name, $source := .Values.server.gates.sources }}
+        {{- with $source.prometheus.credentials }}
+        - name: gate-source-{{ sha256sum $name | trunc 12 }}
+          secret:
+            secretName: {{ .secretName }}
+            defaultMode: 0440
+            items:
+              {{- with .bearerTokenKey }}
+              - key: {{ . }}
+                path: bearer-token
+              {{- end }}
+              {{- with .caKey }}
+              - key: {{ . }}
+                path: ca.crt
+              {{- end }}
+              {{- with .clientCertificateKey }}
+              - key: {{ . }}
+                path: tls.crt
+              {{- end }}
+              {{- with .clientKeyKey }}
+              - key: {{ . }}
+                path: tls.key
+              {{- end }}
+        {{- end }}
         {{- end }}
         {{- range $name, $destination := .Values.server.notifications.destinations }}
         - name: notification-{{ sha256sum $name | trunc 12 }}

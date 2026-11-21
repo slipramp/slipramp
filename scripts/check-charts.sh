@@ -153,6 +153,22 @@ assert_contains "$test_directory/server-kargo.yaml" 'name: SLIPRAMP_KARGO_INTEGR
 assert_contains "$test_directory/server-kargo.yaml" 'kind: KargoIntegrationConfig'
 assert_not_contains "$test_directory/server-kargo.yaml" 'name: SLIPRAMP_KARGO_INTEGRATIONS$'
 
+gates_checksum_default=$(grep -E 'checksum/gates:' "$server_render" | awk '{print $2}')
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-gates.yaml" \
+  >"$test_directory/server-gates.yaml"
+gates_checksum_changed=$(grep -E 'checksum/gates:' "$test_directory/server-gates.yaml" | awk '{print $2}')
+test "$gates_checksum_default" != "$gates_checksum_changed" || fail "Gate source change did not change the rollout checksum"
+assert_contains "$test_directory/server-gates.yaml" 'name: SLIPRAMP_GATE_SOURCES_FILE'
+assert_contains "$test_directory/server-gates.yaml" 'kind: GateSourceConfig'
+assert_contains "$test_directory/server-gates.yaml" 'url: "https://prometheus.example.com"'
+assert_contains "$test_directory/server-gates.yaml" '/var/run/slipramp/gate-sources/production/bearer-token'
+assert_contains "$test_directory/server-gates.yaml" '/var/run/slipramp/gate-sources/production/ca.crt'
+assert_contains "$test_directory/server-gates.yaml" 'secretName: prometheus-gate'
+assert_contains "$test_directory/server-gates.yaml" 'key: bearer-token'
+
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
   --values "$testdata/slipramp-required.yaml" \
@@ -333,6 +349,11 @@ assert_render_fails "Notification route with unknown event" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
   --values "$testdata/slipramp-notifications.yaml" \
   --set-json 'server.notifications.routes=[{"events":["run.failed"],"destinations":["operations"]}]'
+assert_render_fails "Gate source with incomplete client certificate credentials" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.gates.sources.production.prometheus.url=https://prometheus.example.com \
+  --set-string server.gates.sources.production.prometheus.credentials.secretName=prometheus-gate \
+  --set-string server.gates.sources.production.prometheus.credentials.clientCertificateKey=tls.crt
 assert_render_fails "HTTPRoute without a parent reference" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
   --set httpRoute.enabled=true --set-json httpRoute.hostnames='["slipramp.test"]'
