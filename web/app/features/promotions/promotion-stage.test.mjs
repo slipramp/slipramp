@@ -61,17 +61,8 @@ test("Stage Freight pagination validates and clamps the requested page", () => {
   );
 });
 
-test("Stage Gates can be opened directly or from a paginated Freight view", () => {
-  const current = new URLSearchParams("policy=stage-1&freightPage=2");
-  const selected = updatePromotionStageView(current, "gates");
-  assert.equal(selected.toString(), "policy=stage-1&view=gates");
-  assert.equal(selectedPromotionStageView(selected), "gates");
-  assert.equal(
-    canonicalPromotionStageSearchParams(
-      new URLSearchParams("view=gates&freightPage=2"),
-      20,
-    ).toString(),
-    "view=gates",
-  );
-  assert.equal(updatePromotionStageView(selected, "freight").toString(), "policy=stage-1");
+test("an unsupported Gates view uses the default Stage tab", () => {
+  const requested = new URLSearchParams("view=gates&policy=stage-1");
+  assert.equal(selectedPromotionStageView(requested), "freight");
+  assert.equal(canonicalPromotionStageSearchParams(requested, 0).toString(), "policy=stage-1");
 });

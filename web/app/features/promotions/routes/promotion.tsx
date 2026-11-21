@@ -53,7 +53,6 @@ import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
-import { GatesTab } from "~/features/gates/gates-tab";
 import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
@@ -77,6 +76,7 @@ import {
   type ArgoDiffResource,
 } from "~/features/promotions/promotion-diff";
 import { pageTitle } from "~/shared/page-title";
+import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import {
@@ -222,6 +222,9 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           <PageHeaderFacts>
             <PageHeaderFact label="Promotion">
               <Code>{promotion.id.slice(0, 8)}</Code>
+            </PageHeaderFact>
+            <PageHeaderFact label="Stage">
+              <PromotionStageLink fw={400} stage={promotion.stageSnapshot} />
             </PageHeaderFact>
             <PageHeaderFact label="Created">
               <RelativeTime value={promotion.createdAt} />
@@ -674,15 +677,8 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
             </Anchor>
           }
         />
-        <Fact
-          label="Stage"
-          value={
-            <PromotionStageLink
-              label={`${stage.project}/${stage.name}`}
-              stage={{ id: promotion.stageId, name: stage.name }}
-            />
-          }
-        />
+        <Fact label="Project" value={<PromotionProjectLink fw={400} project={stage} />} />
+        <Fact label="Stage" value={<PromotionStageLink fw={400} stage={stage} />} />
         <Fact label="Policy snapshot" value={policy.effectiveMode} />
         {promotion.expiresAt ? (
           <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
@@ -849,7 +845,6 @@ function PromotionWorkspace({
             <Tabs.Tab leftSection={<IconStack2 aria-hidden size={16} />} value="argo">
               Argo CD
             </Tabs.Tab>
-            <GatesTab count={promotion.gates.requirements.length} />
             <Tabs.Tab leftSection={<IconInfoCircle aria-hidden size={16} />} value="details">
               Promotion details
             </Tabs.Tab>
@@ -911,12 +906,9 @@ function PromotionWorkspace({
             ) : null}
           </Tabs.Panel>
 
-          <Tabs.Panel className={styles.reviewPanel} value="gates">
-            <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
-          </Tabs.Panel>
-
           <Tabs.Panel className={styles.reviewPanel} value="details">
             <Stack gap="lg">
+              <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
               {promotion.selectedFreight ? (
                 <SelectedFreight freight={promotion.selectedFreight} />
               ) : null}

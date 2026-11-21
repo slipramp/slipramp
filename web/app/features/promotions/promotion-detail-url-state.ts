@@ -3,7 +3,7 @@ export const promotionDetailSearchParamNames = {
   view: "view",
 } as const;
 
-export const promotionDetailViews = ["git", "argo", "gates", "details"] as const;
+export const promotionDetailViews = ["git", "argo", "details"] as const;
 export const promotionLifecycleStages = ["delivery", "preparation", "review", "execution"] as const;
 
 export type PromotionDetailView = (typeof promotionDetailViews)[number];

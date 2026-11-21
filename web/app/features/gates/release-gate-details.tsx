@@ -1,5 +1,5 @@
 import { Badge, Code, Stack, Table, Text } from "@mantine/core";
-import { Fragment, type ReactNode } from "react";
+import { Fragment } from "react";
 
 import type { GateRequirement, GateSummary } from "~/api/generated";
 import {
@@ -8,23 +8,19 @@ import {
   gateSummaryBadges,
 } from "~/features/gates/gate-presentation";
 import { SectionHeader } from "~/shared/page";
-import { RelativeTime, Timestamp } from "~/shared/display-values";
+import { RelativeTime } from "~/shared/display-values";
 
 type GateSubject = "Promotion" | "Run";
 
 export function ReleaseGateDetails({
   gates,
   subject,
-  title = "Release gates",
-}: Readonly<{ gates: GateSummary; subject: GateSubject; title?: ReactNode }>) {
-  if (gates.state === "not-required") {
-    return subject === "Promotion" ? (
-      <Text c="dimmed">No gates required for this Promotion.</Text>
-    ) : null;
-  }
+}: Readonly<{ gates: GateSummary; subject: GateSubject }>) {
+  if (gates.state === "not-required") return null;
 
   const badge = gateSummaryBadges[gates.state];
   const description = gateSummaryDescription(gates.state, subject);
+  const showLastEvaluated = gates.state === "waiting";
 
   return (
     <Stack gap="md">
@@ -35,26 +31,29 @@ export function ReleaseGateDetails({
           </Badge>
         }
         description={description}
-        title={title}
+        title={subject === "Promotion" ? "Promotion gates" : "Release gates"}
       />
-      <Table.ScrollContainer minWidth={600} type="native">
+      <Table.ScrollContainer minWidth={showLastEvaluated ? 600 : 480} type="native">
         <Table aria-label="Gate evaluations" verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Gate</Table.Th>
               <Table.Th>Status</Table.Th>
-              <Table.Th>Observed value</Table.Th>
-              <Table.Th>Expected condition</Table.Th>
-              <Table.Th>Last evaluated</Table.Th>
+              <Table.Th>Current</Table.Th>
+              <Table.Th>Expected</Table.Th>
+              {showLastEvaluated ? <Table.Th>Last evaluated</Table.Th> : null}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {gates.requirements.map((requirement) => (
               <Fragment key={requirement.name}>
-                <GateRequirementRow requirement={requirement} />
+                <GateRequirementRow
+                  requirement={requirement}
+                  showLastEvaluated={showLastEvaluated}
+                />
                 {requirement.diagnostic ? (
                   <Table.Tr>
-                    <Table.Td colSpan={5}>
+                    <Table.Td colSpan={showLastEvaluated ? 5 : 4}>
                       <Text size="sm">{requirement.diagnostic}</Text>
                     </Table.Td>
                   </Table.Tr>
@@ -69,20 +68,17 @@ export function ReleaseGateDetails({
 }
 
 function gateSummaryDescription(state: GateSummary["state"], subject: GateSubject) {
+  if (subject !== "Run") return undefined;
   if (state === "waiting") {
-    if (subject === "Run") {
-      return "Run assignment requires every attached Gate to pass in the same release check.";
-    }
-    return "Kargo execution requires every attached Gate to pass in the same release check.";
+    return "Run assignment requires every attached Gate to pass in the same release check.";
   }
-
-  if (subject === "Run") {
-    return "Every required Gate passed together when this Run was released for assignment.";
-  }
-  return "Every required Gate passed together when this Promotion was released for Kargo execution.";
+  return "Every required Gate passed together when this Run was released for assignment.";
 }
 
-function GateRequirementRow({ requirement }: Readonly<{ requirement: GateRequirement }>) {
+function GateRequirementRow({
+  requirement,
+  showLastEvaluated,
+}: Readonly<{ requirement: GateRequirement; showLastEvaluated: boolean }>) {
   const badge = gateRequirementBadges[requirement.state];
 
   return (
@@ -98,17 +94,14 @@ function GateRequirementRow({ requirement }: Readonly<{ requirement: GateRequire
         ) : null}
       </Table.Td>
       <Table.Td>
-        <Badge color={badge.color} variant="light">
-          {badge.label}
-        </Badge>
-        {requirement.releasedAt ? (
-          <Timestamp
-            aria-label="Release time"
-            c="dimmed"
-            size="xs"
-            value={requirement.releasedAt}
-          />
-        ) : null}
+        <Stack align="flex-start" gap={2}>
+          <Badge color={badge.color} variant="light">
+            {badge.label}
+          </Badge>
+          {requirement.releasedAt ? (
+            <RelativeTime c="dimmed" size="xs" value={requirement.releasedAt} />
+          ) : null}
+        </Stack>
       </Table.Td>
       <Table.Td>
         {requirement.value === undefined ? (
@@ -120,15 +113,17 @@ function GateRequirementRow({ requirement }: Readonly<{ requirement: GateRequire
         )}
       </Table.Td>
       <Table.Td>{gateConditionLabel(requirement)}</Table.Td>
-      <Table.Td>
-        {requirement.evaluatedAt ? (
-          <RelativeTime size="sm" value={requirement.evaluatedAt} />
-        ) : (
-          <Text c="dimmed" size="sm">
-            Not evaluated
-          </Text>
-        )}
-      </Table.Td>
+      {showLastEvaluated ? (
+        <Table.Td>
+          {requirement.evaluatedAt ? (
+            <RelativeTime size="sm" value={requirement.evaluatedAt} />
+          ) : (
+            <Text c="dimmed" size="sm">
+              Not evaluated
+            </Text>
+          )}
+        </Table.Td>
+      ) : null}
     </Table.Tr>
   );
 }

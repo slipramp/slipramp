@@ -56,14 +56,12 @@ test("lifecycle selection validates stages and preserves review state", () => {
   assert.equal(reset.toString(), "view=argo&resourceQuery=deployment");
 });
 
-test("Promotion Gates stay selected as review artifacts arrive and preserve the lifecycle selection", () => {
-  const current = new URLSearchParams("stage=execution");
-  const selected = updatePromotionDetailSearchParams(current, "gates", "details");
-  assert.equal(selected.toString(), "stage=execution&view=gates");
-  assert.equal(selectedPromotionDetailView(selected, "details"), "gates");
-  assert.equal(selectedPromotionDetailView(selected, "git"), "gates");
+test("an unsupported Gates view falls back to the default Promotion tab", () => {
+  const requested = new URLSearchParams("view=gates&stage=execution");
+  const fallback = selectedPromotionDetailView(requested, "git");
+  assert.equal(fallback, "git");
   assert.equal(
-    updatePromotionDetailSearchParams(selected, "git", "git").toString(),
+    updatePromotionDetailSearchParams(requested, fallback, "git").toString(),
     "stage=execution",
   );
 });
