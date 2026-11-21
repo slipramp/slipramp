@@ -1,8 +1,9 @@
 # Disposable kind acceptance test
 
-The acceptance task creates a new single-node kind cluster, builds and loads the
-Slipramp images, deploys PostgreSQL, RustFS, Dex, the Server, web application,
-and one Controller, and serves a generated Git fixture over authenticated SSH.
+The acceptance task creates a new single-node kind cluster while preparing the
+Slipramp images. It loads the images once the cluster is ready, deploys PostgreSQL,
+RustFS, Dex, the Server, web application, and one Controller, and serves a generated
+Git fixture over authenticated SSH.
 The Server, web application, and Controller are installed through the supported
 Helm charts; only disposable dependencies and acceptance fixtures use raw
 manifests.
@@ -48,6 +49,11 @@ It then verifies the accepted baseline end to end:
   with exact Git diffs and structured Argo CD diffs uploaded by the Harness,
   retained in RustFS, and downloaded through the artifact API;
 - zero-byte Git diff uploads and idempotent Promotion polling.
+
+In the restart and outage scenarios, the recovery action logs that it has
+started and waits on a named pipe in its container. The test releases the action
+after it observes the restart or confirms the dependency outage. The queued
+PostgreSQL recovery action completes as soon as it is dispatched.
 
 The default suite's Kargo cases install minimal Stage and Promotion CRDs plus a
 Stage fixture. The Controller observes that Stage, materializes an
@@ -104,5 +110,7 @@ environment variables read by the Go acceptance suite in
 [`internal/acceptance/kind`](../../../internal/acceptance/kind/suite_test.go).
 
 The `Checks` workflow runs both suites as independent, non-blocking jobs. Each
-CI run uses a unique cluster name and performs an unconditional cleanup; the
-local tasks remain available for development and failure diagnosis.
+job starts its cluster while Docker Bake builds the current checkout using a
+per-image BuildKit cache.
+The kind job updates the cache for both suites. Each CI run uses a unique cluster
+name and performs an unconditional cleanup. The local tasks build their own images.

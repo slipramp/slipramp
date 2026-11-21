@@ -198,7 +198,7 @@ func (s *suite) registerRepository(t *testing.T) {
 	var explanation catalog.Explanation
 	s.mustProductCLIJSON(t, &explanation,
 		"target", "explain", s.targetID.String(), "preview", "--format", "json")
-	if explanation.SchemaVersion != 1 || explanation.Level != catalog.ValidationLevelDeployment ||
+	if explanation.SchemaVersion != 2 || explanation.Level != catalog.ValidationLevelDeployment ||
 		explanation.Target.Value.Name != "acceptance" || explanation.Action.Value != "preview" ||
 		!explanation.Placement.ConfigurationAvailable || explanation.Placement.Name.Value != "acceptance" ||
 		explanation.Placement.Cluster.Value != "kind" {

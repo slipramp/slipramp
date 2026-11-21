@@ -18,8 +18,8 @@ func (s *suite) provision(t *testing.T) {
 	t.Helper()
 
 	s.requireCommands(t)
-	s.buildImagesAndCLI(t)
-	s.createCluster(t)
+	s.prepareClusterAndImages(t)
+	s.loadImages(t)
 	s.createFixture(t)
 	s.deployDependencies(t)
 	s.deployFixtures(t)
@@ -53,12 +53,44 @@ func (s *suite) requireCommands(t *testing.T) {
 		}
 	}
 
-	clusters := string(s.mustRun(t, s.kindBin, "get", "clusters"))
-	for cluster := range strings.FieldsSeq(clusters) {
-		if cluster == s.clusterName {
-			t.Fatalf("kind cluster already exists: %s", s.clusterName)
-		}
+	clusters := strings.Fields(string(s.mustRun(t, s.kindBin, "get", "clusters")))
+	clusterExists := slices.Contains(clusters, s.clusterName)
+	if s.precreatedCluster && !clusterExists {
+		t.Fatalf("precreated kind cluster does not exist: %s", s.clusterName)
 	}
+	if !s.precreatedCluster && clusterExists {
+		t.Fatalf("kind cluster already exists: %s", s.clusterName)
+	}
+}
+
+func (s *suite) prepareClusterAndImages(t *testing.T) {
+	t.Helper()
+
+	if s.precreatedCluster {
+		t.Logf("using precreated kind cluster %s", s.clusterName)
+		s.clusterCreated = true
+	} else {
+		t.Logf("creating kind cluster %s alongside image preparation", s.clusterName)
+		command := exec.CommandContext(t.Context(), s.kindBin,
+			"create", "cluster", "--name", s.clusterName,
+			"--config", filepath.Join(s.rootDirectory, "deploy/e2e/kind/cluster.yaml"), "--wait", "2m",
+		)
+		command.Dir = s.rootDirectory
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		if err := command.Start(); err != nil {
+			t.Fatalf("start kind cluster creation: %v", err)
+		}
+		// Reap the process before suite cleanup even if image preparation fails.
+		defer func() {
+			if err := command.Wait(); err != nil {
+				t.Fatalf("create kind cluster %s: %v", s.clusterName, err)
+			}
+			s.clusterCreated = true
+		}()
+	}
+
+	s.buildImagesAndCLI(t)
 }
 
 func (s *suite) buildImagesAndCLI(t *testing.T) {
@@ -71,25 +103,16 @@ func (s *suite) buildImagesAndCLI(t *testing.T) {
 		t.Fatalf("CLI version output omitted %q: %q", "slipramp dev", version)
 	}
 
-	t.Log("building Slipramp acceptance images")
-	targets := []string{
-		"acceptance-git",
-		"checkout",
-		"controller",
-		"harness",
-		"kargo-tools",
-		"server",
-		"web",
-	}
-	if !s.kargoIntegration {
-		targets = append(targets, "acceptance-ssh", "ansible-tools")
-	}
-	for _, target := range targets {
-		s.mustRunVisible(t, "docker", "build",
-			"--target", target,
-			"--tag", "slipramp-"+target+":acceptance",
-			s.rootDirectory,
-		)
+	if os.Getenv("SLIPRAMP_ACCEPTANCE_PREBUILT_IMAGES") == "1" {
+		t.Log("using prebuilt Slipramp acceptance images")
+		args := append([]string{"image", "inspect", "--format", "{{.Id}}"}, s.acceptanceImages()...)
+		s.mustRun(t, "docker", args...)
+	} else {
+		t.Log("building Slipramp acceptance images")
+		for _, image := range s.acceptanceImages() {
+			target := strings.TrimSuffix(strings.TrimPrefix(image, "slipramp-"), ":acceptance")
+			s.mustRunVisible(t, "docker", "build", "--target", target, "--tag", image, s.rootDirectory)
+		}
 	}
 
 	t.Log("pulling acceptance dependency images")
@@ -100,28 +123,8 @@ func (s *suite) buildImagesAndCLI(t *testing.T) {
 	s.mustRun(t, "docker", "tag", dexImage, "slipramp-acceptance-dex:acceptance")
 }
 
-func dependencyImages() []string {
-	return []string{
-		"postgres:18.6-alpine3.24",
-		"rustfs/rustfs:1.0.1",
-		"rustfs/rc:v0.1.36",
-	}
-}
-
-func (s *suite) createCluster(t *testing.T) {
-	t.Helper()
-
-	t.Logf("creating kind cluster %s", s.clusterName)
-	s.mustRunVisible(t, s.kindBin,
-		"create", "cluster",
-		"--name", s.clusterName,
-		"--image", kindNodeImage,
-		"--wait", "2m",
-	)
-	s.clusterCreated = true
-
+func (s *suite) acceptanceImages() []string {
 	images := []string{
-		"slipramp-acceptance-dex:acceptance",
 		"slipramp-acceptance-git:acceptance",
 		"slipramp-checkout:acceptance",
 		"slipramp-controller:acceptance",
@@ -133,6 +136,21 @@ func (s *suite) createCluster(t *testing.T) {
 	if !s.kargoIntegration {
 		images = append(images, "slipramp-acceptance-ssh:acceptance", "slipramp-ansible-tools:acceptance")
 	}
+	return images
+}
+
+func dependencyImages() []string {
+	return []string{
+		"postgres:18.6-alpine3.24",
+		"rustfs/rustfs:1.0.1",
+		"rustfs/rc:v0.1.36",
+	}
+}
+
+func (s *suite) loadImages(t *testing.T) {
+	t.Helper()
+
+	images := append([]string{"slipramp-acceptance-dex:acceptance"}, s.acceptanceImages()...)
 	images = append(images, dependencyImages()...)
 
 	// Docker's containerd image store may retain a multi-platform index while pulling only the native image.

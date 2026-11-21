@@ -2,17 +2,25 @@ package kindacceptance
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cluster"
+)
+
+const (
+	recoveryStarted   = "acceptance recovery started"
+	recoveryCompleted = "acceptance recovery completed"
 )
 
 func (s *suite) testOperatorCLI(t *testing.T) {
@@ -135,9 +143,11 @@ func (s *suite) testControllerRestartRecovery(t *testing.T) {
 	run := s.createRun(t, "recover", nil, nil, "acceptance-controller-recovery")
 	s.controllerRecoveryRun = run.ID
 	s.waitForRunPhase(t, run.ID, api.RunPhaseRunning)
+	s.waitForActionLog(t, run.ID, recoveryStarted)
 	s.restartDeployment(t, "slipramp-controller")
+	s.releaseRecoveryRun(t, run.ID)
 	s.waitForRunOutcome(t, run.ID, api.RunOutcomeSucceeded)
-	s.assertLogContains(t, run.ID, "acceptance recovery completed")
+	s.assertLogContains(t, run.ID, recoveryCompleted)
 }
 
 func (s *suite) testServerRestartRecovery(t *testing.T) {
@@ -145,10 +155,12 @@ func (s *suite) testServerRestartRecovery(t *testing.T) {
 	run := s.createRun(t, "recover", nil, nil, "acceptance-server-recovery")
 	s.serverRecoveryRun = run.ID
 	s.waitForRunPhase(t, run.ID, api.RunPhaseRunning)
+	s.waitForActionLog(t, run.ID, recoveryStarted)
 	s.restartDeployment(t, "slipramp-server")
 	s.startForward(t, "server", "slipramp-server", s.serverPort, 8080)
+	s.releaseRecoveryRun(t, run.ID)
 	s.waitForRunOutcome(t, run.ID, api.RunOutcomeSucceeded)
-	s.assertLogContains(t, run.ID, "acceptance recovery completed")
+	s.assertLogContains(t, run.ID, recoveryCompleted)
 }
 
 func (s *suite) testRustFSOutageRecovery(t *testing.T) {
@@ -157,8 +169,7 @@ func (s *suite) testRustFSOutageRecovery(t *testing.T) {
 	s.rustFSRecoveryRun = run.ID
 	s.waitForRunPhase(t, run.ID, api.RunPhaseRunning)
 
-	firstLine := []byte("acceptance recovery started\n")
-	s.waitForDurableLogBytes(t, run.ID, int64(len(firstLine)))
+	s.waitForDurableLogBytes(t, run.ID, int64(len(recoveryStarted)+1))
 
 	outageActive := true
 	defer func() {
@@ -172,6 +183,7 @@ func (s *suite) testRustFSOutageRecovery(t *testing.T) {
 		t.Fatalf("readiness during RustFS outage = %#v", report)
 	}
 
+	s.releaseRecoveryRun(t, run.ID)
 	s.kubectl(t,
 		"-n", runNamespace,
 		"wait", "--for=condition=complete", "job",
@@ -191,7 +203,7 @@ func (s *suite) testRustFSOutageRecovery(t *testing.T) {
 	}
 	s.waitForRunOutcome(t, run.ID, api.RunOutcomeSucceeded)
 
-	expectedLog := []byte("acceptance recovery started\nacceptance recovery completed\n")
+	expectedLog := []byte(recoveryStarted + "\n" + recoveryCompleted + "\n")
 	s.assertSealedLogEquals(t, run.ID, expectedLog)
 }
 
@@ -256,9 +268,14 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 	s.postgresRecoveryRun = active.ID
 	s.waitForRunPhase(t, active.ID, api.RunPhaseRunning)
 
-	firstLine := []byte("acceptance recovery started\n")
-	s.waitForDurableLogBytes(t, active.ID, int64(len(firstLine)))
-	queued := s.createRun(t, "recover", nil, nil, "acceptance-postgres-queued")
+	s.waitForDurableLogBytes(t, active.ID, int64(len(recoveryStarted)+1))
+	var waitForRelease api.ParameterValue
+	if err := waitForRelease.FromParameterValue1(false); err != nil {
+		t.Fatalf("encode recovery wait parameter: %v", err)
+	}
+	queued := s.createRun(t, "recover", map[string]api.ParameterValue{
+		"wait-for-release": waitForRelease,
+	}, nil, "acceptance-postgres-queued")
 	s.postgresQueuedRun = queued.ID
 	s.waitForRunPhase(t, queued.ID, api.RunPhaseQueued)
 
@@ -275,6 +292,7 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 	}
 	s.assertHealthy(t)
 
+	s.releaseRecoveryRun(t, active.ID)
 	s.kubectl(t,
 		"-n", runNamespace,
 		"wait", "--for=condition=complete", "job",
@@ -291,7 +309,7 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 		t.Fatalf("readiness after PostgreSQL recovery = %#v", report)
 	}
 
-	expectedLog := []byte("acceptance recovery started\nacceptance recovery completed\n")
+	expectedLog := []byte(recoveryStarted + "\n" + recoveryCompleted + "\n")
 	s.waitForRunOutcome(t, active.ID, api.RunOutcomeSucceeded)
 	s.assertSealedLogEquals(t, active.ID, expectedLog)
 	s.waitForJobDeletion(t, active.ID)
@@ -299,6 +317,20 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 	s.waitForRunOutcome(t, queued.ID, api.RunOutcomeSucceeded)
 	s.assertSealedLogEquals(t, queued.ID, expectedLog)
 	s.waitForJobDeletion(t, queued.ID)
+}
+
+func (s *suite) releaseRecoveryRun(t *testing.T, runID uuid.UUID) {
+	t.Helper()
+
+	pods := strings.Fields(string(s.kubectl(t, "-n", runNamespace, "get", "pods",
+		"-l", "slipramp.com/run-id="+runID.String(), "-o", "name")))
+	if len(pods) != 1 {
+		t.Fatalf("expected one recovery Pod for Run %s, found %v", runID, pods)
+	}
+	s.kubectl(t, "-n", runNamespace, "exec", pods[0], "-c", "action", "--", "/bin/sh", "-ec", `
+fifo=/tmp/acceptance-recovery
+test -p "$fifo"
+printf '%s\n' continue > "$fifo"`)
 }
 
 func (s *suite) testRunReviews(t *testing.T) {
@@ -397,7 +429,7 @@ func (s *suite) testInbox(t *testing.T) {
 	inboxAPIKey := s.createServiceAccountAPIKey(t, principalID, "Inbox acceptance",
 		[]string{"slipramp:read", "slipramp:inbox:write"})
 
-	s.scaleDeployment(t, "slipramp-controller", 0)
+	s.expireControllerCheckIn(t)
 	firstProblem := s.waitForClusterInboxProblem(t, s.productAPIKey)
 	secondPrincipalProblem := s.waitForClusterInboxProblem(t, inboxAPIKey)
 	if firstProblem != secondPrincipalProblem {
@@ -436,13 +468,32 @@ func (s *suite) testInbox(t *testing.T) {
 	s.scaleDeployment(t, "slipramp-controller", 1)
 	s.waitForDeployment(t, "slipramp-controller")
 	s.waitForClusterInboxRecovery(t, inboxAPIKey)
-	s.scaleDeployment(t, "slipramp-controller", 0)
+	s.expireControllerCheckIn(t)
 	recurrentProblem := s.waitForClusterInboxProblem(t, s.productAPIKey)
 	if recurrentProblem == firstProblem {
 		t.Fatalf("recurrent Inbox problem reused occurrence identity %s", firstProblem)
 	}
 	s.scaleDeployment(t, "slipramp-controller", 1)
 	s.waitForDeployment(t, "slipramp-controller")
+	s.waitForClusterInboxRecovery(t, inboxAPIKey)
+}
+
+func (s *suite) expireControllerCheckIn(t *testing.T) {
+	t.Helper()
+
+	s.scaleDeployment(t, "slipramp-controller", 0)
+	s.kubectl(t, "-n", systemNamespace, "wait", "--for=delete", "pod",
+		"-l", "app.kubernetes.io/name=slipramp-controller", "--timeout="+s.timeout.String())
+
+	// Age the last real check-in so each outage retains its own occurrence identity.
+	statement := fmt.Sprintf(`
+UPDATE clusters SET last_seen_at = last_seen_at - interval '%d seconds'
+WHERE name = 'kind' RETURNING name`, 2*cluster.ConnectionWindow/time.Second)
+	output := s.kubectl(t, "-n", systemNamespace, "exec", "deployment/postgres", "--",
+		"psql", "-XqAt", "-U", "slipramp", "-d", "slipramp", "-v", "ON_ERROR_STOP=1", "-c", statement)
+	if strings.TrimSpace(string(output)) != "kind" {
+		t.Fatalf("expire Controller check-in returned %q, want cluster kind", output)
+	}
 }
 
 func findArtifact(t *testing.T, artifacts []api.Artifact, name string) api.Artifact {

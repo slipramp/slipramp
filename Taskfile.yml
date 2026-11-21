@@ -367,6 +367,14 @@ tasks:
     cmds:
       - ./scripts/release.sh "{{.VERSION}}"
 
+  acceptance:cluster:
+    desc: Create the disposable cluster for a CI acceptance job
+    deps: [deps:kind]
+    cmds:
+      - >-
+        "{{.KIND}}" create cluster --name "$SLIPRAMP_ACCEPTANCE_CLUSTER_NAME"
+        --config "{{.ROOT_DIR}}/deploy/e2e/kind/cluster.yaml" --wait 2m
+
   acceptance:kind:
     desc: Run execution and Kargo acceptance in a disposable kind cluster
     deps: [deps:helm, deps:kind]

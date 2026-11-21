@@ -20,7 +20,6 @@ const (
 	kargoAcceptanceEnvironment = "SLIPRAMP_RUN_KARGO_ACCEPTANCE"
 	kargoChart                 = "oci://ghcr.io/akuity/kargo-charts/kargo"
 	kargoChartVersion          = "1.11.4"
-	kindNodeImage              = "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
 	dexImage                   = "ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462"
 	systemNamespace            = "slipramp-system"
 	runNamespace               = "slipramp-runs"
@@ -47,6 +46,7 @@ type suite struct {
 	processContext     context.Context
 	cancelProcesses    context.CancelFunc
 	kargoIntegration   bool
+	precreatedCluster  bool
 
 	clusterCreated bool
 	forwards       map[string]*forward
@@ -154,7 +154,8 @@ func newSuite(t *testing.T, kargoIntegration bool) *suite {
 
 	temporaryDirectory := t.TempDir()
 	keepCluster := environmentString("SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER", "false") == "true"
-	if !keepCluster {
+	precreatedCluster := os.Getenv("SLIPRAMP_ACCEPTANCE_PRECREATED_CLUSTER") == "1"
+	if !keepCluster && !precreatedCluster {
 		t.Setenv("KUBECONFIG", filepath.Join(temporaryDirectory, "kubeconfig"))
 	}
 	serverPort := environmentInt(t, "SLIPRAMP_ACCEPTANCE_SERVER_PORT", 18080)
@@ -184,6 +185,7 @@ func newSuite(t *testing.T, kargoIntegration bool) *suite {
 		processContext:     suiteContext,
 		cancelProcesses:    cancel,
 		kargoIntegration:   kargoIntegration,
+		precreatedCluster:  precreatedCluster,
 		forwards:           make(map[string]*forward),
 	}
 }

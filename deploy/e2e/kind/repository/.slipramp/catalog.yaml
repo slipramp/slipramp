@@ -44,6 +44,10 @@ spec:
     recover:
       intent: operation
       command: [/bin/sh, scripts/recover.sh]
+      parameters:
+        wait-for-release:
+          type: boolean
+          environment: ACCEPTANCE_WAIT_FOR_RELEASE
     review:
       intent: operation
       command: [/bin/sh, scripts/review.sh]

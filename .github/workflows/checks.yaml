@@ -147,7 +147,32 @@ jobs:
       - name: Install Task
         run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
 
+      - name: Start disposable kind cluster
+        background: true
+        run: |
+          export KUBECONFIG="$RUNNER_TEMP/slipramp-acceptance.kubeconfig"
+          echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+          task acceptance:cluster
+
+      - uses: docker/setup-buildx-action@v4.4.1
+        with:
+          version: v0.33.0
+
+      - name: Build kind acceptance images
+        uses: docker/bake-action@v7.5.0
+        with:
+          source: .
+          files: deploy/e2e/kind/docker-bake.hcl
+          targets: acceptance
+          load: true
+
+      - name: Wait for kind startup
+        wait-all:
+
       - run: task acceptance:kind
+        env:
+          SLIPRAMP_ACCEPTANCE_PREBUILT_IMAGES: "1"
+          SLIPRAMP_ACCEPTANCE_PRECREATED_CLUSTER: "1"
 
       - name: Clean up disposable cluster
         if: always()
@@ -179,7 +204,33 @@ jobs:
       - name: Install Task
         run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
 
+      - name: Start disposable kind cluster
+        background: true
+        run: |
+          export KUBECONFIG="$RUNNER_TEMP/slipramp-acceptance.kubeconfig"
+          echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+          task acceptance:cluster
+
+      - uses: docker/setup-buildx-action@v4.4.1
+        with:
+          version: v0.33.0
+
+      - name: Build Kargo acceptance images
+        uses: docker/bake-action@v7.5.0
+        with:
+          source: .
+          files: deploy/e2e/kind/docker-bake.hcl
+          targets: acceptance
+          load: true
+          vars: KARGO_ONLY=true
+
+      - name: Wait for kind startup
+        wait-all:
+
       - run: task acceptance:kargo
+        env:
+          SLIPRAMP_ACCEPTANCE_PREBUILT_IMAGES: "1"
+          SLIPRAMP_ACCEPTANCE_PRECREATED_CLUSTER: "1"
 
       - name: Clean up disposable cluster
         if: always()
