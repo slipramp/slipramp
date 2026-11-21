@@ -41,13 +41,14 @@ func (q *Queries) ActivateCatalogRevision(ctx context.Context, arg ActivateCatal
 	return err
 }
 
-const archiveMissingTargets = `-- name: ArchiveMissingTargets :exec
+const archiveMissingTargets = `-- name: ArchiveMissingTargets :many
 UPDATE targets
 SET updated_at = $1,
     archived_at = $1
 WHERE repository_id = $2
   AND archived_at IS NULL
   AND NOT (name = ANY($3::text[]))
+RETURNING id
 `
 
 type ArchiveMissingTargetsParams struct {
@@ -56,9 +57,24 @@ type ArchiveMissingTargetsParams struct {
 	ActiveNames  []string
 }
 
-func (q *Queries) ArchiveMissingTargets(ctx context.Context, arg ArchiveMissingTargetsParams) error {
-	_, err := q.db.Exec(ctx, archiveMissingTargets, arg.UpdatedAt, arg.RepositoryID, arg.ActiveNames)
-	return err
+func (q *Queries) ArchiveMissingTargets(ctx context.Context, arg ArchiveMissingTargetsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, archiveMissingTargets, arg.UpdatedAt, arg.RepositoryID, arg.ActiveNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const catalogSnapshotID = `-- name: CatalogSnapshotID :one

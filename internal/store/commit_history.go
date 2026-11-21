@@ -84,14 +84,16 @@ func (d *Database) RecordCommitHistory(
 			return fmt.Errorf("replace tracked branch commit history: %w", err)
 		}
 	}
+	var addedCommits int64
 	if len(commitSHAs) > 0 {
-		if err := queries.AddTrackedBranchCommits(
+		addedCommits, err = queries.AddTrackedBranchCommits(
 			ctx,
 			storedb.AddTrackedBranchCommitsParams{
 				RepositoryID: identifier,
 				CommitShas:   commitSHAs,
 			},
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("record tracked branch commits: %w", err)
 		}
 	}
@@ -100,6 +102,8 @@ func (d *Database) RecordCommitHistory(
 		ctx,
 		storedb.FinishRepositoryCommitHistoryParams{
 			IndexedHeadSha: &result.HeadSHA,
+			ReplaceHistory: result.Replace,
+			AddedCommits:   addedCommits,
 			RepositoryID:   identifier,
 			AttemptedAt:    databaseTime(result.AttemptedAt),
 		},

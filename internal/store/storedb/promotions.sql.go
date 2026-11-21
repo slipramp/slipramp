@@ -2617,7 +2617,7 @@ func (q *Queries) UpsertKargoStageSnapshot(ctx context.Context, arg UpsertKargoS
 	return i, err
 }
 
-const upsertPromotionStage = `-- name: UpsertPromotionStage :one
+const upsertPromotionStage = `-- name: UpsertPromotionStage :execrows
 INSERT INTO promotion_stages (
     id,
     integration,
@@ -2697,7 +2697,6 @@ SET cluster_name = EXCLUDED.cluster_name,
     archived_at = EXCLUDED.archived_at
 WHERE promotion_stages.cluster_name = EXCLUDED.cluster_name
   AND promotion_stages.last_observed_at <= EXCLUDED.last_observed_at
-RETURNING id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, candidate_freight_json, health_status, argo_application_namespace, stage_status_json, gate_names
 `
 
 type UpsertPromotionStageParams struct {
@@ -2728,8 +2727,8 @@ type UpsertPromotionStageParams struct {
 	ArchivedAt                      pgtype.Timestamptz
 }
 
-func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionStageParams) (PromotionStage, error) {
-	row := q.db.QueryRow(ctx, upsertPromotionStage,
+func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionStageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertPromotionStage,
 		arg.ID,
 		arg.Integration,
 		arg.ClusterName,
@@ -2756,35 +2755,10 @@ func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionS
 		arg.LastObservedAt,
 		arg.ArchivedAt,
 	)
-	var i PromotionStage
-	err := row.Scan(
-		&i.ID,
-		&i.Integration,
-		&i.ClusterName,
-		&i.Project,
-		&i.Name,
-		&i.KubernetesUid,
-		&i.ResourceVersion,
-		&i.Application,
-		&i.Environment,
-		&i.RepositoryName,
-		&i.RepositoryUrl,
-		&i.TargetBranch,
-		&i.SourcePaths,
-		&i.FreightJson,
-		&i.SuccessfulRenderAcknowledgement,
-		&i.FirstObservedAt,
-		&i.LastObservedAt,
-		&i.ArchivedAt,
-		&i.RequestedFreightJson,
-		&i.AutoPromotionEnabled,
-		&i.CandidateFreightJson,
-		&i.HealthStatus,
-		&i.ArgoApplicationNamespace,
-		&i.StageStatusJson,
-		&i.GateNames,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertPromotionStagePolicy = `-- name: UpsertPromotionStagePolicy :one

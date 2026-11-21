@@ -53,7 +53,7 @@ FOR UPDATE OF repositories, repository_commit_history_indexes;
 DELETE FROM repository_tracked_branch_commits
 WHERE repository_id = sqlc.arg(repository_id);
 
--- name: AddTrackedBranchCommits :exec
+-- name: AddTrackedBranchCommits :execrows
 INSERT INTO repository_tracked_branch_commits (repository_id, commit_sha)
 SELECT sqlc.arg(repository_id), unnest(sqlc.arg(commit_shas)::text[])
 ON CONFLICT DO NOTHING;
@@ -66,11 +66,8 @@ SET status = CASE
         ELSE 'pending'
     END,
     indexed_head_sha = sqlc.arg(indexed_head_sha),
-    commit_count = (
-        SELECT count(*)::integer
-        FROM repository_tracked_branch_commits
-        WHERE repository_tracked_branch_commits.repository_id = sqlc.arg(repository_id)
-    ),
+    commit_count = CASE WHEN sqlc.arg(replace_history)::boolean THEN 0 ELSE commit_count END
+                 + sqlc.arg(added_commits)::bigint,
     last_attempted_at = sqlc.arg(attempted_at),
     last_succeeded_at = sqlc.arg(attempted_at),
     failure_reason = NULL

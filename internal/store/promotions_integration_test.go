@@ -1488,6 +1488,17 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	}
 
 	edgeObservedAt := observedAt.Add(2 * time.Minute)
+	conflictingSnapshot := promotionTestSnapshot(uuid.New(), "prod", "edge-cluster", edgeObservedAt)
+	newStage := promotionTestStage("prod", "edge-cluster", "kargo-core", "new-stage", edgeObservedAt)
+	conflictingStage := promotionTestStage("prod", "edge-cluster", "kargo-core", "external-dns-prod", edgeObservedAt)
+	err = database.ReplacePromotionStageSnapshot(ctx, conflictingSnapshot, []promotion.Stage{newStage, conflictingStage})
+	if !errors.Is(err, promotion.ErrStaleSnapshot) {
+		t.Fatalf("Stage identity already observed in another cluster: got %v, want stale snapshot", err)
+	}
+	if _, err := database.GetPromotionStage(ctx, newStage.ID); !errors.Is(err, promotion.ErrStageNotFound) {
+		t.Fatalf("get Stage from rejected snapshot: got %v, want Stage not found", err)
+	}
+
 	edgeSnapshot := promotionTestSnapshot(uuid.New(), "edge", "edge-cluster", edgeObservedAt)
 	edgeStage := promotionTestStage("edge", "edge-cluster", "kargo-core", "external-dns-prod", edgeObservedAt)
 	if err := database.ReplacePromotionStageSnapshot(

@@ -101,7 +101,7 @@ WHERE id = sqlc.arg(id)
 -- name: SupersedePendingGitTriggerDeliveries :exec
 UPDATE git_trigger_deliveries AS delivery
 SET superseded_at = sqlc.arg(superseded_at)
-WHERE delivery.target_id = sqlc.arg(target_id)
+WHERE delivery.target_id = ANY(sqlc.arg(target_ids)::uuid[])
   AND delivery.run_id IS NULL
   AND delivery.superseded_at IS NULL
   AND delivery.failed_at IS NULL;
@@ -118,10 +118,9 @@ SET phase = 'finished',
     outcome = 'canceled',
     finished_at = sqlc.arg(finished_at),
     outcome_reason = 'SupersededByGitChange'
-WHERE target_id = sqlc.arg(target_id)
-  AND phase = 'queued'
-  AND source->>'type' = 'git'
-  AND (
-      sqlc.arg(cancel_all)::boolean
-      OR commit_sha <> sqlc.arg(desired_commit_sha)
-  );
+FROM targets
+WHERE runs.target_id = targets.id
+  AND targets.id = ANY(sqlc.arg(target_ids)::uuid[])
+  AND runs.phase = 'queued'
+  AND runs.source->>'type' = 'git'
+  AND (targets.archived_at IS NOT NULL OR runs.commit_sha <> targets.desired_commit_sha);

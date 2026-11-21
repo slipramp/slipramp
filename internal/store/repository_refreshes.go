@@ -117,11 +117,11 @@ func recordCatalogRevision(
 		}
 	}
 
-	targetChanges, err := updateTargetStates(ctx, queries, repositoryID, revisionID, result)
+	changedTargetIDs, err := updateTargetStates(ctx, queries, repositoryID, revisionID, result)
 	if err != nil {
 		return err
 	}
-	if err := coalesceSupersededGitWork(ctx, queries, repositoryID, targetChanges, result.AttemptedAt); err != nil {
+	if err := coalesceSupersededGitWork(ctx, queries, changedTargetIDs, result.AttemptedAt); err != nil {
 		return err
 	}
 	if previousRevisionID.Valid && previousRevisionID.Bytes != revisionID.Bytes {
@@ -172,94 +172,62 @@ func upsertRepositoryCommit(
 	return nil
 }
 
-type targetStateChange struct {
-	id               uuid.UUID
-	name             string
-	desiredCommitSHA string
-	archived         bool
-}
-
 func updateTargetStates(
 	ctx context.Context,
 	queries *storedb.Queries,
 	repositoryID pgtype.UUID,
 	revisionID pgtype.UUID,
 	result repository.RefreshResult,
-) ([]targetStateChange, error) {
+) ([]pgtype.UUID, error) {
 	existingRows, err := queries.ListRepositoryTargetStates(ctx, repositoryID)
 	if err != nil {
 		return nil, fmt.Errorf("list repository target states: %w", err)
 	}
 
-	type existingTargetState struct {
-		id               uuid.UUID
-		desiredCommitSHA string
-		archived         bool
-	}
-	existing := make(map[string]existingTargetState, len(existingRows))
+	existing := make(map[string]storedb.ListRepositoryTargetStatesRow, len(existingRows))
 	for _, row := range existingRows {
-		existing[row.Name] = existingTargetState{
-			id:               uuid.UUID(row.ID.Bytes),
-			desiredCommitSHA: row.DesiredCommitSha,
-			archived:         row.ArchivedAt.Valid,
-		}
+		existing[row.Name] = row
 	}
 
 	revision := *result.Revision
 	activeNames := make([]string, 0, len(revision.Catalog.Targets))
-	activeNameSet := make(map[string]struct{}, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
 		activeNames = append(activeNames, target.Metadata.Name)
-		activeNameSet[target.Metadata.Name] = struct{}{}
-	}
-
-	changes := make([]targetStateChange, 0, len(revision.Catalog.Targets))
-	for _, row := range existingRows {
-		if _, active := activeNameSet[row.Name]; !active && !row.ArchivedAt.Valid {
-			changes = append(changes, targetStateChange{
-				id:       uuid.UUID(row.ID.Bytes),
-				name:     row.Name,
-				archived: true,
-			})
-		}
 	}
 
 	updatedAt := pgtype.Timestamptz{Time: result.AttemptedAt, Valid: true}
-	if err := queries.ArchiveMissingTargets(
+	changedTargetIDs, err := queries.ArchiveMissingTargets(
 		ctx,
 		storedb.ArchiveMissingTargetsParams{
 			UpdatedAt:    updatedAt,
 			RepositoryID: repositoryID,
 			ActiveNames:  activeNames,
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return nil, fmt.Errorf("archive missing targets: %w", err)
 	}
 
 	for _, target := range revision.Catalog.Targets {
 		name := target.Metadata.Name
 		state, found := existing[name]
-		targetID := uuid.New()
-		if found {
-			targetID = state.id
+		targetID := state.ID
+		if !found {
+			targetID = databaseUUID(uuid.New())
 		}
 		desiredCommitSHA := revision.CommitSHA
-		if found && !state.archived &&
+		if found && !state.ArchivedAt.Valid &&
 			!catalog.TargetAffected(target, result.ChangedPaths) {
-			desiredCommitSHA = state.desiredCommitSHA
+			desiredCommitSHA = state.DesiredCommitSha
 		}
-		if !found || state.archived || state.desiredCommitSHA != desiredCommitSHA {
-			changes = append(changes, targetStateChange{
-				id:               targetID,
-				name:             name,
-				desiredCommitSHA: desiredCommitSHA,
-			})
+		if !found || state.ArchivedAt.Valid || state.DesiredCommitSha != desiredCommitSHA {
+			changedTargetIDs = append(changedTargetIDs, targetID)
 		}
 
 		err := queries.UpsertTargetState(
 			ctx,
 			storedb.UpsertTargetStateParams{
-				ID:                databaseUUID(targetID),
+				ID:                targetID,
 				RepositoryID:      repositoryID,
 				Name:              name,
 				CatalogRevisionID: revisionID,
@@ -273,7 +241,7 @@ func updateTargetStates(
 		}
 	}
 
-	return changes, nil
+	return changedTargetIDs, nil
 }
 
 func findCatalogRevisionID(

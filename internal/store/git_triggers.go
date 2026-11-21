@@ -89,33 +89,23 @@ func createGitTriggerDeliveries(
 func coalesceSupersededGitWork(
 	ctx context.Context,
 	queries *storedb.Queries,
-	repositoryID pgtype.UUID,
-	targets []targetStateChange,
+	targetIDs []pgtype.UUID,
 	finishedAt time.Time,
 ) error {
-	for _, target := range targets {
-		if err := queries.SupersedePendingGitTriggerDeliveries(
-			ctx,
-			storedb.SupersedePendingGitTriggerDeliveriesParams{
-				SupersededAt: databaseTime(finishedAt),
-				TargetID:     databaseUUID(target.id),
-			},
-		); err != nil {
-			return fmt.Errorf("supersede pending Git-trigger deliveries for target %q: %w", target.name, err)
-		}
+	if len(targetIDs) == 0 {
+		return nil
+	}
 
-		err := queries.FinishSupersededQueuedGitRuns(
-			ctx,
-			storedb.FinishSupersededQueuedGitRunsParams{
-				FinishedAt:       databaseTime(finishedAt),
-				TargetID:         databaseUUID(target.id),
-				DesiredCommitSha: target.desiredCommitSHA,
-				CancelAll:        target.archived,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("finish superseded queued Git Runs for target %q: %w", target.name, err)
-		}
+	at := databaseTime(finishedAt)
+	if err := queries.SupersedePendingGitTriggerDeliveries(ctx, storedb.SupersedePendingGitTriggerDeliveriesParams{
+		SupersededAt: at, TargetIds: targetIDs,
+	}); err != nil {
+		return fmt.Errorf("supersede pending Git-trigger deliveries: %w", err)
+	}
+	if err := queries.FinishSupersededQueuedGitRuns(ctx, storedb.FinishSupersededQueuedGitRunsParams{
+		FinishedAt: at, TargetIds: targetIDs,
+	}); err != nil {
+		return fmt.Errorf("finish superseded queued Git Runs: %w", err)
 	}
 
 	return nil

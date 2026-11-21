@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addTrackedBranchCommits = `-- name: AddTrackedBranchCommits :exec
+const addTrackedBranchCommits = `-- name: AddTrackedBranchCommits :execrows
 INSERT INTO repository_tracked_branch_commits (repository_id, commit_sha)
 SELECT $1, unnest($2::text[])
 ON CONFLICT DO NOTHING
@@ -22,9 +22,12 @@ type AddTrackedBranchCommitsParams struct {
 	CommitShas   []string
 }
 
-func (q *Queries) AddTrackedBranchCommits(ctx context.Context, arg AddTrackedBranchCommitsParams) error {
-	_, err := q.db.Exec(ctx, addTrackedBranchCommits, arg.RepositoryID, arg.CommitShas)
-	return err
+func (q *Queries) AddTrackedBranchCommits(ctx context.Context, arg AddTrackedBranchCommitsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addTrackedBranchCommits, arg.RepositoryID, arg.CommitShas)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteTrackedBranchCommits = `-- name: DeleteTrackedBranchCommits :exec
@@ -71,25 +74,30 @@ SET status = CASE
         ELSE 'pending'
     END,
     indexed_head_sha = $1,
-    commit_count = (
-        SELECT count(*)::integer
-        FROM repository_tracked_branch_commits
-        WHERE repository_tracked_branch_commits.repository_id = $2
-    ),
-    last_attempted_at = $3,
-    last_succeeded_at = $3,
+    commit_count = CASE WHEN $2::boolean THEN 0 ELSE commit_count END
+                 + $3::bigint,
+    last_attempted_at = $4,
+    last_succeeded_at = $4,
     failure_reason = NULL
-WHERE repository_id = $2
+WHERE repository_id = $5
 `
 
 type FinishRepositoryCommitHistoryParams struct {
 	IndexedHeadSha *string
-	RepositoryID   pgtype.UUID
+	ReplaceHistory bool
+	AddedCommits   int64
 	AttemptedAt    pgtype.Timestamptz
+	RepositoryID   pgtype.UUID
 }
 
 func (q *Queries) FinishRepositoryCommitHistory(ctx context.Context, arg FinishRepositoryCommitHistoryParams) error {
-	_, err := q.db.Exec(ctx, finishRepositoryCommitHistory, arg.IndexedHeadSha, arg.RepositoryID, arg.AttemptedAt)
+	_, err := q.db.Exec(ctx, finishRepositoryCommitHistory,
+		arg.IndexedHeadSha,
+		arg.ReplaceHistory,
+		arg.AddedCommits,
+		arg.AttemptedAt,
+		arg.RepositoryID,
+	)
 	return err
 }
 

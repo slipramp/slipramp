@@ -125,14 +125,19 @@ func TestRepositoryCommitHistoryPersistenceIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatalf("RecordRepositoryRefresh() incremental error = %v", err)
 	}
-	if err := database.RecordCommitHistory(ctx, repositoryID, repository.CommitHistoryResult{
+	incremental := repository.CommitHistoryResult{
 		HeadSHA: commitC,
 		Commits: []repository.Commit{
+			initialResult.Commits[0],
 			commitHistoryRecord(repositoryID, commitC, "third", baseTime.Add(time.Minute)),
 		},
 		AttemptedAt: baseTime.Add(4 * time.Minute),
-	}); err != nil {
+	}
+	if err := database.RecordCommitHistory(ctx, repositoryID, incremental); err != nil {
 		t.Fatalf("RecordCommitHistory() incremental error = %v", err)
+	}
+	if err := database.RecordCommitHistory(ctx, repositoryID, incremental); err != nil {
+		t.Fatalf("RecordCommitHistory() retry error = %v", err)
 	}
 	assertCommitHistoryState(
 		t,
@@ -201,6 +206,13 @@ func TestRepositoryCommitHistoryPersistenceIntegration(t *testing.T) {
 		loaded.CommitHistoryIndex.CommitCount != 1 {
 		t.Errorf("failed commit history index = %#v", loaded.CommitHistoryIndex)
 	}
+
+	if err := database.RecordCommitHistory(ctx, repositoryID, repository.CommitHistoryResult{
+		HeadSHA: commitE, Replace: true, AttemptedAt: baseTime.Add(9 * time.Minute),
+	}); err != nil {
+		t.Fatalf("RecordCommitHistory() empty replacement error = %v", err)
+	}
+	assertCommitHistoryState(t, database, repositoryID, repository.CommitHistoryIndexSucceeded, commitE, commitE, 0)
 
 	_, err = database.UpdateRepository(
 		ctx,

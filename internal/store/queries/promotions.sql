@@ -1,4 +1,4 @@
--- name: UpsertPromotionStage :one
+-- name: UpsertPromotionStage :execrows
 INSERT INTO promotion_stages (
     id,
     integration,
@@ -77,8 +77,7 @@ SET cluster_name = EXCLUDED.cluster_name,
     last_observed_at = EXCLUDED.last_observed_at,
     archived_at = EXCLUDED.archived_at
 WHERE promotion_stages.cluster_name = EXCLUDED.cluster_name
-  AND promotion_stages.last_observed_at <= EXCLUDED.last_observed_at
-RETURNING *;
+  AND promotion_stages.last_observed_at <= EXCLUDED.last_observed_at;
 
 -- name: GetPromotionStage :one
 SELECT *

@@ -175,11 +175,12 @@ func (d *Database) ReplacePromotionStageSnapshot(
 		if err != nil {
 			return err
 		}
-		if _, err := queries.UpsertPromotionStage(ctx, params); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return promotion.ErrStaleSnapshot
-			}
+		affected, err := queries.UpsertPromotionStage(ctx, params)
+		if err != nil {
 			return fmt.Errorf("upsert promotion Stage in snapshot: %w", err)
+		}
+		if affected == 0 {
+			return promotion.ErrStaleSnapshot
 		}
 	}
 

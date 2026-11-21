@@ -148,13 +148,14 @@ FROM targets
 WHERE repository_id = sqlc.arg(repository_id)
 ORDER BY name;
 
--- name: ArchiveMissingTargets :exec
+-- name: ArchiveMissingTargets :many
 UPDATE targets
 SET updated_at = sqlc.arg(updated_at),
     archived_at = sqlc.arg(updated_at)
 WHERE repository_id = sqlc.arg(repository_id)
   AND archived_at IS NULL
-  AND NOT (name = ANY(sqlc.arg(active_names)::text[]));
+  AND NOT (name = ANY(sqlc.arg(active_names)::text[]))
+RETURNING id;
 
 -- name: UpsertTargetState :exec
 INSERT INTO targets (

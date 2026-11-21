@@ -86,29 +86,21 @@ SET phase = 'finished',
     outcome = 'canceled',
     finished_at = $1,
     outcome_reason = 'SupersededByGitChange'
-WHERE target_id = $2
-  AND phase = 'queued'
-  AND source->>'type' = 'git'
-  AND (
-      $3::boolean
-      OR commit_sha <> $4
-  )
+FROM targets
+WHERE runs.target_id = targets.id
+  AND targets.id = ANY($2::uuid[])
+  AND runs.phase = 'queued'
+  AND runs.source->>'type' = 'git'
+  AND (targets.archived_at IS NOT NULL OR runs.commit_sha <> targets.desired_commit_sha)
 `
 
 type FinishSupersededQueuedGitRunsParams struct {
-	FinishedAt       pgtype.Timestamptz
-	TargetID         pgtype.UUID
-	CancelAll        bool
-	DesiredCommitSha string
+	FinishedAt pgtype.Timestamptz
+	TargetIds  []pgtype.UUID
 }
 
 func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishSupersededQueuedGitRunsParams) error {
-	_, err := q.db.Exec(ctx, finishSupersededQueuedGitRuns,
-		arg.FinishedAt,
-		arg.TargetID,
-		arg.CancelAll,
-		arg.DesiredCommitSha,
-	)
+	_, err := q.db.Exec(ctx, finishSupersededQueuedGitRuns, arg.FinishedAt, arg.TargetIds)
 	return err
 }
 
@@ -409,7 +401,7 @@ func (q *Queries) SupersedeGitTriggerDelivery(ctx context.Context, arg Supersede
 const supersedePendingGitTriggerDeliveries = `-- name: SupersedePendingGitTriggerDeliveries :exec
 UPDATE git_trigger_deliveries AS delivery
 SET superseded_at = $1
-WHERE delivery.target_id = $2
+WHERE delivery.target_id = ANY($2::uuid[])
   AND delivery.run_id IS NULL
   AND delivery.superseded_at IS NULL
   AND delivery.failed_at IS NULL
@@ -417,10 +409,10 @@ WHERE delivery.target_id = $2
 
 type SupersedePendingGitTriggerDeliveriesParams struct {
 	SupersededAt pgtype.Timestamptz
-	TargetID     pgtype.UUID
+	TargetIds    []pgtype.UUID
 }
 
 func (q *Queries) SupersedePendingGitTriggerDeliveries(ctx context.Context, arg SupersedePendingGitTriggerDeliveriesParams) error {
-	_, err := q.db.Exec(ctx, supersedePendingGitTriggerDeliveries, arg.SupersededAt, arg.TargetID)
+	_, err := q.db.Exec(ctx, supersedePendingGitTriggerDeliveries, arg.SupersededAt, arg.TargetIds)
 	return err
 }

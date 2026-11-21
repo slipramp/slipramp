@@ -424,6 +424,88 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 	}
 }
 
+func TestGitRefreshCoalescesWorkAcrossChangedTargetsIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	at := time.Now().UTC().Truncate(time.Second)
+	repositoryID := uuid.New()
+	_, err := database.CreateRepository(ctx, repository.Repository{
+		ID: repositoryID, Name: "infra", CloneURL: "https://example.com/infra.git",
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: at,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets := []string{"network", "storage", "metrics"}
+	refresh := func(sha string, names, changedPaths []string) {
+		t.Helper()
+		at = at.Add(time.Minute)
+		result := successfulCatalogRefresh(sha, at, uuid.New())
+		contents := gitTriggeredCatalog()
+		template := contents.Targets[0]
+		action := template.Spec.Actions["sync"]
+		secondTrigger := action.Triggers[0]
+		secondTrigger.Name = "second"
+		action.Triggers = append(action.Triggers, secondTrigger)
+		template.Spec.Actions["sync"] = action
+		contents.Targets = nil
+		for i, name := range names {
+			target := template
+			target.Metadata.Name = name
+			target.Source.Document = i + 2
+			target.Spec.Watch = []string{name + "/**"}
+			contents.Targets = append(contents.Targets, target)
+		}
+		result.Revision.Catalog = contents
+		result.ChangedPaths = changedPaths
+		if err := database.RecordRepositoryRefresh(ctx, repositoryID, result); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refresh(strings.Repeat("a", 40), targets, nil)
+	commitB := strings.Repeat("b", 40)
+	refresh(commitB, targets, []string{"network/main.tf", "storage/main.tf", "metrics/main.tf"})
+
+	queuedRuns := make(map[string]uuid.UUID)
+	pendingDeliveries := make(map[string]uuid.UUID)
+	for range 2 * len(targets) {
+		delivery, err := database.GetEligibleGitTriggerDelivery(ctx, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if delivery.TriggerName == "second" {
+			recordGitDeliveryFailure(t, database, delivery.ID, at, run.ErrPlacementNotFound)
+			pendingDeliveries[delivery.TargetName] = delivery.ID
+			continue
+		}
+		queued := queuedGitTestRun(uuid.New(), delivery, commitB, at)
+		if _, err := database.CreateRun(ctx, queued, nil); err != nil {
+			t.Fatal(err)
+		}
+		queuedRuns[delivery.TargetName] = queued.ID
+	}
+
+	refresh(strings.Repeat("c", 40), []string{"network", "metrics"}, []string{"network/main.tf"})
+	for _, name := range targets {
+		stored, err := database.GetRun(ctx, queuedRuns[name])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "metrics" {
+			assertGitTriggerDeliveryState(t, database, pendingDeliveries[name], gittrigger.StatePendingRetry)
+			if stored.Phase != run.PhaseQueued {
+				t.Errorf("unaffected Target's Run phase = %s, want queued", stored.Phase)
+			}
+			continue
+		}
+		assertGitTriggerDeliveryState(t, database, pendingDeliveries[name], gittrigger.StateSuperseded)
+		if stored.OutcomeReason == nil || *stored.OutcomeReason != run.ReasonSupersededByGitChange {
+			t.Errorf("%s Run after refresh = %#v, want superseded", name, stored)
+		}
+	}
+}
+
 func TestGitRefreshPreservesNonGitRunsAndFIFOIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
