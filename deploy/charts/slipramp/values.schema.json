@@ -20,8 +20,8 @@
       "additionalProperties": false,
       "required": [
         "replicaCount",
-        "deploymentAnnotations",
-        "deploymentLabels",
+        "deployment",
+        "pod",
         "image",
         "service",
         "metrics",
@@ -53,8 +53,8 @@
       ],
       "properties": {
         "replicaCount": { "type": "integer", "const": 1 },
-        "deploymentAnnotations": { "$ref": "#/$defs/stringMap" },
-        "deploymentLabels": { "$ref": "#/$defs/stringMap" },
+        "deployment": { "$ref": "#/$defs/metadata" },
+        "pod": { "$ref": "#/$defs/metadata" },
         "image": { "$ref": "#/$defs/image" },
         "service": { "$ref": "#/$defs/service" },
         "metrics": {
@@ -438,6 +438,15 @@
     "stringMap": {
       "type": "object",
       "additionalProperties": { "type": "string" }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations", "labels"],
+      "properties": {
+        "annotations": { "$ref": "#/$defs/stringMap" },
+        "labels": { "$ref": "#/$defs/stringMap" }
+      }
     },
     "image": {
       "type": "object",

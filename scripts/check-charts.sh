@@ -95,16 +95,27 @@ server_metadata_render="$test_directory/server-deployment-metadata.yaml"
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --show-only templates/server-deployment.yaml \
   --values "$testdata/slipramp-required.yaml" \
-  --set-json 'server.deploymentAnnotations={"reloader.stakater.com/auto":"true"}' \
-  --set-json 'server.deploymentLabels={"example.com/team":"platform","app.kubernetes.io/component":"other"}' \
+  --values "$testdata/slipramp-metadata.yaml" \
   >"$server_metadata_render"
 sed -n '/^  annotations:$/,/^  labels:$/p' "$server_metadata_render" >"$test_directory/deployment-annotations.yaml"
 sed -n '/^  labels:$/,/^spec:$/p' "$server_metadata_render" >"$test_directory/deployment-labels.yaml"
 assert_contains "$test_directory/deployment-annotations.yaml" '^    reloader\.stakater\.com/auto: "true"$'
 assert_contains "$test_directory/deployment-labels.yaml" '^    example\.com/team: platform$'
 assert_contains "$test_directory/deployment-labels.yaml" '^    app\.kubernetes\.io/component: server$'
-assert_not_contains "$server_metadata_render" 'app\.kubernetes\.io/component: other'
 assert_not_contains "$server_metadata_render" '^ {6,}(example\.com/team|reloader\.stakater\.com/auto):'
+sed -n '/^      annotations:$/,/^      labels:$/p' "$server_metadata_render" >"$test_directory/pod-annotations.yaml"
+sed -n '/^      labels:$/,/^    spec:$/p' "$server_metadata_render" >"$test_directory/pod-labels.yaml"
+assert_contains "$test_directory/pod-annotations.yaml" '^        traffic\.sidecar\.istio\.io/includeInboundPorts: ""$'
+assert_contains "$test_directory/pod-annotations.yaml" '^        traffic\.sidecar\.istio\.io/includeOutboundPorts: "9090"$'
+assert_contains "$test_directory/pod-annotations.yaml" '^        checksum/gates: [[:xdigit:]]{64}$'
+assert_contains "$test_directory/pod-labels.yaml" '^        sidecar\.istio\.io/inject: "true"$'
+assert_contains "$test_directory/pod-labels.yaml" '^        app\.kubernetes\.io/component: server$'
+assert_not_contains "$server_metadata_render" 'custom-deployment|custom-pod|custom-checksum'
+assert_not_contains "$server_metadata_render" '^ {4,6}(sidecar\.istio\.io/inject|traffic\.sidecar\.istio\.io/[^:]+):'
+assert_render_fails "Flat Server Deployment labels from 0.4.0" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set-string server.deploymentLabels.team=platform
+assert_render_fails "Non-string Server pod annotation" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set server.pod.annotations.port=9090
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \

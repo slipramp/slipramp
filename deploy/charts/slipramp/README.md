@@ -10,16 +10,25 @@ sources, and Kargo integrations are ordinary Server configuration in versioned
 files backed by ConfigMaps, never CRDs. Each ConfigMap checksum is attached to
 the Server Pod template so a configuration change rolls the Deployment.
 
-Use `server.deploymentAnnotations` and `server.deploymentLabels` to add
-metadata to the Server Deployment itself. Both accept string values.
-Chart-managed labels take precedence when keys overlap.
+Use `server.deployment` for metadata on the Server Deployment and `server.pod`
+for metadata on its pod template. Both accept `annotations` and `labels` maps
+with string values. The chart owns the Deployment selector. Chart-managed
+labels and rollout checksums take precedence when keys overlap.
+
+When upgrading from 0.4.0, move `server.deploymentAnnotations` to
+`server.deployment.annotations` and `server.deploymentLabels` to
+`server.deployment.labels`.
 
 ```yaml
 server:
-  deploymentAnnotations:
-    reloader.stakater.com/auto: "true"
-  deploymentLabels:
-    example.com/team: platform
+  deployment:
+    annotations:
+      reloader.stakater.com/auto: "true"
+    labels:
+      example.com/team: platform
+  pod:
+    labels:
+      sidecar.istio.io/inject: "true"
 ```
 
 ## Required configuration

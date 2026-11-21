@@ -1,0 +1,15 @@
+server:
+  deployment:
+    annotations:
+      reloader.stakater.com/auto: "true"
+    labels:
+      example.com/team: platform
+      app.kubernetes.io/component: custom-deployment
+  pod:
+    annotations:
+      traffic.sidecar.istio.io/includeInboundPorts: ""
+      traffic.sidecar.istio.io/includeOutboundPorts: "9090"
+      checksum/gates: custom-checksum
+    labels:
+      sidecar.istio.io/inject: "true"
+      app.kubernetes.io/component: custom-pod

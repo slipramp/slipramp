@@ -9,29 +9,31 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "slipramp.serverName" . }}
-  {{- with .Values.server.deploymentAnnotations }}
+  {{- with .Values.server.deployment.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   labels:
     {{- $labels := include "slipramp.labels" . | fromYaml }}
     {{- $selectorLabels := include "slipramp.selectorLabels" (dict "root" . "component" "server") | fromYaml }}
-    {{- merge $labels $selectorLabels .Values.server.deploymentLabels | toYaml | nindent 4 }}
+    {{- merge $labels $selectorLabels .Values.server.deployment.labels | toYaml | nindent 4 }}
 spec:
   replicas: {{ .Values.server.replicaCount }}
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "slipramp.selectorLabels" (dict "root" . "component" "server") | nindent 6 }}
+      {{- toYaml $selectorLabels | nindent 6 }}
   template:
     metadata:
       annotations:
-        checksum/gates: {{ include (print $.Template.BasePath "/gates-configmap.yaml") . | sha256sum }}
-        checksum/kargo: {{ include (print $.Template.BasePath "/kargo-configmap.yaml") . | sha256sum }}
-        checksum/placements: {{ include (print $.Template.BasePath "/placements-configmap.yaml") . | sha256sum }}
+        {{- $checksums := dict
+          "checksum/gates" (include (print $.Template.BasePath "/gates-configmap.yaml") . | sha256sum)
+          "checksum/kargo" (include (print $.Template.BasePath "/kargo-configmap.yaml") . | sha256sum)
+          "checksum/placements" (include (print $.Template.BasePath "/placements-configmap.yaml") . | sha256sum) }}
+        {{- merge $checksums .Values.server.pod.annotations | toYaml | nindent 8 }}
       labels:
-        {{- include "slipramp.selectorLabels" (dict "root" . "component" "server") | nindent 8 }}
+        {{- merge (dict) $selectorLabels .Values.server.pod.labels | toYaml | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
