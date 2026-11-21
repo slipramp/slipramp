@@ -189,7 +189,9 @@ The current-observation projection is keyed by Repository, Gate name, active
 catalog revision, and normalized definition digest. It stores evaluator process
 identity, state, optional finite value, optional bounded diagnostic, evaluation
 time, and validity time. Evaluations update the projection in place rather than
-retaining every poll indefinitely.
+retaining every poll indefinitely. Hourly maintenance removes expired
+observations that have had no matching unreleased requirement for at least 24
+hours; immutable release evidence remains on the Run or Promotion.
 
 `run_gates` and `promotion_gates` store the subject, Repository, Gate name,
 stable attachment order, optional release time, and optional immutable

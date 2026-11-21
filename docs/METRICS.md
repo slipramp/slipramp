@@ -153,6 +153,7 @@ values; it never publishes a partially refreshed view.
 | --- | --- | --- | --- | --- |
 | `slipramp.run.active` | `slipramp_run_active` | observable gauge / `{run}` | `phase=assigned|preparing|running`, `cancellation_state=not-requested|requested` | Active Runs by execution phase and orthogonal operator-cancellation state. |
 | `slipramp.run.review.pending` | `slipramp_run_review_pending` | observable gauge / `{run}` | none | Queued Runs awaiting review. |
+| `slipramp.gate.waiting` | `slipramp_gate_waiting` | observable gauge / `{subject}` | `subject_type=run|promotion` | Runs and Promotions with at least one unreleased Gate. |
 | `slipramp.run.queue.oldest_eligible.age` | `slipramp_run_queue_oldest_eligible_age_seconds` | observable gauge / `s` | none | Age of the oldest review-eligible queued Run whose Target has available capacity. Absent when none is eligible. |
 | `slipramp.controller.connected` | `slipramp_controller_connected` | observable gauge / `{controller}` | none | Controllers whose latest contact is within the connection window. |
 | `slipramp.controller.last_seen.time` | `slipramp_controller_last_seen_time_seconds` | observable gauge / `s` | none | Unix time of the latest Controller contact. Absent until one has been seen. |
@@ -185,6 +186,8 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | `slipramp.artifact.report.duration` | `slipramp_artifact_report_duration_seconds` | histogram / `s` | same `report_kind` and `result` |
 | `slipramp.mcp.tool.calls` | `slipramp_mcp_tool_calls_total` | counter / `{call}` | `tool=list_targets|explain_target_action|create_run|get_run|read_run_log|list_run_artifacts|read_artifact|cancel_run`, `result=succeeded|rejected|failed` |
 | `slipramp.mcp.tool.duration` | `slipramp_mcp_tool_duration_seconds` | histogram / `s` | same `tool` and `result` |
+| `slipramp.gate.evaluation.attempts` | `slipramp_gate_evaluation_attempts_total` | counter / `{evaluation}` | `source_type=prometheus`, `result=passing|blocking|unavailable` |
+| `slipramp.gate.evaluation.duration` | `slipramp_gate_evaluation_duration_seconds` | histogram / `s` | same `source_type` and `result` |
 
 Every metric in this table is a Slipramp-specific convention. Background
 operation attempts are recorded once after their durable result is known; idle
@@ -195,8 +198,8 @@ rejections and internal failures.
 Repository refresh duration buckets are 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 30, 60, 120, and 300 seconds. Artifact reconciliation uses the same upper
 range with additional 0.005, 0.01, and 0.025 second buckets. Delivery and
-Artifact report ingestion and MCP tool duration buckets are 0.005, 0.01, 0.025,
-0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
+Artifact report ingestion, MCP tool, and Gate evaluation duration buckets are
+0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
 
 ## Go runtime and process metrics
 

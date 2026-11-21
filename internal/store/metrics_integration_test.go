@@ -167,6 +167,9 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	if snapshot.PendingRunReviews != 1 {
 		t.Errorf("pending Run reviews = %d, want 1", snapshot.PendingRunReviews)
 	}
+	if snapshot.WaitingGateSubjects["run"] != 0 || snapshot.WaitingGateSubjects["promotion"] != 0 {
+		t.Errorf("waiting Gate subjects = %v, want zero", snapshot.WaitingGateSubjects)
+	}
 	if snapshot.OldestEligibleRunCreatedAt == nil ||
 		!snapshot.OldestEligibleRunCreatedAt.Equal(eligible.CreatedAt) {
 		t.Errorf(

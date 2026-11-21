@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -30,6 +31,8 @@ type operationInstruments struct {
 	artifactReportDuration         metric.Float64Histogram
 	mcpToolCalls                   metric.Int64Counter
 	mcpToolDuration                metric.Float64Histogram
+	gateEvaluationAttempts         metric.Int64Counter
+	gateEvaluationDuration         metric.Float64Histogram
 }
 
 func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
@@ -140,8 +143,37 @@ func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
 	if err != nil {
 		return operationInstruments{}, fmt.Errorf("create MCP tool duration metric: %w", err)
 	}
+	instruments.gateEvaluationAttempts, err = meter.Int64Counter(
+		"slipramp.gate.evaluation.attempts",
+		metric.WithUnit("{evaluation}"),
+		metric.WithDescription("Gate evaluation attempts by source type and result."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create Gate evaluation attempts metric: %w", err)
+	}
+	instruments.gateEvaluationDuration, err = meter.Float64Histogram(
+		"slipramp.gate.evaluation.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of Gate evaluation attempts."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create Gate evaluation duration metric: %w", err)
+	}
 
 	return instruments, nil
+}
+
+func (t *Telemetry) ObserveGateEvaluation(
+	ctx context.Context,
+	result gate.ObservationState,
+	duration time.Duration,
+) {
+	options := metric.WithAttributes(
+		attribute.String("source_type", "prometheus"),
+		attribute.String("result", string(result)),
+	)
+	t.operations.gateEvaluationAttempts.Add(ctx, 1, options)
+	t.operations.gateEvaluationDuration.Record(ctx, duration.Seconds(), options)
 }
 
 func (t *Telemetry) ObserveMCPToolCall(

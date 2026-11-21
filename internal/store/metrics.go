@@ -29,6 +29,7 @@ func (d *Database) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telem
 	queries := d.queries.WithTx(transaction)
 	snapshot := telemetry.MetricsSnapshot{
 		ActiveRuns:                 make(map[telemetry.ActiveRunState]int64),
+		WaitingGateSubjects:        make(map[string]int64),
 		RepositoryRefreshStates:    make(map[string]int64),
 		NotificationDeliveryStates: make(map[string]int64),
 	}
@@ -57,6 +58,13 @@ func (d *Database) LoadMetricsSnapshot(ctx context.Context, at time.Time) (telem
 	snapshot.PendingRunReviews, err = queries.CountPendingRunReviews(ctx)
 	if err != nil {
 		return telemetry.MetricsSnapshot{}, fmt.Errorf("count pending Run reviews: %w", err)
+	}
+	waitingGateSubjects, err := queries.CountWaitingGateSubjects(ctx)
+	if err != nil {
+		return telemetry.MetricsSnapshot{}, fmt.Errorf("count waiting Gate subjects: %w", err)
+	}
+	for _, row := range waitingGateSubjects {
+		snapshot.WaitingGateSubjects[row.SubjectType] = row.SubjectCount
 	}
 
 	oldestEligible, err := queries.GetOldestEligibleRunCreatedAt(ctx)

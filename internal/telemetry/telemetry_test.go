@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -43,6 +44,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 				{Phase: run.PhaseRunning, Cancellation: run.CancellationStateNotRequested}: 2,
 			},
 			PendingRunReviews:          3,
+			WaitingGateSubjects:        map[string]int64{"run": 2, "promotion": 1},
 			OldestEligibleRunCreatedAt: &oldest,
 			ConnectedControllers:       1,
 			ControllerLastSeenAt:       &lastSeen,
@@ -135,6 +137,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		mcpserver.ToolCallRejected,
 		10*time.Millisecond,
 	)
+	metrics.ObserveGateEvaluation(t.Context(), gate.ObservationPassing, 30*time.Millisecond)
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
@@ -164,6 +167,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	assertMetricLine(t, firstScrape, "slipramp_run_active", `cancellation_state="not-requested"`,
 		`phase="running"`, " 2")
 	assertMetricLine(t, firstScrape, "slipramp_run_review_pending", " 3")
+	assertMetricLine(t, firstScrape, "slipramp_gate_waiting", `subject_type="run"`, " 2")
+	assertMetricLine(t, firstScrape, "slipramp_gate_waiting", `subject_type="promotion"`, " 1")
 	assertMetricLine(t, firstScrape, "slipramp_run_queue_oldest_eligible_age_seconds", " 90")
 	assertMetricLine(t, firstScrape, "slipramp_metrics_snapshot_success_ratio", " 1")
 	assertMetricLine(
@@ -211,6 +216,22 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		"slipramp_mcp_tool_duration_seconds_count",
 		`tool="create_run"`,
 		`result="rejected"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_gate_evaluation_attempts_total",
+		`source_type="prometheus"`,
+		`result="passing"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_gate_evaluation_duration_seconds_count",
+		`source_type="prometheus"`,
+		`result="passing"`,
 		" 1",
 	)
 	assertMetricLine(

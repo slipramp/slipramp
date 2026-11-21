@@ -25,6 +25,114 @@ func (q *Queries) CountUnreleasedPromotionGates(ctx context.Context, promotionID
 	return count, err
 }
 
+const countWaitingGateSubjects = `-- name: CountWaitingGateSubjects :many
+SELECT
+    'run'::text AS subject_type,
+    count(DISTINCT run_gates.run_id) AS subject_count
+FROM run_gates
+JOIN runs
+  ON runs.id = run_gates.run_id
+WHERE run_gates.released_at IS NULL
+  AND runs.phase = 'queued'
+
+UNION ALL
+
+SELECT
+    'promotion'::text AS subject_type,
+    count(DISTINCT promotion_gates.promotion_id) AS subject_count
+FROM promotion_gates
+JOIN promotions
+  ON promotions.id = promotion_gates.promotion_id
+WHERE promotion_gates.released_at IS NULL
+  AND promotions.status IN ('creating', 'preparing', 'pending', 'approved')
+  AND promotions.dispatch_failed_at IS NULL
+  AND promotions.kargo_outcome_phase IS NULL
+`
+
+type CountWaitingGateSubjectsRow struct {
+	SubjectType  string
+	SubjectCount int64
+}
+
+func (q *Queries) CountWaitingGateSubjects(ctx context.Context) ([]CountWaitingGateSubjectsRow, error) {
+	rows, err := q.db.Query(ctx, countWaitingGateSubjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountWaitingGateSubjectsRow
+	for rows.Next() {
+		var i CountWaitingGateSubjectsRow
+		if err := rows.Scan(&i.SubjectType, &i.SubjectCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteInactiveGateObservations = `-- name: DeleteInactiveGateObservations :execrows
+WITH active_observations AS (
+    SELECT
+        requirements.repository_id,
+        requirements.gate_name,
+        repositories.active_catalog_revision_id AS catalog_revision_id,
+        catalog_gates.definition_digest
+    FROM (
+        SELECT
+            run_gates.repository_id,
+            run_gates.gate_name
+        FROM run_gates
+        JOIN runs
+          ON runs.id = run_gates.run_id
+        WHERE run_gates.released_at IS NULL
+          AND runs.phase = 'queued'
+
+        UNION
+
+        SELECT
+            promotion_gates.repository_id,
+            promotion_gates.gate_name
+        FROM promotion_gates
+        JOIN promotions
+          ON promotions.id = promotion_gates.promotion_id
+        WHERE promotion_gates.released_at IS NULL
+          AND promotions.status IN ('creating', 'preparing', 'pending', 'approved')
+          AND promotions.dispatch_failed_at IS NULL
+          AND promotions.kargo_outcome_phase IS NULL
+    ) AS requirements
+    JOIN repositories
+      ON repositories.id = requirements.repository_id
+    JOIN catalog_revisions
+      ON catalog_revisions.id = repositories.active_catalog_revision_id
+    JOIN catalog_gates
+      ON catalog_gates.catalog_snapshot_id = catalog_revisions.catalog_snapshot_id
+     AND catalog_gates.name = requirements.gate_name
+    WHERE repositories.removed_at IS NULL
+)
+DELETE FROM gate_observations
+WHERE gate_observations.valid_until < $1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM active_observations
+      WHERE active_observations.repository_id = gate_observations.repository_id
+        AND active_observations.gate_name = gate_observations.gate_name
+        AND active_observations.catalog_revision_id = gate_observations.catalog_revision_id
+        AND active_observations.definition_digest = gate_observations.definition_digest
+  )
+`
+
+func (q *Queries) DeleteInactiveGateObservations(ctx context.Context, inactiveBefore pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteInactiveGateObservations, inactiveBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getGateObservation = `-- name: GetGateObservation :one
 SELECT repository_id, gate_name, catalog_revision_id, definition_digest, evaluator_process_id, state, value, diagnostic, evaluated_at, valid_until
 FROM gate_observations

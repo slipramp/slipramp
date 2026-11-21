@@ -6,18 +6,23 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
 const (
-	DefaultReconciliationInterval = time.Second
-	observationValidityIntervals  = 3
+	DefaultReconciliationInterval       = time.Second
+	DefaultObservationCleanupInterval   = time.Hour
+	DefaultInactiveObservationRetention = 24 * time.Hour
+	MaximumEvaluationFailureBackoff     = time.Minute
+	observationValidityIntervals        = 3
 )
 
 // EvaluationTarget identifies one active Gate definition required by at
@@ -50,6 +55,11 @@ func (t EvaluationTarget) Validate() error {
 type EvaluationStore interface {
 	ListGateEvaluationTargets(context.Context) ([]EvaluationTarget, error)
 	UpsertGateObservation(context.Context, CurrentObservation) error
+	DeleteInactiveGateObservations(context.Context, time.Time) (int64, error)
+}
+
+type EvaluationObserver interface {
+	ObserveGateEvaluation(context.Context, ObservationState, time.Duration)
 }
 
 // EvaluationNotifier wakes the evaluator after durable requirements or active
@@ -71,6 +81,29 @@ type evaluationGroup struct {
 type evaluationState struct {
 	membership string
 	next       time.Time
+	failures   int
+}
+
+type evaluationTask struct {
+	digest           string
+	group            evaluationGroup
+	membership       string
+	source           Source
+	evaluator        definitionEvaluator
+	previousFailures int
+}
+
+type evaluationResult struct {
+	digest string
+	state  evaluationState
+}
+
+type CoordinatorOption func(*Coordinator)
+
+func WithEvaluationObserver(observer EvaluationObserver) CoordinatorOption {
+	return func(coordinator *Coordinator) {
+		coordinator.observer = observer
+	}
 }
 
 type Coordinator struct {
@@ -79,16 +112,22 @@ type Coordinator struct {
 	evaluators             map[string]definitionEvaluator
 	reconciliationInterval time.Duration
 	logger                 *slog.Logger
+	observer               EvaluationObserver
 	processID              uuid.UUID
 	now                    func() time.Time
+	jitter                 func(time.Duration) time.Duration
 	wakeups                chan struct{}
 	states                 map[string]evaluationState
+	cleanupInterval        time.Duration
+	inactiveRetention      time.Duration
+	nextCleanup            time.Time
 }
 
 func NewCoordinator(
 	store EvaluationStore,
 	sources SourceSet,
 	logger *slog.Logger,
+	options ...CoordinatorOption,
 ) (*Coordinator, error) {
 	if store == nil {
 		return nil, errors.New("Gate evaluation store is required") //nolint:staticcheck // Gate is a domain name.
@@ -109,7 +148,7 @@ func NewCoordinator(
 		evaluators[name] = evaluator
 	}
 
-	return newCoordinator(store, sources, evaluators, logger), nil
+	return newCoordinator(store, sources, evaluators, logger, options...), nil
 }
 
 func newCoordinator(
@@ -117,8 +156,9 @@ func newCoordinator(
 	sources SourceSet,
 	evaluators map[string]definitionEvaluator,
 	logger *slog.Logger,
+	options ...CoordinatorOption,
 ) *Coordinator {
-	return &Coordinator{
+	coordinator := &Coordinator{
 		store:                  store,
 		sources:                sources,
 		evaluators:             evaluators,
@@ -126,9 +166,19 @@ func newCoordinator(
 		logger:                 logger.With("component", "gate_evaluator"),
 		processID:              uuid.New(),
 		now:                    time.Now,
-		wakeups:                make(chan struct{}, 1),
-		states:                 map[string]evaluationState{},
+		jitter: func(interval time.Duration) time.Duration {
+			return time.Duration(float64(interval) * (0.9 + rand.Float64()*0.2))
+		},
+		wakeups:           make(chan struct{}, 1),
+		states:            map[string]evaluationState{},
+		cleanupInterval:   DefaultObservationCleanupInterval,
+		inactiveRetention: DefaultInactiveObservationRetention,
 	}
+	for _, option := range options {
+		option(coordinator)
+	}
+
+	return coordinator
 }
 
 func (c *Coordinator) Run(ctx context.Context) {
@@ -184,6 +234,7 @@ func (c *Coordinator) Reconcile(ctx context.Context) error {
 
 	now := c.now().UTC()
 	activeStates := make(map[string]evaluationState, len(groups))
+	tasks := make([]evaluationTask, 0, len(groups))
 	digests := slices.Sorted(maps.Keys(groups))
 	for _, digest := range digests {
 		group := groups[digest]
@@ -209,36 +260,125 @@ func (c *Coordinator) Reconcile(ctx context.Context) error {
 			)
 		}
 
-		observation := evaluator.Evaluate(ctx, group.definition, now)
-		if err := observation.Validate(); err != nil {
-			return fmt.Errorf("validate Gate evaluation result: %w", err)
-		}
-		validUntil := now.Add(observationValidityIntervals * source.Prometheus.EvaluationInterval)
-		for _, target := range group.targets {
-			record := CurrentObservation{
-				RepositoryID:       target.RepositoryID,
-				GateName:           target.GateName,
-				CatalogRevisionID:  target.CatalogRevisionID,
-				DefinitionDigest:   digest,
-				EvaluatorProcessID: c.processID,
-				Observation:        observation,
-				EvaluatedAt:        now,
-				ValidUntil:         validUntil,
-			}
-			if err := c.store.UpsertGateObservation(ctx, record); err != nil {
-				return fmt.Errorf("record Gate observation for %q: %w", target.GateName, err)
-			}
-		}
+		tasks = append(tasks, evaluationTask{
+			digest:           digest,
+			group:            group,
+			membership:       membership,
+			source:           source,
+			evaluator:        evaluator,
+			previousFailures: state.failures,
+		})
+	}
 
-		activeStates[digest] = evaluationState{
-			membership: membership,
-			next:       now.Add(source.Prometheus.EvaluationInterval),
-		}
+	results, err := c.evaluate(ctx, tasks, now)
+	if err != nil {
+		return err
+	}
+	for _, result := range results {
+		activeStates[result.digest] = result.state
 	}
 
 	c.states = activeStates
+	if !now.Before(c.nextCleanup) {
+		if _, err := c.store.DeleteInactiveGateObservations(ctx, now.Add(-c.inactiveRetention)); err != nil {
+			return fmt.Errorf("delete inactive Gate observations: %w", err)
+		}
+		c.nextCleanup = now.Add(c.cleanupInterval)
+	}
 
 	return nil
+}
+
+func (c *Coordinator) evaluate(
+	ctx context.Context,
+	tasks []evaluationTask,
+	now time.Time,
+) ([]evaluationResult, error) {
+	results := make([]evaluationResult, len(tasks))
+	semaphores := make(map[string]chan struct{}, len(c.sources))
+	for name, source := range c.sources {
+		semaphores[name] = make(chan struct{}, source.Prometheus.MaximumConcurrency)
+	}
+
+	group, groupContext := errgroup.WithContext(ctx)
+	for index, task := range tasks {
+		group.Go(func() error {
+			semaphore := semaphores[task.group.definition.Prometheus.Source]
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-groupContext.Done():
+				return groupContext.Err()
+			}
+
+			startedAt := time.Now()
+			observation := task.evaluator.Evaluate(groupContext, task.group.definition, now)
+			if err := observation.Validate(); err != nil {
+				return fmt.Errorf("validate Gate evaluation result: %w", err)
+			}
+			if c.observer != nil {
+				c.observer.ObserveGateEvaluation(ctx, observation.State, time.Since(startedAt))
+			}
+
+			validUntil := now.Add(observationValidityIntervals * task.source.Prometheus.EvaluationInterval)
+			for _, target := range task.group.targets {
+				record := CurrentObservation{
+					RepositoryID:       target.RepositoryID,
+					GateName:           target.GateName,
+					CatalogRevisionID:  target.CatalogRevisionID,
+					DefinitionDigest:   task.digest,
+					EvaluatorProcessID: c.processID,
+					Observation:        observation,
+					EvaluatedAt:        now,
+					ValidUntil:         validUntil,
+				}
+				if err := c.store.UpsertGateObservation(groupContext, record); err != nil {
+					return fmt.Errorf("record Gate observation for %q: %w", target.GateName, err)
+				}
+			}
+
+			failures := 0
+			if observation.State == ObservationUnavailable {
+				failures = task.previousFailures + 1
+			}
+			delay := task.source.Prometheus.EvaluationInterval
+			if failures > 0 {
+				delay = evaluationFailureBackoff(delay, failures)
+			}
+			delay = c.jitter(delay)
+			if failures > 0 {
+				delay = min(delay, max(task.source.Prometheus.EvaluationInterval, MaximumEvaluationFailureBackoff))
+			}
+			results[index] = evaluationResult{
+				digest: task.digest,
+				state: evaluationState{
+					membership: task.membership,
+					next:       now.Add(delay),
+					failures:   failures,
+				},
+			}
+
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func evaluationFailureBackoff(interval time.Duration, failures int) time.Duration {
+	backoff := interval
+	maximum := max(interval, MaximumEvaluationFailureBackoff)
+	for range max(failures-1, 0) {
+		if backoff >= maximum/2 {
+			return maximum
+		}
+		backoff *= 2
+	}
+
+	return min(backoff, maximum)
 }
 
 func groupEvaluationTargets(targets []EvaluationTarget) (map[string]evaluationGroup, error) {

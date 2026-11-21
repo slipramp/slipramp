@@ -3,8 +3,13 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -96,6 +101,166 @@ func TestGateObservationPersistenceIntegration(t *testing.T) {
 	if !reflect.DeepEqual(stored, unavailable) {
 		t.Errorf("replaced observation = %#v, want %#v", stored, unavailable)
 	}
+}
+
+func TestInactiveGateObservationCleanupPreservesActiveDemandIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	repositoryID := uuid.New()
+	oldRevisionID := uuid.New()
+	now := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
+	createGateTestRepository(t, database, repositoryID, oldRevisionID, now.Add(-2*time.Hour))
+
+	definition := persistedCatalog("1.14.3").Gates[0].NormalizedDefinition()
+	digest, err := definition.Digest()
+	if err != nil {
+		t.Fatalf("digest Gate definition: %v", err)
+	}
+	value := float64(0)
+	oldObservation := gate.CurrentObservation{
+		RepositoryID:       repositoryID,
+		GateName:           "network-idle",
+		CatalogRevisionID:  oldRevisionID,
+		DefinitionDigest:   digest,
+		EvaluatorProcessID: uuid.New(),
+		Observation:        gate.Observation{State: gate.ObservationPassing, Value: &value},
+		EvaluatedAt:        now.Add(-90 * time.Minute),
+		ValidUntil:         now.Add(-89 * time.Minute),
+	}
+	if err := database.UpsertGateObservation(ctx, oldObservation); err != nil {
+		t.Fatalf("record old Gate observation: %v", err)
+	}
+
+	activeRevisionID := uuid.New()
+	refresh := successfulCatalogRefresh(strings.Repeat("b", 40), now.Add(-time.Hour), activeRevisionID)
+	refresh.Revision.Catalog = persistedCatalog("1.14.3")
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatalf("activate current catalog: %v", err)
+	}
+	record := gateTestRun(t, database, repositoryID, activeRevisionID, now.Add(-30*time.Minute))
+	if _, err := database.CreateRun(ctx, record, nil); err != nil {
+		t.Fatalf("create waiting Run: %v", err)
+	}
+	activeObservation := oldObservation
+	activeObservation.CatalogRevisionID = activeRevisionID
+	activeObservation.EvaluatedAt = now.Add(-20 * time.Minute)
+	activeObservation.ValidUntil = now.Add(-19 * time.Minute)
+	if err := database.UpsertGateObservation(ctx, activeObservation); err != nil {
+		t.Fatalf("record active Gate observation: %v", err)
+	}
+
+	deleted, err := database.DeleteInactiveGateObservations(ctx, now.Add(-10*time.Minute))
+	if err != nil {
+		t.Fatalf("DeleteInactiveGateObservations() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted Gate observations = %d, want 1", deleted)
+	}
+	if _, err := database.GetGateObservation(
+		ctx,
+		repositoryID,
+		"network-idle",
+		oldRevisionID,
+		digest,
+	); !errors.Is(err, gate.ErrObservationNotFound) {
+		t.Errorf("old Gate observation error = %v, want not found", err)
+	}
+	if _, err := database.GetGateObservation(
+		ctx,
+		repositoryID,
+		"network-idle",
+		activeRevisionID,
+		digest,
+	); err != nil {
+		t.Errorf("active Gate observation error = %v", err)
+	}
+}
+
+func TestPrometheusGateEvaluationRecoversAndRequiresCurrentProcessIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	var sourceState atomic.Int32
+	source := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		switch sourceState.Load() {
+		case 0:
+			_, _ = io.WriteString(writer, `{"status":"success","data":{"resultType":"scalar","result":[1,"1"]}}`)
+		case 1:
+			_, _ = io.WriteString(writer, `{"status":"success","data":{"resultType":"scalar","result":[1,"0"]}}`)
+		default:
+			http.Error(writer, "unavailable", http.StatusServiceUnavailable)
+		}
+	}))
+	defer source.Close()
+
+	now := time.Now().UTC()
+	repositoryID := uuid.New()
+	revisionID := uuid.New()
+	createGateTestRepository(t, database, repositoryID, revisionID, now.Add(-time.Minute))
+	record := gateTestRun(t, database, repositoryID, revisionID, now.Add(-30*time.Second))
+	if _, err := database.CreateRun(ctx, record, nil); err != nil {
+		t.Fatalf("create gated Run: %v", err)
+	}
+
+	blocking := newPrometheusGateCoordinator(t, database, source.URL)
+	if err := blocking.Reconcile(ctx); err != nil {
+		t.Fatalf("evaluate blocking Gate: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, blocking.ProcessID(), time.Now().UTC())
+
+	sourceState.Store(1)
+	passing := newPrometheusGateCoordinator(t, database, source.URL)
+	if err := passing.Reconcile(ctx); err != nil {
+		t.Fatalf("evaluate passing Gate: %v", err)
+	}
+	restarted := newPrometheusGateCoordinator(t, database, source.URL)
+	assertNoGateRunAssignment(t, database, restarted.ProcessID(), time.Now().UTC())
+
+	sourceState.Store(2)
+	if err := restarted.Reconcile(ctx); err != nil {
+		t.Fatalf("evaluate unavailable Gate: %v", err)
+	}
+	assertNoGateRunAssignment(t, database, restarted.ProcessID(), time.Now().UTC())
+
+	sourceState.Store(1)
+	recovered := newPrometheusGateCoordinator(t, database, source.URL)
+	if err := recovered.Reconcile(ctx); err != nil {
+		t.Fatalf("evaluate recovered Gate: %v", err)
+	}
+	assigned, err := database.ClaimQueuedRun(
+		ctx,
+		"colo",
+		testSchedulingCapacity(),
+		recovered.ProcessID(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("claim recovered gated Run: %v", err)
+	}
+	if assigned.ID != record.ID || assigned.Phase != run.PhaseAssigned {
+		t.Errorf("assigned Run = %#v", assigned)
+	}
+}
+
+func newPrometheusGateCoordinator(t *testing.T, database *Database, sourceURL string) *gate.Coordinator {
+	t.Helper()
+
+	coordinator, err := gate.NewCoordinator(
+		database,
+		gate.SourceSet{"homelab": {Prometheus: gate.PrometheusSource{
+			URL:                sourceURL,
+			EvaluationInterval: 15 * time.Second,
+			Timeout:            5 * time.Second,
+			MaximumConcurrency: 2,
+		}}},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatalf("NewCoordinator() error = %v", err)
+	}
+
+	return coordinator
 }
 
 func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {

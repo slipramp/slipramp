@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -110,6 +111,15 @@ func (d *Database) GetGateObservation(
 		EvaluatedAt: row.EvaluatedAt.Time.UTC(),
 		ValidUntil:  row.ValidUntil.Time.UTC(),
 	}, nil
+}
+
+func (d *Database) DeleteInactiveGateObservations(ctx context.Context, inactiveBefore time.Time) (int64, error) {
+	deleted, err := d.queries.DeleteInactiveGateObservations(ctx, databaseTime(inactiveBefore))
+	if err != nil {
+		return 0, fmt.Errorf("delete inactive Gate observations: %w", err)
+	}
+
+	return deleted, nil
 }
 
 func (d *Database) ListRunGateProjections(

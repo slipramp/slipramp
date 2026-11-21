@@ -87,7 +87,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	catalogs := catalog.NewService(persistence.database, cfg.Placements, cfg.GateSources)
 	var gateEvaluations *gate.Coordinator
 	if len(cfg.GateSources) > 0 {
-		gateEvaluations, err = gate.NewCoordinator(persistence.database, cfg.GateSources, logger)
+		gateEvaluations, err = gate.NewCoordinator(
+			persistence.database,
+			cfg.GateSources,
+			logger,
+			gate.WithEvaluationObserver(metrics),
+		)
 		if err != nil {
 			closeInitialization()
 

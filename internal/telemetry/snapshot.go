@@ -24,6 +24,7 @@ const (
 type MetricsSnapshot struct {
 	ActiveRuns                 map[ActiveRunState]int64
 	PendingRunReviews          int64
+	WaitingGateSubjects        map[string]int64
 	OldestEligibleRunCreatedAt *time.Time
 	ConnectedControllers       int64
 	ControllerLastSeenAt       *time.Time
@@ -65,6 +66,7 @@ type snapshotPublisher struct {
 type snapshotInstruments struct {
 	activeRuns                   metric.Int64ObservableGauge
 	pendingRunReviews            metric.Int64ObservableGauge
+	waitingGateSubjects          metric.Int64ObservableGauge
 	oldestEligibleRunAge         metric.Float64ObservableGauge
 	connectedControllers         metric.Int64ObservableGauge
 	controllerLastSeenTime       metric.Float64ObservableGauge
@@ -99,6 +101,7 @@ func newSnapshotPublisher(
 	publisher.published.Store(&publishedSnapshot{
 		state: MetricsSnapshot{
 			ActiveRuns:                 map[ActiveRunState]int64{},
+			WaitingGateSubjects:        map[string]int64{},
 			RepositoryRefreshStates:    map[string]int64{},
 			NotificationDeliveryStates: map[string]int64{},
 		},
@@ -108,6 +111,7 @@ func newSnapshotPublisher(
 		publisher.observe(instruments),
 		instruments.activeRuns,
 		instruments.pendingRunReviews,
+		instruments.waitingGateSubjects,
 		instruments.oldestEligibleRunAge,
 		instruments.connectedControllers,
 		instruments.controllerLastSeenTime,
@@ -148,6 +152,14 @@ func newSnapshotInstruments(meter metric.Meter) (snapshotInstruments, error) {
 	)
 	if err != nil {
 		return snapshotInstruments{}, fmt.Errorf("create pending Run reviews metric: %w", err)
+	}
+	instruments.waitingGateSubjects, err = meter.Int64ObservableGauge(
+		"slipramp.gate.waiting",
+		metric.WithUnit("{subject}"),
+		metric.WithDescription("Runs and Promotions waiting for Gate release."),
+	)
+	if err != nil {
+		return snapshotInstruments{}, fmt.Errorf("create waiting Gate subjects metric: %w", err)
 	}
 	instruments.oldestEligibleRunAge, err = meter.Float64ObservableGauge(
 		"slipramp.run.queue.oldest_eligible.age",
@@ -301,6 +313,13 @@ func (p *snapshotPublisher) observe(instruments snapshotInstruments) metric.Call
 			}
 		}
 		observer.ObserveInt64(instruments.pendingRunReviews, snapshot.state.PendingRunReviews)
+		for _, subjectType := range []string{"run", "promotion"} {
+			observer.ObserveInt64(
+				instruments.waitingGateSubjects,
+				snapshot.state.WaitingGateSubjects[subjectType],
+				metric.WithAttributes(attribute.String("subject_type", subjectType)),
+			)
+		}
 		if snapshot.state.OldestEligibleRunCreatedAt != nil {
 			age := max(p.now().UTC().Sub(*snapshot.state.OldestEligibleRunCreatedAt).Seconds(), 0)
 			observer.ObserveFloat64(instruments.oldestEligibleRunAge, age)
