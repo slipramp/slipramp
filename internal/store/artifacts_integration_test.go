@@ -799,20 +799,21 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 		t.Errorf("GetLogChunk() = %#v, want %#v", loadedChunk, first)
 	}
 
-	chunks, err := database.ListLogChunks(ctx, artifactID, 0)
-	if err != nil {
-		t.Fatalf("ListLogChunks() error = %v", err)
-	}
-	if len(chunks) != 2 || chunks[0] != first || chunks[1] != later {
-		t.Errorf("ListLogChunks() = %#v", chunks)
-	}
-
-	chunks, err = database.ListLogChunks(ctx, artifactID, later.OffsetBytes)
-	if err != nil {
-		t.Fatalf("ListLogChunks(from later) error = %v", err)
-	}
-	if len(chunks) != 1 || chunks[0] != later {
-		t.Errorf("ListLogChunks(from later) = %#v", chunks)
+	for _, test := range []struct {
+		cursor int64
+		want   []artifact.LogChunk
+	}{
+		{0, []artifact.LogChunk{first, later}},
+		{first.EndOffset() - 1, []artifact.LogChunk{first, later}},
+		{later.OffsetBytes, []artifact.LogChunk{later}},
+		{later.EndOffset() - 1, []artifact.LogChunk{later}},
+		{later.EndOffset(), nil},
+		{later.EndOffset() + 1, nil},
+	} {
+		chunks, err := database.ListLogChunks(ctx, artifactID, test.cursor)
+		if err != nil || !slices.Equal(chunks, test.want) {
+			t.Errorf("ListLogChunks(%d) = %#v, error %v, want %#v", test.cursor, chunks, err, test.want)
+		}
 	}
 
 	sealedAt := createdAt.Add(5 * time.Minute)
@@ -985,6 +986,10 @@ func TestFailedLogRetentionDeletesChunkMetadataIntegration(t *testing.T) {
 	if err != nil || !slices.Equal(keys, []string{chunkKey}) {
 		t.Fatalf("failed log object keys = %v, error = %v", keys, err)
 	}
+	orphans, err := database.ListOrphanArtifactObjectKeys(ctx, []string{chunkKey, "runs/unreferenced"})
+	if err != nil || !slices.Equal(orphans, []string{"runs/unreferenced"}) {
+		t.Fatalf("orphan lookup with referenced log chunk = %v, error %v", orphans, err)
+	}
 	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
 		t.Fatalf("mark failed log deleted: %v", err)
 	}
@@ -1122,13 +1127,11 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	if err != nil || !slices.Equal(keys, wantKeys) {
 		t.Fatalf("ListArtifactObjectKeys() = %v, error = %v", keys, err)
 	}
-	exists, err := database.ArtifactObjectKeyExists(ctx, objectKey)
-	if err != nil || !exists {
-		t.Fatalf("ArtifactObjectKeyExists() = %t, error = %v", exists, err)
-	}
-	exists, err = database.ArtifactObjectKeyExists(ctx, report.ProjectionObjectKey)
-	if err != nil || !exists {
-		t.Fatalf("ArtifactObjectKeyExists(projection) = %t, error = %v", exists, err)
+	missing := "runs/retention/unreferenced"
+	candidates := []string{missing, objectKey, report.ProjectionObjectKey, missing}
+	orphans, err := database.ListOrphanArtifactObjectKeys(ctx, candidates)
+	if err != nil || !slices.Equal(orphans, []string{missing}) {
+		t.Fatalf("orphans while expired = %v, error %v", orphans, err)
 	}
 
 	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
@@ -1141,13 +1144,12 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	if deleted.RetentionState != artifact.RetentionDeleted || deleted.ObjectKey != nil {
 		t.Errorf("deleted Artifact metadata = %#v", deleted)
 	}
-	exists, err = database.ArtifactObjectKeyExists(ctx, objectKey)
-	if err != nil || exists {
-		t.Fatalf("ArtifactObjectKeyExists() after delete = %t, error = %v", exists, err)
-	}
-	exists, err = database.ArtifactObjectKeyExists(ctx, report.ProjectionObjectKey)
-	if err != nil || exists {
-		t.Fatalf("ArtifactObjectKeyExists(projection) after delete = %t, error = %v", exists, err)
+	orphans, err = database.ListOrphanArtifactObjectKeys(ctx, candidates)
+	slices.Sort(orphans)
+	wantOrphans := []string{objectKey, report.ProjectionObjectKey, missing}
+	slices.Sort(wantOrphans)
+	if err != nil || !slices.Equal(orphans, wantOrphans) {
+		t.Fatalf("orphans after deletion = %v, error %v, want %v", orphans, err, wantOrphans)
 	}
 }
 

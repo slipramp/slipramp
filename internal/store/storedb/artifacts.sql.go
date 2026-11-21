@@ -27,34 +27,6 @@ func (q *Queries) AdvanceArtifactLogSize(ctx context.Context, arg AdvanceArtifac
 	return err
 }
 
-const artifactObjectKeyExists = `-- name: ArtifactObjectKeyExists :one
-SELECT EXISTS (
-    SELECT 1
-    FROM artifacts
-    WHERE artifacts.retention_state <> 'deleted'
-      AND artifacts.content_object_key = $1
-    UNION ALL
-    SELECT 1
-    FROM artifact_log_chunks
-    JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
-    WHERE artifacts.retention_state <> 'deleted'
-      AND artifact_log_chunks.object_key = $1
-    UNION ALL
-    SELECT 1
-    FROM artifact_reports
-    JOIN artifacts ON artifacts.id = artifact_reports.artifact_id
-    WHERE artifacts.retention_state <> 'deleted'
-      AND artifact_reports.projection_object_key = $1
-) AS exists
-`
-
-func (q *Queries) ArtifactObjectKeyExists(ctx context.Context, candidateObjectKey *string) (bool, error) {
-	row := q.db.QueryRow(ctx, artifactObjectKeyExists, candidateObjectKey)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createArtifact = `-- name: CreateArtifact :one
 INSERT INTO artifacts (
     id,
@@ -519,11 +491,20 @@ func (q *Queries) GetRunInputArtifact(ctx context.Context, arg GetRunInputArtifa
 }
 
 const listArtifactLogChunks = `-- name: ListArtifactLogChunks :many
-SELECT artifact_id, offset_bytes, size_bytes, sha256, object_key, created_at
-FROM artifact_log_chunks
-WHERE artifact_id = $1
-  AND offset_bytes + size_bytes > $2
-ORDER BY offset_bytes
+SELECT chunk.artifact_id, chunk.offset_bytes, chunk.size_bytes, chunk.sha256, chunk.object_key, chunk.created_at
+FROM artifact_log_chunks AS chunk
+WHERE chunk.artifact_id = $1
+  -- Seek to the chunk containing the cursor, including a resume partway through a chunk.
+  AND chunk.offset_bytes >= COALESCE((
+      SELECT previous.offset_bytes
+      FROM artifact_log_chunks AS previous
+      WHERE previous.artifact_id = $1
+        AND previous.offset_bytes <= $2
+      ORDER BY previous.offset_bytes DESC
+      LIMIT 1
+  ), $2)
+  AND chunk.offset_bytes + chunk.size_bytes > $2
+ORDER BY chunk.offset_bytes
 `
 
 type ListArtifactLogChunksParams struct {
@@ -669,6 +650,49 @@ func (q *Queries) ListExpiredArtifacts(ctx context.Context) ([]Artifact, error) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrphanArtifactObjectKeys = `-- name: ListOrphanArtifactObjectKeys :many
+SELECT candidate.object_key::text AS object_key
+FROM unnest($1::text[]) AS candidate(object_key)
+EXCEPT (
+    SELECT content_object_key
+    FROM artifacts
+    WHERE retention_state <> 'deleted'
+      AND content_object_key = ANY($1::text[])
+    UNION ALL
+    SELECT artifact_log_chunks.object_key
+    FROM artifact_log_chunks
+    JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_log_chunks.object_key = ANY($1::text[])
+    UNION ALL
+    SELECT artifact_reports.projection_object_key
+    FROM artifact_reports
+    JOIN artifacts ON artifacts.id = artifact_reports.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_reports.projection_object_key = ANY($1::text[])
+)
+`
+
+func (q *Queries) ListOrphanArtifactObjectKeys(ctx context.Context, candidateKeys []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, listOrphanArtifactObjectKeys, candidateKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var object_key string
+		if err := rows.Scan(&object_key); err != nil {
+			return nil, err
+		}
+		items = append(items, object_key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

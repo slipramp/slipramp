@@ -72,11 +72,11 @@ func (d *Database) MarkArtifactDeleted(ctx context.Context, artifactID uuid.UUID
 	return nil
 }
 
-func (d *Database) ArtifactObjectKeyExists(ctx context.Context, key string) (bool, error) {
-	exists, err := d.queries.ArtifactObjectKeyExists(ctx, &key)
+func (d *Database) ListOrphanArtifactObjectKeys(ctx context.Context, candidates []string) ([]string, error) {
+	keys, err := d.queries.ListOrphanArtifactObjectKeys(ctx, candidates)
 	if err != nil {
-		return false, fmt.Errorf("check artifact object key: %w", err)
+		return nil, fmt.Errorf("list orphan artifact object keys: %w", err)
 	}
 
-	return exists, nil
+	return keys, nil
 }

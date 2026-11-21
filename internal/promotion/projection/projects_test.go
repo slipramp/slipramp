@@ -238,12 +238,13 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	bravo.Application = "payments"
 	bravo.Environment = "production"
 	bravo.Conditions = []promotion.StageCondition{{Type: "Ready", Status: "False"}}
+	bravo.RequestedFreight = []promotion.FreightRequest{{Origin: "Warehouse/app", SourceStages: []string{"alpha"}}}
 	store := &projectionTestStore{
 		stages:        []promotion.Stage{bravo, alphaPlatform, alphaCore},
 		pendingCounts: map[uuid.UUID]int{bravo.ID: 1},
 	}
 	service := NewProjectService(
-		promotion.IntegrationSet{"prod": {ClusterName: "colo"}},
+		promotion.IntegrationSet{"prod": {ClusterName: "colo", Repositories: []string{"ops"}}},
 		store,
 	)
 	service.now = func() time.Time { return now }
@@ -251,6 +252,9 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 	result, err := service.ListStages(t.Context(), StageListFilter{Limit: 2})
 	if err != nil {
 		t.Fatalf("ListStages() error = %v", err)
+	}
+	if want := (projectionReads{stages: 1, policies: 1, pending: 1, repositories: 1}); store.reads != want {
+		t.Errorf("store reads across two projects = %+v, want %+v", store.reads, want)
 	}
 	if result.Total != 3 || len(result.Items) != 2 || result.Limit != 2 || result.Offset != 0 {
 		t.Fatalf("Stage page = %#v", result)
@@ -273,7 +277,11 @@ func TestProjectServiceListsLooseStagesByName(t *testing.T) {
 		t.Fatalf("ListStages(filtered) error = %v", err)
 	}
 	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].Stage.Stage.ID != bravo.ID {
-		t.Errorf("filtered Stages = %#v", filtered)
+		t.Fatalf("filtered Stages = %#v", filtered)
+	}
+	alignments := filtered.Items[0].Stage.FreightAlignments
+	if len(alignments) != 1 || alignments[0].SourceStageID == nil || *alignments[0].SourceStageID != alphaCore.ID {
+		t.Errorf("filtered Stage's upstream Freight = %#v, want source %v", alignments, alphaCore.ID)
 	}
 
 	environmentFiltered, err := service.ListStages(t.Context(), StageListFilter{
@@ -319,6 +327,9 @@ func TestProjectServiceListsCompletePipelinesByName(t *testing.T) {
 	result, err := service.ListPipelines(t.Context(), PipelineListFilter{Limit: 2})
 	if err != nil {
 		t.Fatalf("ListPipelines() error = %v", err)
+	}
+	if want := (projectionReads{stages: 1, policies: 1, pending: 1}); store.reads != want {
+		t.Errorf("store reads across two projects without configured repositories = %+v, want %+v", store.reads, want)
 	}
 	if result.Total != 3 || len(result.Items) != 2 {
 		t.Fatalf("Pipeline page = %#v", result)

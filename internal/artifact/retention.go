@@ -25,7 +25,7 @@ type RetentionStore interface {
 	ListExpiredArtifacts(ctx context.Context) ([]Artifact, error)
 	ListArtifactObjectKeys(ctx context.Context, artifactID uuid.UUID) ([]string, error)
 	MarkArtifactDeleted(ctx context.Context, artifactID uuid.UUID) error
-	ArtifactObjectKeyExists(ctx context.Context, key string) (bool, error)
+	ListOrphanArtifactObjectKeys(ctx context.Context, candidates []string) ([]string, error)
 }
 
 type RetentionObjectStore interface {
@@ -193,29 +193,32 @@ func (r *Reconciler) deleteOrphans(ctx context.Context, modifiedBefore time.Time
 
 	deleted := 0
 	var deletionErr error
-	for _, object := range objects {
-		if object.LastModified.After(modifiedBefore) {
-			continue
+	candidates := make([]string, 0, reconciliationBatchSize)
+	for len(objects) > 0 {
+		candidates = candidates[:0]
+		for len(objects) > 0 && len(candidates) < cap(candidates) {
+			object := objects[0]
+			objects = objects[1:]
+			if !object.LastModified.After(modifiedBefore) {
+				candidates = append(candidates, object.Key)
+			}
+		}
+		if len(candidates) == 0 {
+			break
 		}
 
-		exists, err := r.metadata.ArtifactObjectKeyExists(ctx, object.Key)
+		orphans, err := r.metadata.ListOrphanArtifactObjectKeys(ctx, candidates)
 		if err != nil {
-			deletionErr = errors.Join(deletionErr, fmt.Errorf("check artifact object %q: %w", object.Key, err))
+			deletionErr = errors.Join(deletionErr, fmt.Errorf("check artifact object references: %w", err))
 			continue
 		}
-		if exists {
-			continue
+		for _, key := range orphans {
+			if err := r.contents.Delete(ctx, key); err != nil {
+				deletionErr = errors.Join(deletionErr, fmt.Errorf("delete orphaned artifact object %q: %w", key, err))
+				continue
+			}
+			deleted++
 		}
-
-		if err := r.contents.Delete(ctx, object.Key); err != nil {
-			deletionErr = errors.Join(
-				deletionErr,
-				fmt.Errorf("delete orphaned artifact object %q: %w", object.Key, err),
-			)
-			continue
-		}
-
-		deleted++
 	}
 
 	return deleted, deletionErr

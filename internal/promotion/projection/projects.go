@@ -3,7 +3,6 @@ package projection
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -193,7 +192,7 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 		if !ok || integration.ClusterName != stage.ClusterName {
 			continue
 		}
-		key := ProjectKey{Integration: stage.Integration, Cluster: stage.ClusterName, Project: stage.Project}
+		key := stageProjectKey(stage)
 		grouped[key] = append(grouped[key], stage)
 		configs[key] = integration
 		stageIDs = append(stageIDs, stage.ID)
@@ -275,32 +274,15 @@ func (s *ProjectService) ListStages(ctx context.Context, filter StageListFilter)
 		return StageList{}, fmt.Errorf("%w: Freight alignment filter is invalid", promotion.ErrInvalid)
 	}
 
-	stages, err := s.store.ListPromotionStages(ctx)
+	projects, err := s.projectDetails(ctx, func(stage promotion.Stage) bool {
+		return stageMatchesStageScope(stage, filter)
+	})
 	if err != nil {
 		return StageList{}, err
 	}
-	keys := make(map[ProjectKey]struct{})
-	for _, stage := range stages {
-		if stage.ArchivedAt != nil || !stageMatchesStageScope(stage, filter) {
-			continue
-		}
-		integration, configured := s.integrations.Lookup(stage.Integration)
-		if !configured || integration.ClusterName != stage.ClusterName {
-			continue
-		}
-		keys[ProjectKey{
-			Integration: stage.Integration,
-			Cluster:     stage.ClusterName,
-			Project:     stage.Project,
-		}] = struct{}{}
-	}
 
 	items := make([]StageDetail, 0)
-	for key := range keys {
-		project, detailErr := s.projectDetail(ctx, key, stages)
-		if detailErr != nil {
-			return StageList{}, detailErr
-		}
+	for _, project := range projects {
 		for _, stage := range project.Stages {
 			if !stageMatchesStageScope(stage.Stage, filter) || !projectStageMatchesListFilter(stage, filter) {
 				continue
@@ -330,32 +312,15 @@ func (s *ProjectService) ListPipelines(ctx context.Context, filter PipelineListF
 		return PipelineList{}, fmt.Errorf("%w: Freight alignment filter is invalid", promotion.ErrInvalid)
 	}
 
-	stages, err := s.store.ListPromotionStages(ctx)
+	projects, err := s.projectDetails(ctx, func(stage promotion.Stage) bool {
+		return stageMatchesPipelineScope(stage, filter)
+	})
 	if err != nil {
 		return PipelineList{}, err
 	}
-	keys := make(map[ProjectKey]struct{})
-	for _, stage := range stages {
-		if stage.ArchivedAt != nil || !stageMatchesPipelineScope(stage, filter) {
-			continue
-		}
-		integration, configured := s.integrations.Lookup(stage.Integration)
-		if !configured || integration.ClusterName != stage.ClusterName {
-			continue
-		}
-		keys[ProjectKey{
-			Integration: stage.Integration,
-			Cluster:     stage.ClusterName,
-			Project:     stage.Project,
-		}] = struct{}{}
-	}
 
 	items := make([]Pipeline, 0)
-	for key := range keys {
-		project, detailErr := s.projectDetail(ctx, key, stages)
-		if detailErr != nil {
-			return PipelineList{}, detailErr
-		}
+	for _, project := range projects {
 		for _, pipeline := range projectPipelines(project) {
 			if pipelineMatchesListFilter(pipeline, filter) {
 				items = append(items, pipeline)
@@ -372,60 +337,97 @@ func (s *ProjectService) ListPipelines(ctx context.Context, filter PipelineListF
 }
 
 func (s *ProjectService) Get(ctx context.Context, key ProjectKey) (ProjectDetail, error) {
-	stages, err := s.store.ListPromotionStages(ctx)
+	projects, err := s.projectDetails(ctx, func(stage promotion.Stage) bool {
+		return stageProjectKey(stage) == key
+	})
 	if err != nil {
 		return ProjectDetail{}, err
 	}
-
-	return s.projectDetail(ctx, key, stages)
+	if len(projects) == 0 {
+		return ProjectDetail{}, promotion.ErrProjectNotFound
+	}
+	return projects[0], nil
 }
 
-func (s *ProjectService) projectDetail(
+func (s *ProjectService) projectDetails(
 	ctx context.Context,
-	key ProjectKey,
-	stages []promotion.Stage,
-) (ProjectDetail, error) {
-	integration, configured := s.integrations.Lookup(key.Integration)
-	if !configured || integration.ClusterName != key.Cluster {
-		return ProjectDetail{}, promotion.ErrProjectNotFound
+	matches func(promotion.Stage) bool,
+) ([]ProjectDetail, error) {
+	stages, err := s.store.ListPromotionStages(ctx)
+	if err != nil {
+		return nil, err
 	}
-	active := make([]promotion.Stage, 0)
-	byName := make(map[string]promotion.Stage)
-	stageIDs := make([]uuid.UUID, 0)
+
+	grouped := make(map[ProjectKey][]promotion.Stage)
+	var needRepositories bool
 	for _, stage := range stages {
-		if stage.ArchivedAt != nil || stage.Integration != key.Integration || stage.ClusterName != key.Cluster ||
-			stage.Project != key.Project {
+		if stage.ArchivedAt != nil || !matches(stage) {
 			continue
 		}
-		active = append(active, stage)
-		byName[stage.Name] = stage
-		stageIDs = append(stageIDs, stage.ID)
+		integration, configured := s.integrations.Lookup(stage.Integration)
+		if configured && integration.ClusterName == stage.ClusterName {
+			grouped[stageProjectKey(stage)] = nil
+			needRepositories = needRepositories || len(integration.Repositories) > 0
+		}
 	}
-	if len(active) == 0 {
-		return ProjectDetail{}, promotion.ErrProjectNotFound
+	if len(grouped) == 0 {
+		return nil, nil
 	}
+
+	// Include upstream Stages even when only their downstream Stage matches the filter.
+	var stageIDs []uuid.UUID
+	for _, stage := range stages {
+		key := stageProjectKey(stage)
+		if siblings, selected := grouped[key]; selected && stage.ArchivedAt == nil {
+			grouped[key] = append(siblings, stage)
+			stageIDs = append(stageIDs, stage.ID)
+		}
+	}
+
 	evaluatedAt := s.now().UTC()
 	policies, err := stagePolicyViews(ctx, s.store, stageIDs, evaluatedAt)
 	if err != nil {
-		return ProjectDetail{}, err
+		return nil, err
 	}
 	pending, err := s.store.CountPendingPromotionsByStage(ctx, stageIDs)
 	if err != nil {
-		return ProjectDetail{}, err
+		return nil, err
 	}
-	stale := make(map[uuid.UUID]bool, len(active))
-	for _, stage := range active {
-		stale[stage.ID] = stageObservationStale(stage, integration, evaluatedAt)
-	}
-	alignments := freightAlignments(active, stale)
-
 	var repositories map[string]repository.Repository
-	if len(integration.Repositories) > 0 {
+	if needRepositories {
 		repositories, err = activeRepositoriesByName(ctx, s.store)
 		if err != nil {
-			return ProjectDetail{}, err
+			return nil, err
 		}
 	}
+
+	facts := stageFacts{evaluatedAt: evaluatedAt, policies: policies, pending: pending, repositories: repositories}
+	projects := make([]ProjectDetail, 0, len(grouped))
+	for key, siblings := range grouped {
+		projects = append(projects, facts.projectDetail(key, s.integrations[key.Integration], siblings))
+	}
+	return projects, nil
+}
+
+type stageFacts struct {
+	evaluatedAt  time.Time
+	policies     map[uuid.UUID]promotion.PromotionPolicySnapshot
+	pending      map[uuid.UUID]int
+	repositories map[string]repository.Repository
+}
+
+func (facts stageFacts) projectDetail(
+	key ProjectKey,
+	integration promotion.IntegrationConfig,
+	active []promotion.Stage,
+) ProjectDetail {
+	byName := make(map[string]promotion.Stage, len(active))
+	stale := make(map[uuid.UUID]bool, len(active))
+	for _, stage := range active {
+		byName[stage.Name] = stage
+		stale[stage.ID] = stageObservationStale(stage, integration, facts.evaluatedAt)
+	}
+	alignments := freightAlignments(active, stale)
 	items := make([]ProjectStage, 0, len(active))
 	for _, stage := range active {
 		requests := make([]ProjectFreightRequest, 0, len(stage.RequestedFreight))
@@ -453,15 +455,15 @@ func (s *ProjectService) projectDetail(
 		}
 		items = append(items, ProjectStage{
 			Stage:                 stage,
-			Policy:                policies[stage.ID],
-			PendingPromotionCount: pending[stage.ID],
+			Policy:                facts.policies[stage.ID],
+			PendingPromotionCount: facts.pending[stage.ID],
 			ObservationStale:      stale[stage.ID],
 			RequestedFreight:      requests,
 			FreightAlignments:     alignments[stage.ID],
 			Capabilities: stageCapabilities(
 				stage,
 				integration,
-				repositories[stage.RepositoryName].CloneURL,
+				facts.repositories[stage.RepositoryName].CloneURL,
 				stale[stage.ID],
 			),
 		})
@@ -472,37 +474,18 @@ func (s *ProjectService) projectDetail(
 
 	return ProjectDetail{
 		Integration: key.Integration, ClusterName: key.Cluster, Project: key.Project, Stages: items,
-	}, nil
+	}
 }
 
 func (s *ProjectService) GetStage(ctx context.Context, stageID uuid.UUID) (StageDetail, error) {
-	stages, err := s.store.ListPromotionStages(ctx)
+	projects, err := s.projectDetails(ctx, func(stage promotion.Stage) bool { return stage.ID == stageID })
 	if err != nil {
 		return StageDetail{}, err
 	}
-
-	var key ProjectKey
-	for _, stage := range stages {
-		if stage.ID == stageID && stage.ArchivedAt == nil {
-			key = ProjectKey{
-				Integration: stage.Integration,
-				Cluster:     stage.ClusterName,
-				Project:     stage.Project,
-			}
-			break
-		}
-	}
-	if key == (ProjectKey{}) {
+	if len(projects) == 0 {
 		return StageDetail{}, promotion.ErrStageNotFound
 	}
-
-	project, err := s.projectDetail(ctx, key, stages)
-	if errors.Is(err, promotion.ErrProjectNotFound) {
-		return StageDetail{}, promotion.ErrStageNotFound
-	}
-	if err != nil {
-		return StageDetail{}, err
-	}
+	project := projects[0]
 	for _, stage := range project.Stages {
 		if stage.Stage.ID == stageID {
 			return StageDetail{
@@ -515,6 +498,10 @@ func (s *ProjectService) GetStage(ctx context.Context, stageID uuid.UUID) (Stage
 	}
 
 	return StageDetail{}, promotion.ErrStageNotFound
+}
+
+func stageProjectKey(stage promotion.Stage) ProjectKey {
+	return ProjectKey{Integration: stage.Integration, Cluster: stage.ClusterName, Project: stage.Project}
 }
 
 func stageNonReady(stage promotion.Stage) bool {

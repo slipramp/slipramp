@@ -138,11 +138,20 @@ WHERE artifact_id = sqlc.arg(artifact_id)
   AND offset_bytes = sqlc.arg(offset_bytes);
 
 -- name: ListArtifactLogChunks :many
-SELECT *
-FROM artifact_log_chunks
-WHERE artifact_id = sqlc.arg(artifact_id)
-  AND offset_bytes + size_bytes > sqlc.arg(from_offset_bytes)
-ORDER BY offset_bytes;
+SELECT chunk.*
+FROM artifact_log_chunks AS chunk
+WHERE chunk.artifact_id = sqlc.arg(artifact_id)
+  -- Seek to the chunk containing the cursor, including a resume partway through a chunk.
+  AND chunk.offset_bytes >= COALESCE((
+      SELECT previous.offset_bytes
+      FROM artifact_log_chunks AS previous
+      WHERE previous.artifact_id = sqlc.arg(artifact_id)
+        AND previous.offset_bytes <= sqlc.arg(from_offset_bytes)
+      ORDER BY previous.offset_bytes DESC
+      LIMIT 1
+  ), sqlc.arg(from_offset_bytes))
+  AND chunk.offset_bytes + chunk.size_bytes > sqlc.arg(from_offset_bytes)
+ORDER BY chunk.offset_bytes;
 
 -- name: ExpireArtifacts :many
 WITH candidates AS (
@@ -233,22 +242,24 @@ WITH deleted_artifact AS (
 )
 SELECT * FROM deleted_artifact;
 
--- name: ArtifactObjectKeyExists :one
-SELECT EXISTS (
-    SELECT 1
+-- name: ListOrphanArtifactObjectKeys :many
+SELECT candidate.object_key::text AS object_key
+FROM unnest(sqlc.arg(candidate_keys)::text[]) AS candidate(object_key)
+EXCEPT (
+    SELECT content_object_key
     FROM artifacts
-    WHERE artifacts.retention_state <> 'deleted'
-      AND artifacts.content_object_key = sqlc.arg(candidate_object_key)
+    WHERE retention_state <> 'deleted'
+      AND content_object_key = ANY(sqlc.arg(candidate_keys)::text[])
     UNION ALL
-    SELECT 1
+    SELECT artifact_log_chunks.object_key
     FROM artifact_log_chunks
     JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
     WHERE artifacts.retention_state <> 'deleted'
-      AND artifact_log_chunks.object_key = sqlc.arg(candidate_object_key)
+      AND artifact_log_chunks.object_key = ANY(sqlc.arg(candidate_keys)::text[])
     UNION ALL
-    SELECT 1
+    SELECT artifact_reports.projection_object_key
     FROM artifact_reports
     JOIN artifacts ON artifacts.id = artifact_reports.artifact_id
     WHERE artifacts.retention_state <> 'deleted'
-      AND artifact_reports.projection_object_key = sqlc.arg(candidate_object_key)
-) AS exists;
+      AND artifact_reports.projection_object_key = ANY(sqlc.arg(candidate_keys)::text[])
+);

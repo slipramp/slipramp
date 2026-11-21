@@ -3,6 +3,7 @@ package artifact
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -68,8 +69,27 @@ func (s *retentionMetadataStore) MarkArtifactDeleted(_ context.Context, artifact
 	return nil
 }
 
-func (s *retentionMetadataStore) ArtifactObjectKeyExists(_ context.Context, key string) (bool, error) {
-	return s.references[key], nil
+func (s *retentionMetadataStore) ListOrphanArtifactObjectKeys(_ context.Context, candidates []string) ([]string, error) {
+	var keys []string
+	for _, key := range candidates {
+		if !s.references[key] {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
+}
+
+type failingOrphanLookup struct {
+	retentionMetadataStore
+	batches [][]string
+}
+
+func (s *failingOrphanLookup) ListOrphanArtifactObjectKeys(ctx context.Context, candidates []string) ([]string, error) {
+	s.batches = append(s.batches, slices.Clone(candidates))
+	if len(s.batches) == 1 {
+		return candidates, errors.New("reference lookup failed")
+	}
+	return s.retentionMetadataStore.ListOrphanArtifactObjectKeys(ctx, candidates)
 }
 
 type retentionContentStore struct {
@@ -224,6 +244,36 @@ func TestReconcilerRetriesExpiredArtifactAfterObjectDeletionFailure(t *testing.T
 	wantOutcomes := []ReconciliationOutcome{ReconciliationFailed, ReconciliationSucceeded}
 	if !slices.Equal(observer.outcomes, wantOutcomes) {
 		t.Errorf("reconciliation metric outcomes = %v, want %v", observer.outcomes, wantOutcomes)
+	}
+}
+
+func TestOrphanCleanupSkipsFailedBatchAndContinues(t *testing.T) {
+	now := time.Now().UTC()
+	metadata := &failingOrphanLookup{}
+	contents := &retentionContentStore{objects: map[string]objectstore.ObjectInfo{}}
+	for i := range 205 {
+		key := fmt.Sprintf("runs/old/%d", i)
+		contents.objects[key] = objectstore.ObjectInfo{Key: key, LastModified: now.Add(-DefaultOrphanGracePeriod)}
+	}
+	contents.objects["runs/new"] = objectstore.ObjectInfo{Key: "runs/new", LastModified: now}
+
+	reconciler := newTestReconciler(metadata, contents)
+	reconciler.now = func() time.Time { return now }
+	result, err := reconciler.Reconcile(t.Context())
+	if err == nil || result.DeletedOrphans != 105 {
+		t.Fatalf("orphan cleanup = %#v, error %v", result, err)
+	}
+	if len(metadata.batches) != 3 || len(metadata.batches[0]) != 100 ||
+		len(metadata.batches[1]) != 100 || len(metadata.batches[2]) != 5 {
+		t.Fatalf("unexpected candidate batches: %v", metadata.batches)
+	}
+	for _, key := range metadata.batches[0] {
+		if _, kept := contents.objects[key]; !kept {
+			t.Fatalf("deleted %s after its lookup failed", key)
+		}
+	}
+	if _, kept := contents.objects["runs/new"]; !kept {
+		t.Fatal("deleted an object inside the grace period")
 	}
 }
 
