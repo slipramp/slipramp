@@ -324,20 +324,14 @@ a {
   letter-spacing: -0.035em;
 }
 
-.page-header-heading {
-  flex: 1 1 24rem;
-  min-width: 0;
-}
-
-.page-header-copy {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.page-header-copy .mantine-Title-root {
+.page-header h1 {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.page-header-facts {
+  flex: 1 1 24rem;
+  min-width: 0;
 }
 
 .page-back-link {
@@ -564,10 +558,6 @@ a {
 }
 
 @media (width < 36em) {
-  .page-header-heading {
-    align-items: flex-end;
-  }
-
   :root[data-slipramp-theme="kawaii"] .product-header-mascot-slot {
     display: none;
   }

@@ -21,30 +21,30 @@ export function PageHeader({
   return (
     <Stack className="page-header" gap="xs">
       {back}
-      <Group align="flex-end" justify="space-between" wrap="wrap">
-        <Group className="page-header-heading" gap="md" wrap="nowrap">
-          <Stack className="page-header-copy" gap={2}>
-            <Group gap="sm" wrap="wrap">
-              <Title order={1}>{title}</Title>
-              {badges}
-            </Group>
-            {typeof description === "string" ? <Text c="dimmed">{description}</Text> : description}
-            {details}
-          </Stack>
+      <Stack gap={2}>
+        <Group gap="sm" wrap="wrap">
+          <Title order={1}>{title}</Title>
+          {badges}
         </Group>
-        {actions ? (
-          <Group gap="sm" wrap="wrap">
-            {actions}
-          </Group>
-        ) : null}
-      </Group>
+        {typeof description === "string" ? <Text c="dimmed">{description}</Text> : description}
+      </Stack>
+      {details || actions ? (
+        <Group align="center" gap="md" wrap="wrap">
+          {details}
+          {actions ? (
+            <Group gap="sm" justify="flex-end" ml="auto" wrap="wrap">
+              {actions}
+            </Group>
+          ) : null}
+        </Group>
+      ) : null}
     </Stack>
   );
 }
 
 export function PageHeaderFacts({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <Group align="flex-start" className="page-header-facts" gap="xl" mt="xs" wrap="wrap">
+    <Group align="flex-start" className="page-header-facts" gap="xl" wrap="wrap">
       {children}
     </Group>
   );

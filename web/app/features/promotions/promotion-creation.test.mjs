@@ -7,6 +7,7 @@ import {
   initialPromotionFreightName,
   promotionCreationContext,
   promotionCreationURLSelection,
+  repeatPromotionFreight,
   upstreamPromotionOptions,
   updatePromotionCreationSearchParams,
   visiblePromotionFreight,
@@ -159,4 +160,48 @@ test("promotion creation round-trips through URL state without disturbing page f
 test("in-place promotion uses a distinct URL context", () => {
   assert.equal(promotionCreationContext({ inPlace: true }), "in-place");
   assert.equal(promotionCreationContext({}), "stage");
+});
+
+test("a repeat uses exact Freight on the destination or the original eligible candidate", () => {
+  const original = freight("Warehouse/app", "freight-a", "1.0");
+  const other = freight("Warehouse/app", "freight-b", "2.0");
+  const stage = {
+    id: "prod",
+    capabilities: { promotion: { status: "ready" } },
+    freight: { items: [other, original] },
+    requestedFreight: [{ candidates: [{ freight: original, readiness: "ready" }] }],
+  };
+  const promotion = { selectedFreight: original, sourceStageId: "qa" };
+  assert.deepEqual(repeatPromotionFreight(promotion, stage), {
+    freight: [original],
+    inPlace: true,
+  });
+
+  stage.freight.items = [other];
+  const retry = repeatPromotionFreight(promotion, stage);
+  assert.deepEqual(retry.freight, [original]);
+  assert.equal(retry.sourceStageId, "qa");
+  assert.equal(
+    repeatPromotionFreight({ ...promotion, sourceStageId: "prod" }, stage).sourceStageId,
+    undefined,
+  );
+
+  stage.requestedFreight[0].candidates = [{ freight: other, readiness: "ready" }];
+  assert.deepEqual(repeatPromotionFreight(promotion, stage).freight, []);
+});
+
+test("a Promotion without recorded Freight offers an explicit choice", () => {
+  const current = freight("Warehouse/app", "current", "1.0");
+  const eligible = freight("Warehouse/app", "next", "2.0");
+  const stage = {
+    capabilities: { promotion: { status: "ready" } },
+    freight: { items: [current] },
+    requestedFreight: [{ candidates: [{ freight: eligible, readiness: "ready" }] }],
+  };
+  const retry = repeatPromotionFreight({}, stage);
+  assert.deepEqual(retry.freight, [eligible]);
+  assert.ok(retry.notice);
+  const repeat = repeatPromotionFreight({ kargoOutcome: { phase: "Succeeded" } }, stage);
+  assert.deepEqual(repeat.freight, [current]);
+  assert.equal(repeat.inPlace, true);
 });

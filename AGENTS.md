@@ -66,6 +66,10 @@ Use the established names consistently:
 - Pin generator versions, validate and bundle the specification in CI, and fail CI when generated output is stale.
 - Standard requests use the generated frontend client. A small handwritten SSE transport may handle live-log reconnection while using generated event payload types.
 
+## Web Layout
+
+- Keep cards and card-like surfaces at a single level. Give the outer container the border, background, and shadow. Group its contents with headings, spacing, or dividers.
+
 ## Web URL State
 
 - Treat the URL as the source of truth for user-visible page state that should survive refresh, browser navigation, bookmarking, or sharing. This includes filters, search queries, pagination, sorting, tabs and views, selected domain items, and route-level dialogs.

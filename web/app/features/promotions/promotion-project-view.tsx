@@ -32,8 +32,9 @@ import {
   type PromotionProjectStage,
 } from "~/api/generated";
 import {
-  PromotionCreateButton,
+  FreightPromotionLink,
   PromotionCreateMenu,
+  StagePromotionDialog,
 } from "~/features/promotions/promotion-create-dialog";
 import { eligibleStageFreight } from "~/features/promotions/promotion-creation";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
@@ -1180,7 +1181,7 @@ export function StageCard({
                 {showFreightDetails ? (
                   <StageFreightDetailsDialog compact canWrite={canWrite} stage={stage} />
                 ) : null}
-                {canWrite ? <StagePromotionActions stage={stage} /> : null}
+                {canWrite ? <PromotionCreateMenu stage={stage} /> : null}
               </Group>
             ) : null}
           </Group>
@@ -1206,11 +1207,10 @@ export function StageCard({
 
 function StagePromotionActions({ stage }: Readonly<{ stage: PromotionProjectStage }>) {
   return (
-    <PromotionCreateMenu
-      currentFreight={stage.freight.items}
-      eligibleFreight={eligibleStageFreight(stage)}
-      stage={stage}
-    />
+    <>
+      <PromotionCreateMenu stage={stage} />
+      <StagePromotionDialog stage={stage} />
+    </>
   );
 }
 
@@ -1491,12 +1491,9 @@ function StageFreightDetailTableRow({
         </Table.Td>
         <Table.Td>
           {canPromote ? (
-            <PromotionCreateButton
-              currentFreight={stage.freight.items}
-              freight={[sourceFreight]}
-              initialFreightName={sourceFreight.name}
+            <FreightPromotionLink
+              freight={sourceFreight}
               sourceStageId={sourceStageId}
-              sourceStageName={row.source.name}
               stage={stage}
             />
           ) : null}
@@ -1524,12 +1521,7 @@ function StageFreightDetailTableRow({
         </Table.Td>
         <Table.Td>
           {canWrite && row.request.direct && row.candidate.readiness === "ready" ? (
-            <PromotionCreateButton
-              currentFreight={stage.freight.items}
-              freight={eligibleFreight}
-              initialFreightName={row.candidate.freight.name}
-              stage={stage}
-            />
+            <FreightPromotionLink freight={row.candidate.freight} stage={stage} />
           ) : null}
         </Table.Td>
       </Table.Tr>

@@ -768,7 +768,7 @@ function RunDetails({
   return (
     <Stack gap="lg">
       <SectionHeader title="Run details" />
-      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} titleOrder={3} />
       <ReleaseGateDetails gates={run.gates} subject="Run" />
       <ParameterTable parameters={run.parameters} />
       <RunOverview repositoryName={repositoryName} run={run} />

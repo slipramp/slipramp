@@ -1,5 +1,6 @@
 import type {
   ProductPrincipal,
+  Promotion,
   PromotionFreightItem,
   PromotionProjectStage,
 } from "~/api/generated";
@@ -46,6 +47,35 @@ export function eligibleStageFreight(stage: PromotionProjectStage): PromotionFre
       .filter((candidate) => candidate.readiness === "ready")
       .map((candidate) => candidate.freight),
   );
+}
+
+export function repeatPromotionFreight(
+  promotion: Pick<Promotion, "selectedFreight" | "sourceStageId" | "kargoOutcome">,
+  stage: PromotionProjectStage,
+) {
+  const original = promotion.selectedFreight;
+  if (!original) {
+    const inPlace = promotion.kargoOutcome?.phase === "Succeeded";
+    return {
+      freight: inPlace ? stage.freight.items : eligibleStageFreight(stage),
+      inPlace,
+      notice: "The original Freight was not recorded. Confirm the Freight for this new Promotion.",
+      unavailableLabel: inPlace
+        ? "This Stage has no current Freight."
+        : "This Stage has no eligible Freight.",
+    };
+  }
+
+  const matchesOriginal = (item: PromotionFreightItem) =>
+    item.name === original.name && item.origin === original.origin;
+  const current = stage.freight.items.find(matchesOriginal);
+  if (current) return { freight: [current], inPlace: true };
+
+  return {
+    freight: eligibleStageFreight(stage).filter(matchesOriginal),
+    sourceStageId: promotion.sourceStageId === stage.id ? undefined : promotion.sourceStageId,
+    unavailableLabel: "The original Freight is no longer eligible for this Stage.",
+  };
 }
 
 export function upstreamPromotionOptions(stage: PromotionProjectStage): UpstreamPromotionOption[] {

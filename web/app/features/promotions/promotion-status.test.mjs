@@ -6,6 +6,7 @@ import {
   promotionExecutionStatus,
   promotionIsActive,
   promotionOverallStatus,
+  promotionRepeatLabel,
   promotionReviewStatus,
 } from "./promotion-status.ts";
 
@@ -147,4 +148,27 @@ test("waiting Gates take precedence over active delivery and execution presentat
     kargoOutcome: { observedAt: "2026-11-11T12:00:00Z", phase: "Succeeded" },
   };
   assert.equal(promotionOverallStatus(succeeded).label, "Succeeded");
+});
+
+test("repeat actions follow terminal outcomes and wait for cancellation to finish", () => {
+  for (const status of ["creating", "preparing", "pending", "approved", "expired"]) {
+    assert.equal(promotionRepeatLabel({ ...base, status }), undefined);
+  }
+  for (const status of ["rejected", "error"]) {
+    assert.equal(promotionRepeatLabel({ ...base, status }), "Retry");
+  }
+  for (const phase of ["Failed", "Errored", "Aborted", "Succeeded"]) {
+    const promotion = { ...base, kargoOutcome: { phase } };
+    assert.equal(promotionRepeatLabel(promotion), phase === "Succeeded" ? "Re-promote" : "Retry");
+    assert.equal(
+      promotionRepeatLabel({ ...promotion, cancellation: { state: "requested" } }),
+      undefined,
+    );
+    assert.equal(
+      promotionRepeatLabel({ ...promotion, cancellation: { state: "overtaken" } }),
+      phase === "Succeeded" ? "Re-promote" : "Retry",
+    );
+  }
+  assert.equal(promotionRepeatLabel({ ...base, creationDispatch: { phase: "failed" } }), "Retry");
+  assert.equal(promotionRepeatLabel({ ...base, cancellation: { state: "completed" } }), "Retry");
 });

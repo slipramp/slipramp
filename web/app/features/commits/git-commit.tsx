@@ -1,4 +1,4 @@
-import { Anchor, Code, Group, HoverCard, Paper, Stack, Text, Title } from "@mantine/core";
+import { Anchor, Code, Flex, Group, HoverCard, Stack, Text, Title } from "@mantine/core";
 import { IconExternalLink, IconGitCommit } from "@tabler/icons-react";
 import { Link } from "react-router";
 
@@ -96,50 +96,69 @@ export function CommitReference({
 
 export function CommitDetails({
   commit,
+  stacked = false,
+  titleOrder = 2,
   repositoryId,
   label = "Git commit",
-}: Readonly<{ commit: GitCommit; repositoryId?: string; label?: string }>) {
+}: Readonly<{
+  commit: GitCommit;
+  stacked?: boolean;
+  titleOrder?: 2 | 3;
+  repositoryId?: string;
+  label?: string;
+}>) {
   const title = commit.title ?? `Commit ${shortIdentifier(commit.sha, 12)}`;
   const detailsURL = repositoryId ? commitPath(repositoryId, commit.sha) : undefined;
 
   return (
-    <Paper p="lg" withBorder>
-      <Group align="flex-start" justify="space-between" wrap="wrap">
-        <Stack gap="xs" style={{ flex: "1 1 32rem", minWidth: 0 }}>
-          <Group gap="xs">
-            <IconGitCommit aria-hidden size={18} />
-            <Text c="dimmed" fw={650} size="xs" tt="uppercase">
-              {label}
-            </Text>
-          </Group>
-          <Title lineClamp={2} order={2} style={{ overflowWrap: "anywhere" }} title={title}>
-            {detailsURL ? (
-              <Anchor
-                c="inherit"
-                component={Link}
-                fw="inherit"
-                fz="inherit"
-                to={detailsURL}
-                underline="hover"
-              >
-                {title}
-              </Anchor>
-            ) : commit.url ? (
-              <Anchor
-                c="inherit"
-                fw="inherit"
-                fz="inherit"
-                href={commit.url}
-                rel="noreferrer"
-                target="_blank"
-                underline="hover"
-              >
-                {title}
-              </Anchor>
-            ) : (
-              title
-            )}
-          </Title>
+    <Flex
+      align="flex-start"
+      direction={stacked ? "column" : "row"}
+      gap={stacked ? 4 : "md"}
+      wrap="wrap"
+    >
+      <Stack flex={stacked ? undefined : "1 1 32rem"} gap="xs" maw="100%" miw={0}>
+        <Group gap="xs">
+          <IconGitCommit aria-hidden size={18} />
+          <Text c="dimmed" fw={650} size="xs" tt="uppercase">
+            {label}
+          </Text>
+        </Group>
+        <Title
+          lineClamp={2}
+          order={titleOrder}
+          size="h4"
+          style={{ overflowWrap: "anywhere" }}
+          title={title}
+        >
+          {detailsURL ? (
+            <Anchor
+              c="inherit"
+              component={Link}
+              fw="inherit"
+              fz="inherit"
+              to={detailsURL}
+              underline="hover"
+            >
+              {title}
+            </Anchor>
+          ) : commit.url ? (
+            <Anchor
+              c="inherit"
+              fw="inherit"
+              fz="inherit"
+              href={commit.url}
+              rel="noreferrer"
+              target="_blank"
+              underline="hover"
+            >
+              {title}
+            </Anchor>
+          ) : (
+            title
+          )}
+        </Title>
+        {commit.author || commit.authoredAt ? (
           <Group gap="xs" wrap="wrap">
             {commit.author ? <Identity avatarSize={28} name={commit.author} /> : null}
             {commit.author && commit.authoredAt ? (
@@ -151,17 +170,17 @@ export function CommitDetails({
               <Timestamp c="dimmed" size="sm" value={commit.authoredAt} />
             ) : null}
           </Group>
-          <Code style={{ overflowWrap: "anywhere", width: "fit-content" }}>{commit.sha}</Code>
-        </Stack>
-        {commit.url ? (
-          <Anchor href={commit.url} rel="noreferrer" style={{ flexShrink: 0 }} target="_blank">
-            <Group gap={6} wrap="nowrap">
-              View commit
-              <IconExternalLink aria-hidden size={15} />
-            </Group>
-          </Anchor>
         ) : null}
-      </Group>
-    </Paper>
+        <Code style={{ overflowWrap: "anywhere", width: "fit-content" }}>{commit.sha}</Code>
+      </Stack>
+      {commit.url ? (
+        <Anchor href={commit.url} rel="noreferrer" style={{ flexShrink: 0 }} target="_blank">
+          <Group gap={6} wrap="nowrap">
+            View commit
+            <IconExternalLink aria-hidden size={15} />
+          </Group>
+        </Anchor>
+      ) : null}
+    </Flex>
   );
 }

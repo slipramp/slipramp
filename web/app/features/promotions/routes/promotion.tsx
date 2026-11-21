@@ -16,6 +16,7 @@ import {
   Text,
   Textarea,
   TextInput,
+  Tooltip,
   Title,
 } from "@mantine/core";
 import {
@@ -26,6 +27,7 @@ import {
   IconChecklist,
   IconLoader2,
   IconPlayerPlay,
+  IconRefresh,
   IconStack2,
   IconTruckDelivery,
   type TablerIcon,
@@ -39,6 +41,7 @@ import {
   cancelPromotion,
   decidePromotion,
   getPromotion,
+  getPromotionStage,
   type ProductPrincipal,
   type Promotion,
   type PromotionFreightItem,
@@ -52,6 +55,12 @@ import { DetailFact, DetailGrid } from "~/shared/context-value";
 import { Identity } from "~/shared/identity";
 import { KargoButton } from "~/features/promotions/kargo-link";
 import { FreightContents, FreightIdentifier } from "~/features/promotions/freight-display";
+import {
+  canWritePromotions,
+  repeatPromotionFreight,
+} from "~/features/promotions/promotion-creation";
+import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import { promotionStagePath } from "~/features/promotions/promotion-stage";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
 import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import {
@@ -60,6 +69,7 @@ import {
   promotionIsActive,
   promotionOverallStatus,
   promotionReviewStatus,
+  promotionRepeatLabel,
   type PromotionStatusPresentation,
 } from "~/features/promotions/promotion-status";
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
@@ -113,6 +123,13 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   ]);
   const promotion = promotionResult.data;
 
+  const repeatLabel =
+    promotion && canWritePromotions(principal) ? promotionRepeatLabel(promotion) : undefined;
+  const repeatStageRequest =
+    promotion && repeatLabel
+      ? getPromotionStage({ client, path: { stageId: promotion.stageId } })
+      : undefined;
+
   let gitDiff: ArtifactText = {};
   let argoDiff: ArtifactText = {};
   let argoResources: ArgoDiffResource[] | undefined;
@@ -136,6 +153,9 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     argoDiff = { error };
   }
 
+  const stageResult = await repeatStageRequest;
+  const repeatStage = stageResult?.data?.stage;
+
   return {
     argoDiff,
     argoResources,
@@ -143,6 +163,20 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     gitDiff,
     principal,
     promotion,
+    repeatLabel,
+    repeatOptions:
+      repeatStage && promotion
+        ? {
+            ...repeatPromotionFreight(promotion, repeatStage),
+            stage: {
+              id: repeatStage.id,
+              name: repeatStage.name,
+              capabilities: repeatStage.capabilities,
+              policy: repeatStage.policy,
+            },
+          }
+        : undefined,
+    repeatStageError: stageResult?.error?.detail ?? stageResult?.error?.title,
   };
 }
 
@@ -213,8 +247,8 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
     <Stack gap="lg">
       <PageHeader
         actions={
-          canCancel || promotion.kargoUrl || promotion.argoCdUrl ? (
-            <Group gap="sm">
+          canCancel || loaderData.repeatLabel || promotion.kargoUrl || promotion.argoCdUrl ? (
+            <>
               {canCancel ? (
                 <Form method="post">
                   <Button
@@ -247,7 +281,29 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
                   Open in Argo CD
                 </Button>
               ) : null}
-            </Group>
+              {loaderData.repeatLabel &&
+                (loaderData.repeatOptions ? (
+                  <PromotionCreateButton
+                    {...loaderData.repeatOptions}
+                    repeatLabel={loaderData.repeatLabel}
+                    formAction={promotionStagePath(promotion.stageId)}
+                  />
+                ) : (
+                  <Tooltip
+                    label={loaderData.repeatStageError ?? "The destination Stage is unavailable."}
+                  >
+                    <span>
+                      <Button
+                        disabled
+                        leftSection={<IconRefresh aria-hidden size={16} />}
+                        size="compact-md"
+                      >
+                        {loaderData.repeatLabel}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                ))}
+            </>
           ) : undefined
         }
         back={<PageBackLink label="Back to promotions" to="/promotions" />}
@@ -720,18 +776,25 @@ function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
   return (
     <Stack gap="lg">
       {review && git && (
-        <DetailGrid>
-          <CommitDetails
-            label="Base revision"
-            commit={git.baseCommit}
-            repositoryId={review.repositoryId}
-          />
-          <CommitDetails
-            label="Candidate revision"
-            commit={git.candidateCommit}
-            repositoryId={review.repositoryId}
-          />
-        </DetailGrid>
+        <Stack component="section" gap="lg">
+          <SectionHeader title="Git revisions" />
+          <DetailGrid>
+            <CommitDetails
+              label="Base revision"
+              commit={git.baseCommit}
+              repositoryId={review.repositoryId}
+              stacked
+              titleOrder={3}
+            />
+            <CommitDetails
+              label="Candidate revision"
+              commit={git.candidateCommit}
+              repositoryId={review.repositoryId}
+              stacked
+              titleOrder={3}
+            />
+          </DetailGrid>
+        </Stack>
       )}
       <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
       {promotion.selectedFreight && <SelectedFreight freight={promotion.selectedFreight} />}
@@ -1173,10 +1236,6 @@ async function loadArtifactText(
 }
 
 function canReadSensitiveArtifacts(principal?: ProductPrincipal) {
-  return principal?.role === "operator" || principal?.role === "admin";
-}
-
-function canWritePromotions(principal?: ProductPrincipal) {
   return principal?.role === "operator" || principal?.role === "admin";
 }
 

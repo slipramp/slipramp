@@ -34,7 +34,10 @@ import {
 } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
-import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import {
+  InPlacePromotionLink,
+  StagePromotionDialog,
+} from "~/features/promotions/promotion-create-dialog";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { buildStageFreightDetailRows } from "~/features/promotions/promotion-freight";
 import { KargoButton } from "~/features/promotions/kargo-link";
@@ -239,8 +242,8 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
     <Stack gap="lg">
       <PageHeader
         actions={
-          stage.kargoUrl || stage.argoCdUrl ? (
-            <Group gap="sm">
+          canWrite || stage.kargoUrl || stage.argoCdUrl ? (
+            <>
               {stage.kargoUrl ? <KargoButton url={stage.kargoUrl} /> : null}
               {stage.argoCdUrl ? (
                 <Button
@@ -255,7 +258,8 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
                   Open in Argo CD
                 </Button>
               ) : null}
-            </Group>
+              {canWrite ? <InPlacePromotionLink label="Sync" stage={stage} /> : null}
+            </>
           ) : undefined
         }
         back={<PageBackLink label="Back to Stages" to="/promotion-stages" />}
@@ -375,6 +379,7 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
         </Tabs.Panel>
       </Tabs>
 
+      {canWrite ? <StagePromotionDialog stage={stage} /> : null}
       <StagePolicyDialog actionData={actionData} onClose={closePolicy} stage={policyStage} />
     </Stack>
   );
@@ -443,12 +448,7 @@ function BranchDriftDetails({
               {presentation.label}
             </Badge>
             {canWrite && summary?.stage.status === "drifted" ? (
-              <PromotionCreateButton
-                freight={summary.stage.freight.items}
-                inPlace
-                stage={summary.stage}
-                unavailableLabel="This Stage has no current Freight to promote in place."
-              />
+              <InPlacePromotionLink label="Re-promote" stage={stage} />
             ) : null}
           </Group>
         }

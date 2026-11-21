@@ -36,6 +36,18 @@ export function promotionIsActive(promotion: PromotionState) {
   }
 }
 
+export function promotionRepeatLabel(
+  promotion: PromotionState,
+): "Retry" | "Re-promote" | undefined {
+  if (promotionIsActive(promotion)) return undefined;
+  if (promotion.cancellation.state === "completed" || promotion.creationDispatch.phase === "failed")
+    return "Retry";
+  if (promotion.kargoOutcome)
+    return promotion.kargoOutcome.phase === "Succeeded" ? "Re-promote" : "Retry";
+  if (promotion.status === "rejected" || promotion.status === "error") return "Retry";
+  return undefined;
+}
+
 export function promotionOverallStatus(promotion: PromotionState): PromotionStatusPresentation {
   if (promotion.cancellation.state === "requested")
     return {
