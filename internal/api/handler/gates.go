@@ -11,19 +11,20 @@ import (
 	"github.com/slipramp/slipramp/internal/gate"
 )
 
-func gateSummaryResponse(summary gate.Summary) api.GateSummary {
+func (h *Handler) gateSummaryResponse(summary gate.Summary) api.GateSummary {
 	requirements := make([]api.GateRequirement, 0, len(summary))
 	for _, requirement := range summary {
 		var operator *api.GateOperator
 		var threshold *float64
-		if requirement.Condition != nil {
-			operator = new(api.GateOperator(requirement.Condition.Operator))
-			threshold = &requirement.Condition.Value
+		if definition := requirement.Prometheus; definition != nil {
+			operator = new(api.GateOperator(definition.Condition.Operator))
+			threshold = &definition.Condition.Value
 		}
 		requirements = append(requirements, api.GateRequirement{
 			Name:             api.CatalogName(requirement.Name),
 			DefinitionDigest: optionalString(requirement.DefinitionDigest),
 			Overrides:        gateOverrideResponses(requirement.Overrides),
+			QueryURL:         h.gateSources.QueryURL(requirement),
 			Title:            optionalString(requirement.Title),
 			State:            api.GateRequirementState(requirement.State),
 			Value:            requirement.Value,

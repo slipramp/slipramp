@@ -52,19 +52,19 @@ type Requirement struct {
 	Title            string
 	State            RequirementState
 	Value            *float64
-	Condition        *Condition
+	Prometheus       *PrometheusDefinition
 	EvaluatedAt      *time.Time
 	ReleasedAt       *time.Time
 	Diagnostic       string
 }
 
 // RequirementEvidence holds the fields needed to show one Gate requirement.
-// After release, its condition and observation come from the stored release evidence.
+// After release, its definition and observation come from the stored release evidence.
 type RequirementEvidence struct {
 	Canceled           bool
 	Name               string
 	Title              string
-	Condition          *Condition
+	Prometheus         *PrometheusDefinition
 	Observation        Observation
 	EvaluatedAt        *time.Time
 	ReleasedAt         *time.Time
@@ -73,7 +73,7 @@ type RequirementEvidence struct {
 }
 
 func (e RequirementEvidence) RequirementAt(processID uuid.UUID, at time.Time) Requirement {
-	requirement := Requirement{Name: e.Name, Title: e.Title, Condition: e.Condition}
+	requirement := Requirement{Name: e.Name, Title: e.Title, Prometheus: e.Prometheus}
 	if e.ReleasedAt != nil {
 		requirement.State = RequirementReleased
 		requirement.Value = e.Observation.Value
@@ -87,7 +87,7 @@ func (e RequirementEvidence) RequirementAt(processID uuid.UUID, at time.Time) Re
 	}
 
 	switch {
-	case e.Condition == nil:
+	case e.Prometheus == nil:
 		requirement.State = RequirementUnavailable
 		requirement.Diagnostic = "The Gate definition is not available in the active catalog."
 	case e.EvaluatedAt == nil || e.EvaluatorProcessID != processID:

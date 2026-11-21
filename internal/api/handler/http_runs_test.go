@@ -796,7 +796,10 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 				{
 					Name: "network-idle", Title: "Network idle",
 					State: gate.RequirementBlocking, Value: &observedValue,
-					Condition: &gate.Condition{Operator: operator, Value: threshold}, EvaluatedAt: &snapshotAt,
+					Prometheus: &gate.PrometheusDefinition{
+						Source: "prod", Query: "up", Condition: gate.Condition{Operator: operator, Value: threshold},
+					},
+					EvaluatedAt: &snapshotAt,
 				},
 			},
 		},

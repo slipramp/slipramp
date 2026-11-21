@@ -55,12 +55,12 @@ func listGateSummaries(
 			EvaluatorProcessID: uuid.UUID(row.EvaluatorProcessID.Bytes),
 			ValidUntil:         row.ValidUntil.Time.UTC(),
 		}
-		if row.Condition != nil {
-			var condition gate.Condition
-			if err := json.Unmarshal(row.Condition, &condition); err != nil {
-				return nil, fmt.Errorf("decode Gate %q condition: %w", row.GateName, err)
+		if row.Prometheus != nil {
+			var definition gate.PrometheusDefinition
+			if err := json.Unmarshal(row.Prometheus, &definition); err != nil {
+				return nil, fmt.Errorf("decode Gate %q Prometheus definition: %w", row.GateName, err)
 			}
-			evidence.Condition = &condition
+			evidence.Prometheus = &definition
 		}
 		if evidence.ReleasedAt != nil && row.ReleaseObservedValue != nil {
 			evidence.Observation = gate.Observation{State: gate.ObservationPassing, Value: row.ReleaseObservedValue}

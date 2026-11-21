@@ -216,10 +216,9 @@ func (h *Handler) CreatePromotion(
 	if err != nil {
 		return nil, err
 	}
-	body, err := promotionResponse(
+	body, err := h.promotionResponse(
 		promotion.PromotionReview{Promotion: record},
 		nil,
-		h.kargoIntegrations,
 		gates[record.ID],
 	)
 	if err != nil {
@@ -363,10 +362,9 @@ func (h *Handler) ListPromotions(
 
 	items := make([]api.Promotion, 0, len(result.Items))
 	for _, review := range result.Items {
-		item, convertErr := promotionResponse(
+		item, convertErr := h.promotionResponse(
 			review,
 			commits,
-			h.kargoIntegrations,
 			gates[review.Promotion.ID],
 		)
 		if convertErr != nil {
@@ -544,10 +542,9 @@ func promotionPolicyResponse(value promotion.PromotionPolicySnapshot) api.Promot
 	}
 }
 
-func promotionResponse(
+func (h *Handler) promotionResponse(
 	review promotion.PromotionReview,
 	commits map[repository.CommitKey]api.GitCommit,
-	integrations promotion.IntegrationSet,
 	gates gate.Summary,
 ) (api.Promotion, error) {
 	record := review.Promotion
@@ -592,7 +589,7 @@ func promotionResponse(
 		SelectedFreight:     selectedFreight,
 		ReviewRequired:      record.ReviewRequired,
 		Status:              api.PromotionStatus(record.Lifecycle.State),
-		Gates:               gateSummaryResponse(gates),
+		Gates:               h.gateSummaryResponse(gates),
 		Message:             record.Message,
 		CreationDispatch: api.PromotionCreationDispatch{
 			Phase:         api.PromotionCreationDispatchPhase(record.CreationDispatch.Phase(record.Source)),
@@ -624,7 +621,7 @@ func promotionResponse(
 		}
 	}
 	if record.Source == promotion.SourceKargo || record.KargoExecution.PromotionUID != nil {
-		body.KargoURL = integrations.KargoPromotionURL(
+		body.KargoURL = h.kargoIntegrations.KargoPromotionURL(
 			record.Integration,
 			project,
 			record.ExternalPromotionID,
@@ -635,7 +632,7 @@ func promotionResponse(
 		argoApplicationNamespace = *record.StageSnapshot.ArgoApplicationNamespace
 	}
 	if record.StageSnapshot.Enrichment != nil {
-		body.ArgoCdURL = integrations.ArgoCDApplicationURL(
+		body.ArgoCdURL = h.kargoIntegrations.ArgoCDApplicationURL(
 			record.Integration,
 			record.StageSnapshot.Enrichment.Environment,
 			argoApplicationNamespace,
@@ -681,10 +678,9 @@ func (h *Handler) promotionDetailResponse(
 	if err != nil {
 		return api.Promotion{}, err
 	}
-	body, err := promotionResponse(
+	body, err := h.promotionResponse(
 		review,
 		commits,
-		h.kargoIntegrations,
 		gates[review.Promotion.ID],
 	)
 	if err != nil {

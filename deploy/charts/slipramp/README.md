@@ -115,7 +115,8 @@ server:
     sources:
       production:
         prometheus:
-          url: https://prometheus.example.com
+          url: https://prometheus.monitoring.svc:9090
+          publicUrl: https://metrics.example.com/prometheus
           evaluationInterval: 15s
           timeout: 5s
           maximumConcurrency: 4

@@ -14,7 +14,7 @@ func TestRequirementAt(t *testing.T) {
 	now := time.Now().UTC()
 	processID := uuid.New()
 	noObservation := RequirementEvidence{
-		Name: "idle", Title: "Network idle", Condition: &Condition{Operator: OperatorEqual},
+		Name: "idle", Title: "Network idle", Prometheus: &PrometheusDefinition{Condition: Condition{Operator: OperatorEqual}},
 	}
 	passing := noObservation
 	passing.EvaluatorProcessID = processID
@@ -23,7 +23,7 @@ func TestRequirementAt(t *testing.T) {
 	passing.Observation = Observation{State: ObservationPassing, Value: new(0.0)}
 
 	noDefinition := passing
-	noDefinition.Condition = nil
+	noDefinition.Prometheus = nil
 	oldProcess := passing
 	oldProcess.EvaluatorProcessID = uuid.New()
 	stale := passing
@@ -80,7 +80,7 @@ func TestRequirementAt(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			want := Requirement{
-				Name: tc.evidence.Name, Title: tc.evidence.Title, Condition: tc.evidence.Condition,
+				Name: tc.evidence.Name, Title: tc.evidence.Title, Prometheus: tc.evidence.Prometheus,
 				State: tc.state, Diagnostic: tc.diagnostic, Value: tc.value,
 				EvaluatedAt: tc.evaluatedAt, ReleasedAt: tc.evidence.ReleasedAt,
 			}
@@ -94,7 +94,7 @@ func TestRequirementAt(t *testing.T) {
 func TestCanceledGateSummaryPreservesOnlyReleaseEvidence(t *testing.T) {
 	now := time.Now().UTC()
 	evidence := RequirementEvidence{
-		Name: "idle", Canceled: true, Condition: &Condition{Operator: OperatorEqual},
+		Name: "idle", Canceled: true, Prometheus: &PrometheusDefinition{Condition: Condition{Operator: OperatorEqual}},
 		EvaluatedAt: &now, Observation: Observation{State: ObservationPassing, Value: new(0.0)},
 	}
 	stopped := Summary{evidence.RequirementAt(uuid.Nil, now)}

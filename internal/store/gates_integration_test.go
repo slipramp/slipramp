@@ -228,9 +228,9 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	wantDefinition := persistedCatalog("1.14.3").Gates[0].Spec
 	if requirements.State() != gate.SummaryWaiting || len(requirements) != 2 ||
 		requirements[0].Name != "network-idle" || requirements[0].State != gate.RequirementUnevaluated ||
-		requirements[0].Condition == nil || *requirements[0].Condition != wantDefinition.Prometheus.Condition ||
+		requirements[0].Prometheus == nil || *requirements[0].Prometheus != wantDefinition.Prometheus ||
 		requirements[1].Name != "change-window" || requirements[1].State != gate.RequirementUnavailable ||
-		requirements[1].Condition != nil {
+		requirements[1].Prometheus != nil {
 		t.Fatalf("ordered Run Gate requirements = %#v", requirements)
 	}
 	targets, err := database.ListGateEvaluationDemand(ctx)
@@ -379,6 +379,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	releaseRevisionID := uuid.New()
 	releaseCatalog := persistedCatalog("1.14.4")
 	releaseCatalog.Gates[0].Metadata.Title = "Release window"
+	releaseCatalog.Gates[0].Spec.Prometheus.Query = "sum(active_sessions)"
 	releaseCatalog.Gates[0].Spec.Prometheus.Condition.Value = 2
 	refresh := successfulCatalogRefresh(
 		strings.Repeat("c", 40),
@@ -476,15 +477,22 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	if len(targets) != 0 {
 		t.Errorf("Gate evaluation demand after release = %#v", targets)
 	}
+	laterAt := assignedAt.Add(time.Minute)
+	laterRefresh := successfulCatalogRefresh(strings.Repeat("d", 40), laterAt, uuid.New())
+	laterRefresh.Revision.Catalog = persistedCatalog("1.14.5")
+	laterRefresh.Revision.Catalog.Gates[0].Spec.Prometheus.Source = "other"
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, laterRefresh); err != nil {
+		t.Fatalf("change query and source after release: %v", err)
+	}
 	service := run.NewService(run.Dependencies{Gates: database, GateEvaluatorProcessID: evaluatorID})
-	summaries, err := service.GateSummaries(ctx, []run.Run{claimed, ungated}, assignedAt)
+	summaries, err := service.GateSummaries(ctx, []run.Run{claimed, ungated}, laterAt)
 	if err != nil {
 		t.Fatalf("read released Run Gate summary: %v", err)
 	}
 	summary := summaries[claimed.ID]
 	if summary.State() != gate.SummaryReleased || len(summary) != 1 ||
 		summary[0].Title != "Release window" || summary[0].ReleasedAt == nil || !summary[0].ReleasedAt.Equal(assignedAt) ||
-		summary[0].Condition == nil || *summary[0].Condition != definition.Prometheus.Condition ||
+		summary[0].Prometheus == nil || *summary[0].Prometheus != definition.Prometheus ||
 		summary[0].Value == nil || *summary[0].Value != observedValue {
 		t.Errorf("released Run Gate summary = %#v", summary)
 	}

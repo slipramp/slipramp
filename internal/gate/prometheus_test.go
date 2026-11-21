@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,5 +207,67 @@ func validPrometheusSource(sourceURL string) gate.PrometheusSource {
 		EvaluationInterval: time.Minute,
 		Timeout:            5 * time.Second,
 		MaximumConcurrency: 1,
+	}
+}
+
+func TestPrometheusQueryURL(t *testing.T) {
+	t.Parallel()
+
+	sources := gate.SourceSet{
+		"prod": {Prometheus: gate.PrometheusSource{
+			URL: "http://internal:9090", PublicURL: "https://metrics.example.com/tenant/prod/",
+		}},
+		"internal": {Prometheus: gate.PrometheusSource{URL: "http://internal:9090"}},
+	}
+	const expr = `sum(rate(http_requests_total{job=~"api|web",route="/a&b"}[5m])) + 1`
+	def := &gate.PrometheusDefinition{Source: "prod", Query: expr}
+	at := time.Date(2026, 11, 20, 10, 30, 12, 345678000, time.FixedZone("MST", -7*60*60))
+	const utc = "2026-11-20T17:30:12.345Z"
+	override := gate.Requirement{
+		State: gate.RequirementReleased, Prometheus: def, DefinitionDigest: "release",
+		Overrides: []gate.Override{{DefinitionDigest: "release", EvaluatedAt: &at}},
+	}
+	otherDigest := override
+	otherDigest.DefinitionDigest = "other"
+	for _, tc := range []struct {
+		name       string
+		req        gate.Requirement
+		wantMoment string
+		wantLink   bool
+	}{
+		{"observation", gate.Requirement{State: gate.RequirementBlocking, Prometheus: def, EvaluatedAt: &at}, utc, true},
+		{"waiting for observation", gate.Requirement{State: gate.RequirementUnevaluated, Prometheus: def}, "", true},
+		{"released", gate.Requirement{State: gate.RequirementReleased, Prometheus: def, EvaluatedAt: &at}, utc, true},
+		{"release by override", override, utc, true},
+		{"different override", otherDigest, "", true},
+		{"stopped", gate.Requirement{State: gate.RequirementStopped, Prometheus: def}, "", false},
+		{"missing definition", gate.Requirement{}, "", false},
+		{"missing source", gate.Requirement{Prometheus: &gate.PrometheusDefinition{Source: "removed", Query: expr}}, "", false},
+		{"private source", gate.Requirement{Prometheus: &gate.PrometheusDefinition{Source: "internal", Query: expr}}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			link := sources.QueryURL(tc.req)
+			if !tc.wantLink {
+				if link != nil {
+					t.Errorf("unexpected viewer link %q", *link)
+				}
+				return
+			}
+			if link == nil {
+				t.Fatal("missing viewer link")
+			}
+			viewer, err := url.Parse(*link)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if viewer.Scheme != "https" || viewer.Host != "metrics.example.com" || viewer.Path != "/tenant/prod/query" {
+				t.Errorf("viewer location = %v", viewer)
+			}
+			params := viewer.Query()
+			if params.Get("g0.expr") != expr || params.Get("g0.tab") != "table" ||
+				params.Get("g0.moment_input") != tc.wantMoment || params.Has("g0.moment_input") != (tc.wantMoment != "") {
+				t.Errorf("viewer parameters = %v", params)
+			}
+		})
 	}
 }

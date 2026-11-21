@@ -19,12 +19,19 @@ kind: GateSourceConfig
 sources:
   production:
     prometheus:
-      url: https://prometheus.example.com
+      url: https://prometheus.monitoring.svc:9090
+      publicUrl: https://metrics.example.com/prometheus
       evaluationInterval: 15s
       timeout: 5s
       maximumConcurrency: 4
       bearerTokenFile: /var/run/slipramp/gates/token
 ```
+
+Set the optional `publicUrl` to the base URL users visit for this Prometheus
+source, including any path prefix. **Open in Prometheus** on a Run or Promotion
+opens Table view using the user's own browser access. The link uses the Gate's
+observation time when available and opens a live query otherwise. A released
+Gate uses the source and expression saved at release.
 
 The Server evaluates one query per unique normalized definition, shares the
 result across all waiting subjects, and bounds concurrent requests separately

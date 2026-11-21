@@ -942,6 +942,10 @@ export type GateRequirement = {
   title?: string;
   state: GateRequirementState;
   /**
+   * Opens the active or released PromQL in the configured viewer at the observation time, when available.
+   */
+  queryUrl?: string;
+  /**
    * Digest of the active or released Gate definition.
    */
   definitionDigest?: string;

@@ -159,9 +159,7 @@ SELECT
     requirements.overrides,
     COALESCE(requirements.release_definition_digest, active_gate.definition_digest, '')::text AS definition_digest,
     COALESCE(COALESCE(active_gate.definition, historical_gate.definition)->'metadata'->>'title', '')::text AS title,
-    (
-        COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus'->'condition'
-    )::jsonb AS condition,
+    (COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus')::jsonb AS prometheus,
     requirements.released_at,
     requirements.release_observed_value,
     observation.value AS observed_value,
@@ -206,7 +204,7 @@ type ListGateRequirementEvidenceRow struct {
 	Overrides             []byte
 	DefinitionDigest      string
 	Title                 string
-	Condition             []byte
+	Prometheus            []byte
 	ReleasedAt            pgtype.Timestamptz
 	ReleaseObservedValue  *float64
 	ObservedValue         *float64
@@ -233,7 +231,7 @@ func (q *Queries) ListGateRequirementEvidence(ctx context.Context, arg ListGateR
 			&i.Overrides,
 			&i.DefinitionDigest,
 			&i.Title,
-			&i.Condition,
+			&i.Prometheus,
 			&i.ReleasedAt,
 			&i.ReleaseObservedValue,
 			&i.ObservedValue,

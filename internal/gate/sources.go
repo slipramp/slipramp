@@ -29,6 +29,7 @@ type Source struct {
 
 type PrometheusSource struct {
 	URL                string
+	PublicURL          string
 	EvaluationInterval time.Duration
 	Timeout            time.Duration
 	MaximumConcurrency int
@@ -44,6 +45,39 @@ type TLSConfig struct {
 
 func (s SourceSet) Names() []string {
 	return slices.Sorted(maps.Keys(s))
+}
+
+// QueryURL opens the requirement's expression in its source's browser-facing viewer.
+func (s SourceSet) QueryURL(requirement Requirement) *string {
+	definition := requirement.Prometheus
+	if definition == nil || requirement.State == RequirementStopped {
+		return nil
+	}
+	publicURL := s[definition.Source].Prometheus.PublicURL
+	if publicURL == "" {
+		return nil
+	}
+	base, err := validatePrometheusURL(publicURL)
+	if err != nil {
+		return nil
+	}
+	viewer := base.JoinPath("query")
+	params := viewer.Query()
+	params.Set("g0.expr", definition.Query)
+	params.Set("g0.tab", "table")
+
+	evaluatedAt := requirement.EvaluatedAt
+	if evaluatedAt == nil && requirement.State == RequirementReleased && len(requirement.Overrides) > 0 {
+		last := requirement.Overrides[len(requirement.Overrides)-1]
+		if last.DefinitionDigest == requirement.DefinitionDigest {
+			evaluatedAt = last.EvaluatedAt
+		}
+	}
+	if evaluatedAt != nil {
+		params.Set("g0.moment_input", evaluatedAt.UTC().Format("2006-01-02T15:04:05.000Z"))
+	}
+	viewer.RawQuery = params.Encode()
+	return new(viewer.String())
 }
 
 func (s SourceSet) Validate() error {
@@ -63,6 +97,11 @@ func (s PrometheusSource) validate() error {
 	parsed, err := validatePrometheusURL(s.URL)
 	if err != nil {
 		return err
+	}
+	if s.PublicURL != "" {
+		if _, err := validatePrometheusURL(s.PublicURL); err != nil {
+			return fmt.Errorf("publicUrl: %w", err)
+		}
 	}
 	if s.EvaluationInterval <= 0 {
 		return fmt.Errorf("prometheus evaluation interval must be positive")

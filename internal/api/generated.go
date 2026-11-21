@@ -2774,8 +2774,11 @@ type GateRequirement struct {
 	Operator    *GateOperator `json:"operator,omitempty"`
 
 	// Overrides Operator decisions in chronological order. The latest applies when its digest matches the definition.
-	Overrides  *[]GateOverride `json:"overrides,omitempty"`
-	ReleasedAt *time.Time      `json:"releasedAt,omitempty"`
+	Overrides *[]GateOverride `json:"overrides,omitempty"`
+
+	// QueryURL Opens the active or released PromQL in the configured viewer at the observation time, when available.
+	QueryURL   *string    `json:"queryUrl,omitempty"`
+	ReleasedAt *time.Time `json:"releasedAt,omitempty"`
 
 	// State Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 	State GateRequirementState `json:"state"`

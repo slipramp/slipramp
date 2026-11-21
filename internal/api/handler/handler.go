@@ -8,6 +8,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -34,6 +35,7 @@ type Handler struct {
 	inbox                    InboxService
 	notifications            NotificationService
 	runs                     RunService
+	gateSources              gate.SourceSet
 	gateOverrides            GateOverrideStore
 	gateEvaluatorProcessID   uuid.UUID
 	artifacts                ArtifactService
@@ -86,6 +88,7 @@ type Dependencies struct {
 	Inbox                    InboxService
 	Notifications            NotificationService
 	Runs                     RunService
+	GateSources              gate.SourceSet
 	GateOverrides            GateOverrideStore
 	GateEvaluatorProcessID   uuid.UUID
 	Artifacts                ArtifactService
@@ -126,6 +129,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		inbox:                    dependencies.Inbox,
 		notifications:            dependencies.Notifications,
 		runs:                     dependencies.Runs,
+		gateSources:              dependencies.GateSources,
 		gateOverrides:            dependencies.GateOverrides,
 		gateEvaluatorProcessID:   dependencies.GateEvaluatorProcessID,
 		artifacts:                dependencies.Artifacts,

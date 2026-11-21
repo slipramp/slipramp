@@ -32,6 +32,7 @@ type sourceFileSource struct {
 
 type sourceFilePrometheus struct {
 	URL                string         `yaml:"url"`
+	PublicURL          string         `yaml:"publicUrl,omitempty"`
 	EvaluationInterval *string        `yaml:"evaluationInterval,omitempty"`
 	Timeout            *string        `yaml:"timeout,omitempty"`
 	MaximumConcurrency *int           `yaml:"maximumConcurrency,omitempty"`
@@ -104,6 +105,7 @@ func DecodeSourceFile(input io.Reader) (SourceSet, error) {
 
 		prometheus := PrometheusSource{
 			URL:                encoded.URL,
+			PublicURL:          encoded.PublicURL,
 			EvaluationInterval: evaluationInterval,
 			Timeout:            timeout,
 			MaximumConcurrency: maximumConcurrency,

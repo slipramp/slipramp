@@ -257,14 +257,21 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		ArgoCDUIURLs: map[string]string{"prod": "https://argocd.example.com"},
 	}}
 
-	body, err := promotionResponse(
-		promotion.PromotionReview{Promotion: record},
-		nil,
-		integrations,
-		nil,
-	)
+	h := newHandler(Dependencies{
+		KargoIntegrations: integrations,
+		GateSources:       gate.SourceSet{"prod": {Prometheus: gate.PrometheusSource{PublicURL: "https://metrics.example.com"}}},
+	})
+	gates := gate.Summary{{
+		Name: "healthy", State: gate.RequirementUnevaluated,
+		Prometheus: &gate.PrometheusDefinition{Source: "prod", Query: "up"},
+	}}
+	body, err := h.promotionResponse(promotion.PromotionReview{Promotion: record}, nil, gates)
 	if err != nil {
 		t.Fatalf("promotionResponse() error = %v", err)
+	}
+	if len(body.Gates.Requirements) != 1 || body.Gates.Requirements[0].QueryURL == nil ||
+		*body.Gates.Requirements[0].QueryURL != "https://metrics.example.com/query?g0.expr=up&g0.tab=table" {
+		t.Errorf("Promotion Gate viewer = %#v", body.Gates)
 	}
 	if body.KargoURL != nil {
 		t.Errorf("undispatched operator Promotion KargoURL = %q", *body.KargoURL)
@@ -276,10 +283,9 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 
 	uid := "promotion-uid"
 	record.KargoExecution.PromotionUID = &uid
-	body, err = promotionResponse(
+	body, err = h.promotionResponse(
 		promotion.PromotionReview{Promotion: record},
 		nil,
-		integrations,
 		nil,
 	)
 	if err != nil {
@@ -315,9 +321,8 @@ func TestPromotionResponseOmitsUnavailableReviewContext(t *testing.T) {
 	}
 	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
 
-	body, err := promotionResponse(
+	body, err := (&Handler{}).promotionResponse(
 		promotion.PromotionReview{Promotion: record},
-		nil,
 		nil,
 		nil,
 	)

@@ -15,6 +15,9 @@ data:
       {{ $name }}:
         prometheus:
           url: {{ $source.prometheus.url | quote }}
+          {{- with $source.prometheus.publicUrl }}
+          publicUrl: {{ . | quote }}
+          {{- end }}
           {{- with $source.prometheus.evaluationInterval }}
           evaluationInterval: {{ . | quote }}
           {{- end }}

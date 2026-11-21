@@ -189,7 +189,8 @@ gates_checksum_changed=$(grep -E 'checksum/gates:' "$test_directory/server-gates
 test "$gates_checksum_default" != "$gates_checksum_changed" || fail "Gate source change did not change the rollout checksum"
 assert_contains "$test_directory/server-gates.yaml" 'name: SLIPRAMP_GATE_SOURCES_FILE'
 assert_contains "$test_directory/server-gates.yaml" 'kind: GateSourceConfig'
-assert_contains "$test_directory/server-gates.yaml" 'url: "https://prometheus.example.com"'
+assert_contains "$test_directory/server-gates.yaml" 'url: "https://prometheus.monitoring.svc:9090"'
+assert_contains "$test_directory/server-gates.yaml" 'publicUrl: "https://metrics.example.com/prometheus"'
 assert_contains "$test_directory/server-gates.yaml" '/var/run/slipramp/gate-sources/production/bearer-token'
 assert_contains "$test_directory/server-gates.yaml" '/var/run/slipramp/gate-sources/production/ca.crt'
 assert_contains "$test_directory/server-gates.yaml" 'secretName: prometheus-gate'

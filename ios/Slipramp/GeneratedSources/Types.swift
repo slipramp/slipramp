@@ -1749,6 +1749,10 @@ internal enum Components {
             internal var title: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GateRequirement/state`.
             internal var state: Components.Schemas.GateRequirementState
+            /// Opens the active or released PromQL in the configured viewer at the observation time, when available.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/queryUrl`.
+            internal var queryUrl: Swift.String?
             /// Digest of the active or released Gate definition.
             ///
             /// - Remark: Generated from `#/components/schemas/GateRequirement/definitionDigest`.
@@ -1781,6 +1785,7 @@ internal enum Components {
             ///   - name:
             ///   - title:
             ///   - state:
+            ///   - queryUrl: Opens the active or released PromQL in the configured viewer at the observation time, when available.
             ///   - definitionDigest: Digest of the active or released Gate definition.
             ///   - overrides: Operator decisions in chronological order. The latest applies when its digest matches the definition.
             ///   - value: Finite observed value from current or immutable release evidence.
@@ -1793,6 +1798,7 @@ internal enum Components {
                 name: Components.Schemas.CatalogName,
                 title: Swift.String? = nil,
                 state: Components.Schemas.GateRequirementState,
+                queryUrl: Swift.String? = nil,
                 definitionDigest: Swift.String? = nil,
                 overrides: [Components.Schemas.GateOverride]? = nil,
                 value: Swift.Double? = nil,
@@ -1805,6 +1811,7 @@ internal enum Components {
                 self.name = name
                 self.title = title
                 self.state = state
+                self.queryUrl = queryUrl
                 self.definitionDigest = definitionDigest
                 self.overrides = overrides
                 self.value = value
@@ -1818,6 +1825,7 @@ internal enum Components {
                 case name
                 case title
                 case state
+                case queryUrl
                 case definitionDigest
                 case overrides
                 case value

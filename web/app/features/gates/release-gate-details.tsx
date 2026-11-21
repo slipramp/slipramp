@@ -1,4 +1,5 @@
-import { Badge, Button, Code, Stack, Table, Text, Textarea } from "@mantine/core";
+import { Anchor, Badge, Button, Code, Group, Stack, Table, Text, Textarea } from "@mantine/core";
+import { IconExternalLink } from "@tabler/icons-react";
 import { Fragment } from "react";
 import { Form, useNavigation } from "react-router";
 
@@ -144,6 +145,20 @@ function GateRequirementRow({
           <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
             {requirement.name}
           </Text>
+        ) : null}
+        {requirement.queryUrl ? (
+          <Anchor
+            href={requirement.queryUrl}
+            rel="noreferrer"
+            size="xs"
+            target="_blank"
+            aria-label={`Open in Prometheus for ${requirement.title ?? requirement.name}`}
+          >
+            <Group component="span" gap={4} wrap="nowrap">
+              Open in Prometheus
+              <IconExternalLink aria-hidden size={13} />
+            </Group>
+          </Anchor>
         ) : null}
       </Table.Td>
       <Table.Td>

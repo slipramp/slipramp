@@ -599,7 +599,7 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 			body.EligiblePosition = detail.EligiblePosition
 			body.SchedulingSnapshotAt = &detail.SnapshotAt
 		}
-		body.Gates = gateSummaryResponse(gates[record.ID])
+		body.Gates = h.gateSummaryResponse(gates[record.ID])
 
 		items = append(items, body)
 	}

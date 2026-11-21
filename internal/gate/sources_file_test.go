@@ -42,6 +42,7 @@ kind: GateSourceConfig
   production:
     prometheus:
       url: https://prometheus.example.com/metrics
+      publicUrl: https://metrics.example.com/prometheus
       evaluationInterval: 30s
       timeout: 8s
       maximumConcurrency: 7
@@ -53,6 +54,7 @@ kind: GateSourceConfig
 `,
 			want: gate.SourceSet{"production": {Prometheus: gate.PrometheusSource{
 				URL:                "https://prometheus.example.com/metrics",
+				PublicURL:          "https://metrics.example.com/prometheus",
 				EvaluationInterval: 30 * time.Second,
 				Timeout:            8 * time.Second,
 				MaximumConcurrency: 7,
@@ -145,6 +147,13 @@ func TestDecodeSourceFileRejectsInvalidConfiguration(t *testing.T) {
 				return strings.Replace(input, "prometheus:9090", "prometheus:9090?tenant=one", 1)
 			},
 			wantError: "credentials, a query, or a fragment",
+		},
+		{
+			name: "public URL with credentials",
+			configure: func(input string) string {
+				return input + "      publicUrl: https://user:password@metrics.example.com\n"
+			},
+			wantError: "publicUrl: prometheus URL must not contain credentials",
 		},
 		{
 			name: "invalid interval",

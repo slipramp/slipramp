@@ -94,10 +94,10 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	waiting := summaries[record.ID]
-	wantCondition := catalog.Gates[0].Spec.Prometheus.Condition
+	wantDefinition := catalog.Gates[0].Spec.Prometheus
 	if waiting.State() != gate.SummaryWaiting || len(waiting) != 2 ||
 		waiting[0].Name != "network-idle" || waiting[0].State != gate.RequirementPassing ||
-		waiting[0].Condition == nil || *waiting[0].Condition != wantCondition ||
+		waiting[0].Prometheus == nil || *waiting[0].Prometheus != wantDefinition ||
 		waiting[1].Name != "window" || waiting[1].State != gate.RequirementUnevaluated {
 		t.Fatalf("partial evidence was latched or reordered: %#v", waiting)
 	}
@@ -150,8 +150,8 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	}
 	projections := summaries[record.ID]
 	if projections.State() != gate.SummaryReleased || len(projections) != 2 || projections[0].ReleasedAt == nil ||
-		!projections[0].ReleasedAt.Equal(pollAt) || projections[0].Condition == nil ||
-		*projections[0].Condition != wantCondition || projections[0].Value == nil ||
+		!projections[0].ReleasedAt.Equal(pollAt) || projections[0].Prometheus == nil ||
+		*projections[0].Prometheus != wantDefinition || projections[0].Value == nil ||
 		*projections[0].Value != observedValue || projections[0].EvaluatedAt == nil ||
 		!projections[0].EvaluatedAt.Equal(observation.EvaluatedAt) {
 		t.Errorf("released Promotion Gate projection = %#v", projections)
