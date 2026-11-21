@@ -31,25 +31,18 @@ INSERT INTO repository_commits (
 )
 SELECT
     sqlc.arg(repository_id),
-    commits.sha,
-    titles.title,
-    authors.author_name,
-    author_times.authored_at,
-    commit_times.committed_at
-FROM unnest(sqlc.arg(shas)::text[])
-    WITH ORDINALITY AS commits(sha, ordinal)
-JOIN unnest(sqlc.arg(titles)::text[])
-    WITH ORDINALITY AS titles(title, ordinal)
-  USING (ordinal)
-JOIN unnest(sqlc.arg(author_names)::text[])
-    WITH ORDINALITY AS authors(author_name, ordinal)
-  USING (ordinal)
-JOIN unnest(sqlc.arg(authored_ats)::timestamptz[])
-    WITH ORDINALITY AS author_times(authored_at, ordinal)
-  USING (ordinal)
-JOIN unnest(sqlc.arg(committed_ats)::timestamptz[])
-    WITH ORDINALITY AS commit_times(committed_at, ordinal)
-  USING (ordinal)
+    history.sha,
+    history.title,
+    history.author_name,
+    history.authored_at,
+    history.committed_at
+FROM ROWS FROM (
+    unnest(sqlc.arg(shas)::text[]),
+    unnest(sqlc.arg(titles)::text[]),
+    unnest(sqlc.arg(author_names)::text[]),
+    unnest(sqlc.arg(authored_ats)::timestamptz[]),
+    unnest(sqlc.arg(committed_ats)::timestamptz[])
+) AS history(sha, title, author_name, authored_at, committed_at)
 ON CONFLICT (repository_id, sha) DO UPDATE
 SET title = EXCLUDED.title,
     author_name = EXCLUDED.author_name,
@@ -57,14 +50,6 @@ SET title = EXCLUDED.title,
     committed_at = EXCLUDED.committed_at;
 
 -- name: ListRepositoryCommits :many
-WITH requested AS (
-    SELECT repository_ids.repository_id, commit_shas.sha
-    FROM unnest(sqlc.arg(repository_ids)::uuid[])
-        WITH ORDINALITY AS repository_ids(repository_id, ordinal)
-    JOIN unnest(sqlc.arg(commit_shas)::text[])
-        WITH ORDINALITY AS commit_shas(sha, ordinal)
-      USING (ordinal)
-)
 SELECT
     requested.repository_id::uuid AS repository_id,
     requested.sha::text AS sha,
@@ -74,7 +59,10 @@ SELECT
     repository_commits.committed_at,
     repositories.clone_url,
     repositories.commit_url_template
-FROM requested
+FROM ROWS FROM (
+    unnest(sqlc.arg(repository_ids)::uuid[]),
+    unnest(sqlc.arg(commit_shas)::text[])
+) AS requested(repository_id, sha)
 JOIN repositories ON repositories.id = requested.repository_id
 LEFT JOIN repository_commits
   ON repository_commits.repository_id = requested.repository_id

@@ -10,14 +10,13 @@ import (
 	"github.com/google/uuid"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
 func TestSchedulerCreatesDueRunWithUTCSource(t *testing.T) {
 	start := time.Date(2026, time.November, 3, 2, 59, 0, 0, time.UTC)
 	clock := clocktesting.NewFakeClock(start)
-	catalogs := &schedulerCatalog{target: scheduledTarget("0 3 * * *")}
+	catalogs := &schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")}
 	runs := &recordingRunCreator{}
 	scheduler := testScheduler(catalogs, runs, clock)
 
@@ -61,7 +60,7 @@ func TestSchedulerCreatesDueRunWithUTCSource(t *testing.T) {
 func TestSchedulerSkipsOverlapWithoutRetryingOccurrence(t *testing.T) {
 	start := time.Date(2026, time.November, 3, 2, 59, 0, 0, time.UTC)
 	clock := clocktesting.NewFakeClock(start)
-	catalogs := &schedulerCatalog{target: scheduledTarget("0 3 * * *")}
+	catalogs := &schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")}
 	runs := &recordingRunCreator{err: run.ErrScheduleOverlap}
 	scheduler := testScheduler(catalogs, runs, clock)
 
@@ -85,7 +84,7 @@ func TestSchedulerDoesNotRetryCreationFailure(t *testing.T) {
 	clock := clocktesting.NewFakeClock(start)
 	runs := &recordingRunCreator{err: run.ErrCatalogNotFound}
 	scheduler := testScheduler(
-		&schedulerCatalog{target: scheduledTarget("0 3 * * *")},
+		&schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")},
 		runs,
 		clock,
 	)
@@ -104,7 +103,7 @@ func TestSchedulerDoesNotCatchUpAfterStartup(t *testing.T) {
 	clock := clocktesting.NewFakeClock(start)
 	runs := &recordingRunCreator{}
 	scheduler := testScheduler(
-		&schedulerCatalog{target: scheduledTarget("0 3 * * *")},
+		&schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")},
 		runs,
 		clock,
 	)
@@ -125,16 +124,14 @@ func TestSchedulerDoesNotCatchUpAfterStartup(t *testing.T) {
 func TestSchedulerRecalculatesAfterScheduleChange(t *testing.T) {
 	start := time.Date(2026, time.November, 3, 2, 0, 0, 0, time.UTC)
 	clock := clocktesting.NewFakeClock(start)
-	catalogs := &schedulerCatalog{target: scheduledTarget("0 3 * * *")}
+	catalogs := &schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")}
 	runs := &recordingRunCreator{}
 	scheduler := testScheduler(catalogs, runs, clock)
 
 	mustEvaluate(t, scheduler)
 	clock.Step(15 * time.Minute)
-	catalogs.target.CatalogRevisionID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1402")
-	action := catalogs.target.Target.Spec.Actions["preview"]
-	action.Triggers[0].Schedule.Cron = "30 2 * * *"
-	catalogs.target.Target.Spec.Actions["preview"] = action
+	catalogs.definitions[0].CatalogRevisionID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1402")
+	catalogs.definitions[0].Cron = "30 2 * * *"
 	mustEvaluate(t, scheduler)
 
 	clock.Step(15 * time.Minute)
@@ -148,15 +145,12 @@ func TestSchedulerRecalculatesAfterScheduleChange(t *testing.T) {
 func TestSchedulerDropsRemovedSchedule(t *testing.T) {
 	start := time.Date(2026, time.November, 3, 2, 59, 0, 0, time.UTC)
 	clock := clocktesting.NewFakeClock(start)
-	catalogs := &schedulerCatalog{target: scheduledTarget("0 3 * * *")}
+	catalogs := &schedulerCatalog{definitions: scheduledDefinitions("0 3 * * *")}
 	runs := &recordingRunCreator{}
 	scheduler := testScheduler(catalogs, runs, clock)
 
 	mustEvaluate(t, scheduler)
-	action := catalogs.target.Target.Spec.Actions["preview"]
-	action.Triggers = nil
-	catalogs.target.Target.Spec.Actions["preview"] = action
-	catalogs.target.CatalogRevisionID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1403")
+	catalogs.definitions = nil
 	clock.Step(time.Minute)
 	mustEvaluate(t, scheduler)
 	if len(runs.requests) != 0 {
@@ -166,38 +160,20 @@ func TestSchedulerDropsRemovedSchedule(t *testing.T) {
 
 var testTargetID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400")
 
-func scheduledTarget(expression string) catalog.TargetSummary {
-	return catalog.TargetSummary{
-		ID:                testTargetID,
-		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1401"),
-		Target: catalog.Target{
-			Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
-				"preview": {
-					Command: []string{"preview"},
-					Triggers: []catalog.Trigger{{
-						Name:       "nightly-preview",
-						Schedule:   &catalog.ScheduleTrigger{Cron: expression},
-						Parameters: map[string]any{"refresh": true},
-					}},
-				},
-			}},
-		},
-	}
+func scheduledDefinitions(expression string) []Definition {
+	return []Definition{{
+		TargetID: testTargetID, CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1401"),
+		ActionName: "preview", TriggerName: "nightly-preview", Cron: expression,
+		Parameters: map[string]any{"refresh": true},
+	}}
 }
 
 type schedulerCatalog struct {
-	target catalog.TargetSummary
+	definitions []Definition
 }
 
-func (s *schedulerCatalog) ListTargets(
-	_ context.Context,
-	filter catalog.TargetListFilter,
-) (catalog.TargetList, error) {
-	if filter.Offset > 0 {
-		return catalog.TargetList{Items: []catalog.TargetSummary{}, Total: 1}, nil
-	}
-
-	return catalog.TargetList{Items: []catalog.TargetSummary{s.target}, Total: 1}, nil
+func (s *schedulerCatalog) ListScheduledTriggers(context.Context) ([]Definition, error) {
+	return s.definitions, nil
 }
 
 type recordingRunCreator struct {

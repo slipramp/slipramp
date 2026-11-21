@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -85,6 +86,50 @@ func TestRunCapacityIntegration(t *testing.T) {
 				t.Errorf("scheduling snapshots = %#v", snapshots)
 			}
 		})
+	}
+}
+
+func TestSchedulingSnapshotRanksUnrequestedRunsInFIFOOrder(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	first, second := createCapacityTestRuns(t, ctx, database)
+	_, err := database.pool.Exec(ctx, "UPDATE runs SET created_at = $1 WHERE id = $2", first.CreatedAt, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Compare(first.ID[:], second.ID[:]) > 0 {
+		first, second = second, first
+	}
+
+	snapshot := func() run.SchedulingSnapshot {
+		t.Helper()
+		rows, err := database.GetRunSchedulingSnapshots(ctx, []uuid.UUID{second.ID}, []byte(`{"colo":2}`), []byte(`{}`))
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("load scheduling snapshot: rows=%v error=%v", rows, err)
+		}
+		return rows[0]
+	}
+	if position := snapshot().EligiblePosition; position == nil || *position != 2 {
+		t.Fatalf("later Run in timestamp tie: position = %v, want 2", position)
+	}
+
+	// An active Run in another Cluster consumes Target capacity but no local Cluster or Placement slots.
+	remote := second
+	remote.ID = uuid.New()
+	remote.ClusterName = "remote"
+	remote.Snapshot.Placement.ClusterName = remote.ClusterName
+	if _, err := database.CreateRun(ctx, remote, nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.ClaimQueuedRun(ctx, remote.ClusterName, testSchedulingCapacity(), uuid.Nil, remote.CreatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := snapshot()
+	if blocked.BlockingRunID == nil || *blocked.BlockingRunID != remote.ID || blocked.EligiblePosition != nil ||
+		blocked.ClusterActiveRuns != 0 || blocked.PlacementActiveRuns != 0 {
+		t.Fatalf("cross-Cluster Target blocker = %#v", blocked)
 	}
 }
 

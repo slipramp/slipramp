@@ -452,103 +452,60 @@ WHERE runs.id = candidate.id
 RETURNING runs.*;
 
 -- name: GetRunSchedulingSnapshots :many
-SELECT
-    queued.id,
-    NOT EXISTS (
-        SELECT 1
-        FROM run_gates
-        WHERE run_gates.run_id = queued.id
-          AND run_gates.released_at IS NULL
-    ) AS gates_released,
-    blocker.id AS blocking_run_id,
-    (
-        SELECT count(*)::bigint
-        FROM runs AS active
-        WHERE active.cluster_name = queued.cluster_name
-          AND active.phase IN ('assigned', 'preparing', 'running')
-    ) AS cluster_active_runs,
-    (
-        SELECT count(*)::bigint
-        FROM runs AS active
-        WHERE active.cluster_name = queued.cluster_name
-          AND active.placement_name = queued.placement_name
-          AND active.phase IN ('assigned', 'preparing', 'running')
-    ) AS placement_active_runs,
-    CAST(CASE
-        WHEN queued.review_state IN ('not-required', 'approved')
-          AND NOT EXISTS (
-              SELECT 1
-              FROM run_gates
-              WHERE run_gates.run_id = queued.id
-                AND run_gates.released_at IS NULL
-          )
-          AND target_activity.active_runs < target_state.maximum_active_runs
-          AND (
-              SELECT count(*)
-              FROM runs AS active
-              WHERE active.cluster_name = queued.cluster_name
-                AND active.phase IN ('assigned', 'preparing', 'running')
-          ) < (sqlc.arg(cluster_maximum_active_runs)::jsonb ->> queued.cluster_name)::bigint
-          AND (
-              NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? queued.placement_name)
-              OR (
-                  SELECT count(*)
-                  FROM runs AS active
-                  WHERE active.cluster_name = queued.cluster_name
-                    AND active.placement_name = queued.placement_name
-                    AND active.phase IN ('assigned', 'preparing', 'running')
-              ) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
-          )
-        THEN (
-            SELECT count(*)::integer + 1
-            FROM runs AS older
-            JOIN targets AS older_target_state
-              ON older_target_state.id = older.target_id
-            WHERE older.cluster_name = queued.cluster_name
-              AND older.phase = 'queued'
-              AND older.review_state IN ('not-required', 'approved')
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM run_gates
-                  WHERE run_gates.run_id = older.id
-                    AND run_gates.released_at IS NULL
-              )
-              AND (older.created_at, older.id) < (queued.created_at, queued.id)
-              AND (
-                  SELECT count(*)
-                  FROM runs AS active
-                  WHERE active.target_id = older.target_id
-                    AND active.phase IN ('assigned', 'preparing', 'running')
-              ) < older_target_state.maximum_active_runs
-              AND (
-                  NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? older.placement_name)
-                  OR (
-                      SELECT count(*)
-                      FROM runs AS active
-                      WHERE active.cluster_name = older.cluster_name
-                        AND active.placement_name = older.placement_name
-                        AND active.phase IN ('assigned', 'preparing', 'running')
-                  ) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> older.placement_name)::bigint
-              )
-        )
-        ELSE 0
-    END AS integer) AS eligible_position
-FROM runs AS queued
-JOIN targets AS target_state
-  ON target_state.id = queued.target_id
-CROSS JOIN LATERAL (
-    SELECT count(*)::integer AS active_runs
-    FROM runs AS active
-    WHERE active.target_id = queued.target_id
-      AND active.phase IN ('assigned', 'preparing', 'running')
-) AS target_activity
-LEFT JOIN LATERAL (
-    SELECT active.id
-    FROM runs AS active
-    WHERE active.target_id = queued.target_id
-      AND active.phase IN ('assigned', 'preparing', 'running')
-    ORDER BY active.assigned_at, active.id
-    LIMIT 1
-) AS blocker ON target_activity.active_runs >= target_state.maximum_active_runs
-WHERE queued.id = ANY(sqlc.arg(run_ids)::uuid[])
-  AND queued.phase = 'queued';
+WITH active AS (
+    SELECT id, target_id, cluster_name, placement_name, assigned_at
+    FROM runs
+    WHERE phase IN ('assigned', 'preparing', 'running')
+), target_activity AS (
+    -- A Target shares one capacity limit across all Clusters.
+    SELECT target_id, count(*) AS total, (array_agg(id ORDER BY assigned_at, id))[1] AS first_run_id
+    FROM active
+    GROUP BY target_id
+), cluster_activity AS (
+    SELECT cluster_name, count(*) AS total
+    FROM active
+    GROUP BY cluster_name
+), placement_activity AS (
+    SELECT cluster_name, placement_name, count(*) AS total
+    FROM active
+    GROUP BY cluster_name, placement_name
+), requested_clusters AS (
+    -- Later Runs cannot affect the requested FIFO positions.
+    SELECT cluster_name, max(created_at) AS latest_requested_at
+    FROM runs
+    WHERE id = ANY(sqlc.arg(run_ids)::uuid[]) AND phase = 'queued'
+    GROUP BY cluster_name
+), queue AS (
+    SELECT queued.id, queued.cluster_name, queued.placement_name, queued.created_at, queued.review_state,
+           NOT EXISTS (
+               SELECT 1 FROM run_gates WHERE run_id = queued.id AND released_at IS NULL
+           ) AS gates_released,
+           CASE WHEN target_load.total >= target.maximum_active_runs THEN target_load.first_run_id END AS blocking_run_id,
+           coalesce(cluster_load.total, 0)::bigint AS cluster_active_runs,
+           coalesce(placement_load.total, 0)::bigint AS placement_active_runs
+    FROM runs AS queued
+    JOIN requested_clusters AS requested ON requested.cluster_name = queued.cluster_name
+                                        AND queued.created_at <= requested.latest_requested_at
+    JOIN targets AS target ON target.id = queued.target_id
+    LEFT JOIN target_activity AS target_load ON target_load.target_id = queued.target_id
+    LEFT JOIN cluster_activity AS cluster_load ON cluster_load.cluster_name = queued.cluster_name
+    LEFT JOIN placement_activity AS placement_load ON placement_load.cluster_name = queued.cluster_name
+                                                  AND placement_load.placement_name = queued.placement_name
+    WHERE queued.phase = 'queued'
+), eligibility AS (
+    SELECT queue.*,
+           review_state IN ('not-required', 'approved') AND gates_released AND blocking_run_id IS NULL
+           AND cluster_active_runs < (sqlc.arg(cluster_maximum_active_runs)::jsonb ->> cluster_name)::bigint
+           AND (NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? placement_name)
+                OR placement_active_runs < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> placement_name)::bigint)
+           AS eligible
+    FROM queue
+), ranked AS (
+    SELECT eligibility.*,
+           count(*) FILTER (WHERE eligible) OVER (PARTITION BY cluster_name ORDER BY created_at, id) AS position
+    FROM eligibility
+)
+SELECT id, gates_released, blocking_run_id::uuid, cluster_active_runs, placement_active_runs,
+       (CASE WHEN eligible THEN position ELSE 0 END)::integer AS eligible_position
+FROM ranked
+WHERE id = ANY(sqlc.arg(run_ids)::uuid[]);

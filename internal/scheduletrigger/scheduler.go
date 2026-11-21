@@ -8,13 +8,11 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
 	"k8s.io/utils/clock"
 
-	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cronexpr"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -22,7 +20,7 @@ import (
 const DefaultEvaluationInterval = 5 * time.Second
 
 type Catalog interface {
-	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
+	ListScheduledTriggers(context.Context) ([]Definition, error)
 }
 
 type RunCreator interface {
@@ -44,15 +42,19 @@ type scheduleKey struct {
 	triggerName string
 }
 
-type scheduleDefinition struct {
-	key               scheduleKey
-	catalogRevisionID uuid.UUID
-	cron              string
-	parameters        map[string]any
+// Definition identifies a scheduled Action trigger in an active catalog revision.
+type Definition struct {
+	TargetID          uuid.UUID
+	ActionName        string
+	TriggerName       string
+	CatalogRevisionID uuid.UUID
+	Cron              string
+	Parameters        map[string]any
 }
 
 type scheduleState struct {
-	definition scheduleDefinition
+	revisionID uuid.UUID
+	cron       string
 	schedule   cronexpr.Schedule
 	next       time.Time
 }
@@ -114,38 +116,37 @@ func (s *Scheduler) evaluateAndLog(ctx context.Context) {
 // It is exported so deterministic tests do not need wall-clock sleeps.
 func (s *Scheduler) Evaluate(ctx context.Context) error {
 	now := s.clock.Now().UTC()
-	definitions, err := s.listDefinitions(ctx)
+	definitions, err := s.catalog.ListScheduledTriggers(ctx)
 	if err != nil {
 		return err
 	}
 
 	seen := make(map[scheduleKey]struct{}, len(definitions))
 	for _, definition := range definitions {
-		seen[definition.key] = struct{}{}
-		state, found := s.states[definition.key]
-		if !found || state.definition.catalogRevisionID != definition.catalogRevisionID ||
-			state.definition.cron != definition.cron {
-			parsed, err := cronexpr.Parse(definition.cron)
+		key := scheduleKey{definition.TargetID, definition.ActionName, definition.TriggerName}
+		seen[key] = struct{}{}
+		state, found := s.states[key]
+		if !found || state.revisionID != definition.CatalogRevisionID || state.cron != definition.Cron {
+			parsed, err := cronexpr.Parse(definition.Cron)
 			if err != nil {
 				return fmt.Errorf("parse active scheduled trigger: %w", err)
 			}
-			s.states[definition.key] = scheduleState{
-				definition: definition,
+			s.states[key] = scheduleState{
+				revisionID: definition.CatalogRevisionID,
+				cron:       definition.Cron,
 				schedule:   parsed,
 				next:       parsed.Next(now),
 			}
 			continue
 		}
 
-		state.definition = definition
 		if state.next.After(now) {
-			s.states[definition.key] = state
 			continue
 		}
 
 		s.createOccurrence(ctx, definition, state.next)
 		state.next = state.schedule.Next(now)
-		s.states[definition.key] = state
+		s.states[key] = state
 	}
 
 	for key := range s.states {
@@ -159,24 +160,24 @@ func (s *Scheduler) Evaluate(ctx context.Context) error {
 
 func (s *Scheduler) createOccurrence(
 	ctx context.Context,
-	definition scheduleDefinition,
+	definition Definition,
 	scheduledAt time.Time,
 ) {
 	idempotencyKey := run.ScheduleOccurrenceIdempotencyKey(
-		definition.key.targetID,
-		definition.key.actionName,
-		definition.key.triggerName,
+		definition.TargetID,
+		definition.ActionName,
+		definition.TriggerName,
 		scheduledAt,
 	)
 	created, err := s.runs.CreateRun(ctx, run.CreateRequest{
-		TargetID:   definition.key.targetID,
-		ActionName: definition.key.actionName,
-		Parameters: maps.Clone(definition.parameters),
+		TargetID:   definition.TargetID,
+		ActionName: definition.ActionName,
+		Parameters: maps.Clone(definition.Parameters),
 		Inputs:     map[string]uuid.UUID{},
 		Source: run.Source{
 			Type: run.SourceTypeSchedule,
 			Schedule: &run.ScheduleRunSource{
-				TriggerName: definition.key.triggerName,
+				TriggerName: definition.TriggerName,
 				ScheduledAt: scheduledAt,
 			},
 		},
@@ -185,9 +186,9 @@ func (s *Scheduler) createOccurrence(
 	if errors.Is(err, run.ErrScheduleOverlap) {
 		s.logger.Info(
 			"scheduled Action occurrence skipped because its previous Run is unfinished",
-			"target", definition.key.targetID,
-			"action", definition.key.actionName,
-			"trigger", definition.key.triggerName,
+			"target", definition.TargetID,
+			"action", definition.ActionName,
+			"trigger", definition.TriggerName,
 			"scheduled_at", scheduledAt,
 		)
 		return
@@ -196,9 +197,9 @@ func (s *Scheduler) createOccurrence(
 		if ctx.Err() == nil {
 			s.logger.Warn(
 				"scheduled Action occurrence could not create Run",
-				"target", definition.key.targetID,
-				"action", definition.key.actionName,
-				"trigger", definition.key.triggerName,
+				"target", definition.TargetID,
+				"action", definition.ActionName,
+				"trigger", definition.TriggerName,
 				"scheduled_at", scheduledAt,
 				"diagnostic", creationDiagnostic(err),
 			)
@@ -209,52 +210,11 @@ func (s *Scheduler) createOccurrence(
 	s.logger.Info(
 		"scheduled Action occurrence created Run",
 		"run", created.ID,
-		"target", definition.key.targetID,
-		"action", definition.key.actionName,
-		"trigger", definition.key.triggerName,
+		"target", definition.TargetID,
+		"action", definition.ActionName,
+		"trigger", definition.TriggerName,
 		"scheduled_at", scheduledAt,
 	)
-}
-
-func (s *Scheduler) listDefinitions(ctx context.Context) ([]scheduleDefinition, error) {
-	definitions := []scheduleDefinition{}
-	var offset int32
-	for {
-		page, err := s.catalog.ListTargets(ctx, catalog.TargetListFilter{
-			Limit:  catalog.MaximumTargetListLimit,
-			Offset: offset,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("list active Targets: %w", err)
-		}
-		for _, target := range page.Items {
-			for _, actionName := range slices.Sorted(maps.Keys(target.Target.Spec.Actions)) {
-				action := target.Target.Spec.Actions[actionName]
-				for _, trigger := range action.Triggers {
-					if trigger.Schedule == nil {
-						continue
-					}
-					definitions = append(definitions, scheduleDefinition{
-						key: scheduleKey{
-							targetID:    target.ID,
-							actionName:  actionName,
-							triggerName: trigger.Name,
-						},
-						catalogRevisionID: target.CatalogRevisionID,
-						cron:              trigger.Schedule.Cron,
-						parameters:        maps.Clone(trigger.Parameters),
-					})
-				}
-			}
-		}
-
-		offset += int32(len(page.Items))
-		if len(page.Items) == 0 || int64(offset) >= page.Total {
-			break
-		}
-	}
-
-	return definitions, nil
 }
 
 func creationDiagnostic(err error) string {

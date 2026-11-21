@@ -187,7 +187,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		gittrigger.WithDeliveryObserver(metrics),
 	)
 	scheduleTriggerScheduler := scheduletrigger.NewScheduler(
-		catalogs,
+		persistence.database,
 		runs,
 		scheduletrigger.DefaultEvaluationInterval,
 		logger,

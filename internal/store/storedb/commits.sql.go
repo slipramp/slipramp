@@ -97,14 +97,6 @@ func (q *Queries) GetRepositoryCommit(ctx context.Context, arg GetRepositoryComm
 }
 
 const listRepositoryCommits = `-- name: ListRepositoryCommits :many
-WITH requested AS (
-    SELECT repository_ids.repository_id, commit_shas.sha
-    FROM unnest($1::uuid[])
-        WITH ORDINALITY AS repository_ids(repository_id, ordinal)
-    JOIN unnest($2::text[])
-        WITH ORDINALITY AS commit_shas(sha, ordinal)
-      USING (ordinal)
-)
 SELECT
     requested.repository_id::uuid AS repository_id,
     requested.sha::text AS sha,
@@ -114,7 +106,10 @@ SELECT
     repository_commits.committed_at,
     repositories.clone_url,
     repositories.commit_url_template
-FROM requested
+FROM ROWS FROM (
+    unnest($1::uuid[]),
+    unnest($2::text[])
+) AS requested(repository_id, sha)
 JOIN repositories ON repositories.id = requested.repository_id
 LEFT JOIN repository_commits
   ON repository_commits.repository_id = requested.repository_id
@@ -311,25 +306,18 @@ INSERT INTO repository_commits (
 )
 SELECT
     $1,
-    commits.sha,
-    titles.title,
-    authors.author_name,
-    author_times.authored_at,
-    commit_times.committed_at
-FROM unnest($2::text[])
-    WITH ORDINALITY AS commits(sha, ordinal)
-JOIN unnest($3::text[])
-    WITH ORDINALITY AS titles(title, ordinal)
-  USING (ordinal)
-JOIN unnest($4::text[])
-    WITH ORDINALITY AS authors(author_name, ordinal)
-  USING (ordinal)
-JOIN unnest($5::timestamptz[])
-    WITH ORDINALITY AS author_times(authored_at, ordinal)
-  USING (ordinal)
-JOIN unnest($6::timestamptz[])
-    WITH ORDINALITY AS commit_times(committed_at, ordinal)
-  USING (ordinal)
+    history.sha,
+    history.title,
+    history.author_name,
+    history.authored_at,
+    history.committed_at
+FROM ROWS FROM (
+    unnest($2::text[]),
+    unnest($3::text[]),
+    unnest($4::text[]),
+    unnest($5::timestamptz[]),
+    unnest($6::timestamptz[])
+) AS history(sha, title, author_name, authored_at, committed_at)
 ON CONFLICT (repository_id, sha) DO UPDATE
 SET title = EXCLUDED.title,
     author_name = EXCLUDED.author_name,

@@ -2,6 +2,8 @@ package store
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/scheduletrigger"
 )
 
 func TestScheduledRunOccurrencePersistenceAndOverlapIntegration(t *testing.T) {
@@ -177,6 +180,72 @@ func TestScheduledRunOccurrencePersistenceAndOverlapIntegration(t *testing.T) {
 	}
 	if len(apiSync.Items) != 1 || apiSync.Items[0].ID != apiRun.ID || apiSync.Total != 1 {
 		t.Errorf("API sync Runs = %#v, want API Run", apiSync)
+	}
+}
+
+func TestListScheduledTriggersIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	at := time.Now().UTC()
+	repositoryID := uuid.New()
+	_, err := database.CreateRepository(ctx, repository.Repository{
+		ID: repositoryID, Name: "schedules", CloneURL: "https://example.com/schedules.git",
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: at,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	refresh := successfulCatalogRefresh(strings.Repeat("a", 40), at, uuid.New())
+	refresh.Revision.Catalog = scheduledRunCatalog()
+	action := refresh.Revision.Catalog.Targets[0].Spec.Actions["sync"]
+	action.Triggers = append(action.Triggers, catalog.Trigger{Name: "on-change", Git: &catalog.GitTrigger{}})
+	refresh.Revision.Catalog.Targets[0].Spec.Actions["sync"] = action
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatal(err)
+	}
+
+	targetID := activeTargetID(t, database, repositoryID, "network")
+	want := func(action, trigger, cron string) scheduletrigger.Definition {
+		return scheduletrigger.Definition{
+			TargetID: targetID, CatalogRevisionID: refresh.Revision.ID,
+			ActionName: action, TriggerName: trigger, Cron: cron, Parameters: gitTriggerParameters("production"),
+		}
+	}
+	expected := []scheduletrigger.Definition{
+		want("preview", "nightly-preview", "0 3 * * *"),
+		want("sync", "nightly-preview", "0 3 * * *"),
+		want("sync", "weekly-preview", "0 9 * * 1"),
+	}
+	got, err := database.ListScheduledTriggers(ctx)
+	if err != nil || !reflect.DeepEqual(got, expected) {
+		t.Fatalf("active schedules = %#v, error %v, want %#v", got, err, expected)
+	}
+
+	// Replacing the Target archives its schedules even though the old catalog still exists.
+	replacement := successfulCatalogRefresh(strings.Repeat("b", 40), at.Add(time.Minute), uuid.New())
+	replacement.Revision.Catalog = scheduledRunCatalog()
+	replacement.Revision.Catalog.Targets[0].Metadata.Name = "storage"
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, replacement); err != nil {
+		t.Fatal(err)
+	}
+	got, err = database.ListScheduledTriggers(ctx)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("replacement schedules = %#v, error %v", got, err)
+	}
+	for _, definition := range got {
+		if definition.TargetID == targetID || definition.CatalogRevisionID != replacement.Revision.ID {
+			t.Fatalf("stale schedule = %#v", definition)
+		}
+	}
+
+	if err := database.RemoveRepository(ctx, repositoryID, at.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	got, err = database.ListScheduledTriggers(ctx)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("schedules after removal = %#v, error %v", got, err)
 	}
 }
 

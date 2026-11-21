@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func openIntegrationDatabase(t *testing.T) (context.Context, Config, *Database) {
+func openIntegrationDatabase(t testing.TB) (context.Context, Config, *Database) {
 	t.Helper()
 
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -61,7 +61,7 @@ func openIntegrationDatabase(t *testing.T) (context.Context, Config, *Database) 
 	return ctx, cfg, database
 }
 
-func databaseURLWithName(t *testing.T, databaseURL, databaseName string) string {
+func databaseURLWithName(t testing.TB, databaseURL, databaseName string) string {
 	t.Helper()
 
 	parsedURL, err := url.Parse(databaseURL)

@@ -132,9 +132,13 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		t.Fatalf("record successful repository refresh: %v", err)
 	}
 	commitKey := repository.CommitKey{RepositoryID: first.ID, SHA: commitSHA}
-	commits, err := database.ListCommits(ctx, []repository.CommitKey{commitKey})
+	otherKey := repository.CommitKey{RepositoryID: second.ID, SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+	commits, err := database.ListCommits(ctx, []repository.CommitKey{otherKey, commitKey, otherKey})
 	if err != nil {
 		t.Fatalf("ListCommits() error = %v", err)
+	}
+	if other, found := commits[otherKey]; !found || len(commits) != 2 || other.Title != nil {
+		t.Fatalf("commit lookup did not preserve the requested Repository/SHA pairs: %#v", commits)
 	}
 	commit := commits[commitKey]
 	if commit.Title == nil || *commit.Title != commitTitle ||
