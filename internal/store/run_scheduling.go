@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -14,6 +15,8 @@ import (
 func (d *Database) GetRunSchedulingSnapshots(
 	ctx context.Context,
 	runIDs []uuid.UUID,
+	evaluatorProcessID uuid.UUID,
+	at time.Time,
 	clusterMaximumActiveRuns []byte,
 	placementMaximumActiveRuns []byte,
 ) ([]run.SchedulingSnapshot, error) {
@@ -26,6 +29,8 @@ func (d *Database) GetRunSchedulingSnapshots(
 		ClusterMaximumActiveRuns:   clusterMaximumActiveRuns,
 		PlacementMaximumActiveRuns: placementMaximumActiveRuns,
 		RunIds:                     databaseIDs,
+		EvaluatorProcessID:         databaseUUID(evaluatorProcessID),
+		CheckedAt:                  databaseTime(at),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get Run scheduling snapshots: %w", err)
@@ -39,7 +44,7 @@ func (d *Database) GetRunSchedulingSnapshots(
 		}
 		snapshots = append(snapshots, run.SchedulingSnapshot{
 			RunID:               uuid.UUID(row.ID.Bytes),
-			GatesReleased:       row.GatesReleased,
+			GatesReady:          row.GatesReady,
 			BlockingRunID:       applicationUUID(row.BlockingRunID),
 			ClusterActiveRuns:   row.ClusterActiveRuns,
 			PlacementActiveRuns: row.PlacementActiveRuns,

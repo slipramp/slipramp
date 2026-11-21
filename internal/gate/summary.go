@@ -46,14 +46,16 @@ func (s Summary) State() SummaryState {
 }
 
 type Requirement struct {
-	Name        string
-	Title       string
-	State       RequirementState
-	Value       *float64
-	Condition   *Condition
-	EvaluatedAt *time.Time
-	ReleasedAt  *time.Time
-	Diagnostic  string
+	DefinitionDigest string
+	Overrides        []Override
+	Name             string
+	Title            string
+	State            RequirementState
+	Value            *float64
+	Condition        *Condition
+	EvaluatedAt      *time.Time
+	ReleasedAt       *time.Time
+	Diagnostic       string
 }
 
 // RequirementEvidence holds the fields needed to show one Gate requirement.

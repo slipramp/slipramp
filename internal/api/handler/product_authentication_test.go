@@ -305,6 +305,8 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	}{
 		{name: "Run cancellation", operationID: "CancelRun", scope: productidentity.ScopeRunsWrite},
 		{name: "Run rerun", operationID: "RerunRun", scope: productidentity.ScopeRunsWrite},
+		{name: "Run Gate override", operationID: "OverrideRunGate", scope: productidentity.ScopeRunsOverrideGates},
+		{name: "Promotion Gate override", operationID: "OverridePromotionGate", scope: productidentity.ScopePromotionsOverrideGates},
 		{name: "Run review decision", operationID: "DecideRunReview", scope: productidentity.ScopeRunsReview},
 		{name: "API key revocation", operationID: "RevokeAPIKey", scope: productidentity.ScopeRunsWrite},
 		{

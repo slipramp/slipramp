@@ -375,6 +375,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Inbox:                    inboxService,
 			Notifications:            notificationService,
 			Runs:                     runs,
+			GateOverrides:            persistence.database,
+			GateEvaluatorProcessID:   gateEvaluatorProcessID,
 			Artifacts:                artifacts,
 			PromotionRequests:        promotionRequests,
 			PromotionCreations:       promotionCreations,

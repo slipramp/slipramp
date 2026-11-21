@@ -218,7 +218,9 @@ JOIN targets AS target_state
   ON target_state.id = queued.target_id
 WHERE queued.phase = 'queued'
   AND queued.review_state IN ('not-required', 'approved')
-  AND run_gates_allow_dispatch(queued.id, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
+  AND queued.id NOT IN (
+      SELECT run_id FROM runs_awaiting_gates(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
+  )
   AND (
       SELECT count(*)
       FROM runs AS active
@@ -421,7 +423,9 @@ WITH active_runs AS (
     WHERE queued.cluster_name = sqlc.arg(cluster_name)
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
-      AND run_gates_allow_dispatch(queued.id, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(assigned_at)::timestamptz)
+      AND queued.id NOT IN (
+          SELECT run_id FROM runs_awaiting_gates(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(assigned_at)::timestamptz)
+      )
       AND (
           SELECT count(*)
           FROM active_runs
@@ -477,9 +481,9 @@ WITH active AS (
     GROUP BY cluster_name
 ), queue AS (
     SELECT queued.id, queued.cluster_name, queued.placement_name, queued.created_at, queued.review_state,
-           NOT EXISTS (
-               SELECT 1 FROM run_gates WHERE run_id = queued.id AND released_at IS NULL
-           ) AS gates_released,
+           (queued.id NOT IN (
+               SELECT run_id FROM runs_awaiting_gates(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
+           ))::boolean AS gates_ready,
            CASE WHEN target_load.total >= target.maximum_active_runs THEN target_load.first_run_id END AS blocking_run_id,
            coalesce(cluster_load.total, 0)::bigint AS cluster_active_runs,
            coalesce(placement_load.total, 0)::bigint AS placement_active_runs
@@ -494,7 +498,7 @@ WITH active AS (
     WHERE queued.phase = 'queued'
 ), eligibility AS (
     SELECT queue.*,
-           review_state IN ('not-required', 'approved') AND gates_released AND blocking_run_id IS NULL
+           review_state IN ('not-required', 'approved') AND gates_ready AND blocking_run_id IS NULL
            AND cluster_active_runs < (sqlc.arg(cluster_maximum_active_runs)::jsonb ->> cluster_name)::bigint
            AND (NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? placement_name)
                 OR placement_active_runs < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> placement_name)::bigint)
@@ -505,7 +509,7 @@ WITH active AS (
            count(*) FILTER (WHERE eligible) OVER (PARTITION BY cluster_name ORDER BY created_at, id) AS position
     FROM eligibility
 )
-SELECT id, gates_released, blocking_run_id::uuid, cluster_active_runs, placement_active_runs,
+SELECT id, gates_ready, blocking_run_id::uuid, cluster_active_runs, placement_active_runs,
        (CASE WHEN eligible THEN position ELSE 0 END)::integer AS eligible_position
 FROM ranked
 WHERE id = ANY(sqlc.arg(run_ids)::uuid[]);

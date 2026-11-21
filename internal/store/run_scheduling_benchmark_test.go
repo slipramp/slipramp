@@ -34,7 +34,7 @@ func BenchmarkGetRunSchedulingSnapshots(b *testing.B) {
 	} {
 		b.Run(scenario.name, func(b *testing.B) {
 			read := func() {
-				snapshots, err := database.GetRunSchedulingSnapshots(b.Context(), scenario.ids, clusterLimits, placementLimits)
+				snapshots, err := database.GetRunSchedulingSnapshots(b.Context(), scenario.ids, uuid.Nil, time.Now(), clusterLimits, placementLimits)
 				if err != nil || len(snapshots) != len(scenario.ids) {
 					b.Fatalf("read %d snapshots: got %d, error %v", len(scenario.ids), len(snapshots), err)
 				}

@@ -34,6 +34,15 @@ GateRequirement:
       minLength: 1
     state:
       $ref: "#/GateRequirementState"
+    definitionDigest:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
+      description: Digest of the active or released Gate definition.
+    overrides:
+      type: array
+      description: Operator decisions in chronological order. The latest applies when its digest matches the definition.
+      items:
+        $ref: "#/GateOverride"
     value:
       type: number
       format: double
@@ -83,3 +92,40 @@ GateOperator:
     - GateOperatorLessThanOrEqual
     - GateOperatorGreaterThan
     - GateOperatorGreaterThanOrEqual
+
+GateOverrideRequest:
+  type: object
+  additionalProperties: false
+  required: [definitionDigest, reason]
+  properties:
+    definitionDigest:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 1024
+
+GateOverride:
+  type: object
+  required: [definitionDigest, reason, actor, recordedAt, observedState]
+  properties:
+    definitionDigest:
+      type: string
+    reason:
+      type: string
+    actor:
+      $ref: ./common.yaml#/ActorSnapshot
+    recordedAt:
+      type: string
+      format: date-time
+    observedState:
+      $ref: "#/GateRequirementState"
+    observedValue:
+      type: number
+      format: double
+    evaluatedAt:
+      type: string
+      format: date-time
+    diagnostic:
+      type: string

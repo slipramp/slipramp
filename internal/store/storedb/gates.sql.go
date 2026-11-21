@@ -130,6 +130,7 @@ WITH requirements AS (
         run_gates.attachment_order,
         runs.catalog_revision_id AS attached_revision_id,
         (runs.cancellation_requested_at IS NOT NULL OR runs.outcome IS NOT DISTINCT FROM 'canceled') AS canceled,
+        run_gates.overrides, run_gates.release_definition_digest,
         run_gates.released_at,
         run_gates.release_catalog_revision_id,
         run_gates.release_definition,
@@ -144,6 +145,7 @@ WITH requirements AS (
     SELECT
         pg.promotion_id, pg.repository_id, pg.gate_name, pg.attachment_order, NULL::uuid,
         promotions.cancellation_requested_at IS NOT NULL,
+        pg.overrides, pg.release_definition_digest,
         pg.released_at, pg.release_catalog_revision_id, pg.release_definition,
         pg.release_observed_value, pg.release_evaluated_at
     FROM promotion_gates AS pg
@@ -154,6 +156,8 @@ SELECT
     requirements.subject_id,
     requirements.gate_name,
     requirements.canceled::boolean AS canceled,
+    requirements.overrides,
+    COALESCE(requirements.release_definition_digest, active_gate.definition_digest, '')::text AS definition_digest,
     COALESCE(COALESCE(active_gate.definition, historical_gate.definition)->'metadata'->>'title', '')::text AS title,
     (
         COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus'->'condition'
@@ -199,6 +203,8 @@ type ListGateRequirementEvidenceRow struct {
 	SubjectID             pgtype.UUID
 	GateName              string
 	Canceled              bool
+	Overrides             []byte
+	DefinitionDigest      string
 	Title                 string
 	Condition             []byte
 	ReleasedAt            pgtype.Timestamptz
@@ -224,6 +230,8 @@ func (q *Queries) ListGateRequirementEvidence(ctx context.Context, arg ListGateR
 			&i.SubjectID,
 			&i.GateName,
 			&i.Canceled,
+			&i.Overrides,
+			&i.DefinitionDigest,
 			&i.Title,
 			&i.Condition,
 			&i.ReleasedAt,
@@ -314,6 +322,74 @@ func (q *Queries) LockQueuedRunGateRepositories(ctx context.Context, clusterName
 	return items, nil
 }
 
+const recordPromotionGateOverride = `-- name: RecordPromotionGateOverride :execrows
+UPDATE promotion_gates
+SET overrides = overrides || $1::jsonb
+WHERE promotion_gates.promotion_id = $2
+  AND promotion_gates.gate_name = $3 AND promotion_gates.released_at IS NULL
+  AND EXISTS (
+      SELECT 1 FROM waiting_gate_requirements AS waiting
+      JOIN subject_gate_evidence AS evidence USING (subject_type, subject_id, gate_name)
+      WHERE waiting.subject_type = 'promotion' AND waiting.subject_id = promotion_gates.promotion_id
+        AND waiting.gate_name = promotion_gates.gate_name
+        AND evidence.definition_digest = $4
+  )
+`
+
+type RecordPromotionGateOverrideParams struct {
+	Decision         []byte
+	PromotionID      pgtype.UUID
+	GateName         string
+	DefinitionDigest string
+}
+
+func (q *Queries) RecordPromotionGateOverride(ctx context.Context, arg RecordPromotionGateOverrideParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordPromotionGateOverride,
+		arg.Decision,
+		arg.PromotionID,
+		arg.GateName,
+		arg.DefinitionDigest,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const recordRunGateOverride = `-- name: RecordRunGateOverride :execrows
+UPDATE run_gates
+SET overrides = overrides || $1::jsonb
+WHERE run_gates.run_id = $2
+  AND run_gates.gate_name = $3 AND run_gates.released_at IS NULL
+  AND EXISTS (
+      SELECT 1 FROM waiting_gate_requirements AS waiting
+      JOIN subject_gate_evidence AS evidence USING (subject_type, subject_id, gate_name)
+      WHERE waiting.subject_type = 'run' AND waiting.subject_id = run_gates.run_id
+        AND waiting.gate_name = run_gates.gate_name
+        AND evidence.definition_digest = $4
+  )
+`
+
+type RecordRunGateOverrideParams struct {
+	Decision         []byte
+	RunID            pgtype.UUID
+	GateName         string
+	DefinitionDigest string
+}
+
+func (q *Queries) RecordRunGateOverride(ctx context.Context, arg RecordRunGateOverrideParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordRunGateOverride,
+		arg.Decision,
+		arg.RunID,
+		arg.GateName,
+		arg.DefinitionDigest,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const releasePromotionGates = `-- name: ReleasePromotionGates :execrows
 UPDATE promotion_gates
 SET released_at = $1,
@@ -324,14 +400,12 @@ SET released_at = $1,
     release_observed_value = evidence.value,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
-FROM active_passing_gate_evidence AS evidence
+FROM eligible_gate_evidence($3::uuid, $1::timestamptz) AS evidence
 WHERE promotion_gates.promotion_id = $2
   AND promotion_gates.released_at IS NULL
-  AND evidence.repository_id = promotion_gates.repository_id
+  AND evidence.subject_type = 'promotion'
+  AND evidence.subject_id = promotion_gates.promotion_id
   AND evidence.gate_name = promotion_gates.gate_name
-  AND evidence.evaluator_process_id = $3
-  AND evidence.evaluated_at <= $1
-  AND evidence.valid_until > $1
 `
 
 type ReleasePromotionGatesParams struct {
@@ -358,14 +432,12 @@ SET released_at = $1,
     release_observed_value = evidence.value,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
-FROM active_passing_gate_evidence AS evidence
+FROM eligible_gate_evidence($3::uuid, $1::timestamptz) AS evidence
 WHERE run_gates.run_id = $2
   AND run_gates.released_at IS NULL
-  AND evidence.repository_id = run_gates.repository_id
+  AND evidence.subject_type = 'run'
+  AND evidence.subject_id = run_gates.run_id
   AND evidence.gate_name = run_gates.gate_name
-  AND evidence.evaluator_process_id = $3
-  AND evidence.evaluated_at <= $1
-  AND evidence.valid_until > $1
 `
 
 type ReleaseRunGatesParams struct {

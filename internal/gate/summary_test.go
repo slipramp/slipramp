@@ -98,7 +98,7 @@ func TestCanceledGateSummaryPreservesOnlyReleaseEvidence(t *testing.T) {
 		EvaluatedAt: &now, Observation: Observation{State: ObservationPassing, Value: new(0.0)},
 	}
 	stopped := Summary{evidence.RequirementAt(uuid.Nil, now)}
-	if stopped.State() != SummaryStopped || stopped[0] != (Requirement{Name: "idle", State: RequirementStopped}) {
+	if stopped.State() != SummaryStopped || !reflect.DeepEqual(stopped[0], Requirement{Name: "idle", State: RequirementStopped}) {
 		t.Fatalf("unreleased cancellation = %#v", stopped)
 	}
 	evidence.ReleasedAt = &now

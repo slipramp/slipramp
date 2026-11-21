@@ -1749,6 +1749,14 @@ internal enum Components {
             internal var title: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GateRequirement/state`.
             internal var state: Components.Schemas.GateRequirementState
+            /// Digest of the active or released Gate definition.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/definitionDigest`.
+            internal var definitionDigest: Swift.String?
+            /// Operator decisions in chronological order. The latest applies when its digest matches the definition.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/overrides`.
+            internal var overrides: [Components.Schemas.GateOverride]?
             /// Finite observed value from current or immutable release evidence.
             ///
             /// - Remark: Generated from `#/components/schemas/GateRequirement/value`.
@@ -1773,6 +1781,8 @@ internal enum Components {
             ///   - name:
             ///   - title:
             ///   - state:
+            ///   - definitionDigest: Digest of the active or released Gate definition.
+            ///   - overrides: Operator decisions in chronological order. The latest applies when its digest matches the definition.
             ///   - value: Finite observed value from current or immutable release evidence.
             ///   - _operator:
             ///   - threshold: Finite comparison threshold from the current or released definition.
@@ -1783,6 +1793,8 @@ internal enum Components {
                 name: Components.Schemas.CatalogName,
                 title: Swift.String? = nil,
                 state: Components.Schemas.GateRequirementState,
+                definitionDigest: Swift.String? = nil,
+                overrides: [Components.Schemas.GateOverride]? = nil,
                 value: Swift.Double? = nil,
                 _operator: Components.Schemas.GateOperator? = nil,
                 threshold: Swift.Double? = nil,
@@ -1793,6 +1805,8 @@ internal enum Components {
                 self.name = name
                 self.title = title
                 self.state = state
+                self.definitionDigest = definitionDigest
+                self.overrides = overrides
                 self.value = value
                 self._operator = _operator
                 self.threshold = threshold
@@ -1804,6 +1818,8 @@ internal enum Components {
                 case name
                 case title
                 case state
+                case definitionDigest
+                case overrides
                 case value
                 case _operator = "operator"
                 case threshold
@@ -1822,6 +1838,65 @@ internal enum Components {
             case unavailable = "unavailable"
             case stopped = "stopped"
             case released = "released"
+        }
+        /// - Remark: Generated from `#/components/schemas/GateOverride`.
+        internal struct GateOverride: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GateOverride/definitionDigest`.
+            internal var definitionDigest: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GateOverride/reason`.
+            internal var reason: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GateOverride/actor`.
+            internal var actor: Components.Schemas.ActorSnapshot
+            /// - Remark: Generated from `#/components/schemas/GateOverride/recordedAt`.
+            internal var recordedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GateOverride/observedState`.
+            internal var observedState: Components.Schemas.GateRequirementState
+            /// - Remark: Generated from `#/components/schemas/GateOverride/observedValue`.
+            internal var observedValue: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/GateOverride/evaluatedAt`.
+            internal var evaluatedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/GateOverride/diagnostic`.
+            internal var diagnostic: Swift.String?
+            /// Creates a new `GateOverride`.
+            ///
+            /// - Parameters:
+            ///   - definitionDigest:
+            ///   - reason:
+            ///   - actor:
+            ///   - recordedAt:
+            ///   - observedState:
+            ///   - observedValue:
+            ///   - evaluatedAt:
+            ///   - diagnostic:
+            internal init(
+                definitionDigest: Swift.String,
+                reason: Swift.String,
+                actor: Components.Schemas.ActorSnapshot,
+                recordedAt: Foundation.Date,
+                observedState: Components.Schemas.GateRequirementState,
+                observedValue: Swift.Double? = nil,
+                evaluatedAt: Foundation.Date? = nil,
+                diagnostic: Swift.String? = nil
+            ) {
+                self.definitionDigest = definitionDigest
+                self.reason = reason
+                self.actor = actor
+                self.recordedAt = recordedAt
+                self.observedState = observedState
+                self.observedValue = observedValue
+                self.evaluatedAt = evaluatedAt
+                self.diagnostic = diagnostic
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case definitionDigest
+                case reason
+                case actor
+                case recordedAt
+                case observedState
+                case observedValue
+                case evaluatedAt
+                case diagnostic
+            }
         }
         /// - Remark: Generated from `#/components/schemas/GateOperator`.
         internal enum GateOperator: String, Codable, Hashable, Sendable, CaseIterable {

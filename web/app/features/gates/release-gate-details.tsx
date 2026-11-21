@@ -1,8 +1,11 @@
-import { Badge, Code, Stack, Table, Text } from "@mantine/core";
+import { Badge, Button, Code, Stack, Table, Text, Textarea } from "@mantine/core";
 import { Fragment } from "react";
+import { Form, useNavigation } from "react-router";
 
 import type { GateRequirement, GateSummary } from "~/api/generated";
 import {
+  gateCanBeOverridden,
+  hasMatchingOverride,
   gateConditionLabel,
   gateRequirementBadges,
   gateSummaryBadges,
@@ -15,7 +18,14 @@ type GateSubject = "Promotion" | "Run";
 export function ReleaseGateDetails({
   gates,
   subject,
-}: Readonly<{ gates: GateSummary; subject: GateSubject }>) {
+  subjectId,
+  canOverride,
+}: Readonly<{
+  gates: GateSummary;
+  subject: GateSubject;
+  subjectId: string;
+  canOverride: boolean;
+}>) {
   if (gates.state === "not-required") return null;
 
   const badge = gateSummaryBadges[gates.state];
@@ -59,6 +69,36 @@ export function ReleaseGateDetails({
                   requirement={requirement}
                   showLastEvaluated={showLastEvaluated}
                 />
+                {requirement.overrides?.map((decision) => (
+                  <Table.Tr key={`${decision.recordedAt}-${decision.definitionDigest}`}>
+                    <Table.Td colSpan={showLastEvaluated ? 5 : showEvidence ? 4 : 2}>
+                      <Text size="sm">
+                        {decision.actor.displayName} recorded an override
+                        {requirement.definitionDigest &&
+                        decision.definitionDigest !== requirement.definitionDigest
+                          ? " for an earlier Gate definition"
+                          : ""}{" "}
+                        <RelativeTime size="sm" value={decision.recordedAt} />. {decision.reason}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {gateRequirementBadges[decision.observedState].label} at decision time
+                        {decision.observedValue !== undefined ? ` (${decision.observedValue})` : ""}
+                        {decision.diagnostic ? ` · ${decision.diagnostic}` : ""}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+                {canOverride && gates.state === "waiting" && gateCanBeOverridden(requirement) ? (
+                  <Table.Tr key={requirement.definitionDigest}>
+                    <Table.Td colSpan={5}>
+                      <GateOverrideForm
+                        requirement={requirement}
+                        subject={subject}
+                        subjectId={subjectId}
+                      />
+                    </Table.Td>
+                  </Table.Tr>
+                ) : null}
                 {requirement.diagnostic ? (
                   <Table.Tr>
                     <Table.Td colSpan={showLastEvaluated ? 5 : 4}>
@@ -76,23 +116,23 @@ export function ReleaseGateDetails({
 }
 
 function gateSummaryDescription(state: GateSummary["state"], subject: GateSubject) {
-  if (subject === "Promotion") {
-    return state === "released"
-      ? "Every required gate passed when this Promotion was released."
-      : undefined;
-  }
-  if (state === "stopped") return "Cancellation ended the gate wait before this Run was released.";
-  if (state === "waiting") {
-    return "Run assignment requires every attached Gate to pass in the same release check.";
-  }
-  return "Every required Gate passed together when this Run was released for assignment.";
+  if (state === "stopped")
+    return `Cancellation ended the gate wait before this ${subject} was released.`;
+  if (state === "waiting")
+    return `Each Gate needs a fresh pass or an override before this ${subject} can proceed.`;
+  return undefined;
 }
 
 function GateRequirementRow({
   requirement,
   showLastEvaluated,
 }: Readonly<{ requirement: GateRequirement; showLastEvaluated: boolean }>) {
-  const badge = gateRequirementBadges[requirement.state];
+  const badge = hasMatchingOverride(requirement)
+    ? {
+        label: requirement.releasedAt ? "Released by override" : "Override recorded",
+        color: "orange",
+      }
+    : gateRequirementBadges[requirement.state];
 
   return (
     <Table.Tr>
@@ -121,7 +161,9 @@ function GateRequirementRow({
           <Table.Td>
             {requirement.value === undefined ? (
               <Text c="dimmed" size="sm">
-                No observation
+                {requirement.releasedAt && hasMatchingOverride(requirement)
+                  ? "Operator override"
+                  : "No observation"}
               </Text>
             ) : (
               <Code>{requirement.value}</Code>
@@ -142,5 +184,44 @@ function GateRequirementRow({
         </Table.Td>
       ) : null}
     </Table.Tr>
+  );
+}
+
+function GateOverrideForm({
+  requirement,
+  subject,
+  subjectId,
+}: Readonly<{
+  requirement: GateRequirement;
+  subject: GateSubject;
+  subjectId: string;
+}>) {
+  const navigation = useNavigation();
+  return (
+    <details>
+      <summary>Override gate</summary>
+      <Form method="post">
+        <Stack align="flex-start" gap="xs" mt="xs">
+          <input name="intent" type="hidden" value="override-gate" />
+          <input name="gateName" type="hidden" value={requirement.name} />
+          <input name="definitionDigest" type="hidden" value={requirement.definitionDigest} />
+          <Textarea
+            required
+            maxLength={1024}
+            name="reason"
+            label="Reason for override"
+            description={`Waive ${requirement.name} for ${subject} ${subjectId.slice(0, 8)}. It can proceed once its other requirements are met.`}
+          />
+          <Button
+            color="orange"
+            type="submit"
+            size="compact-md"
+            disabled={navigation.state !== "idle"}
+          >
+            Record override
+          </Button>
+        </Stack>
+      </Form>
+    </details>
   );
 }

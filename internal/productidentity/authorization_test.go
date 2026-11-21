@@ -280,6 +280,14 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			permission: PermissionRead,
 			disabled:   true,
 		},
+		{name: "callback cannot override promotion gates", role: RoleOperator, method: AuthenticationMethodAPIKey,
+			scopes: []Scope{ScopePromotionsSubmit}, permission: PermissionPromotionsOverrideGates},
+		{name: "run override cannot waive promotion gates", role: RoleOperator, method: AuthenticationMethodAPIKey,
+			scopes: []Scope{ScopeRunsOverrideGates}, permission: PermissionPromotionsOverrideGates},
+		{name: "ordinary run write cannot override", role: RoleOperator, method: AuthenticationMethodAPIKey,
+			scopes: []Scope{ScopeRunsWrite}, permission: PermissionRunsOverrideGates},
+		{name: "viewer cannot override", role: RoleViewer, method: AuthenticationMethodWebSession,
+			permission: PermissionRunsOverrideGates},
 	}
 
 	for _, test := range tests {
@@ -302,6 +310,7 @@ func TestAuthenticationValidate(t *testing.T) {
 	t.Parallel()
 
 	allScopes := []Scope{
+		ScopeRunsOverrideGates, ScopePromotionsOverrideGates,
 		ScopeRead,
 		ScopeRunsWrite,
 		ScopeRunsReview,

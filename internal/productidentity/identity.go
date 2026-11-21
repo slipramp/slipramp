@@ -23,13 +23,15 @@ const (
 	RoleOperator Role = "operator"
 	RoleViewer   Role = "viewer"
 
-	ScopeRead             Scope = "slipramp:read"
-	ScopeRunsWrite        Scope = "slipramp:runs:write"
-	ScopeRunsReview       Scope = "slipramp:runs:review"
-	ScopeInboxWrite       Scope = "slipramp:inbox:write"
-	ScopePromotionsSubmit Scope = "slipramp:promotions:submit"
-	ScopePromotionsWrite  Scope = "slipramp:promotions:write"
-	ScopeAdmin            Scope = "slipramp:admin"
+	ScopeRead                    Scope = "slipramp:read"
+	ScopeRunsWrite               Scope = "slipramp:runs:write"
+	ScopeRunsOverrideGates       Scope = "slipramp:runs:override-gates"
+	ScopePromotionsOverrideGates Scope = "slipramp:promotions:override-gates"
+	ScopeRunsReview              Scope = "slipramp:runs:review"
+	ScopeInboxWrite              Scope = "slipramp:inbox:write"
+	ScopePromotionsSubmit        Scope = "slipramp:promotions:submit"
+	ScopePromotionsWrite         Scope = "slipramp:promotions:write"
+	ScopeAdmin                   Scope = "slipramp:admin"
 
 	maximumDisplayNameLength  = 200
 	maximumAPIKeyNameLength   = 200
@@ -240,6 +242,8 @@ func (s Scope) valid() bool {
 	switch s {
 	case ScopeRead,
 		ScopeRunsWrite,
+		ScopeRunsOverrideGates,
+		ScopePromotionsOverrideGates,
 		ScopeRunsReview,
 		ScopeInboxWrite,
 		ScopePromotionsSubmit,

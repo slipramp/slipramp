@@ -396,7 +396,7 @@ test("active Promotions show creation, preparation, and post-approval Kargo work
   assert.deepEqual(promotionActivity({ gates: { state: "waiting" }, status: "approved" }), {
     animation: "waiting",
     title: "Waiting for gates",
-    description: "Every required Gate must pass together before this Promotion continues.",
+    description: "Each Gate needs a fresh pass or an override before this Promotion continues.",
   });
   assert.equal(
     promotionActivity({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }),

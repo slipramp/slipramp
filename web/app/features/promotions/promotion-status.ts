@@ -85,7 +85,7 @@ export function promotionOverallStatus(promotion: PromotionState): PromotionStat
   if (promotion.status === "approved" && promotion.gates.state === "waiting") {
     return {
       color: "yellow",
-      description: "Waiting for every required Gate to pass together",
+      description: "Waiting for Gate release",
       label: "Waiting for gates",
     };
   }
@@ -249,7 +249,7 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
   ) {
     return {
       color: "yellow",
-      description: "Kargo delivery starts after every required Gate passes together",
+      description: "Kargo delivery starts after Gate release",
       label: "Waiting for gates",
     };
   }
@@ -291,7 +291,7 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
   if (promotion.status === "approved" && promotion.gates.state === "waiting") {
     return {
       color: "yellow",
-      description: "Kargo execution starts after every required Gate passes together",
+      description: "Kargo execution starts after Gate release",
       label: "Waiting for gates",
     };
   }

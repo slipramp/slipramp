@@ -46,6 +46,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import { canReadArtifactContents } from "~/features/artifacts/artifact-access";
 import {
   cancelRun,
+  overrideRunGate,
   createRun,
   decideRunReview,
   getArtifactReport,
@@ -81,7 +82,7 @@ import {
   formatTimestamp,
   shortIdentifier,
 } from "~/shared/display";
-import { optionalFormValue } from "~/shared/form-data";
+import { formValue, optionalFormValue } from "~/shared/form-data";
 import { pageTitle } from "~/shared/page-title";
 import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
@@ -180,6 +181,18 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  if (formValue(formData, "intent") === "override-gate") {
+    const result = await overrideRunGate({
+      client: createServerAPIClient(request, context),
+      path: { runId: params.runId, gateName: formValue(formData, "gateName") },
+      body: {
+        definitionDigest: formValue(formData, "definitionDigest"),
+        reason: formValue(formData, "reason"),
+      },
+    });
+    if (result.response?.status === 204) return { message: "Gate override recorded." };
+    return { error: result.error?.detail ?? "The Gate override could not be recorded." };
+  }
   const intent = formData.get("intent");
   if (intent === "approve-review" || intent === "reject-review") {
     const comment = optionalFormValue(formData, "comment");
@@ -769,7 +782,16 @@ function RunDetails({
     <Stack gap="lg">
       <SectionHeader title="Run details" />
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} titleOrder={3} />
-      <ReleaseGateDetails gates={run.gates} subject="Run" />
+      <ReleaseGateDetails
+        gates={run.gates}
+        subject="Run"
+        subjectId={run.id}
+        canOverride={
+          run.phase === "queued" &&
+          run.cancellation.state === "not-requested" &&
+          (principal?.role === "operator" || principal?.role === "admin")
+        }
+      />
       <ParameterTable parameters={run.parameters} />
       <RunOverview repositoryName={repositoryName} run={run} />
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
@@ -817,7 +839,7 @@ function runQueueExplanation(run: Run): ReactNode {
     case "awaiting-review":
       return "This Run must be approved before it can enter the eligible FIFO queue.";
     case "awaiting-gates":
-      return "This Run is waiting for every required Gate to pass at the same release check.";
+      return "Each Gate needs a fresh pass or an override before assignment.";
     case "target-busy":
       return run.blockingRunId ? (
         <>

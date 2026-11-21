@@ -63,6 +63,8 @@ APIKeyScope:
     - slipramp:read
     - slipramp:runs:write
     - slipramp:runs:review
+    - slipramp:runs:override-gates
+    - slipramp:promotions:override-gates
     - slipramp:inbox:write
     - slipramp:promotions:submit
     - slipramp:promotions:write

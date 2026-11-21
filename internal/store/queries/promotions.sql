@@ -384,12 +384,10 @@ WHERE cancellation_requested_at IS NULL
             AND promotion_gates.released_at IS NULL
             AND NOT EXISTS (
                 SELECT 1
-                FROM active_passing_gate_evidence AS evidence
-                WHERE evidence.repository_id = promotion_gates.repository_id
+                FROM eligible_gate_evidence(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(due_at)) AS evidence
+                WHERE evidence.subject_type = 'promotion'
+                  AND evidence.subject_id = promotion_gates.promotion_id
                   AND evidence.gate_name = promotion_gates.gate_name
-                  AND evidence.evaluator_process_id = sqlc.arg(evaluator_process_id)
-                  AND evidence.evaluated_at <= sqlc.arg(due_at)
-                  AND evidence.valid_until > sqlc.arg(due_at)
             )
       )
   )

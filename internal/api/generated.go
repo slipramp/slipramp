@@ -2742,14 +2742,40 @@ type FailedGitTriggerDeliveryList struct {
 // GateOperator defines model for GateOperator.
 type GateOperator string
 
+// GateOverride defines model for GateOverride.
+type GateOverride struct {
+	Actor            ActorSnapshot `json:"actor"`
+	DefinitionDigest string        `json:"definitionDigest"`
+	Diagnostic       *string       `json:"diagnostic,omitempty"`
+	EvaluatedAt      *time.Time    `json:"evaluatedAt,omitempty"`
+
+	// ObservedState Stopped requirements retain the attached Gate name and have no release evidence or current observation.
+	ObservedState GateRequirementState `json:"observedState"`
+	ObservedValue *float64             `json:"observedValue,omitempty"`
+	Reason        string               `json:"reason"`
+	RecordedAt    time.Time            `json:"recordedAt"`
+}
+
+// GateOverrideRequest defines model for GateOverrideRequest.
+type GateOverrideRequest struct {
+	DefinitionDigest string `json:"definitionDigest"`
+	Reason           string `json:"reason"`
+}
+
 // GateRequirement defines model for GateRequirement.
 type GateRequirement struct {
+	// DefinitionDigest Digest of the active or released Gate definition.
+	DefinitionDigest *string `json:"definitionDigest,omitempty"`
+
 	// Diagnostic Bounded sanitized explanation for an unavailable requirement.
 	Diagnostic  *string       `json:"diagnostic,omitempty"`
 	EvaluatedAt *time.Time    `json:"evaluatedAt,omitempty"`
 	Name        CatalogName   `json:"name"`
 	Operator    *GateOperator `json:"operator,omitempty"`
-	ReleasedAt  *time.Time    `json:"releasedAt,omitempty"`
+
+	// Overrides Operator decisions in chronological order. The latest applies when its digest matches the definition.
+	Overrides  *[]GateOverride `json:"overrides,omitempty"`
+	ReleasedAt *time.Time      `json:"releasedAt,omitempty"`
 
 	// State Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 	State GateRequirementState `json:"state"`
@@ -5417,6 +5443,9 @@ type CreatePromotionJSONRequestBody = PromotionCreate
 // DecidePromotionJSONRequestBody defines body for DecidePromotion for application/json ContentType.
 type DecidePromotionJSONRequestBody = PromotionDecisionUpdate
 
+// OverridePromotionGateJSONRequestBody defines body for OverridePromotionGate for application/json ContentType.
+type OverridePromotionGateJSONRequestBody = GateOverrideRequest
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryConfig
 
@@ -5428,6 +5457,9 @@ type TestRepositoryConnectionJSONRequestBody = RepositoryConnectionTestRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
+
+// OverrideRunGateJSONRequestBody defines body for OverrideRunGate for application/json ContentType.
+type OverrideRunGateJSONRequestBody = GateOverrideRequest
 
 // RerunRunJSONRequestBody defines body for RerunRun for application/json ContentType.
 type RerunRunJSONRequestBody = RunRerun
@@ -6401,6 +6433,20 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/v1/promotions/{promotionId}/decision (the `DecidePromotion` operationId).
 	DecidePromotion(ctx context.Context, promotionID PromotionID, body DecidePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// OverridePromotionGateWithBody Override one Gate for a waiting Promotion
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OverridePromotionGate Override one Gate for a waiting Promotion
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+	OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListRepositories List repositories
 	//
 	// Lists active repository registrations ordered by name.
@@ -6538,6 +6584,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OverrideRunGateWithBody Override one Gate for a waiting Run
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+	OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OverrideRunGate Override one Gate for a waiting Run
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+	OverrideRunGate(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StreamRunLog Stream retained and live Run log bytes
 	//
@@ -7672,6 +7732,40 @@ func (c *Client) DecidePromotion(ctx context.Context, promotionID PromotionID, b
 	return c.Client.Do(req)
 }
 
+// OverridePromotionGateWithBody Override one Gate for a waiting Promotion
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+func (c *Client) OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverridePromotionGateRequestWithBody(c.Server, promotionID, gateName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OverridePromotionGate Override one Gate for a waiting Promotion
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+func (c *Client) OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverridePromotionGateRequest(c.Server, promotionID, gateName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListRepositories List repositories
 //
 // Lists active repository registrations ordered by name.
@@ -7980,6 +8074,40 @@ func (c *Client) ListRunArtifacts(ctx context.Context, runID openapi_types.UUID,
 // Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCancelRunRequest(c.Server, runID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OverrideRunGateWithBody Override one Gate for a waiting Run
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+func (c *Client) OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverrideRunGateRequestWithBody(c.Server, runID, gateName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OverrideRunGate Override one Gate for a waiting Run
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+func (c *Client) OverrideRunGate(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverrideRunGateRequest(c.Server, runID, gateName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11200,6 +11328,60 @@ func NewDecidePromotionRequestWithBody(server string, promotionID PromotionID, c
 	return req, nil
 }
 
+// NewOverridePromotionGateRequest calls the generic OverridePromotionGate builder with application/json body
+func NewOverridePromotionGateRequest(server string, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewOverridePromotionGateRequestWithBody(server, promotionID, gateName, "application/json", bodyReader)
+}
+
+// NewOverridePromotionGateRequestWithBody constructs an http.Request for the OverridePromotionGate method, with any body, and a specified content type
+func NewOverridePromotionGateRequestWithBody(server string, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "promotionId", promotionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gateName", gateName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotions/%s/gates/%s/override", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListRepositoriesRequest constructs an http.Request for the ListRepositories method
 func NewListRepositoriesRequest(server string, params *ListRepositoriesParams) (*http.Request, error) {
 	var err error
@@ -11984,6 +12166,60 @@ func NewCancelRunRequest(server string, runID openapi_types.UUID) (*http.Request
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewOverrideRunGateRequest calls the generic OverrideRunGate builder with application/json body
+func NewOverrideRunGateRequest(server string, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewOverrideRunGateRequestWithBody(server, runID, gateName, "application/json", bodyReader)
+}
+
+// NewOverrideRunGateRequestWithBody constructs an http.Request for the OverrideRunGate method, with any body, and a specified content type
+func NewOverrideRunGateRequestWithBody(server string, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gateName", gateName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/gates/%s/override", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -13530,6 +13766,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/v1/promotions/{promotionId}/decision (the `DecidePromotion` operationId).
 	DecidePromotionWithResponse(ctx context.Context, promotionID PromotionID, body DecidePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*DecidePromotionResponse, error)
 
+	// OverridePromotionGateWithBodyWithResponse Override one Gate for a waiting Promotion
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
+
+	// OverridePromotionGateWithResponse Override one Gate for a waiting Promotion
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
+
 	// ListRepositoriesWithResponse List repositories
 	//
 	// Lists active repository registrations ordered by name.
@@ -13687,6 +13937,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelRunResponse, error)
+
+	// OverrideRunGateWithBodyWithResponse Override one Gate for a waiting Run
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+	OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
+
+	// OverrideRunGateWithResponse Override one Gate for a waiting Run
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+	OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
 
 	// StreamRunLogWithResponse Stream retained and live Run log bytes
 	//
@@ -17256,6 +17520,89 @@ func (r DecidePromotionResponse) ContentType() string {
 	return ""
 }
 
+type OverridePromotionGateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r OverridePromotionGateResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r OverridePromotionGateResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r OverridePromotionGateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r OverridePromotionGateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r OverridePromotionGateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRepositoriesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18419,6 +18766,89 @@ func (r CancelRunResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CancelRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type OverrideRunGateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r OverrideRunGateResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r OverrideRunGateResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r OverrideRunGateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r OverrideRunGateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r OverrideRunGateResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20874,6 +21304,32 @@ func (c *ClientWithResponses) DecidePromotionWithResponse(ctx context.Context, p
 	return ParseDecidePromotionResponse(rsp)
 }
 
+// OverridePromotionGateWithBodyWithResponse Override one Gate for a waiting Promotion
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+func (c *ClientWithResponses) OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
+	rsp, err := c.OverridePromotionGateWithBody(ctx, promotionID, gateName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOverridePromotionGateResponse(rsp)
+}
+
+// OverridePromotionGateWithResponse Override one Gate for a waiting Promotion
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
+func (c *ClientWithResponses) OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
+	rsp, err := c.OverridePromotionGate(ctx, promotionID, gateName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOverridePromotionGateResponse(rsp)
+}
+
 // ListRepositoriesWithResponse List repositories
 //
 // Lists active repository registrations ordered by name.
@@ -21138,6 +21594,32 @@ func (c *ClientWithResponses) CancelRunWithResponse(ctx context.Context, runID o
 		return nil, err
 	}
 	return ParseCancelRunResponse(rsp)
+}
+
+// OverrideRunGateWithBodyWithResponse Override one Gate for a waiting Run
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+func (c *ClientWithResponses) OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
+	rsp, err := c.OverrideRunGateWithBody(ctx, runID, gateName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOverrideRunGateResponse(rsp)
+}
+
+// OverrideRunGateWithResponse Override one Gate for a waiting Run
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
+func (c *ClientWithResponses) OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
+	rsp, err := c.OverrideRunGate(ctx, runID, gateName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOverrideRunGateResponse(rsp)
 }
 
 // StreamRunLogWithResponse Stream retained and live Run log bytes
@@ -24395,6 +24877,77 @@ func ParseDecidePromotionResponse(rsp *http.Response) (*DecidePromotionResponse,
 	return response, nil
 }
 
+// ParseOverridePromotionGateResponse parses an HTTP response from a OverridePromotionGateWithResponse call
+func ParseOverridePromotionGateResponse(rsp *http.Response) (*OverridePromotionGateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &OverridePromotionGateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListRepositoriesResponse parses an HTTP response from a ListRepositoriesWithResponse call
 func ParseListRepositoriesResponse(rsp *http.Response) (*ListRepositoriesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -25356,6 +25909,77 @@ func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseOverrideRunGateResponse parses an HTTP response from a OverrideRunGateWithResponse call
+func ParseOverrideRunGateResponse(rsp *http.Response) (*OverrideRunGateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &OverrideRunGateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -26916,6 +27540,9 @@ type ServerInterface interface {
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
+	// OverridePromotionGate Override one Gate for a waiting Promotion
+	// (PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override)
+	OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID, gateName CatalogName)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
 	ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams)
@@ -26958,6 +27585,9 @@ type ServerInterface interface {
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// OverrideRunGate Override one Gate for a waiting Run
+	// (PUT /api/v1/runs/{runId}/gates/{gateName}/override)
+	OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, gateName CatalogName)
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
@@ -29055,6 +29685,41 @@ func (siw *ServerInterfaceWrapper) DecidePromotion(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// OverridePromotionGate operation middleware
+func (siw *ServerInterfaceWrapper) OverridePromotionGate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "promotionId" -------------
+	var promotionID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "promotionId", r.PathValue("promotionId"), &promotionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "promotionId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gateName" -------------
+	var gateName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gateName", r.PathValue("gateName"), &gateName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OverridePromotionGate(w, r, promotionID, gateName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositories operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
 
@@ -29648,6 +30313,41 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelRun(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OverrideRunGate operation middleware
+func (siw *ServerInterfaceWrapper) OverrideRunGate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gateName" -------------
+	var gateName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gateName", r.PathValue("gateName"), &gateName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OverrideRunGate(w, r, runID, gateName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30552,6 +31252,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/runs/{runId}/gates/{gateName}/override", wrapper.OverrideRunGate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/review", wrapper.DecideRunReview)
@@ -30580,6 +31281,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kargo/{integration}/promotions", wrapper.SubmitKargoPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions", wrapper.ListPromotions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/gates/{gateName}/override", wrapper.OverridePromotionGate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/cancel", wrapper.CancelPromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
@@ -34824,6 +35526,124 @@ func (response DecidePromotion500ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
+type OverridePromotionGateRequestObject struct {
+	PromotionID openapi_types.UUID `json:"promotionId"`
+	GateName    CatalogName        `json:"gateName"`
+	Body        *OverridePromotionGateJSONRequestBody
+}
+
+type OverridePromotionGateResponseObject interface {
+	VisitOverridePromotionGateResponse(w http.ResponseWriter) error
+}
+
+type OverridePromotionGate204Response struct {
+}
+
+func (response OverridePromotionGate204Response) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type OverridePromotionGate400ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate400ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate401ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate401ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate403ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate403ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate404ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate404ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate409ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate409ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response OverridePromotionGate413ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverridePromotionGate500ApplicationProblemPlusJSONResponse Problem
+
+func (response OverridePromotionGate500ApplicationProblemPlusJSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoriesRequestObject struct {
 	Params ListRepositoriesParams
 }
@@ -36323,6 +37143,124 @@ func (response CancelRun409ApplicationProblemPlusJSONResponse) VisitCancelRunRes
 type CancelRun500ApplicationProblemPlusJSONResponse Problem
 
 func (response CancelRun500ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGateRequestObject struct {
+	RunID    openapi_types.UUID `json:"runId"`
+	GateName CatalogName        `json:"gateName"`
+	Body     *OverrideRunGateJSONRequestBody
+}
+
+type OverrideRunGateResponseObject interface {
+	VisitOverrideRunGateResponse(w http.ResponseWriter) error
+}
+
+type OverrideRunGate204Response struct {
+}
+
+func (response OverrideRunGate204Response) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type OverrideRunGate400ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate400ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate401ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate401ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate403ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate403ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate404ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate404ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate409ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate409ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response OverrideRunGate413ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OverrideRunGate500ApplicationProblemPlusJSONResponse Problem
+
+func (response OverrideRunGate500ApplicationProblemPlusJSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -38751,6 +39689,9 @@ type StrictServerInterface interface {
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(ctx context.Context, request DecidePromotionRequestObject) (DecidePromotionResponseObject, error)
+	// OverridePromotionGate Override one Gate for a waiting Promotion
+	// (PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override)
+	OverridePromotionGate(ctx context.Context, request OverridePromotionGateRequestObject) (OverridePromotionGateResponseObject, error)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -38793,6 +39734,9 @@ type StrictServerInterface interface {
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// OverrideRunGate Override one Gate for a waiting Run
+	// (PUT /api/v1/runs/{runId}/gates/{gateName}/override)
+	OverrideRunGate(ctx context.Context, request OverrideRunGateRequestObject) (OverrideRunGateResponseObject, error)
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(ctx context.Context, request StreamRunLogRequestObject) (StreamRunLogResponseObject, error)
@@ -40071,6 +41015,40 @@ func (sh *strictHandler) DecidePromotion(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// OverridePromotionGate operation middleware
+func (sh *strictHandler) OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID, gateName CatalogName) {
+	var request OverridePromotionGateRequestObject
+
+	request.PromotionID = promotionID
+	request.GateName = gateName
+
+	var body OverridePromotionGateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OverridePromotionGate(ctx, request.(OverridePromotionGateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OverridePromotionGate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OverridePromotionGateResponseObject); ok {
+		if err := validResponse.VisitOverridePromotionGateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRepositories operation middleware
 func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams) {
 	var request ListRepositoriesRequestObject
@@ -40454,6 +41432,40 @@ func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, runID
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
 		if err := validResponse.VisitCancelRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OverrideRunGate operation middleware
+func (sh *strictHandler) OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, gateName CatalogName) {
+	var request OverrideRunGateRequestObject
+
+	request.RunID = runID
+	request.GateName = gateName
+
+	var body OverrideRunGateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OverrideRunGate(ctx, request.(OverrideRunGateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OverrideRunGate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OverrideRunGateResponseObject); ok {
+		if err := validResponse.VisitOverrideRunGateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

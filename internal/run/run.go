@@ -259,7 +259,7 @@ type Scheduling struct {
 
 type SchedulingSnapshot struct {
 	RunID               uuid.UUID
-	GatesReleased       bool
+	GatesReady          bool
 	BlockingRunID       *uuid.UUID
 	ClusterActiveRuns   int64
 	PlacementActiveRuns int64

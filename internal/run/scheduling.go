@@ -13,6 +13,8 @@ type SchedulingStore interface {
 	GetRunSchedulingSnapshots(
 		context.Context,
 		[]uuid.UUID,
+		uuid.UUID,
+		time.Time,
 		[]byte,
 		[]byte,
 	) ([]SchedulingSnapshot, error)
@@ -66,6 +68,7 @@ func (s *Service) Scheduling(
 	snapshots, err := s.scheduling.GetRunSchedulingSnapshots(
 		ctx,
 		ids,
+		s.gateEvaluatorProcessID, at,
 		clusterLimitsJSON,
 		placementLimitsJSON,
 	)
@@ -95,7 +98,7 @@ func (s *Service) Scheduling(
 		case record.Review.State == ReviewStatePending:
 			detail.State = SchedulingStateAwaitingReview
 			detail.EligiblePosition = nil
-		case !snapshot.GatesReleased:
+		case !snapshot.GatesReady:
 			detail.State = SchedulingStateAwaitingGates
 			detail.EligiblePosition = nil
 		case snapshot.BlockingRunID != nil:

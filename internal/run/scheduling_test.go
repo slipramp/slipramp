@@ -40,7 +40,7 @@ func TestSchedulingDerivesQueuedState(t *testing.T) {
 	}{
 		{
 			name: "awaiting review", review: ReviewStatePending, connected: true,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(1))},
+			snapshot:  SchedulingSnapshot{GatesReady: true, EligiblePosition: new(int32(1))},
 			wantState: SchedulingStateAwaitingReview,
 		},
 		{
@@ -50,27 +50,27 @@ func TestSchedulingDerivesQueuedState(t *testing.T) {
 		},
 		{
 			name: "target busy", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, BlockingRunID: &blockingRunID},
+			snapshot:  SchedulingSnapshot{GatesReady: true, BlockingRunID: &blockingRunID},
 			wantState: SchedulingStateTargetBusy, wantBlock: true,
 		},
 		{
 			name: "cluster unreachable", review: ReviewStateApproved,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(1))},
+			snapshot:  SchedulingSnapshot{GatesReady: true, EligiblePosition: new(int32(1))},
 			wantState: SchedulingStateClusterUnreachable, wantPosition: true,
 		},
 		{
 			name: "cluster capacity", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, ClusterActiveRuns: 3},
+			snapshot:  SchedulingSnapshot{GatesReady: true, ClusterActiveRuns: 3},
 			wantState: SchedulingStateClusterCapacity,
 		},
 		{
 			name: "placement capacity", review: ReviewStateApproved, connected: true,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, PlacementActiveRuns: 2},
+			snapshot:  SchedulingSnapshot{GatesReady: true, PlacementActiveRuns: 2},
 			wantState: SchedulingStateClusterCapacity,
 		},
 		{
 			name: "eligible", review: ReviewStateNotRequired, connected: true,
-			snapshot:  SchedulingSnapshot{GatesReleased: true, EligiblePosition: new(int32(2))},
+			snapshot:  SchedulingSnapshot{GatesReady: true, EligiblePosition: new(int32(2))},
 			wantState: SchedulingStateEligible, wantPosition: true,
 		},
 	}
@@ -119,6 +119,8 @@ type stubSchedulingStore struct {
 func (s *stubSchedulingStore) GetRunSchedulingSnapshots(
 	context.Context,
 	[]uuid.UUID,
+	uuid.UUID,
+	time.Time,
 	[]byte,
 	[]byte,
 ) ([]SchedulingSnapshot, error) {

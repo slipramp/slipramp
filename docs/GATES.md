@@ -71,10 +71,24 @@ slipramp catalog validate --gate-sources ./gate-sources.yaml
    outage, and recovery behavior.
 5. Attach it to the intended Kargo Stage only after the Action path is proven.
 
-Every required Gate must pass in the same release check. Passing evidence does
-not latch independently, and a catalog definition change requires a new
-observation. Restarting the Server also requires new evidence because each
-process has a distinct evaluator identity.
+Every required Gate needs a fresh pass or a matching override in the same
+release check. Passing observations must come from the current Server process
+and active catalog revision. Overrides survive Server restarts and catalog
+refreshes while the definition digest matches.
+
+## Override a Gate
+
+On the Run or Promotion detail page, open **Details**, find the Gate, and choose
+**Override gate**. Check the observation and condition, enter the reason, and
+select **Record override**. The decision applies only to this subject and Gate
+definition. Its history shows who recorded it, when, and what the evaluator saw.
+Review and all other requirements still apply.
+
+Operators and admins can also send `PUT /api/v1/runs/{runId}/gates/{gateName}/override`
+or `PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override` with the
+`definitionDigest` from the Gate detail and a nonblank `reason`. API credentials
+need the matching `slipramp:runs:override-gates` or `slipramp:promotions:override-gates`
+scope. A changed definition returns a conflict so the operator can review it.
 
 ## Troubleshooting
 

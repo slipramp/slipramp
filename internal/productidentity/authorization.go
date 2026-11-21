@@ -11,15 +11,17 @@ const (
 	AuthenticationMethodAPIKey     AuthenticationMethod = "api-key"
 	AuthenticationMethodOAuthToken AuthenticationMethod = "oauth-access-token"
 
-	PermissionRead                   Permission = "read"
-	PermissionRunsWrite              Permission = "runs:write"
-	PermissionRunsReview             Permission = "runs:review"
-	PermissionInboxWrite             Permission = "inbox:write"
-	PermissionAdmin                  Permission = "admin"
-	PermissionAPIKeyRevoke           Permission = "api-keys:revoke"
-	PermissionSensitiveArtifactsRead Permission = "sensitive-artifacts:read"
-	PermissionPromotionsSubmit       Permission = "promotions:submit"
-	PermissionPromotionsWrite        Permission = "promotions:write"
+	PermissionRead                    Permission = "read"
+	PermissionRunsWrite               Permission = "runs:write"
+	PermissionRunsOverrideGates       Permission = "runs:override-gates"
+	PermissionPromotionsOverrideGates Permission = "promotions:override-gates"
+	PermissionRunsReview              Permission = "runs:review"
+	PermissionInboxWrite              Permission = "inbox:write"
+	PermissionAdmin                   Permission = "admin"
+	PermissionAPIKeyRevoke            Permission = "api-keys:revoke"
+	PermissionSensitiveArtifactsRead  Permission = "sensitive-artifacts:read"
+	PermissionPromotionsSubmit        Permission = "promotions:submit"
+	PermissionPromotionsWrite         Permission = "promotions:write"
 )
 
 type AuthenticationMethod string
@@ -92,9 +94,9 @@ func roleAuthorizes(role Role, permission Permission) bool {
 	switch permission {
 	case PermissionRead:
 		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
-	case PermissionRunsWrite, PermissionRunsReview, PermissionInboxWrite:
+	case PermissionRunsWrite, PermissionRunsReview, PermissionRunsOverrideGates, PermissionInboxWrite:
 		return role == RoleOperator || role == RoleAdmin
-	case PermissionPromotionsSubmit, PermissionPromotionsWrite:
+	case PermissionPromotionsSubmit, PermissionPromotionsWrite, PermissionPromotionsOverrideGates:
 		return role == RoleOperator || role == RoleAdmin
 	case PermissionAdmin:
 		return role == RoleAdmin
@@ -130,6 +132,14 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			}
 		case PermissionRunsWrite:
 			if scope == ScopeRunsWrite {
+				return true
+			}
+		case PermissionRunsOverrideGates:
+			if scope == ScopeRunsOverrideGates {
+				return true
+			}
+		case PermissionPromotionsOverrideGates:
+			if scope == ScopePromotionsOverrideGates {
 				return true
 			}
 		case PermissionRunsReview:

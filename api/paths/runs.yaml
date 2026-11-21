@@ -278,6 +278,74 @@ run:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+overrideRunGate:
+  put:
+    operationId: overrideRunGate
+    summary: Override one Gate for a waiting Run
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Runs]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: gateName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/GateOverrideRequest
+    responses:
+      "204":
+        description: The override decision has been recorded.
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "400":
+        description: The override request is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Gate override permission is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The requested Gate attachment does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The requirement or its definition changed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The operation could not be completed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 cancelRun:
   post:
     operationId: cancelRun

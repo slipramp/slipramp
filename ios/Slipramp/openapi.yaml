@@ -2447,6 +2447,74 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /api/v1/runs/{runId}/gates/{gateName}/override:
+    put:
+      operationId: overrideRunGate
+      summary: Override one Gate for a waiting Run
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Runs
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gateName
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateOverrideRequest'
+      responses:
+        '204':
+          description: The override decision has been recorded.
+        '400':
+          description: The override request is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Gate override permission is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The requested Gate attachment does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The requirement or its definition changed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The operation could not be completed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/runs/{runId}/cancel:
     post:
       operationId: cancelRun
@@ -4075,6 +4143,74 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/promotions/{promotionId}/gates/{gateName}/override:
+    put:
+      operationId: overridePromotionGate
+      summary: Override one Gate for a waiting Promotion
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Promotions
+      parameters:
+        - name: promotionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gateName
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GateOverrideRequest'
+      responses:
+        '204':
+          description: The override decision has been recorded.
+        '400':
+          description: The override request is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Gate override permission is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The requested Gate attachment does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The requirement or its definition changed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The operation could not be completed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/promotions/{promotionId}/cancel:
     post:
       operationId: cancelPromotion
@@ -6540,6 +6676,15 @@ components:
           minLength: 1
         state:
           $ref: '#/components/schemas/GateRequirementState'
+        definitionDigest:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Digest of the active or released Gate definition.
+        overrides:
+          type: array
+          description: Operator decisions in chronological order. The latest applies when its digest matches the definition.
+          items:
+            $ref: '#/components/schemas/GateOverride'
         value:
           type: number
           format: double
@@ -6571,6 +6716,48 @@ components:
         - unavailable
         - stopped
         - released
+    GateOverride:
+      type: object
+      required:
+        - definitionDigest
+        - reason
+        - actor
+        - recordedAt
+        - observedState
+      properties:
+        definitionDigest:
+          type: string
+        reason:
+          type: string
+        actor:
+          $ref: '#/components/schemas/ActorSnapshot'
+        recordedAt:
+          type: string
+          format: date-time
+        observedState:
+          $ref: '#/components/schemas/GateRequirementState'
+        observedValue:
+          type: number
+          format: double
+        evaluatedAt:
+          type: string
+          format: date-time
+        diagnostic:
+          type: string
+    GateOverrideRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - definitionDigest
+        - reason
+      properties:
+        definitionDigest:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1024
     GateOperator:
       type: string
       enum:
@@ -9829,6 +10016,8 @@ components:
         - slipramp:read
         - slipramp:runs:write
         - slipramp:runs:review
+        - slipramp:runs:override-gates
+        - slipramp:promotions:override-gates
         - slipramp:inbox:write
         - slipramp:promotions:submit
         - slipramp:promotions:write

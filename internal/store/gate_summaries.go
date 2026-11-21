@@ -19,7 +19,7 @@ func (d *Database) ListRunGateSummaries(
 	at time.Time,
 ) (map[uuid.UUID]gate.Summary, error) {
 	params := storedb.ListGateRequirementEvidenceParams{RunIds: databaseUUIDs(ids)}
-	return d.listGateSummaries(ctx, params, processID, at)
+	return listGateSummaries(ctx, d.queries, params, processID, at)
 }
 
 func (d *Database) ListPromotionGateSummaries(
@@ -29,16 +29,17 @@ func (d *Database) ListPromotionGateSummaries(
 	at time.Time,
 ) (map[uuid.UUID]gate.Summary, error) {
 	params := storedb.ListGateRequirementEvidenceParams{PromotionIds: databaseUUIDs(ids)}
-	return d.listGateSummaries(ctx, params, processID, at)
+	return listGateSummaries(ctx, d.queries, params, processID, at)
 }
 
-func (d *Database) listGateSummaries(
+func listGateSummaries(
 	ctx context.Context,
+	queries *storedb.Queries,
 	params storedb.ListGateRequirementEvidenceParams,
 	processID uuid.UUID,
 	at time.Time,
 ) (map[uuid.UUID]gate.Summary, error) {
-	rows, err := d.queries.ListGateRequirementEvidence(ctx, params)
+	rows, err := queries.ListGateRequirementEvidence(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("list Gate requirement evidence: %w", err)
 	}
@@ -61,7 +62,7 @@ func (d *Database) listGateSummaries(
 			}
 			evidence.Condition = &condition
 		}
-		if evidence.ReleasedAt != nil {
+		if evidence.ReleasedAt != nil && row.ReleaseObservedValue != nil {
 			evidence.Observation = gate.Observation{State: gate.ObservationPassing, Value: row.ReleaseObservedValue}
 		} else if row.ObservationState != nil {
 			evidence.Observation = gate.Observation{
@@ -71,7 +72,12 @@ func (d *Database) listGateSummaries(
 			}
 		}
 		id := uuid.UUID(row.SubjectID.Bytes)
-		summaries[id] = append(summaries[id], evidence.RequirementAt(processID, at))
+		requirement := evidence.RequirementAt(processID, at)
+		requirement.DefinitionDigest = row.DefinitionDigest
+		if err := json.Unmarshal(row.Overrides, &requirement.Overrides); err != nil {
+			return nil, fmt.Errorf("decode Gate %q overrides: %w", row.GateName, err)
+		}
+		summaries[id] = append(summaries[id], requirement)
 	}
 
 	return summaries, nil

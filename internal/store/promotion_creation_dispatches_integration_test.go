@@ -135,55 +135,8 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 }
 
 func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *testing.T) {
-	createdAt := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
-	fixture := newPromotionIntegrationFixture(t, createdAt)
-	acceptedAt := createdAt.Add(2 * time.Minute)
-	evaluatorID := uuid.New()
-
-	stage := fixture.stage
-	stage.ResourceVersion = "2"
-	stage.Gates = []string{"network-idle"}
-	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
-		Origin:    "Warehouse/external-dns",
-		Name:      "freight-42",
-		Artifacts: []promotion.FreightArtifact{{Kind: "image", Version: "1.2.3"}},
-	}}}
-	stage.FirstObservedAt = acceptedAt.Add(-30 * time.Second)
-	stage.LastObservedAt = acceptedAt.Add(-30 * time.Second)
-	if err := fixture.database.ReplacePromotionStageSnapshot(
-		fixture.ctx,
-		promotionTestSnapshot(uuid.New(), stage.Integration, stage.ClusterName, stage.LastObservedAt),
-		[]promotion.Stage{stage},
-	); err != nil {
-		t.Fatalf("attach Gate to dispatch Stage: %v", err)
-	}
-
-	record, err := fixture.database.CreateOperatorPromotion(
-		fixture.ctx,
-		promotion.OperatorPromotionAcceptance{
-			ID:                         uuid.New(),
-			Integration:                stage.Integration,
-			TargetStageID:              stage.ID,
-			SourceStageID:              stage.ID,
-			FreightName:                "freight-42",
-			AllowedRepositories:        []string{stage.RepositoryName},
-			RequestedByPrincipalID:     fixture.principal.ID,
-			RequestedBySnapshot:        fixture.actor,
-			AcceptedAt:                 acceptedAt,
-			MaximumStageObservationAge: 5 * time.Minute,
-			PendingReviewRetention:     8 * 24 * time.Hour,
-		},
-	)
-	if err != nil {
-		t.Fatalf("create gated automatic Promotion: %v", err)
-	}
-	claim := promotion.CreationDispatchClaim{
-		ClusterName:            stage.ClusterName,
-		GateEvaluatorProcessID: evaluatorID,
-		ClaimedAt:              acceptedAt,
-		RetryDelays:            []time.Duration{time.Minute, 5 * time.Minute},
-		ExhaustedMessage:       "dispatch attempts exhausted",
-	}
+	fixture, record, claim := gatedPromotionCreation(t)
+	acceptedAt, evaluatorID := claim.ClaimedAt, claim.GateEvaluatorProcessID
 	assertNoPromotionCreationDispatch(t, fixture, claim)
 
 	targets, err := fixture.database.ListGateEvaluationDemand(fixture.ctx)
@@ -875,4 +828,86 @@ func mustCreateOperatorPromotion(
 	}
 
 	return record
+}
+
+func gatedPromotionCreation(t *testing.T) (promotionIntegrationFixture, promotion.Promotion, promotion.CreationDispatchClaim) {
+	t.Helper()
+	createdAt := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	acceptedAt := createdAt.Add(2 * time.Minute)
+	evaluatorID := uuid.New()
+
+	stage := fixture.stage
+	stage.ResourceVersion = "2"
+	stage.Gates = []string{"network-idle"}
+	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin:    "Warehouse/external-dns",
+		Name:      "freight-42",
+		Artifacts: []promotion.FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+	}}}
+	stage.FirstObservedAt = acceptedAt.Add(-30 * time.Second)
+	stage.LastObservedAt = acceptedAt.Add(-30 * time.Second)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), stage.Integration, stage.ClusterName, stage.LastObservedAt),
+		[]promotion.Stage{stage},
+	); err != nil {
+		t.Fatalf("attach Gate to dispatch Stage: %v", err)
+	}
+
+	record, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		promotion.OperatorPromotionAcceptance{
+			ID:                         uuid.New(),
+			Integration:                stage.Integration,
+			TargetStageID:              stage.ID,
+			SourceStageID:              stage.ID,
+			FreightName:                "freight-42",
+			AllowedRepositories:        []string{stage.RepositoryName},
+			RequestedByPrincipalID:     fixture.principal.ID,
+			RequestedBySnapshot:        fixture.actor,
+			AcceptedAt:                 acceptedAt,
+			MaximumStageObservationAge: 5 * time.Minute,
+			PendingReviewRetention:     8 * 24 * time.Hour,
+		},
+	)
+	if err != nil {
+		t.Fatalf("create gated automatic Promotion: %v", err)
+	}
+	claim := promotion.CreationDispatchClaim{
+		ClusterName:            stage.ClusterName,
+		GateEvaluatorProcessID: evaluatorID,
+		ClaimedAt:              acceptedAt,
+		RetryDelays:            []time.Duration{time.Minute, 5 * time.Minute},
+		ExhaustedMessage:       "dispatch attempts exhausted",
+	}
+	return fixture, record, claim
+}
+
+func TestAutomaticPromotionGateOverrideDispatchIntegration(t *testing.T) {
+	fixture, record, claim := gatedPromotionCreation(t)
+	summaries, err := fixture.database.ListPromotionGateSummaries(fixture.ctx, []uuid.UUID{record.ID}, claim.GateEvaluatorProcessID, claim.ClaimedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirement := summaries[record.ID][0]
+	assertNoPromotionCreationDispatch(t, fixture, claim)
+	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: record.ID, GateName: requirement.Name,
+		DefinitionDigest: requirement.DefinitionDigest, Actor: fixture.actor, Reason: "Source outage", RecordedAt: claim.ClaimedAt,
+		EvaluatorProcessID: claim.GateEvaluatorProcessID}
+	if err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	if err != nil || claimed.ID != record.ID {
+		t.Fatalf("claim by override = %v, %v", claimed.ID, err)
+	}
+	summaries, err = fixture.database.ListPromotionGateSummaries(fixture.ctx, []uuid.UUID{record.ID}, claim.GateEvaluatorProcessID, claim.ClaimedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := summaries[record.ID][0]
+	if released.ReleasedAt == nil || released.Value != nil || len(released.Overrides) != 1 || released.Overrides[0].Actor != fixture.actor {
+		t.Fatalf("override evidence at creation claim = %#v", released)
+	}
 }

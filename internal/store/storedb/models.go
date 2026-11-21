@@ -336,6 +336,7 @@ type PromotionGate struct {
 	ReleaseObservedValue      *float64
 	ReleaseEvaluatedAt        pgtype.Timestamptz
 	ReleaseValidUntil         pgtype.Timestamptz
+	Overrides                 []byte
 }
 
 type PromotionStage struct {
@@ -496,6 +497,21 @@ type RunGate struct {
 	ReleaseObservedValue      *float64
 	ReleaseEvaluatedAt        pgtype.Timestamptz
 	ReleaseValidUntil         pgtype.Timestamptz
+	Overrides                 []byte
+}
+
+type SubjectGateEvidence struct {
+	SubjectType        string
+	SubjectID          pgtype.UUID
+	GateName           string
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   string
+	Spec               interface{}
+	Overridden         interface{}
+	EvaluatorProcessID pgtype.UUID
+	Value              *float64
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
 }
 
 type Target struct {

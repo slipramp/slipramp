@@ -74,6 +74,8 @@ is no bootstrap API key or anonymous product bypass.
 | Read product state, history, logs, and non-sensitive Artifact contents | viewer | `slipramp:read` |
 | Create, rerun, or cancel Runs | operator | `slipramp:runs:write` |
 | Decide Run reviews | operator | `slipramp:runs:review` |
+| Override one Run Gate | operator | `slipramp:runs:override-gates` |
+| Override one Promotion Gate | operator | `slipramp:promotions:override-gates` |
 | Acknowledge Inbox problems | operator | `slipramp:inbox:write` |
 | Submit or poll Kargo Promotions | operator service account | `slipramp:promotions:submit` |
 | Create, decide, or cancel Promotions and change Stage policy | operator | `slipramp:promotions:write` |

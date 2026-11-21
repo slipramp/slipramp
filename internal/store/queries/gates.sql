@@ -89,14 +89,12 @@ SET released_at = sqlc.arg(released_at),
     release_observed_value = evidence.value,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
-FROM active_passing_gate_evidence AS evidence
+FROM eligible_gate_evidence(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(released_at)::timestamptz) AS evidence
 WHERE run_gates.run_id = sqlc.arg(run_id)
   AND run_gates.released_at IS NULL
-  AND evidence.repository_id = run_gates.repository_id
-  AND evidence.gate_name = run_gates.gate_name
-  AND evidence.evaluator_process_id = sqlc.arg(evaluator_process_id)
-  AND evidence.evaluated_at <= sqlc.arg(released_at)
-  AND evidence.valid_until > sqlc.arg(released_at);
+  AND evidence.subject_type = 'run'
+  AND evidence.subject_id = run_gates.run_id
+  AND evidence.gate_name = run_gates.gate_name;
 
 -- name: ReleasePromotionGates :execrows
 UPDATE promotion_gates
@@ -108,14 +106,12 @@ SET released_at = sqlc.arg(released_at),
     release_observed_value = evidence.value,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
-FROM active_passing_gate_evidence AS evidence
+FROM eligible_gate_evidence(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(released_at)::timestamptz) AS evidence
 WHERE promotion_gates.promotion_id = sqlc.arg(promotion_id)
   AND promotion_gates.released_at IS NULL
-  AND evidence.repository_id = promotion_gates.repository_id
-  AND evidence.gate_name = promotion_gates.gate_name
-  AND evidence.evaluator_process_id = sqlc.arg(evaluator_process_id)
-  AND evidence.evaluated_at <= sqlc.arg(released_at)
-  AND evidence.valid_until > sqlc.arg(released_at);
+  AND evidence.subject_type = 'promotion'
+  AND evidence.subject_id = promotion_gates.promotion_id
+  AND evidence.gate_name = promotion_gates.gate_name;
 
 -- name: CountUnreleasedPromotionGates :one
 SELECT count(*)
@@ -137,6 +133,7 @@ WITH requirements AS (
         run_gates.attachment_order,
         runs.catalog_revision_id AS attached_revision_id,
         (runs.cancellation_requested_at IS NOT NULL OR runs.outcome IS NOT DISTINCT FROM 'canceled') AS canceled,
+        run_gates.overrides, run_gates.release_definition_digest,
         run_gates.released_at,
         run_gates.release_catalog_revision_id,
         run_gates.release_definition,
@@ -151,6 +148,7 @@ WITH requirements AS (
     SELECT
         pg.promotion_id, pg.repository_id, pg.gate_name, pg.attachment_order, NULL::uuid,
         promotions.cancellation_requested_at IS NOT NULL,
+        pg.overrides, pg.release_definition_digest,
         pg.released_at, pg.release_catalog_revision_id, pg.release_definition,
         pg.release_observed_value, pg.release_evaluated_at
     FROM promotion_gates AS pg
@@ -161,6 +159,8 @@ SELECT
     requirements.subject_id,
     requirements.gate_name,
     requirements.canceled::boolean AS canceled,
+    requirements.overrides,
+    COALESCE(requirements.release_definition_digest, active_gate.definition_digest, '')::text AS definition_digest,
     COALESCE(COALESCE(active_gate.definition, historical_gate.definition)->'metadata'->>'title', '')::text AS title,
     (
         COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus'->'condition'
@@ -195,3 +195,29 @@ LEFT JOIN gate_observations AS observation
  AND observation.catalog_revision_id = active_revision.id
  AND observation.definition_digest = active_gate.definition_digest
 ORDER BY requirements.subject_id, requirements.attachment_order;
+
+-- name: RecordRunGateOverride :execrows
+UPDATE run_gates
+SET overrides = overrides || sqlc.arg(decision)::jsonb
+WHERE run_gates.run_id = sqlc.arg(run_id)
+  AND run_gates.gate_name = sqlc.arg(gate_name) AND run_gates.released_at IS NULL
+  AND EXISTS (
+      SELECT 1 FROM waiting_gate_requirements AS waiting
+      JOIN subject_gate_evidence AS evidence USING (subject_type, subject_id, gate_name)
+      WHERE waiting.subject_type = 'run' AND waiting.subject_id = run_gates.run_id
+        AND waiting.gate_name = run_gates.gate_name
+        AND evidence.definition_digest = sqlc.arg(definition_digest)
+  );
+
+-- name: RecordPromotionGateOverride :execrows
+UPDATE promotion_gates
+SET overrides = overrides || sqlc.arg(decision)::jsonb
+WHERE promotion_gates.promotion_id = sqlc.arg(promotion_id)
+  AND promotion_gates.gate_name = sqlc.arg(gate_name) AND promotion_gates.released_at IS NULL
+  AND EXISTS (
+      SELECT 1 FROM waiting_gate_requirements AS waiting
+      JOIN subject_gate_evidence AS evidence USING (subject_type, subject_id, gate_name)
+      WHERE waiting.subject_type = 'promotion' AND waiting.subject_id = promotion_gates.promotion_id
+        AND waiting.gate_name = promotion_gates.gate_name
+        AND evidence.definition_digest = sqlc.arg(definition_digest)
+  );

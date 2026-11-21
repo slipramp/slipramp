@@ -39,6 +39,7 @@ import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
 import {
   cancelPromotion,
+  overridePromotionGate,
   decidePromotion,
   getPromotion,
   getPromotionStage,
@@ -182,6 +183,18 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  if (formValue(formData, "intent") === "override-gate") {
+    const result = await overridePromotionGate({
+      client: createServerAPIClient(request, context),
+      path: { promotionId: params.promotionId, gateName: formValue(formData, "gateName") },
+      body: {
+        definitionDigest: formValue(formData, "definitionDigest"),
+        reason: formValue(formData, "reason"),
+      },
+    });
+    if (result.response?.status === 204) return { message: "Gate override recorded." };
+    return { error: result.error?.detail ?? "The Gate override could not be recorded." };
+  }
   if (formValue(formData, "intent") === "cancel") {
     const result = await cancelPromotion({
       client: createServerAPIClient(request, context),
@@ -768,7 +781,10 @@ function promotionLifecycleState(status: PromotionStatusPresentation): Promotion
   return "waiting";
 }
 
-function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
+function PromotionDetails({
+  promotion,
+  canWrite,
+}: Readonly<{ promotion: Promotion; canWrite: boolean }>) {
   const stage = promotion.stageSnapshot;
   const enrichment = stage.enrichment;
   const review = promotion.reviewContext;
@@ -796,7 +812,16 @@ function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
           </DetailGrid>
         </Stack>
       )}
-      <ReleaseGateDetails gates={promotion.gates} subject="Promotion" />
+      <ReleaseGateDetails
+        gates={promotion.gates}
+        subject="Promotion"
+        subjectId={promotion.id}
+        canOverride={
+          canWrite &&
+          promotionIsActive(promotion) &&
+          promotion.cancellation.state === "not-requested"
+        }
+      />
       {promotion.selectedFreight && <SelectedFreight freight={promotion.selectedFreight} />}
       <Stack component="section" gap="lg">
         <SectionHeader title="Promotion context" />
@@ -1031,7 +1056,7 @@ function PromotionWorkspace({
           </Tabs.Panel>
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
-            <PromotionDetails promotion={promotion} />
+            <PromotionDetails promotion={promotion} canWrite={canWrite} />
           </Tabs.Panel>
         </Tabs>
       </Paper>

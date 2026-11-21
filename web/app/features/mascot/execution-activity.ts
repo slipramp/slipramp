@@ -429,7 +429,8 @@ export function promotionActivity(
         return {
           animation: "waiting",
           title: "Waiting for gates",
-          description: "Every required Gate must pass together before this Promotion continues.",
+          description:
+            "Each Gate needs a fresh pass or an override before this Promotion continues.",
         };
       }
       if (promotion.creationDispatch?.phase === "awaiting-delivery") {

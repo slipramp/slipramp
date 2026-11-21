@@ -98,7 +98,7 @@ process. Kubernetes is an execution backend, not the product database.
 | Cluster | A Kubernetes execution destination represented by its Controller |
 | Run | An immutable Action execution snapshot plus independently recorded observations |
 | Artifact | Durable Run output, including logs, plans, reports, and diff files |
-| Gate | Repository-defined current policy that delays release until a numeric observation passes |
+| Gate | Repository-defined current policy that delays release until a numeric observation passes or an operator overrides it for the subject |
 | Principal | A durable user or service-account actor authenticated by a session or API key |
 | Promotion | A durable Kargo request with Stage, Freight, actor, policy, creation delivery, Kargo execution, and optional review context |
 | Notification event | An immutable channel-neutral snapshot of a selected durable transition |
@@ -203,8 +203,8 @@ names. Waiting subjects resolve those names against the Repository's current
 catalog and share demand-driven observations from administrator-configured
 Prometheus sources. PostgreSQL records the current observation projection and
 the immutable evidence used to release each subject. Run assignment or
-Promotion delivery latches all required passing evidence atomically; later
-blocking observations never stop already released work. See
+Promotion delivery atomically records a fresh pass or a matching operator
+override for each Gate on that subject. Later blocking observations never stop already released work. See
 [Repository-defined release Gates](./design/gates.md).
 
 ### Notification delivery

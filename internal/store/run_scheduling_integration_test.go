@@ -74,7 +74,7 @@ func TestRunCapacityIntegration(t *testing.T) {
 			}
 			snapshots, err := database.GetRunSchedulingSnapshots(
 				ctx,
-				[]uuid.UUID{second.ID},
+				[]uuid.UUID{second.ID}, uuid.Nil, time.Now(),
 				clusterLimits,
 				placementLimits,
 			)
@@ -104,7 +104,7 @@ func TestSchedulingSnapshotRanksUnrequestedRunsInFIFOOrder(t *testing.T) {
 
 	snapshot := func() run.SchedulingSnapshot {
 		t.Helper()
-		rows, err := database.GetRunSchedulingSnapshots(ctx, []uuid.UUID{second.ID}, []byte(`{"colo":2}`), []byte(`{}`))
+		rows, err := database.GetRunSchedulingSnapshots(ctx, []uuid.UUID{second.ID}, uuid.Nil, time.Now(), []byte(`{"colo":2}`), []byte(`{}`))
 		if err != nil || len(rows) != 1 {
 			t.Fatalf("load scheduling snapshot: rows=%v error=%v", rows, err)
 		}
@@ -229,7 +229,7 @@ func TestTargetRunCapacityIntegration(t *testing.T) {
 	}
 	snapshots, err := database.GetRunSchedulingSnapshots(
 		ctx,
-		[]uuid.UUID{queued.Items[0].ID},
+		[]uuid.UUID{queued.Items[0].ID}, uuid.Nil, time.Now(),
 		[]byte(`{"colo":4}`),
 		[]byte(`{}`),
 	)

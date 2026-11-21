@@ -76,6 +76,8 @@ paths:
     $ref: ./paths/runs.yaml#/runs
   /api/v1/runs/{runId}:
     $ref: ./paths/runs.yaml#/run
+  /api/v1/runs/{runId}/gates/{gateName}/override:
+    $ref: ./paths/runs.yaml#/overrideRunGate
   /api/v1/runs/{runId}/cancel:
     $ref: ./paths/runs.yaml#/cancelRun
   /api/v1/runs/{runId}/rerun:
@@ -124,6 +126,8 @@ paths:
     $ref: ./paths/promotions.yaml#/promotions
   /api/v1/promotions/{promotionId}:
     $ref: ./paths/promotions.yaml#/promotion
+  /api/v1/promotions/{promotionId}/gates/{gateName}/override:
+    $ref: ./paths/promotions.yaml#/overridePromotionGate
   /api/v1/promotions/{promotionId}/cancel:
     $ref: ./paths/promotions.yaml#/cancelPromotion
   /api/v1/promotions/{promotionId}/decision:
@@ -302,6 +306,10 @@ components:
       $ref: ./components/gates.yaml#/GateRequirement
     GateRequirementState:
       $ref: ./components/gates.yaml#/GateRequirementState
+    GateOverride:
+      $ref: ./components/gates.yaml#/GateOverride
+    GateOverrideRequest:
+      $ref: ./components/gates.yaml#/GateOverrideRequest
     GateOperator:
       $ref: ./components/gates.yaml#/GateOperator
     Artifact:

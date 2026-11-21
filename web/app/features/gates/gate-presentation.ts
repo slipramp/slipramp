@@ -34,3 +34,18 @@ export function gateConditionLabel(requirement: Pick<GateRequirement, "operator"
 
   return `${operatorLabels[requirement.operator]} ${requirement.threshold}`;
 }
+
+export function hasMatchingOverride(requirement: GateRequirement) {
+  const latest = requirement.overrides?.at(-1);
+  return latest !== undefined && latest.definitionDigest === requirement.definitionDigest;
+}
+
+export function gateCanBeOverridden(requirement: GateRequirement) {
+  return (
+    Boolean(requirement.definitionDigest) &&
+    !hasMatchingOverride(requirement) &&
+    (requirement.state === "blocking" ||
+      requirement.state === "unavailable" ||
+      requirement.state === "unevaluated")
+  );
+}

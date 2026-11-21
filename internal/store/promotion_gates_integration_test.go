@@ -101,6 +101,34 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		waiting[1].Name != "window" || waiting[1].State != gate.RequirementUnevaluated {
 		t.Fatalf("partial evidence was latched or reordered: %#v", waiting)
 	}
+	// The other Promotion can waive its own window while this one continues to wait.
+	other, err := fixture.database.AcceptPromotionRequest(fixture.ctx,
+		fixture.acceptance(t, fixture.request("emergency-deploy"), acceptedAt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: other.ID, GateName: "window",
+		DefinitionDigest: digest, Actor: fixture.actor, Reason: "Incident recovery", RecordedAt: pollAt,
+		EvaluatorProcessID: evaluatorID}
+	if err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := fixture.database.ReleasePromotionGates(fixture.ctx, other.ID, evaluatorID, pollAt); !ok || err != nil {
+		t.Fatalf("release with pass and override = %t, %v", ok, err)
+	}
+	if ok, err := fixture.database.ReleasePromotionGates(fixture.ctx, record.ID, evaluatorID, pollAt); ok || err != nil {
+		t.Fatalf("override leaked to another Promotion: %t, %v", ok, err)
+	}
+	summaries, err = service.GateSummaries(fixture.ctx, []promotion.Promotion{other}, pollAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mixed := summaries[other.ID]
+	if mixed.State() != gate.SummaryReleased || len(mixed[0].Overrides) != 0 || mixed[0].Value == nil ||
+		len(mixed[1].Overrides) != 1 || mixed[1].Overrides[0].ObservedState != gate.RequirementUnevaluated ||
+		mixed[1].Value != nil || mixed[1].EvaluatedAt != nil {
+		t.Fatalf("mixed Promotion release evidence = %#v", mixed)
+	}
 	window := observation
 	window.GateName = "window"
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, window); err != nil {

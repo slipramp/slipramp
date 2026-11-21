@@ -942,6 +942,14 @@ export type GateRequirement = {
   title?: string;
   state: GateRequirementState;
   /**
+   * Digest of the active or released Gate definition.
+   */
+  definitionDigest?: string;
+  /**
+   * Operator decisions in chronological order. The latest applies when its digest matches the definition.
+   */
+  overrides?: Array<GateOverride>;
+  /**
    * Finite observed value from current or immutable release evidence.
    */
   value?: number;
@@ -968,6 +976,22 @@ export type GateRequirementState =
   | "unavailable"
   | "stopped"
   | "released";
+
+export type GateOverride = {
+  definitionDigest: string;
+  reason: string;
+  actor: ActorSnapshot;
+  recordedAt: string;
+  observedState: GateRequirementState;
+  observedValue?: number;
+  evaluatedAt?: string;
+  diagnostic?: string;
+};
+
+export type GateOverrideRequest = {
+  definitionDigest: string;
+  reason: string;
+};
 
 export type GateOperator =
   | "equal"
@@ -2380,6 +2404,8 @@ export type ApiKeyScope =
   | "slipramp:read"
   | "slipramp:runs:write"
   | "slipramp:runs:review"
+  | "slipramp:runs:override-gates"
+  | "slipramp:promotions:override-gates"
   | "slipramp:inbox:write"
   | "slipramp:promotions:submit"
   | "slipramp:promotions:write"
@@ -4772,6 +4798,58 @@ export type GetRunResponses = {
 
 export type GetRunResponse = GetRunResponses[keyof GetRunResponses];
 
+export type OverrideRunGateData = {
+  body: GateOverrideRequest;
+  path: {
+    runId: string;
+    gateName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/gates/{gateName}/override";
+};
+
+export type OverrideRunGateErrors = {
+  /**
+   * The override request is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * Gate override permission is required.
+   */
+  403: Problem;
+  /**
+   * The requested Gate attachment does not exist.
+   */
+  404: Problem;
+  /**
+   * The requirement or its definition changed.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type OverrideRunGateError = OverrideRunGateErrors[keyof OverrideRunGateErrors];
+
+export type OverrideRunGateResponses = {
+  /**
+   * The override decision has been recorded.
+   */
+  204: void;
+};
+
+export type OverrideRunGateResponse = OverrideRunGateResponses[keyof OverrideRunGateResponses];
+
 export type CancelRunData = {
   body?: never;
   path: {
@@ -6057,6 +6135,60 @@ export type GetPromotionResponses = {
 };
 
 export type GetPromotionResponse = GetPromotionResponses[keyof GetPromotionResponses];
+
+export type OverridePromotionGateData = {
+  body: GateOverrideRequest;
+  path: {
+    promotionId: string;
+    gateName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/promotions/{promotionId}/gates/{gateName}/override";
+};
+
+export type OverridePromotionGateErrors = {
+  /**
+   * The override request is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * Gate override permission is required.
+   */
+  403: Problem;
+  /**
+   * The requested Gate attachment does not exist.
+   */
+  404: Problem;
+  /**
+   * The requirement or its definition changed.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type OverridePromotionGateError =
+  OverridePromotionGateErrors[keyof OverridePromotionGateErrors];
+
+export type OverridePromotionGateResponses = {
+  /**
+   * The override decision has been recorded.
+   */
+  204: void;
+};
+
+export type OverridePromotionGateResponse =
+  OverridePromotionGateResponses[keyof OverridePromotionGateResponses];
 
 export type CancelPromotionData = {
   body?: never;

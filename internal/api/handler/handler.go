@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/placement"
@@ -32,6 +34,8 @@ type Handler struct {
 	inbox                    InboxService
 	notifications            NotificationService
 	runs                     RunService
+	gateOverrides            GateOverrideStore
+	gateEvaluatorProcessID   uuid.UUID
 	artifacts                ArtifactService
 	promotionRequests        PromotionRequestService
 	promotionCreations       PromotionCreationService
@@ -82,6 +86,8 @@ type Dependencies struct {
 	Inbox                    InboxService
 	Notifications            NotificationService
 	Runs                     RunService
+	GateOverrides            GateOverrideStore
+	GateEvaluatorProcessID   uuid.UUID
 	Artifacts                ArtifactService
 	PromotionRequests        PromotionRequestService
 	PromotionCreations       PromotionCreationService
@@ -120,6 +126,8 @@ func newHandler(dependencies Dependencies) *Handler {
 		inbox:                    dependencies.Inbox,
 		notifications:            dependencies.Notifications,
 		runs:                     dependencies.Runs,
+		gateOverrides:            dependencies.GateOverrides,
+		gateEvaluatorProcessID:   dependencies.GateEvaluatorProcessID,
 		artifacts:                dependencies.Artifacts,
 		promotionRequests:        dependencies.PromotionRequests,
 		promotionCreations:       dependencies.PromotionCreations,

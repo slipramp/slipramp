@@ -60,6 +60,8 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"StreamRunLog":                   productidentity.PermissionRead,
 	"CreateRun":                      productidentity.PermissionRunsWrite,
 	"RerunRun":                       productidentity.PermissionRunsWrite,
+	"OverrideRunGate":                productidentity.PermissionRunsOverrideGates,
+	"OverridePromotionGate":          productidentity.PermissionPromotionsOverrideGates,
 	"CancelRun":                      productidentity.PermissionRunsWrite,
 	"DecideRunReview":                productidentity.PermissionRunsReview,
 	"CreateRepository":               productidentity.PermissionAdmin,

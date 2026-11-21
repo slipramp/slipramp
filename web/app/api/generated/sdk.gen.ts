@@ -184,6 +184,12 @@ import type {
   LogoutData,
   LogoutErrors,
   LogoutResponses,
+  OverridePromotionGateData,
+  OverridePromotionGateErrors,
+  OverridePromotionGateResponses,
+  OverrideRunGateData,
+  OverrideRunGateErrors,
+  OverrideRunGateResponses,
   PollForControllerCommandData,
   PollForControllerCommandErrors,
   PollForControllerCommandResponses,
@@ -1307,6 +1313,33 @@ export const getRun = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Override one Gate for a waiting Run
+ */
+export const overrideRunGate = <ThrowOnError extends boolean = false>(
+  options: Options<OverrideRunGateData, ThrowOnError>,
+): RequestResult<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError> =>
+  (options.client ?? client).put<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/runs/{runId}/gates/{gateName}/override",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * Cancel a Run
  *
  * Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller asks the pinned Job to stop and reports a terminal observation. If the process finishes first, its ordinary terminal outcome is retained and cancellation is reported as overtaken.
@@ -1986,6 +2019,37 @@ export const getPromotion = <ThrowOnError extends boolean = false>(
     ],
     url: "/api/v1/promotions/{promotionId}",
     ...options,
+  });
+
+/**
+ * Override one Gate for a waiting Promotion
+ */
+export const overridePromotionGate = <ThrowOnError extends boolean = false>(
+  options: Options<OverridePromotionGateData, ThrowOnError>,
+): RequestResult<OverridePromotionGateResponses, OverridePromotionGateErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    OverridePromotionGateResponses,
+    OverridePromotionGateErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions/{promotionId}/gates/{gateName}/override",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

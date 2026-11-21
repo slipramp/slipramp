@@ -88,7 +88,7 @@ Attachments and definitions have different lifetimes:
   closed until the Gate is restored.
 - Activating a catalog wakes evaluation immediately.
 - Release copies the exact active definition, catalog revision, definition
-  digest, and observation into immutable subject evidence.
+  digest, and passing observation or operator decision into immutable subject evidence.
 
 The current catalog may therefore change the definition of an existing
 requirement, but it cannot silently remove the frozen requirement itself.
@@ -171,7 +171,7 @@ Promotions:
   remain.
 
 A passing observation remains fresh for three normal source intervals. Release
-requires evidence from the current evaluator process, the current active
+by observation requires evidence from the current evaluator process, the current active
 definition, and an unexpired validity window. The Server generates a new
 evaluator process identity at startup, preventing evidence obtained with old
 endpoint or credential configuration from releasing work after restart. If the
@@ -208,14 +208,27 @@ Releasing a subject is one transaction that:
 
 1. Serializes the subject's release operation.
 2. Resolves every frozen name against the Repository's current catalog.
-3. Requires current, fresh, passing evidence for every resolved definition.
-4. Copies all definitions and observations into immutable evidence with one
+3. Requires a fresh passing observation or a matching operator override for each definition.
+4. Records the evidence used for each requirement with one
    release time.
 5. Performs the authoritative assignment or delivery transition.
 
-Every Gate must pass in the same release check. Individual requirements do not
-latch at different times. A definition change between observation and release
-cannot use evidence for the previous definition.
+The release check evaluates all requirements together. Passing observations do
+not latch independently. A changed definition requires evidence matching its
+new digest.
+
+## Per-Gate overrides
+
+Operators and administrators can override a blocking, unavailable, or unevaluated Gate on one
+waiting Run or Promotion. The submitted definition digest must match the active definition.
+A missing definition continues to block release. The decision records the actor, time, reason,
+and observed state. The latest decision applies while its digest matches. A digest change
+requires a new decision and earlier decisions remain visible. Reruns and other subjects start
+with their own requirements.
+
+Review, cancellation, and capacity still govern release. At assignment, creation dispatch,
+or callback release, PostgreSQL records the common release time and exact definition for every
+requirement. Requirements satisfied by override retain the decision as evidence.
 
 ## Run release
 
@@ -286,9 +299,7 @@ title from its attached revision.
 The product API never exposes Prometheus endpoints, credentials, response
 labels, queries, or raw responses. Run scheduling details use
 `awaiting-gates`; Run and Promotion details show a compact waiting state and a
-focused Gate panel. Detail views refresh while waiting. Initial Gate support
-does not add dedicated pages, history, filters, Inbox items, notifications, or
-manual overrides.
+focused Gate panel. Detail views refresh while waiting and retain override decisions after release.
 
 ## Operational boundaries
 
@@ -302,7 +313,7 @@ type. It never labels metrics with PromQL, Repository, Gate, Target, or Stage
 names. Structured logs may include stable IDs and bounded error classes, but
 never query responses or credential material.
 
-The initial contract excludes manual overrides, cancellation of active work,
+The initial contract excludes cancellation of active work,
 additional evaluator types, subject-specific query interpolation,
 repository-owned cadence or credentials, implicit attachment, workflow graphs,
 and retained observation history.

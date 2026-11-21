@@ -295,6 +295,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	snapshots, err := database.GetRunSchedulingSnapshots(
 		ctx,
 		[]uuid.UUID{record.ID, ungated.ID},
+		uuid.New(), createdAt,
 		[]byte(`{"colo":4}`),
 		[]byte(`{}`),
 	)
@@ -310,8 +311,8 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	gatedSnapshot := snapshotsByID[record.ID]
 	ungatedSnapshot := snapshotsByID[ungated.ID]
-	if gatedSnapshot.GatesReleased || gatedSnapshot.EligiblePosition != nil ||
-		!ungatedSnapshot.GatesReleased || ungatedSnapshot.EligiblePosition == nil ||
+	if gatedSnapshot.GatesReady || gatedSnapshot.EligiblePosition != nil ||
+		!ungatedSnapshot.GatesReady || ungatedSnapshot.EligiblePosition == nil ||
 		*ungatedSnapshot.EligiblePosition != 1 {
 		t.Errorf("Gate-aware Run scheduling snapshots = %#v", snapshots)
 	}
