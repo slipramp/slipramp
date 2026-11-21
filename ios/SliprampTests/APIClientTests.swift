@@ -164,6 +164,7 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(list.items.first?.displayAction, "Sync homelab")
         XCTAssertEqual(list.items.first?.statusLabel, "Succeeded")
         XCTAssertEqual(list.items.first?.commit.shortSHA, "01234567")
+        XCTAssertEqual(list.items.first?.gates.state, .notRequired)
     }
 
     func testTargetListSendsSearchAndDecodesSummaries() async throws {
@@ -487,6 +488,8 @@ final class APIClientTests: XCTestCase {
         let promotion = try await client.getPromotion(id: promotionID)
         XCTAssertEqual(promotion.externalPromotionId, "promote-production-42")
         XCTAssertEqual(promotion.stageSnapshot.enrichment?.environment, "production")
+        XCTAssertTrue(promotion.stageSnapshot.gates.isEmpty)
+        XCTAssertEqual(promotion.gates.state, .notRequired)
         XCTAssertEqual(promotion.selectedFreight?.name, "freight-42")
         XCTAssertEqual(promotion.statusLabel, "Pending review")
         XCTAssertEqual(
@@ -972,6 +975,7 @@ final class APIClientTests: XCTestCase {
               "inputs": {},
               "artifactConsumers": {},
               "review": { "state": "\(reviewState)" },
+              "gates": { "state": "not-required", "requirements": [] },
               "createdAt": "2026-10-30T12:34:56Z"
             }
             """.utf8
@@ -1063,6 +1067,7 @@ final class APIClientTests: XCTestCase {
                 },
                 "requestedFreight": [],
                 "freight": { "items": [] },
+                "gates": [],
                 "lastObservedAt": "2026-10-30T12:30:00Z"
               },
               "reviewContext": {
@@ -1102,6 +1107,7 @@ final class APIClientTests: XCTestCase {
               },
               "reviewRequired": true,
               "status": "\(status)",
+              "gates": { "state": "not-required", "requirements": [] },
               "creationDispatch": {
                 "phase": "not-applicable",
                 "attemptCount": 0
