@@ -129,6 +129,9 @@ func (s *Service) createRun(
 	if !found {
 		return Run{}, ErrActionNotFound
 	}
+	if err := action.Intent.Validate(request.ActionName); err != nil {
+		return Run{}, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
 	if err := validateScheduledTriggerRequest(action, request.Source, parameters); err != nil {
 		return Run{}, err
 	}

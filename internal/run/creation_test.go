@@ -100,6 +100,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		"https://github.com/example/infrastructure.git" ||
 		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.14.3" ||
 		created.Snapshot.Action.Command[1] != "plan" ||
+		created.Snapshot.Action.Intent != catalog.ActionIntentPreview ||
 		!reflect.DeepEqual(created.Snapshot.Action.Gates, []string{"network-idle"}) ||
 		created.Snapshot.Action.Timeout != "30m" ||
 		created.Snapshot.Placement.JobNamespace != "slipramp-jobs" ||
@@ -108,6 +109,26 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		created.Snapshot.Placement.Credentials["backend"].SecretName !=
 			"terraform-backend" {
 		t.Errorf("frozen snapshot = %#v", created.Snapshot)
+	}
+}
+
+func TestCreateRunRejectsUnclassifiedCatalogAction(t *testing.T) {
+	t.Parallel()
+
+	service, runs := testService(t)
+	revision := testRevision()
+	action := revision.Catalog.Targets[0].Spec.Actions["preview"]
+	action.Intent = ""
+	revision.Catalog.Targets[0].Spec.Actions["preview"] = action
+	service.catalogs = &recordingCatalogs{revision: revision}
+	_, err := service.CreateRun(t.Context(), CreateRequest{
+		TargetID:   testTargetID,
+		ActionName: "preview",
+		Parameters: map[string]any{"mode": "safe"},
+		Source:     Source{Type: SourceTypeAPI},
+	})
+	if !errors.Is(err, ErrInvalidRequest) || !errors.Is(err, catalog.ErrInvalidActionIntent) || runs.calls != 0 {
+		t.Errorf("CreateRun() error = %v, persistence calls = %d", err, runs.calls)
 	}
 }
 
@@ -293,6 +314,7 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	pinnedRevision.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1302")
 	pinnedRevision.CommitSHA = strings.Repeat("b", 40)
 	pinnedRevision.Catalog.Targets[0].Spec.Actions["sync"] = catalog.Action{
+		Intent:  "reconcile",
 		Command: []string{"terraform", "apply"},
 	}
 	activeRevision := testRevision()

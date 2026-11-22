@@ -186,13 +186,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   if (formValue(formData, "intent") === "override-gate") {
     const result = await overridePromotionGate({
       client: createServerAPIClient(request, context),
-      path: { promotionId: params.promotionId, gateName: formValue(formData, "gateName") },
+      path: { promotionId: params.promotionId },
       body: {
-        definitionDigest: formValue(formData, "definitionDigest"),
+        key: formValue(formData, "gateKey"),
+        version: formValue(formData, "version"),
         reason: formValue(formData, "reason"),
       },
     });
-    if (result.response?.status === 204) return { message: "Gate override recorded." };
+    if (result.data) return { message: "Gate override recorded." };
     return { error: result.error?.detail ?? "The Gate override could not be recorded." };
   }
   if (formValue(formData, "intent") === "cancel") {

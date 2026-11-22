@@ -191,11 +191,7 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
           ) : null
         }
         back={<PageBackLink label={`Back to ${targetLabel}`} to={targetURL} />}
-        badges={
-          actionDefinition.intent ? (
-            <Badge variant="outline">{actionDefinition.intent}</Badge>
-          ) : null
-        }
+        badges={<Badge variant="outline">{actionDefinition.intent}</Badge>}
         description={
           actionDefinition.description ?? "Create an immutable execution of this action."
         }

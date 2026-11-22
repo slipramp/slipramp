@@ -88,6 +88,9 @@ import type {
   GetCurrentPrincipalData,
   GetCurrentPrincipalErrors,
   GetCurrentPrincipalResponses,
+  GetGlobalGateScopeData,
+  GetGlobalGateScopeErrors,
+  GetGlobalGateScopeResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
@@ -121,8 +124,14 @@ import type {
   GetRunLogCursorErrors,
   GetRunLogCursorResponses,
   GetRunResponses,
+  GetStageGateScopeData,
+  GetStageGateScopeErrors,
+  GetStageGateScopeResponses,
   GetTargetData,
   GetTargetErrors,
+  GetTargetGateScopeData,
+  GetTargetGateScopeErrors,
+  GetTargetGateScopeResponses,
   GetTargetResponses,
   ListApiKeysData,
   ListApiKeysErrors,
@@ -154,6 +163,9 @@ import type {
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
+  ListPromotionGateOverridesData,
+  ListPromotionGateOverridesErrors,
+  ListPromotionGateOverridesResponses,
   ListPromotionPipelinesData,
   ListPromotionPipelinesErrors,
   ListPromotionPipelinesResponses,
@@ -175,12 +187,24 @@ import type {
   ListRunArtifactsData,
   ListRunArtifactsErrors,
   ListRunArtifactsResponses,
+  ListRunGateOverridesData,
+  ListRunGateOverridesErrors,
+  ListRunGateOverridesResponses,
   ListRunsData,
   ListRunsErrors,
   ListRunsResponses,
   ListTargetsData,
   ListTargetsErrors,
   ListTargetsResponses,
+  LockGlobalGateScopeData,
+  LockGlobalGateScopeErrors,
+  LockGlobalGateScopeResponses,
+  LockStageGateScopeData,
+  LockStageGateScopeErrors,
+  LockStageGateScopeResponses,
+  LockTargetGateScopeData,
+  LockTargetGateScopeErrors,
+  LockTargetGateScopeResponses,
   LogoutData,
   LogoutErrors,
   LogoutResponses,
@@ -196,9 +220,18 @@ import type {
   RefreshRepositoryData,
   RefreshRepositoryErrors,
   RefreshRepositoryResponses,
+  RemoveGlobalGateWindowData,
+  RemoveGlobalGateWindowErrors,
+  RemoveGlobalGateWindowResponses,
   RemoveRepositoryData,
   RemoveRepositoryErrors,
   RemoveRepositoryResponses,
+  RemoveStageGateWindowData,
+  RemoveStageGateWindowErrors,
+  RemoveStageGateWindowResponses,
+  RemoveTargetGateWindowData,
+  RemoveTargetGateWindowErrors,
+  RemoveTargetGateWindowResponses,
   ReplaceKargoStageSnapshotData,
   ReplaceKargoStageSnapshotErrors,
   ReplaceKargoStageSnapshotResponses,
@@ -229,6 +262,15 @@ import type {
   SealRunLogData,
   SealRunLogErrors,
   SealRunLogResponses,
+  SetGlobalGateWindowData,
+  SetGlobalGateWindowErrors,
+  SetGlobalGateWindowResponses,
+  SetStageGateWindowData,
+  SetStageGateWindowErrors,
+  SetStageGateWindowResponses,
+  SetTargetGateWindowData,
+  SetTargetGateWindowErrors,
+  SetTargetGateWindowResponses,
   StreamRunLogData,
   StreamRunLogErrors,
   StreamRunLogResponse,
@@ -239,6 +281,15 @@ import type {
   TestRepositoryConnectionData,
   TestRepositoryConnectionErrors,
   TestRepositoryConnectionResponses,
+  UnlockGlobalGateScopeData,
+  UnlockGlobalGateScopeErrors,
+  UnlockGlobalGateScopeResponses,
+  UnlockStageGateScopeData,
+  UnlockStageGateScopeErrors,
+  UnlockStageGateScopeResponses,
+  UnlockTargetGateScopeData,
+  UnlockTargetGateScopeErrors,
+  UnlockTargetGateScopeResponses,
   UpdatePrincipalData,
   UpdatePrincipalErrors,
   UpdatePrincipalResponses,
@@ -750,6 +801,463 @@ export const explainTargetAction = <ThrowOnError extends boolean = false>(
     ],
     url: "/api/v1/targets/{targetId}/actions/{actionName}/explanation",
     ...options,
+  });
+
+/**
+ * Inspect the global Gate scope
+ *
+ * Returns current lock and window policies, their effective states, and recent changes.
+ */
+export const getGlobalGateScope = <ThrowOnError extends boolean = false>(
+  options?: Options<GetGlobalGateScopeData, ThrowOnError>,
+): RequestResult<GetGlobalGateScopeResponses, GetGlobalGateScopeErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetGlobalGateScopeResponses,
+    GetGlobalGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/global",
+    ...options,
+  });
+
+/**
+ * Unlock the global Gate scope
+ *
+ * Clears the current hold. Unlocking an inactive scope is idempotent.
+ */
+export const unlockGlobalGateScope = <ThrowOnError extends boolean = false>(
+  options?: Options<UnlockGlobalGateScopeData, ThrowOnError>,
+): RequestResult<UnlockGlobalGateScopeResponses, UnlockGlobalGateScopeErrors, ThrowOnError> =>
+  (options?.client ?? client).delete<
+    UnlockGlobalGateScopeResponses,
+    UnlockGlobalGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/global/lock",
+    ...options,
+  });
+
+/**
+ * Lock the global Gate scope
+ *
+ * Records an operator hold. An identical request from its creator returns the existing active lock.
+ */
+export const lockGlobalGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<LockGlobalGateScopeData, ThrowOnError>,
+): RequestResult<LockGlobalGateScopeResponses, LockGlobalGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    LockGlobalGateScopeResponses,
+    LockGlobalGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/global/lock",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove the weekly window for the global Gate scope
+ *
+ * Removing an absent window returns the current scope.
+ */
+export const removeGlobalGateWindow = <ThrowOnError extends boolean = false>(
+  options?: Options<RemoveGlobalGateWindowData, ThrowOnError>,
+): RequestResult<RemoveGlobalGateWindowResponses, RemoveGlobalGateWindowErrors, ThrowOnError> =>
+  (options?.client ?? client).delete<
+    RemoveGlobalGateWindowResponses,
+    RemoveGlobalGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/global/window",
+    ...options,
+  });
+
+/**
+ * Set the weekly window for the global Gate scope
+ *
+ * Every accepted update starts a new window version.
+ */
+export const setGlobalGateWindow = <ThrowOnError extends boolean = false>(
+  options: Options<SetGlobalGateWindowData, ThrowOnError>,
+): RequestResult<SetGlobalGateWindowResponses, SetGlobalGateWindowErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SetGlobalGateWindowResponses,
+    SetGlobalGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/global/window",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Inspect the Target Gate scope
+ *
+ * Returns current lock and window policies, their effective states, and recent changes.
+ */
+export const getTargetGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<GetTargetGateScopeData, ThrowOnError>,
+): RequestResult<GetTargetGateScopeResponses, GetTargetGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetTargetGateScopeResponses,
+    GetTargetGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/targets/{targetId}",
+    ...options,
+  });
+
+/**
+ * Unlock the Target Gate scope
+ *
+ * Clears the current hold. Unlocking an inactive scope is idempotent.
+ */
+export const unlockTargetGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<UnlockTargetGateScopeData, ThrowOnError>,
+): RequestResult<UnlockTargetGateScopeResponses, UnlockTargetGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    UnlockTargetGateScopeResponses,
+    UnlockTargetGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/targets/{targetId}/lock",
+    ...options,
+  });
+
+/**
+ * Lock the Target Gate scope
+ *
+ * Records an operator hold. An identical request from its creator returns the existing active lock.
+ */
+export const lockTargetGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<LockTargetGateScopeData, ThrowOnError>,
+): RequestResult<LockTargetGateScopeResponses, LockTargetGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    LockTargetGateScopeResponses,
+    LockTargetGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/targets/{targetId}/lock",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove the weekly window for the Target Gate scope
+ *
+ * Removing an absent window returns the current scope.
+ */
+export const removeTargetGateWindow = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveTargetGateWindowData, ThrowOnError>,
+): RequestResult<RemoveTargetGateWindowResponses, RemoveTargetGateWindowErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveTargetGateWindowResponses,
+    RemoveTargetGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/targets/{targetId}/window",
+    ...options,
+  });
+
+/**
+ * Set the weekly window for the Target Gate scope
+ *
+ * Every accepted update starts a new window version.
+ */
+export const setTargetGateWindow = <ThrowOnError extends boolean = false>(
+  options: Options<SetTargetGateWindowData, ThrowOnError>,
+): RequestResult<SetTargetGateWindowResponses, SetTargetGateWindowErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SetTargetGateWindowResponses,
+    SetTargetGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/targets/{targetId}/window",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Inspect the Stage Gate scope
+ *
+ * Returns current lock and window policies, their effective states, and recent changes.
+ */
+export const getStageGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<GetStageGateScopeData, ThrowOnError>,
+): RequestResult<GetStageGateScopeResponses, GetStageGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetStageGateScopeResponses, GetStageGateScopeErrors, ThrowOnError>(
+    {
+      security: [
+        {
+          in: "cookie",
+          name: "slipramp_session",
+          type: "apiKey",
+        },
+        {
+          key: "ProductBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/api/v1/gate-scopes/stages/{stageId}",
+      ...options,
+    },
+  );
+
+/**
+ * Unlock the Stage Gate scope
+ *
+ * Clears the current hold. Unlocking an inactive scope is idempotent.
+ */
+export const unlockStageGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<UnlockStageGateScopeData, ThrowOnError>,
+): RequestResult<UnlockStageGateScopeResponses, UnlockStageGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    UnlockStageGateScopeResponses,
+    UnlockStageGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/stages/{stageId}/lock",
+    ...options,
+  });
+
+/**
+ * Lock the Stage Gate scope
+ *
+ * Records an operator hold. An identical request from its creator returns the existing active lock.
+ */
+export const lockStageGateScope = <ThrowOnError extends boolean = false>(
+  options: Options<LockStageGateScopeData, ThrowOnError>,
+): RequestResult<LockStageGateScopeResponses, LockStageGateScopeErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    LockStageGateScopeResponses,
+    LockStageGateScopeErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/stages/{stageId}/lock",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove the weekly window for the Stage Gate scope
+ *
+ * Removing an absent window returns the current scope.
+ */
+export const removeStageGateWindow = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveStageGateWindowData, ThrowOnError>,
+): RequestResult<RemoveStageGateWindowResponses, RemoveStageGateWindowErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveStageGateWindowResponses,
+    RemoveStageGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/stages/{stageId}/window",
+    ...options,
+  });
+
+/**
+ * Set the weekly window for the Stage Gate scope
+ *
+ * Every accepted update starts a new window version.
+ */
+export const setStageGateWindow = <ThrowOnError extends boolean = false>(
+  options: Options<SetStageGateWindowData, ThrowOnError>,
+): RequestResult<SetStageGateWindowResponses, SetStageGateWindowErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SetStageGateWindowResponses,
+    SetStageGateWindowErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/gate-scopes/stages/{stageId}/window",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -1313,12 +1821,16 @@ export const getRun = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Override one Gate for a waiting Run
+ * Inspect eligible Gates and override history for a Run
  */
-export const overrideRunGate = <ThrowOnError extends boolean = false>(
-  options: Options<OverrideRunGateData, ThrowOnError>,
-): RequestResult<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError> =>
-  (options.client ?? client).put<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError>({
+export const listRunGateOverrides = <ThrowOnError extends boolean = false>(
+  options: Options<ListRunGateOverridesData, ThrowOnError>,
+): RequestResult<ListRunGateOverridesResponses, ListRunGateOverridesErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListRunGateOverridesResponses,
+    ListRunGateOverridesErrors,
+    ThrowOnError
+  >({
     security: [
       {
         in: "cookie",
@@ -1331,7 +1843,30 @@ export const overrideRunGate = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/api/v1/runs/{runId}/gates/{gateName}/override",
+    url: "/api/v1/runs/{runId}/gate-overrides",
+    ...options,
+  });
+
+/**
+ * Override one Gate for a waiting Run
+ */
+export const overrideRunGate = <ThrowOnError extends boolean = false>(
+  options: Options<OverrideRunGateData, ThrowOnError>,
+): RequestResult<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError> =>
+  (options.client ?? client).post<OverrideRunGateResponses, OverrideRunGateErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/runs/{runId}/gate-overrides",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -2022,12 +2557,43 @@ export const getPromotion = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Inspect eligible Gates and override history for a Promotion
+ */
+export const listPromotionGateOverrides = <ThrowOnError extends boolean = false>(
+  options: Options<ListPromotionGateOverridesData, ThrowOnError>,
+): RequestResult<
+  ListPromotionGateOverridesResponses,
+  ListPromotionGateOverridesErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListPromotionGateOverridesResponses,
+    ListPromotionGateOverridesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions/{promotionId}/gate-overrides",
+    ...options,
+  });
+
+/**
  * Override one Gate for a waiting Promotion
  */
 export const overridePromotionGate = <ThrowOnError extends boolean = false>(
   options: Options<OverridePromotionGateData, ThrowOnError>,
 ): RequestResult<OverridePromotionGateResponses, OverridePromotionGateErrors, ThrowOnError> =>
-  (options.client ?? client).put<
+  (options.client ?? client).post<
     OverridePromotionGateResponses,
     OverridePromotionGateErrors,
     ThrowOnError
@@ -2044,7 +2610,7 @@ export const overridePromotionGate = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/api/v1/promotions/{promotionId}/gates/{gateName}/override",
+    url: "/api/v1/promotions/{promotionId}/gate-overrides",
     ...options,
     headers: {
       "Content-Type": "application/json",

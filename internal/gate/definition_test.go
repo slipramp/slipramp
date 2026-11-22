@@ -22,8 +22,8 @@ func TestDefinitionDigest(t *testing.T) {
 		t.Fatalf("Digest() = %q, want %q", digest, expectedDigest)
 	}
 
-	changed := definition
-	changed.Prometheus.Query = "active_sessions > 0"
+	changed := validDefinition()
+	changed.Evaluator.(*gate.PrometheusDefinition).Query = "active_sessions > 0"
 	changedDigest, err := changed.Digest()
 	if err != nil {
 		t.Fatalf("changed Digest() error = %v", err)
@@ -32,7 +32,7 @@ func TestDefinitionDigest(t *testing.T) {
 		t.Errorf("changed Digest() = %q, want a different digest", changedDigest)
 	}
 	negativeZero := definition
-	negativeZero.Prometheus.Condition.Value = math.Copysign(0, -1)
+	negativeZero.Evaluator.(*gate.PrometheusDefinition).Condition.Value = math.Copysign(0, -1)
 	if got, err := negativeZero.Digest(); err != nil || got != digest {
 		t.Errorf("negative zero digest = %q, %v, want %q", got, err, digest)
 	}
@@ -50,35 +50,35 @@ func TestDefinitionValidate(t *testing.T) {
 		{
 			name: "source",
 			configure: func(definition *gate.Definition) {
-				definition.Prometheus.Source = "NOT_VALID"
+				definition.Evaluator.(*gate.PrometheusDefinition).Source = "NOT_VALID"
 			},
 			wantError: "Gate Prometheus source",
 		},
 		{
 			name: "query whitespace",
 			configure: func(definition *gate.Definition) {
-				definition.Prometheus.Query = " active_sessions"
+				definition.Evaluator.(*gate.PrometheusDefinition).Query = " active_sessions"
 			},
 			wantError: "leading or trailing whitespace",
 		},
 		{
 			name: "query length",
 			configure: func(definition *gate.Definition) {
-				definition.Prometheus.Query = strings.Repeat("x", gate.MaximumQueryLength+1)
+				definition.Evaluator.(*gate.PrometheusDefinition).Query = strings.Repeat("x", gate.MaximumQueryLength+1)
 			},
 			wantError: "must not exceed",
 		},
 		{
 			name: "operator",
 			configure: func(definition *gate.Definition) {
-				definition.Prometheus.Condition.Operator = "approximately"
+				definition.Evaluator.(*gate.PrometheusDefinition).Condition.Operator = "approximately"
 			},
 			wantError: "is not supported",
 		},
 		{
 			name: "threshold",
 			configure: func(definition *gate.Definition) {
-				definition.Prometheus.Condition.Value = math.Inf(1)
+				definition.Evaluator.(*gate.PrometheusDefinition).Condition.Value = math.Inf(1)
 			},
 			wantError: "must be finite",
 		},
@@ -136,7 +136,7 @@ func TestConditionCompare(t *testing.T) {
 
 func validDefinition() gate.Definition {
 	return gate.Definition{
-		Prometheus: gate.PrometheusDefinition{
+		Evaluator: &gate.PrometheusDefinition{
 			Source: "homelab",
 			Query:  "active_sessions",
 			Condition: gate.Condition{

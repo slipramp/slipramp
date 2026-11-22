@@ -373,7 +373,7 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 		*assignment.Target.Path != "infrastructure/network" {
 		t.Errorf("target = %#v", assignment.Target)
 	}
-	if assignment.Action.Name != "preview" ||
+	if assignment.Action.Name != "preview" || assignment.Action.Intent != api.ActionIntentPreview ||
 		assignment.Action.Runtime != "terraform" ||
 		len(assignment.Action.Command) != 3 ||
 		assignment.Action.ParameterDefinitions == nil {

@@ -574,7 +574,7 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	firstTarget.Metadata.Title = "Home network"
 	firstTarget.Spec.Runtime = "terraform"
 	firstTarget.Spec.Placement = "infrastructure"
-	firstTarget.Spec.Actions["deploy"] = catalog.Action{Command: []string{"deploy"}}
+	firstTarget.Spec.Actions["deploy"] = catalog.Action{Intent: "reconcile", Command: []string{"deploy"}}
 	firstRefresh.Revision.Catalog.Targets = []catalog.Target{firstTarget}
 	if err := database.RecordRepositoryRefresh(ctx, firstRepositoryID, firstRefresh); err != nil {
 		t.Fatalf("record first catalog: %v", err)
@@ -590,10 +590,12 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	secondTarget.Metadata.Title = "Backups"
 	secondTarget.Spec.Placement = "infrastructure"
 	secondTarget.Spec.Actions["preview"] = catalog.Action{
+		Intent:    "preview",
 		Command:   []string{"preview"},
 		Placement: "preview",
 	}
 	secondTarget.Spec.Actions["verify"] = catalog.Action{
+		Intent:    "preview",
 		Command:   []string{"verify"},
 		Placement: "preview",
 	}
@@ -685,7 +687,7 @@ func testCatalogTarget(name, watch string) catalog.Target {
 		Spec: catalog.TargetSpec{
 			Watch: []string{watch},
 			Actions: map[string]catalog.Action{
-				"inspect": {Command: []string{"inspect"}},
+				"inspect": {Intent: "preview", Command: []string{"inspect"}},
 			},
 		},
 		Source: catalog.Source{Path: ".slipramp/targets.yaml", Document: 1},

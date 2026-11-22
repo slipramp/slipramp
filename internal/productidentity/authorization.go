@@ -11,6 +11,8 @@ const (
 	AuthenticationMethodAPIKey     AuthenticationMethod = "api-key"
 	AuthenticationMethodOAuthToken AuthenticationMethod = "oauth-access-token"
 
+	PermissionManageGlobalGates       Permission = "gates:manage-global"
+	PermissionManageLocalGates        Permission = "gates:manage-local"
 	PermissionRead                    Permission = "read"
 	PermissionRunsWrite               Permission = "runs:write"
 	PermissionRunsOverrideGates       Permission = "runs:override-gates"
@@ -96,9 +98,9 @@ func roleAuthorizes(role Role, permission Permission) bool {
 		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
 	case PermissionRunsWrite, PermissionRunsReview, PermissionRunsOverrideGates, PermissionInboxWrite:
 		return role == RoleOperator || role == RoleAdmin
-	case PermissionPromotionsSubmit, PermissionPromotionsWrite, PermissionPromotionsOverrideGates:
+	case PermissionManageLocalGates, PermissionPromotionsSubmit, PermissionPromotionsWrite, PermissionPromotionsOverrideGates:
 		return role == RoleOperator || role == RoleAdmin
-	case PermissionAdmin:
+	case PermissionAdmin, PermissionManageGlobalGates:
 		return role == RoleAdmin
 	case PermissionAPIKeyRevoke:
 		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
@@ -128,6 +130,10 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			}
 		case PermissionSensitiveArtifactsRead:
 			if scope == ScopeRead {
+				return true
+			}
+		case PermissionManageGlobalGates, PermissionManageLocalGates:
+			if scope == ScopeGatesManage {
 				return true
 			}
 		case PermissionRunsWrite:

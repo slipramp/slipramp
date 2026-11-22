@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/slipramp/slipramp/internal/gate"
-
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
@@ -259,11 +258,13 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 
 	h := newHandler(Dependencies{
 		KargoIntegrations: integrations,
-		GateSources:       gate.SourceSet{"prod": {Prometheus: gate.PrometheusSource{PublicURL: "https://metrics.example.com"}}},
+		GateSources:       gate.SourceSet{"prod": gate.PrometheusSource{PublicURL: "https://metrics.example.com"}},
 	})
 	gates := gate.Summary{{
 		Name: "healthy", State: gate.RequirementUnevaluated,
-		Prometheus: &gate.PrometheusDefinition{Source: "prod", Query: "up"},
+		Key: "repository/healthy", Version: "current", Origin: gate.RepositoryOrigin, Type: gate.PrometheusType,
+		Scope:  gate.Scope{Kind: gate.RepositoryScope, ID: uuid.New()},
+		Policy: &gate.PrometheusDefinition{Source: "prod", Query: "up"},
 	}}
 	body, err := h.promotionResponse(promotion.PromotionReview{Promotion: record}, nil, gates)
 	if err != nil {
@@ -406,30 +407,31 @@ func TestSubmitKargoPromotionReturnsDurableState(t *testing.T) {
 	}
 }
 
-func TestSubmitKargoPromotionMapsIneligibleStageToConflict(t *testing.T) {
+func TestSubmitKargoPromotionMapsConflicts(t *testing.T) {
 	t.Parallel()
 
-	promotions := &recordingPromotionService{err: promotion.ErrStageStale}
 	authentication := productAuthentication(
 		productidentity.RoleOperator,
 		productidentity.AuthenticationMethodAPIKey,
 		[]productidentity.Scope{productidentity.ScopePromotionsSubmit},
 	)
 	authentication.Principal.Kind = productidentity.KindServiceAccount
-	httpHandler := NewHTTP(
-		Dependencies{
-			PromotionRequests: promotions,
-			ProductAuthentication: &recordingProductAuthenticationService{
-				authentication: authentication,
-			},
-		},
-		HTTPOptions{},
-	)
-	request := httptest.NewRequestWithContext(
-		t.Context(),
-		http.MethodPost,
-		"/api/v1/kargo/prod/promotions",
-		strings.NewReader(`{
+	for _, conflict := range []error{promotion.ErrStageStale, promotion.ErrTransitionConflict} {
+		t.Run(conflict.Error(), func(t *testing.T) {
+			httpHandler := NewHTTP(
+				Dependencies{
+					PromotionRequests: &recordingPromotionService{err: conflict},
+					ProductAuthentication: &recordingProductAuthenticationService{
+						authentication: authentication,
+					},
+				},
+				HTTPOptions{},
+			)
+			request := httptest.NewRequestWithContext(
+				t.Context(),
+				http.MethodPost,
+				"/api/v1/kargo/prod/promotions",
+				strings.NewReader(`{
           "externalPromotionId":"external-dns-01jbe4q8",
           "project":"kargo-core",
           "stage":"external-dns-prod",
@@ -437,14 +439,16 @@ func TestSubmitKargoPromotionMapsIneligibleStageToConflict(t *testing.T) {
           "candidateRevision":"f4cb21a88e1d0000000000000000000000000000",
           "candidateBranch":"kargo/promotion/external-dns-01jbe4q8"
         }`),
-	)
-	request.Header.Set("Authorization", "Bearer kargo-key")
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
+			)
+			request.Header.Set("Authorization", "Bearer kargo-key")
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
 
-	httpHandler.ServeHTTP(response, request)
+			httpHandler.ServeHTTP(response, request)
 
-	assertProblem(t, response, http.StatusConflict)
+			assertProblem(t, response, http.StatusConflict)
+		})
+	}
 }
 
 func TestListPromotionsUsesOperatorFilters(t *testing.T) {
@@ -493,6 +497,8 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 			promotionID: {
 				{
 					Name: "network-idle", Title: "Network idle",
+					Key: "repository/network-idle", Version: "current", Type: gate.PrometheusType,
+					Origin: gate.RepositoryOrigin, Scope: gate.Scope{Kind: gate.RepositoryScope, ID: repositoryID},
 					State: gate.RequirementBlocking,
 				},
 			},
@@ -547,11 +553,24 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		reviews.promotionFilter.Offset != 2 {
 		t.Errorf("Promotion filter = %#v", reviews.promotionFilter)
 	}
+	var list api.PromotionList
+	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Items) != 1 || list.Items[0].Gates.State != api.GateSummaryStateWaiting ||
+		len(list.Items[0].Gates.Requirements) != 1 {
+		t.Fatalf("Promotion Gate summary = %#v", list.Items)
+	}
+	requirement := list.Items[0].Gates.Requirements[0]
+	if requirement.Key != "repository/network-idle" || requirement.Name != "network-idle" || requirement.Title == nil ||
+		*requirement.Title != "Network idle" || requirement.State != api.GateRequirementStateBlocking ||
+		requirement.Scope.ID != repositoryID || requirement.Version == nil || *requirement.Version != "current" {
+		t.Errorf("Promotion Gate requirement = %#v", requirement)
+	}
 	for _, expected := range []string{
 		promotionID.String(),
 		`"total":1`,
 		`"status":"pending"`,
-		`"gates":{"requirements":[{"name":"network-idle","state":"blocking","title":"Network idle"}],"state":"waiting"}`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/promotion/external-dns-01jbe4q8"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {

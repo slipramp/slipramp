@@ -206,7 +206,7 @@ func TestMetadataFreeKargoPromotionMigrationPreservesLegacyDispatchFailureIntegr
 	if record.ReviewContext == nil {
 		t.Fatal("legacy Promotion review context is nil")
 	}
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      stage.ClusterName,
 		ClaimedAt:        record.CreatedAt,
 		RetryDelays:      []time.Duration{time.Minute},

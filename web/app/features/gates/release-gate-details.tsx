@@ -8,6 +8,7 @@ import {
   gateCanBeOverridden,
   hasMatchingOverride,
   gateConditionLabel,
+  gateEvidenceLabel,
   gateRequirementBadges,
   gateSummaryBadges,
 } from "~/features/gates/gate-presentation";
@@ -65,32 +66,35 @@ export function ReleaseGateDetails({
           </Table.Thead>
           <Table.Tbody>
             {gates.requirements.map((requirement) => (
-              <Fragment key={requirement.name}>
+              <Fragment key={requirement.key}>
                 <GateRequirementRow
                   requirement={requirement}
                   showLastEvaluated={showLastEvaluated}
                 />
                 {requirement.overrides?.map((decision) => (
-                  <Table.Tr key={`${decision.recordedAt}-${decision.definitionDigest}`}>
+                  <Table.Tr key={`${decision.recordedAt}-${decision.version}`}>
                     <Table.Td colSpan={showLastEvaluated ? 5 : showEvidence ? 4 : 2}>
                       <Text size="sm">
                         {decision.actor.displayName} recorded an override
-                        {requirement.definitionDigest &&
-                        decision.definitionDigest !== requirement.definitionDigest
-                          ? " for an earlier Gate definition"
-                          : ""}{" "}
+                        {requirement.origin === "server"
+                          ? ` for version ${decision.version}`
+                          : requirement.version && decision.version !== requirement.version
+                            ? " for an earlier policy version"
+                            : ""}{" "}
                         <RelativeTime size="sm" value={decision.recordedAt} />. {decision.reason}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {gateRequirementBadges[decision.observedState].label} at decision time
-                        {decision.observedValue !== undefined ? ` (${decision.observedValue})` : ""}
+                        {decision.observedEvidence
+                          ? ` (${gateEvidenceLabel(decision.observedEvidence)})`
+                          : ""}
                         {decision.diagnostic ? ` · ${decision.diagnostic}` : ""}
                       </Text>
                     </Table.Td>
                   </Table.Tr>
                 ))}
                 {canOverride && gates.state === "waiting" && gateCanBeOverridden(requirement) ? (
-                  <Table.Tr key={requirement.definitionDigest}>
+                  <Table.Tr key={requirement.version}>
                     <Table.Td colSpan={5}>
                       <GateOverrideForm
                         requirement={requirement}
@@ -143,7 +147,9 @@ function GateRequirementRow({
         </Text>
         {requirement.title ? (
           <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
-            {requirement.name}
+            {requirement.origin === "server"
+              ? `Policy version ${requirement.version}`
+              : requirement.name}
           </Text>
         ) : null}
         {requirement.queryUrl ? (
@@ -174,14 +180,40 @@ function GateRequirementRow({
       {requirement.state !== "stopped" && (
         <>
           <Table.Td>
-            {requirement.value === undefined ? (
+            {requirement.evidence === undefined ? (
               <Text c="dimmed" size="sm">
                 {requirement.releasedAt && hasMatchingOverride(requirement)
                   ? "Operator override"
                   : "No observation"}
               </Text>
             ) : (
-              <Code>{requirement.value}</Code>
+              <Stack gap={2} align="flex-start">
+                <Code>{gateEvidenceLabel(requirement.evidence)}</Code>
+                {"lock" in requirement.evidence ? (
+                  <Text size="xs" c="dimmed">
+                    Locked <RelativeTime value={requirement.evidence.lock.createdAt} />
+                  </Text>
+                ) : null}
+                {"lock" in requirement.evidence && requirement.evidence.lock.expiresAt ? (
+                  <Text size="xs" c="dimmed">
+                    Lock expiry <RelativeTime value={requirement.evidence.lock.expiresAt} />
+                  </Text>
+                ) : null}
+                {"window" in requirement.evidence &&
+                requirement.evidence.window.observation.intervalStart ? (
+                  <Text size="xs" c="dimmed">
+                    Interval start{" "}
+                    <RelativeTime value={requirement.evidence.window.observation.intervalStart} />
+                  </Text>
+                ) : null}
+                {"window" in requirement.evidence &&
+                requirement.evidence.window.observation.nextTransition ? (
+                  <Text size="xs" c="dimmed">
+                    Next transition{" "}
+                    <RelativeTime value={requirement.evidence.window.observation.nextTransition} />
+                  </Text>
+                ) : null}
+              </Stack>
             )}
           </Table.Td>
           <Table.Td>{gateConditionLabel(requirement)}</Table.Td>
@@ -218,8 +250,8 @@ function GateOverrideForm({
       <Form method="post">
         <Stack align="flex-start" gap="xs" mt="xs">
           <input name="intent" type="hidden" value="override-gate" />
-          <input name="gateName" type="hidden" value={requirement.name} />
-          <input name="definitionDigest" type="hidden" value={requirement.definitionDigest} />
+          <input name="gateKey" type="hidden" value={requirement.key} />
+          <input name="version" type="hidden" value={requirement.version} />
           <Textarea
             required
             maxLength={1024}

@@ -52,6 +52,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       triggers:
         - name: nightly-inspect
@@ -79,7 +80,8 @@ metadata:
   name: network-idle
   title: Network has no active changes
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: max_over_time(network_active_changes[1m])
     condition:
@@ -107,6 +109,22 @@ spec:
   image: example.com/tools:1
   typo: rejected
 `,
+		"missing action intent": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata: {name: operations}
+spec:
+  actions:
+    inspect: {command: [inspect]}
+`,
+		"unknown action intent": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata: {name: operations}
+spec:
+  actions:
+    inspect: {intent: inspect, command: [inspect]}
+`,
 		"wrong command type": `
 apiVersion: slipramp.com/v1alpha1
 kind: Target
@@ -115,6 +133,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: inspect
 `,
 		"unsupported kind": `
@@ -133,6 +152,7 @@ spec:
   actions:
     inspect:
       documentationUrl: /docs/inspect
+      intent: preview
       command: [inspect]
 `,
 		"oversized parameter title": `
@@ -143,6 +163,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       parameters:
         environment:
@@ -159,6 +180,7 @@ spec:
   watch: [operations/**]
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       triggers:
         - name: inspect-on-change
@@ -173,6 +195,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       triggers:
         - name: ambiguous
@@ -188,6 +211,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       triggers:
         - name: nightly
@@ -203,6 +227,7 @@ metadata:
 spec:
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       triggers:
         - name: nightly
@@ -215,7 +240,8 @@ kind: Gate
 metadata:
   name: network-idle
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: network_active_changes
     condition:

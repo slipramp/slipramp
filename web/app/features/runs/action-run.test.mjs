@@ -20,9 +20,9 @@ test("lists other target actions by name with their display titles", () => {
   assert.deepEqual(
     otherTargetActions(
       {
-        preview: { command: ["pyinfra", "--dry"], title: "Preview" },
-        sync: { command: ["pyinfra"] },
-        canary: { command: ["pyinfra", "--limit", "canary"], title: "Canary" },
+        preview: { intent: "preview", command: ["pyinfra", "--dry"], title: "Preview" },
+        sync: { intent: "reconcile", command: ["pyinfra"] },
+        canary: { intent: "reconcile", command: ["pyinfra", "--limit", "canary"], title: "Canary" },
       },
       "preview",
     ),

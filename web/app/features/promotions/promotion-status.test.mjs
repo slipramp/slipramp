@@ -131,15 +131,15 @@ test("waiting Gates take precedence over active delivery and execution presentat
 
   assert.deepEqual(
     [promotionOverallStatus(waiting).label, promotionOverallStatus(waiting).color],
-    ["Waiting for gates", "yellow"],
+    ["Waiting for network-idle", "yellow"],
   );
-  assert.equal(promotionDeliveryStatus(waiting).label, "Waiting for gates");
+  assert.equal(promotionDeliveryStatus(waiting).label, "Waiting for network-idle");
   assert.equal(
     promotionExecutionStatus({
       ...waiting,
       creationDispatch: { attemptCount: 1, phase: "delivered" },
     }).label,
-    "Waiting for gates",
+    "Waiting for network-idle",
   );
 
   const succeeded = {
@@ -171,4 +171,26 @@ test("repeat actions follow terminal outcomes and wait for cancellation to finis
   }
   assert.equal(promotionRepeatLabel({ ...base, creationDispatch: { phase: "failed" } }), "Retry");
   assert.equal(promotionRepeatLabel({ ...base, cancellation: { state: "completed" } }), "Retry");
+});
+
+test("Promotion release names the first unwaived scope policy after review", () => {
+  const global = {
+    key: "lock/global",
+    title: "Global lock",
+    type: "lock",
+    state: "blocking",
+    version: "1",
+  };
+  const stage = {
+    key: "window/stage",
+    title: "Stage window",
+    type: "window",
+    state: "blocking",
+    version: "2",
+  };
+  const waiting = { ...base, gates: { state: "waiting", requirements: [global, stage] } };
+  assert.equal(promotionOverallStatus(waiting).label, "Global lock active");
+  global.overrides = [{ key: global.key, version: "1" }];
+  assert.equal(promotionDeliveryStatus(waiting).label, "Stage window closed");
+  assert.equal(promotionOverallStatus({ ...waiting, status: "pending" }).label, "Awaiting review");
 });

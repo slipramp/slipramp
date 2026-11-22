@@ -168,14 +168,16 @@ INSERT INTO catalog_gates (
     source_path,
     source_document,
     definition,
-    definition_digest
+    definition_digest,
+    subject_scoped
 ) VALUES (
     $1,
     $2,
     $3,
     $4,
     $5,
-    $6
+    $6,
+    $7
 )
 `
 
@@ -186,6 +188,7 @@ type CreateCatalogGateParams struct {
 	SourceDocument    int32
 	Definition        []byte
 	DefinitionDigest  string
+	SubjectScoped     bool
 }
 
 func (q *Queries) CreateCatalogGate(ctx context.Context, arg CreateCatalogGateParams) error {
@@ -196,6 +199,7 @@ func (q *Queries) CreateCatalogGate(ctx context.Context, arg CreateCatalogGatePa
 		arg.SourceDocument,
 		arg.Definition,
 		arg.DefinitionDigest,
+		arg.SubjectScoped,
 	)
 	return err
 }

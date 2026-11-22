@@ -165,13 +165,16 @@ func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
 
 func (t *Telemetry) ObserveGateEvaluation(
 	ctx context.Context,
+	sourceType string,
 	result gate.ObservationState,
+	failureClass string,
 	duration time.Duration,
 ) {
-	options := metric.WithAttributes(
-		attribute.String("source_type", "prometheus"),
-		attribute.String("result", string(result)),
-	)
+	labels := []attribute.KeyValue{attribute.String("source_type", sourceType), attribute.String("result", string(result))}
+	if failureClass != "" {
+		labels = append(labels, attribute.String("failure_class", failureClass))
+	}
+	options := metric.WithAttributes(labels...)
 	t.operations.gateEvaluationAttempts.Add(ctx, 1, options)
 	t.operations.gateEvaluationDuration.Record(ctx, duration.Seconds(), options)
 }

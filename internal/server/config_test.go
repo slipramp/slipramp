@@ -202,7 +202,7 @@ func TestConfigValidate(t *testing.T) {
 			name: "invalid Gate source",
 			configure: func(settings *Config) {
 				settings.GateSources = gate.SourceSet{
-					"homelab": {Prometheus: gate.PrometheusSource{URL: "not-a-url"}},
+					"homelab": gate.PrometheusSource{URL: "not-a-url"},
 				}
 			},
 			wantError: "validate Gate sources",

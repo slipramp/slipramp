@@ -82,6 +82,11 @@ func configurePresentationMetadata(resource *jsonschema.Schema) {
 	maximumActiveRuns.Minimum = &minimumActiveRuns
 
 	action := resource.Properties["spec"].Properties["actions"].AdditionalProperties
+	action.Properties["intent"].Enum = []any{
+		catalog.ActionIntentPreview,
+		catalog.ActionIntentReconcile,
+		catalog.ActionIntentOperation,
+	}
 	action.Properties["title"].Description =
 		"Operator-facing display title; the action map key remains the stable identity."
 	action.Properties["description"].Description = "Operator-facing description of the action."
@@ -136,21 +141,9 @@ func configureGate(resource *jsonschema.Schema) {
 	metadata := resource.Properties["metadata"]
 	boundedString(metadata.Properties["title"], catalog.PresentationTitleMaxLength)
 
-	prometheus := resource.Properties["spec"].Properties["prometheus"]
-	source := prometheus.Properties["source"]
-	source.MaxLength = new(63)
-	source.Pattern = `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`
-	query := prometheus.Properties["query"]
-	boundedString(query, gate.MaximumQueryLength)
-	condition := prometheus.Properties["condition"]
-	condition.Properties["operator"].Enum = []any{
-		gate.OperatorEqual,
-		gate.OperatorNotEqual,
-		gate.OperatorLessThan,
-		gate.OperatorLessThanOrEqual,
-		gate.OperatorGreaterThan,
-		gate.OperatorGreaterThanOrEqual,
-	}
+	spec := resource.Properties["spec"]
+	spec.Properties = map[string]*jsonschema.Schema{"evaluator": gate.DefinitionSchema()}
+	spec.Required = []string{"evaluator"}
 }
 
 func boundedString(schema *jsonschema.Schema, maximum int) {

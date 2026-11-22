@@ -155,7 +155,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 		t.Errorf("catalog targets = %#v", body.Targets)
 	}
 	preview := body.Targets[0].Spec.Actions["preview"]
-	if preview.Title == nil || *preview.Title != "Preview changes" ||
+	if preview.Intent != api.ActionIntentPreview || preview.Title == nil || *preview.Title != "Preview changes" ||
 		preview.Description == nil || *preview.Description != "Creates a Terraform plan." ||
 		preview.DocumentationURL == nil ||
 		*preview.DocumentationURL != "https://docs.example.com/actions/preview" ||
@@ -176,6 +176,7 @@ func TestExplainTargetActionReturnsAuthoritativeExplanation(t *testing.T) {
 		explanation: catalog.Explanation{
 			SchemaVersion: 2,
 			Level:         catalog.ValidationLevelDeployment,
+			Intent:        catalog.ExplainedValue[string]{Value: "preview", Resolved: true},
 			Process: catalog.ProcessExplanation{
 				WorkingDirectory: catalog.ExplainedValue[string]{
 					Value:    "/workspace/infrastructure/network",
@@ -217,7 +218,7 @@ func TestExplainTargetActionReturnsAuthoritativeExplanation(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Level != catalog.ValidationLevelDeployment ||
+	if body.Level != catalog.ValidationLevelDeployment || body.Intent.Value != "preview" ||
 		body.Process.WorkingDirectory.Value != "/workspace/infrastructure/network" ||
 		body.Runtime.Image.Value != "example.com/tools:1" ||
 		body.Placement.Cluster.Value != "colo" {
@@ -337,8 +338,8 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 						Runtime:   "terraform",
 						Placement: "infrastructure",
 						Actions: map[string]catalog.Action{
-							"sync":    {},
-							"preview": {},
+							"sync":    {Intent: "reconcile"},
+							"preview": {Intent: "preview"},
 						},
 					},
 				},
@@ -403,7 +404,7 @@ func TestGetTargetReturnsArchivedDefinition(t *testing.T) {
 			Kind:       catalog.TargetKind,
 			Metadata:   catalog.Metadata{Name: "network", Title: "Home network"},
 			Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
-				"preview": {Command: []string{"terraform", "plan"}},
+				"preview": {Intent: "preview", Command: []string{"terraform", "plan"}},
 			}},
 		},
 	}}
@@ -433,6 +434,33 @@ func TestGetTargetReturnsArchivedDefinition(t *testing.T) {
 		body.ArchivedAt == nil || !body.ArchivedAt.Equal(archivedAt) ||
 		body.Definition.Metadata.Name != "network" || body.CatalogCommit.Sha != commitSHA {
 		t.Errorf("Target response = %#v", body)
+	}
+}
+
+func TestCatalogReadsReportUnclassifiedStoredActions(t *testing.T) {
+	t.Parallel()
+
+	targetID, repositoryID := uuid.New(), uuid.New()
+	target := catalog.Target{
+		Metadata: catalog.Metadata{Name: "network"},
+		Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
+			"plan": {Command: []string{"terraform", "plan"}},
+		}},
+	}
+	catalogs := &recordingCatalogService{
+		target:     catalog.TargetSummary{ID: targetID, RepositoryID: repositoryID, Target: target},
+		revision:   catalog.Revision{Catalog: catalog.Catalog{Targets: []catalog.Target{target}}},
+		explainErr: catalog.ErrInvalidActionIntent,
+	}
+	handler := newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil)
+	for _, path := range []string{
+		"/api/v1/targets/" + targetID.String(),
+		"/api/v1/targets/" + targetID.String() + "/actions/plan/explanation",
+		"/api/v1/repositories/" + repositoryID.String() + "/catalog",
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+		assertProblem(t, response, http.StatusConflict)
 	}
 }
 
@@ -482,7 +510,7 @@ func TestGetTargetExposesLatestSyncFailureAndMatchingSuccess(t *testing.T) {
 			Kind:       catalog.TargetKind,
 			Metadata:   catalog.Metadata{Name: "network"},
 			Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
-				"sync": {Command: []string{"terraform", "apply"}},
+				"sync": {Intent: "reconcile", Command: []string{"terraform", "apply"}},
 			}},
 		},
 	}}

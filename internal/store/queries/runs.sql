@@ -409,51 +409,22 @@ WHERE cluster_name = sqlc.arg(cluster_name)
 ORDER BY assigned_at, id
 LIMIT 1;
 
--- name: ClaimQueuedRun :one
-WITH active_runs AS (
-    SELECT active.placement_name
-    FROM runs AS active
-    WHERE active.cluster_name = sqlc.arg(cluster_name)
-      AND active.phase IN ('assigned', 'preparing', 'running')
-), candidate AS (
-    SELECT queued.id
-    FROM runs AS queued
-    JOIN targets AS target_state
-      ON target_state.id = queued.target_id
-    WHERE queued.cluster_name = sqlc.arg(cluster_name)
-      AND queued.phase = 'queued'
-      AND queued.review_state IN ('not-required', 'approved')
-      AND queued.id NOT IN (
-          SELECT run_id FROM runs_awaiting_gates(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(assigned_at)::timestamptz)
-      )
-      AND (
-          SELECT count(*)
-          FROM active_runs
-      ) < sqlc.arg(cluster_maximum_active_runs)::integer
-      AND (
-          NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? queued.placement_name)
-          OR COALESCE((
-              SELECT count(*)
-              FROM active_runs
-              WHERE placement_name = queued.placement_name
-          ), 0) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
-      )
-      AND (
-          SELECT count(*)
-          FROM runs AS active
-          WHERE active.target_id = queued.target_id
-            AND active.phase IN ('assigned', 'preparing', 'running')
-      ) < target_state.maximum_active_runs
-    ORDER BY queued.created_at, queued.id
-    FOR UPDATE OF queued, target_state SKIP LOCKED
-    LIMIT 1
+-- name: LockRunAssignmentCandidate :one
+SELECT queued.* FROM runs queued JOIN targets ON targets.id = queued.target_id
+WHERE queued.phase = 'queued' AND queued.id IN (
+    SELECT run_id FROM assignable_cluster_runs(sqlc.arg(cluster_name)::text, sqlc.arg(cluster_maximum_active_runs)::integer,
+        sqlc.arg(placement_maximum_active_runs)::jsonb, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
 )
-UPDATE runs
-SET phase = 'assigned',
-    assigned_at = sqlc.arg(assigned_at)
-FROM candidate
-WHERE runs.id = candidate.id
-RETURNING runs.*;
+ORDER BY queued.created_at, queued.id
+FOR NO KEY UPDATE OF queued, targets SKIP LOCKED
+LIMIT 1;
+
+-- name: AssignEligibleRun :execrows
+UPDATE runs SET phase = 'assigned', assigned_at = sqlc.arg(checked_at), server_gate_release_evidence = sqlc.narg(evidence)
+WHERE id = sqlc.arg(id) AND phase = 'queued' AND id IN (
+    SELECT run_id FROM assignable_cluster_runs(sqlc.arg(cluster_name)::text, sqlc.arg(cluster_maximum_active_runs)::integer,
+        sqlc.arg(placement_maximum_active_runs)::jsonb, sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)::timestamptz)
+);
 
 -- name: GetRunSchedulingSnapshots :many
 WITH active AS (

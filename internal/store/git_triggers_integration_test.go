@@ -194,7 +194,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	if _, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now()); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
 		t.Fatalf("get pending delivery after dispatch error = %v, want no pending delivery", err)
 	}
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, createdAt.Add(8*time.Minute))
+	claimed, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, createdAt.Add(8*time.Minute))
 	if err != nil || claimed.ID != createdRun.ID {
 		t.Fatalf("claim direct Git-triggered Run = (%#v, %v)", claimed, err)
 	}
@@ -248,7 +248,7 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	}
 	runB := listed.Items[0]
 	assignedAt := baseTime.Add(3 * time.Minute)
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
 		t.Fatalf("claim revision B Run: %v", err)
 	}
 	jobUID := "62c9e83f-408e-4d2f-b0f4-c28a300f4c90"
@@ -329,7 +329,7 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	if processed, err := dispatcher.ProcessNext(ctx); err != nil || !processed {
 		t.Fatalf("dispatch revision D = (%t, %v), want success", processed, err)
 	}
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(8*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(8*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Fatalf("claim while revision B is active error = %v, want no assignment", err)
 	}
 
@@ -345,7 +345,7 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatalf("finish revision B Run: %v", err)
 	}
-	claimedD, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(10*time.Minute))
+	claimedD, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(10*time.Minute))
 	if err != nil {
 		t.Fatalf("claim revision D Run: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 		*stored.OutcomeReason != run.ReasonSupersededByGitChange {
 		t.Errorf("Git Run after target removal = %#v", stored)
 	}
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(4*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(4*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Fatalf("claim after target removal error = %v, want no assignment", err)
 	}
 }
@@ -641,7 +641,7 @@ func TestGitRefreshPreservesNonGitRunsAndFIFOIntegration(t *testing.T) {
 		}
 	}
 
-	claimedManual, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(5*time.Minute))
+	claimedManual, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(5*time.Minute))
 	if err != nil {
 		t.Fatalf("claim manual Run: %v", err)
 	}
@@ -658,7 +658,7 @@ func TestGitRefreshPreservesNonGitRunsAndFIFOIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatalf("finish manual Run: %v", err)
 	}
-	claimedAPI, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(7*time.Minute))
+	claimedAPI, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, baseTime.Add(7*time.Minute))
 	if err != nil {
 		t.Fatalf("claim API Run: %v", err)
 	}
@@ -825,6 +825,7 @@ func gitTriggeredCatalogWithEnvironment(environment string) catalog.Catalog {
 				Placement: "infrastructure",
 				Actions: map[string]catalog.Action{
 					"sync": {
+						Intent:  "reconcile",
 						Command: []string{"./sync.sh"},
 						Parameters: map[string]catalog.Parameter{
 							"message": {
@@ -942,7 +943,7 @@ func queuedTestRun(
 		ClusterName:       "colo",
 		Source:            run.Source{Type: sourceType},
 		RequestDigest:     strings.Repeat(digestCharacter, 64),
-		Snapshot:          run.Snapshot{},
+		Snapshot:          run.Snapshot{Action: catalog.EffectiveAction{Name: "sync", Intent: "reconcile"}},
 		CreatedAt:         createdAt,
 	}
 }
@@ -981,7 +982,7 @@ func queuedGitTestRun(
 		},
 		IdempotencyKey: &idempotencyKey,
 		RequestDigest:  strings.Repeat("c", 64),
-		Snapshot:       run.Snapshot{},
+		Snapshot:       run.Snapshot{Action: catalog.EffectiveAction{Name: delivery.ActionName, Intent: "reconcile"}},
 		CreatedAt:      createdAt,
 	}
 }

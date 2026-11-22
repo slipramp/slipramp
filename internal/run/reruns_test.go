@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
@@ -84,6 +85,23 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	}
 }
 
+func TestExactRerunRejectsUnclassifiedFrozenAction(t *testing.T) {
+	t.Parallel()
+
+	service, runs := testService(t)
+	original := finishedTestRun(t)
+	original.Snapshot.Action.Intent = ""
+	runs.loaded = original
+	_, err := service.RerunRun(t.Context(), RerunRequest{
+		RunID:  original.ID,
+		Mode:   RerunModeExact,
+		Source: Source{Type: SourceTypeManual},
+	})
+	if !errors.Is(err, ErrInvalidRequest) || !errors.Is(err, catalog.ErrInvalidActionIntent) || runs.calls != 0 {
+		t.Errorf("RerunRun() error = %v, persistence calls = %d", err, runs.calls)
+	}
+}
+
 func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 	t.Parallel()
 
@@ -95,6 +113,7 @@ func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 	latest.CommitSHA = "abcdef0123456789abcdef0123456789abcdef01"
 	latest.Catalog.Runtimes[0].Spec.Image = "hashicorp/terraform:1.15.0"
 	latestAction := latest.Catalog.Targets[0].Spec.Actions["preview"]
+	latestAction.Intent = "operation"
 	latestAction.Gates = []string{"change-window"}
 	latest.Catalog.Targets[0].Spec.Actions["preview"] = latestAction
 	service.catalogs = &recordingCatalogs{revision: latest}
@@ -113,6 +132,7 @@ func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 
 	if created.CatalogRevisionID != latest.ID || created.CommitSHA != latest.CommitSHA ||
 		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.15.0" ||
+		created.Snapshot.Action.Intent != "operation" ||
 		!reflect.DeepEqual(created.Snapshot.Action.Gates, []string{"change-window"}) {
 		t.Errorf("latest rerun resolution = %#v", created)
 	}

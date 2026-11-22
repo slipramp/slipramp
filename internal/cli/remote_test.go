@@ -63,6 +63,7 @@ func runTargetResponse() map[string]any {
 			},
 			"spec": map[string]any{"actions": map[string]any{
 				"preview": map[string]any{
+					"intent":  "preview",
 					"command": []string{"terraform", "plan"},
 					"parameters": map[string]any{
 						"force": map[string]any{"type": "boolean", "argument": map[string]any{"name": "--force"}},

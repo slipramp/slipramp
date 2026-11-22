@@ -21,6 +21,7 @@ test("extracts every scheduled trigger with its Action scope", () => {
     spec: {
       actions: {
         sync: {
+          intent: "reconcile",
           command: ["./sync.sh"],
           triggers: [
             { name: "on-change", git: {} },
@@ -28,6 +29,7 @@ test("extracts every scheduled trigger with its Action scope", () => {
           ],
         },
         preview: {
+          intent: "preview",
           command: ["./preview.sh"],
           title: "Preview changes",
           triggers: [{ name: "nightly-preview", schedule: { cron: "0 3 * * *" } }],

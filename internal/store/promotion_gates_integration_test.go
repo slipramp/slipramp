@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	if err != nil || record.Lifecycle.State != promotion.LifecycleApproved {
 		t.Fatalf("accept automatic Promotion = %#v, %v", record, err)
 	}
-	released, err := fixture.database.ReleasePromotionGates(
+	released, err := fixture.database.releasePromotionAt(
 		fixture.ctx,
 		record.ID,
 		evaluatorID,
@@ -75,8 +76,8 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		DefinitionDigest:   digest,
 		EvaluatorProcessID: evaluatorID,
 		Observation: gate.Observation{
-			State: gate.ObservationPassing,
-			Value: &observedValue,
+			State:    gate.ObservationPassing,
+			Evidence: gate.PrometheusSample(observedValue),
 		},
 		EvaluatedAt: acceptedAt,
 		ValidUntil:  pollAt.Add(time.Minute),
@@ -84,7 +85,7 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
 		t.Fatalf("record passing Promotion Gate observation: %v", err)
 	}
-	released, err = fixture.database.ReleasePromotionGates(fixture.ctx, record.ID, evaluatorID, pollAt)
+	released, err = fixture.database.releasePromotionAt(fixture.ctx, record.ID, evaluatorID, pollAt)
 	if err != nil || released {
 		t.Fatalf("release with one of two Gates passing = %t, %v", released, err)
 	}
@@ -94,12 +95,22 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	waiting := summaries[record.ID]
-	wantDefinition := catalog.Gates[0].Spec.Prometheus
+	wantDefinition := *catalog.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition)
 	if waiting.State() != gate.SummaryWaiting || len(waiting) != 2 ||
 		waiting[0].Name != "network-idle" || waiting[0].State != gate.RequirementPassing ||
-		waiting[0].Prometheus == nil || *waiting[0].Prometheus != wantDefinition ||
+		waiting[0].Policy == nil || *waiting[0].Policy.(*gate.PrometheusDefinition) != wantDefinition ||
 		waiting[1].Name != "window" || waiting[1].State != gate.RequirementUnevaluated {
 		t.Fatalf("partial evidence was latched or reordered: %#v", waiting)
+	}
+	if waiting[0].Key == waiting[1].Key || waiting[0].Version != waiting[1].Version {
+		t.Fatalf("expected distinct Gate keys with the same policy version: %#v", waiting)
+	}
+	_, err = fixture.database.RecordGateOverride(fixture.ctx, gate.OverrideRequest{
+		Subject: gate.PromotionSubject, SubjectID: record.ID, Reference: waiting[0].Reference,
+		Actor: fixture.actor, Reason: "Already passing", RecordedAt: pollAt, EvaluatorProcessID: evaluatorID,
+	})
+	if !errors.Is(err, gate.ErrOverrideConflict) {
+		t.Fatalf("override passing Gate = %v", err)
 	}
 	// The other Promotion can waive its own window while this one continues to wait.
 	other, err := fixture.database.AcceptPromotionRequest(fixture.ctx,
@@ -107,16 +118,15 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: other.ID, GateName: "window",
-		DefinitionDigest: digest, Actor: fixture.actor, Reason: "Incident recovery", RecordedAt: pollAt,
+	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: other.ID, Reference: waiting[1].Reference, Actor: fixture.actor, Reason: "Incident recovery", RecordedAt: pollAt,
 		EvaluatorProcessID: evaluatorID}
-	if err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
+	if _, err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := fixture.database.ReleasePromotionGates(fixture.ctx, other.ID, evaluatorID, pollAt); !ok || err != nil {
+	if ok, err := fixture.database.releasePromotionAt(fixture.ctx, other.ID, evaluatorID, pollAt); !ok || err != nil {
 		t.Fatalf("release with pass and override = %t, %v", ok, err)
 	}
-	if ok, err := fixture.database.ReleasePromotionGates(fixture.ctx, record.ID, evaluatorID, pollAt); ok || err != nil {
+	if ok, err := fixture.database.releasePromotionAt(fixture.ctx, record.ID, evaluatorID, pollAt); ok || err != nil {
 		t.Fatalf("override leaked to another Promotion: %t, %v", ok, err)
 	}
 	summaries, err = service.GateSummaries(fixture.ctx, []promotion.Promotion{other}, pollAt)
@@ -124,9 +134,9 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	mixed := summaries[other.ID]
-	if mixed.State() != gate.SummaryReleased || len(mixed[0].Overrides) != 0 || mixed[0].Value == nil ||
+	if mixed.State() != gate.SummaryReleased || len(mixed[0].Overrides) != 0 || mixed[0].Evidence.PrometheusValue() == nil ||
 		len(mixed[1].Overrides) != 1 || mixed[1].Overrides[0].ObservedState != gate.RequirementUnevaluated ||
-		mixed[1].Value != nil || mixed[1].EvaluatedAt != nil {
+		mixed[1].Evidence.PrometheusValue() != nil || mixed[1].EvaluatedAt != nil {
 		t.Fatalf("mixed Promotion release evidence = %#v", mixed)
 	}
 	window := observation
@@ -135,7 +145,7 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	released, err = fixture.database.ReleasePromotionGates(
+	released, err = fixture.database.releasePromotionAt(
 		fixture.ctx,
 		record.ID,
 		evaluatorID,
@@ -150,9 +160,9 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	}
 	projections := summaries[record.ID]
 	if projections.State() != gate.SummaryReleased || len(projections) != 2 || projections[0].ReleasedAt == nil ||
-		!projections[0].ReleasedAt.Equal(pollAt) || projections[0].Prometheus == nil ||
-		*projections[0].Prometheus != wantDefinition || projections[0].Value == nil ||
-		*projections[0].Value != observedValue || projections[0].EvaluatedAt == nil ||
+		!projections[0].ReleasedAt.Equal(pollAt) || projections[0].Policy == nil ||
+		*projections[0].Policy.(*gate.PrometheusDefinition) != wantDefinition || projections[0].Evidence.PrometheusValue() == nil ||
+		*projections[0].Evidence.PrometheusValue() != observedValue || projections[0].EvaluatedAt == nil ||
 		!projections[0].EvaluatedAt.Equal(observation.EvaluatedAt) {
 		t.Errorf("released Promotion Gate projection = %#v", projections)
 	}
@@ -165,7 +175,7 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
              AND release_catalog_revision_id = $3
              AND release_definition_digest = $4
              AND release_evaluator_process_id = $5
-             AND release_observed_value = $6
+             AND (release_evidence #>> '{prometheus,value}')::double precision = $6
              AND release_evaluated_at = $7
              AND release_valid_until = $8
          FROM promotion_gates
@@ -188,7 +198,7 @@ func TestKargoPromotionGateReleaseIntegration(t *testing.T) {
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
 		t.Fatalf("record post-release blocking observation: %v", err)
 	}
-	released, err = fixture.database.ReleasePromotionGates(
+	released, err = fixture.database.releasePromotionAt(
 		fixture.ctx,
 		record.ID,
 		evaluatorID,

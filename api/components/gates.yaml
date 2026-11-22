@@ -10,7 +10,7 @@ GateSummary:
       type: array
       items:
         $ref: "#/GateRequirement"
-      description: Required Gates in their stable attachment order.
+      description: Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
 
 GateSummaryState:
   type: string
@@ -23,9 +23,7 @@ GateSummaryState:
 
 GateRequirement:
   type: object
-  required:
-    - name
-    - state
+  required: [key, name, origin, scope, state]
   properties:
     name:
       $ref: ./runs.yaml#/CatalogName
@@ -38,19 +36,26 @@ GateRequirement:
       type: string
       format: uri
       description: Opens the active or released PromQL in the configured viewer at the observation time, when available.
-    definitionDigest:
+    key:
+      $ref: "#/GateKey"
+    version:
+      $ref: "#/GateVersion"
+    origin:
       type: string
-      pattern: "^[0-9a-f]{64}$"
-      description: Digest of the active or released Gate definition.
+      enum: [repository, server]
+      x-enum-varnames: [GateOriginRepository, GateOriginServer]
+    scope:
+      $ref: "#/GateScope"
+    type:
+      type: string
+      description: Repository evaluator type, lock, or window for the current or released policy.
     overrides:
       type: array
-      description: Operator decisions in chronological order. The latest applies when its digest matches the definition.
+      description: Operator decisions in chronological order. The latest applies when its key and version match the Gate.
       items:
         $ref: "#/GateOverride"
-    value:
-      type: number
-      format: double
-      description: Finite observed value from current or immutable release evidence.
+    evidence:
+      $ref: "#/GateEvidence"
     operator:
       $ref: "#/GateOperator"
     threshold:
@@ -60,6 +65,10 @@ GateRequirement:
     evaluatedAt:
       type: string
       format: date-time
+    validUntil:
+      type: string
+      format: date-time
+      description: Exclusive end of the displayed observation’s validity, frozen at release.
     releasedAt:
       type: string
       format: date-time
@@ -68,6 +77,58 @@ GateRequirement:
       minLength: 1
       maxLength: 512
       description: Bounded sanitized explanation for an unavailable requirement.
+
+GateEvidence:
+  x-go-type: gate.Evidence
+  x-go-type-import:
+    name: gate
+    path: github.com/slipramp/slipramp/internal/gate
+  oneOf:
+    - $ref: "#/PrometheusGateEvidence"
+    - $ref: "#/WebhookGateEvidence"
+    - $ref: "#/LockGateEvidence"
+    - $ref: "#/WindowGateEvidence"
+
+LockGateEvidence:
+  type: object
+  additionalProperties: false
+  required: [lock]
+  properties:
+    lock:
+      $ref: "#/ServerGateLock"
+
+PrometheusGateEvidence:
+  type: object
+  additionalProperties: false
+  required: [prometheus]
+  properties:
+    prometheus:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value:
+          type: number
+          format: double
+          description: Finite sample from the Prometheus query.
+
+WebhookGateEvidence:
+  type: object
+  additionalProperties: false
+  required: [webhook]
+  properties:
+    webhook:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9._-]{0,63}$"
+        message:
+          type: string
+          minLength: 1
+          maxLength: 256
 
 GateRequirementState:
   type: string
@@ -97,14 +158,40 @@ GateOperator:
     - GateOperatorGreaterThan
     - GateOperatorGreaterThanOrEqual
 
+GateKey:
+  type: string
+  description: Stable logical key within the subject.
+  pattern: "^(?:repository/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?|(?:lock|window)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+
+GateVersion:
+  type: string
+  minLength: 1
+  maxLength: 128
+  description: Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+
+GateScope:
+  type: object
+  additionalProperties: false
+  required: [kind, id]
+  properties:
+    kind:
+      type: string
+      enum: [repository, global, target, stage]
+      x-enum-varnames: [GateScopeRepository, GateScopeGlobal, GateScopeTarget, GateScopeStage]
+    id:
+      type: string
+      format: uuid
+      description: Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+
 GateOverrideRequest:
   type: object
   additionalProperties: false
-  required: [definitionDigest, reason]
+  required: [key, version, reason]
   properties:
-    definitionDigest:
-      type: string
-      pattern: "^[0-9a-f]{64}$"
+    key:
+      $ref: "#/GateKey"
+    version:
+      $ref: "#/GateVersion"
     reason:
       type: string
       minLength: 1
@@ -112,10 +199,12 @@ GateOverrideRequest:
 
 GateOverride:
   type: object
-  required: [definitionDigest, reason, actor, recordedAt, observedState]
+  required: [key, version, reason, actor, recordedAt, observedState]
   properties:
-    definitionDigest:
-      type: string
+    key:
+      $ref: "#/GateKey"
+    version:
+      $ref: "#/GateVersion"
     reason:
       type: string
     actor:
@@ -125,11 +214,250 @@ GateOverride:
       format: date-time
     observedState:
       $ref: "#/GateRequirementState"
-    observedValue:
-      type: number
-      format: double
+    observedEvidence:
+      $ref: "#/GateEvidence"
     evaluatedAt:
       type: string
       format: date-time
     diagnostic:
       type: string
+
+ServerGateScope:
+  description: Current operator policy. Mutating Run assignment enforces global and Target policies. Promotion release enforces global and destination Stage policies before automatic creation delivery or callback approval.
+  type: object
+  additionalProperties: false
+  required: [id, kind, checkedAt, lockVersion, events, windowVersion, windowEvents]
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable identity of the Server Gate scope.
+    kind:
+      type: string
+      enum: [global, target, stage]
+      x-enum-varnames: [GlobalGateScope, TargetGateScope, StageGateScope]
+    targetId:
+      type: string
+      format: uuid
+    stageId:
+      type: string
+      format: uuid
+    checkedAt:
+      type: string
+      format: date-time
+      description: Instant used to check lock expiry and window freshness.
+    windowVersion:
+      $ref: "#/GateVersion"
+    window:
+      $ref: "#/ScopeWindow"
+    windowEvents:
+      type: array
+      description: Most recent window updates and removals, newest first.
+      maxItems: 20
+      items:
+        $ref: "#/ServerWindowEvent"
+    lockVersion:
+      $ref: "#/GateVersion"
+    lock:
+      $ref: "#/ServerGateLock"
+    events:
+      type: array
+      description: Most recent lock changes, newest first. Expiry is recorded on the lock event.
+      maxItems: 20
+      items:
+        $ref: "#/ServerGateLockEvent"
+
+ServerGateLockRequest:
+  x-go-type: gate.LockRequest
+  x-go-type-import:
+    name: gate
+    path: github.com/slipramp/slipramp/internal/gate
+  type: object
+  additionalProperties: false
+  required: [reason]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    expiresAt:
+      type: string
+      format: date-time
+      description: Exclusive end of the hold. Omit for an indefinite lock.
+
+ServerGateLock:
+  type: object
+  additionalProperties: false
+  required: [reason, actor, createdAt]
+  properties:
+    reason:
+      type: string
+    actor:
+      $ref: ./common.yaml#/ActorSnapshot
+    createdAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+
+ServerGateLockEvent:
+  type: object
+  additionalProperties: false
+  required: [action, priorVersion, version, reason, actor, recordedAt]
+  properties:
+    action:
+      type: string
+      enum: [lock, unlock]
+      x-enum-varnames: [ServerGateLockCreated, ServerGateLockReleased]
+    priorVersion:
+      $ref: "#/GateVersion"
+    version:
+      $ref: "#/GateVersion"
+    reason:
+      type: string
+      description: Reason supplied when the lock was created.
+    actor:
+      $ref: ./common.yaml#/ActorSnapshot
+    recordedAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+      description: Expiry originally requested on a lock event.
+
+GateOverrideCollection:
+  type: object
+  required: [eligible, decisions]
+  properties:
+    eligible:
+      type: array
+      description: Gates that can receive a new override on this waiting subject. Scope locks precede repository attachments.
+      items:
+        $ref: "#/GateRequirement"
+    decisions:
+      type: array
+      description: Recorded decisions in chronological order, including superseded decisions and overrides of cleared locks.
+      items:
+        $ref: "#/GateOverride"
+
+WeeklyWindow:
+  x-go-type: gate.WeeklyWindow
+  x-go-type-import:
+    name: gate
+    path: github.com/slipramp/slipramp/internal/gate
+  type: object
+  additionalProperties: false
+  required: [timeZone, weekly]
+  properties:
+    timeZone:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: IANA time zone name.
+    weekly:
+      type: array
+      minItems: 1
+      maxItems: 128
+      description: At most 128 day intervals after expanding the days. Split overnight intervals at midnight.
+      items:
+        type: object
+        additionalProperties: false
+        required: [days, start, end]
+        properties:
+          days:
+            type: array
+            minItems: 1
+            maxItems: 7
+            items:
+              type: string
+              enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+          start:
+            type: string
+            pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+          end:
+            type: string
+            pattern: "^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00)$"
+
+WindowObservation:
+  type: object
+  additionalProperties: false
+  required: [state, evaluatedAt, validUntil]
+  properties:
+    state:
+      type: string
+      enum: [passing, blocking]
+      x-enum-varnames: [WindowObservationPassing, WindowObservationBlocking]
+    evaluatedAt:
+      type: string
+      format: date-time
+    validUntil:
+      type: string
+      format: date-time
+      description: Exclusive observation expiry.
+    intervalStart:
+      type: string
+      format: date-time
+    nextTransition:
+      type: string
+      format: date-time
+
+ScopeWindow:
+  x-go-type: gate.ScopeWindow
+  x-go-type-import:
+    name: gate
+    path: github.com/slipramp/slipramp/internal/gate
+  type: object
+  additionalProperties: false
+  required: [definition, digest, state, observation]
+  properties:
+    definition:
+      $ref: "#/WeeklyWindow"
+    digest:
+      type: string
+    state:
+      type: string
+      enum: [passing, blocking, unavailable]
+      description: Effective state at checkedAt. An expired or future observation is unavailable.
+    observation:
+      $ref: "#/WindowObservation"
+
+ServerWindowEvent:
+  type: object
+  required: [action, priorVersion, version, actor, recordedAt]
+  properties:
+    action:
+      type: string
+      enum: [set, remove]
+      x-enum-varnames: [ServerGateWindowSet, ServerGateWindowRemoved]
+    priorVersion:
+      $ref: "#/GateVersion"
+    version:
+      $ref: "#/GateVersion"
+    actor:
+      $ref: ./common.yaml#/ActorSnapshot
+    recordedAt:
+      type: string
+      format: date-time
+    definition:
+      $ref: "#/WeeklyWindow"
+    digest:
+      type: string
+
+WindowGateEvidence:
+  type: object
+  additionalProperties: false
+  required: [window]
+  properties:
+    window:
+      type: object
+      additionalProperties: false
+      required: [timeZone, digest, observation]
+      properties:
+        timeZone:
+          type: string
+        digest:
+          type: string
+        observation:
+          $ref: "#/WindowObservation"

@@ -162,6 +162,9 @@ values; it never publishes a partially refreshed view.
 | `slipramp.metrics.snapshot.success` | `slipramp_metrics_snapshot_success_ratio` | observable gauge / `1` | none | `1` when the latest refresh succeeded and `0` otherwise. |
 | `slipramp.metrics.snapshot.last_success.time` | `slipramp_metrics_snapshot_last_success_time_seconds` | observable gauge / `s` | none | Unix time of the last successful refresh. Absent before the first success. |
 
+Webhook failures use fixed classes `timeout`, `transport`, `http-status`,
+`media-type`, `size`, `invalid-response`, `context`, and `remote-unavailable`.
+
 Every metric in this table is a Slipramp-specific convention. Queue age uses
 the Run creation time and the same Gate eligibility check as dispatch. Each
 unreleased Gate needs fresh passing evidence for its active definition from
@@ -187,8 +190,11 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | `slipramp.artifact.report.duration` | `slipramp_artifact_report_duration_seconds` | histogram / `s` | same `report_kind` and `result` |
 | `slipramp.mcp.tool.calls` | `slipramp_mcp_tool_calls_total` | counter / `{call}` | `tool=list_targets|explain_target_action|create_run|get_run|read_run_log|list_run_artifacts|read_artifact|cancel_run`, `result=succeeded|rejected|failed` |
 | `slipramp.mcp.tool.duration` | `slipramp_mcp_tool_duration_seconds` | histogram / `s` | same `tool` and `result` |
-| `slipramp.gate.evaluation.attempts` | `slipramp_gate_evaluation_attempts_total` | counter / `{evaluation}` | `source_type=prometheus`, `result=passing|blocking|unavailable` |
-| `slipramp.gate.evaluation.duration` | `slipramp_gate_evaluation_duration_seconds` | histogram / `s` | same `source_type` and `result` |
+| `slipramp.gate.evaluation.attempts` | `slipramp_gate_evaluation_attempts_total` | counter / `{evaluation}` | `source_type` (prometheus or webhook), `result` (passing, blocking or unavailable), optional `failure_class` |
+| `slipramp.gate.evaluation.duration` | `slipramp_gate_evaluation_duration_seconds` | histogram / `s` | same `source_type`, `result`, and `failure_class` |
+
+Webhook failures use fixed classes `timeout`, `transport`, `http-status`,
+`media-type`, `size`, `invalid-response`, `context`, and `remote-unavailable`.
 
 Every metric in this table is a Slipramp-specific convention. Background
 operation attempts are recorded once after their durable result is known; idle

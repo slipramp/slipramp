@@ -433,7 +433,7 @@ export type CatalogExplanation = {
   actionTitle: ExplainedString;
   actionDescription: ExplainedString;
   actionDocumentationUrl: ExplainedString;
-  intent: ExplainedString;
+  intent: ExplainedActionIntent;
   process: ProcessExplanation;
   parameters: Array<ParameterExplanation>;
   runtime: RuntimeExplanation;
@@ -771,7 +771,7 @@ export type Run = {
    */
   phase: RunPhase;
   /**
-   * Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+   * Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
    */
   schedulingState?:
     | "awaiting-review"
@@ -933,10 +933,39 @@ export type ActorSnapshot = {
   displayName: string;
 };
 
+/**
+ * Current operator policy. Mutating Run assignment enforces global and Target policies. Promotion release enforces global and destination Stage policies before automatic creation delivery or callback approval.
+ */
+export type ServerGateScope = {
+  /**
+   * Stable identity of the Server Gate scope.
+   */
+  id: string;
+  kind: "global" | "target" | "stage";
+  targetId?: string;
+  stageId?: string;
+  /**
+   * Instant used to check lock expiry and window freshness.
+   */
+  checkedAt: string;
+  windowVersion: GateVersion;
+  window?: ScopeWindow;
+  /**
+   * Most recent window updates and removals, newest first.
+   */
+  windowEvents: Array<ServerWindowEvent>;
+  lockVersion: GateVersion;
+  lock?: ServerGateLock;
+  /**
+   * Most recent lock changes, newest first. Expiry is recorded on the lock event.
+   */
+  events: Array<ServerGateLockEvent>;
+};
+
 export type GateSummary = {
   state: GateSummaryState;
   /**
-   * Required Gates in their stable attachment order.
+   * Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
    */
   requirements: Array<GateRequirement>;
 };
@@ -954,24 +983,29 @@ export type GateRequirement = {
    * Opens the active or released PromQL in the configured viewer at the observation time, when available.
    */
   queryUrl?: string;
+  key: GateKey;
+  version?: GateVersion;
+  origin: "repository" | "server";
+  scope: GateScope;
   /**
-   * Digest of the active or released Gate definition.
+   * Repository evaluator type, lock, or window for the current or released policy.
    */
-  definitionDigest?: string;
+  type?: string;
   /**
-   * Operator decisions in chronological order. The latest applies when its digest matches the definition.
+   * Operator decisions in chronological order. The latest applies when its key and version match the Gate.
    */
   overrides?: Array<GateOverride>;
-  /**
-   * Finite observed value from current or immutable release evidence.
-   */
-  value?: number;
+  evidence?: GateEvidence;
   operator?: GateOperator;
   /**
    * Finite comparison threshold from the current or released definition.
    */
   threshold?: number;
   evaluatedAt?: string;
+  /**
+   * Exclusive end of the displayed observation’s validity, frozen at release.
+   */
+  validUntil?: string;
   releasedAt?: string;
   /**
    * Bounded sanitized explanation for an unavailable requirement.
@@ -991,18 +1025,20 @@ export type GateRequirementState =
   | "released";
 
 export type GateOverride = {
-  definitionDigest: string;
+  key: GateKey;
+  version: GateVersion;
   reason: string;
   actor: ActorSnapshot;
   recordedAt: string;
   observedState: GateRequirementState;
-  observedValue?: number;
+  observedEvidence?: GateEvidence;
   evaluatedAt?: string;
   diagnostic?: string;
 };
 
 export type GateOverrideRequest = {
-  definitionDigest: string;
+  key: GateKey;
+  version: GateVersion;
   reason: string;
 };
 
@@ -1646,6 +1682,11 @@ export type ResourceRequirements = {
   };
 };
 
+/**
+ * Declared purpose of the Action, frozen when a Run is created.
+ */
+export type ActionIntent = "preview" | "reconcile" | "operation";
+
 export type ParameterArgument = {
   name?: string;
 };
@@ -1721,7 +1762,7 @@ export type Action = {
   title?: string;
   description?: string;
   documentationUrl?: string;
-  intent?: string;
+  intent: ActionIntent;
   command: Array<string>;
   runtime?: string;
   placement?: string;
@@ -1831,6 +1872,13 @@ export type ExplainedResourceMetadata = {
 
 export type ExplainedString = {
   value: string;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ExplainedActionIntent = {
+  value: ActionIntent;
   resolved: boolean;
   provenance: Array<ExplanationOrigin>;
   unresolvedReason?: string;
@@ -2009,6 +2057,88 @@ export type CatalogDiagnostic = {
   related?: Array<CatalogRelatedLocation>;
 };
 
+/**
+ * Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+ */
+export type GateVersion = string;
+
+export type WeeklyWindow = {
+  /**
+   * IANA time zone name.
+   */
+  timeZone: string;
+  /**
+   * At most 128 day intervals after expanding the days. Split overnight intervals at midnight.
+   */
+  weekly: Array<{
+    days: Array<"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday">;
+    start: string;
+    end: string;
+  }>;
+};
+
+export type WindowObservation = {
+  state: "passing" | "blocking";
+  evaluatedAt: string;
+  /**
+   * Exclusive observation expiry.
+   */
+  validUntil: string;
+  intervalStart?: string;
+  nextTransition?: string;
+};
+
+export type ScopeWindow = {
+  definition: WeeklyWindow;
+  digest: string;
+  /**
+   * Effective state at checkedAt. An expired or future observation is unavailable.
+   */
+  state: "passing" | "blocking" | "unavailable";
+  observation: WindowObservation;
+};
+
+export type ServerWindowEvent = {
+  action: "set" | "remove";
+  priorVersion: GateVersion;
+  version: GateVersion;
+  actor: ActorSnapshot;
+  recordedAt: string;
+  definition?: WeeklyWindow;
+  digest?: string;
+};
+
+export type ServerGateLock = {
+  reason: string;
+  actor: ActorSnapshot;
+  createdAt: string;
+  expiresAt?: string;
+};
+
+export type ServerGateLockEvent = {
+  action: "lock" | "unlock";
+  priorVersion: GateVersion;
+  version: GateVersion;
+  /**
+   * Reason supplied when the lock was created.
+   */
+  reason: string;
+  actor: ActorSnapshot;
+  recordedAt: string;
+  /**
+   * Expiry originally requested on a lock event.
+   */
+  expiresAt?: string;
+};
+
+export type ServerGateLockRequest = {
+  reason: string;
+  /**
+   * Exclusive end of the hold. Omit for an indefinite lock.
+   */
+  expiresAt?: string;
+};
+
 export type PlacementResourceRequirements = {
   requests: {
     [key: string]: string;
@@ -2102,7 +2232,7 @@ export type RunAssignmentTarget = {
 
 export type RunAssignmentAction = {
   name: CatalogName;
-  intent?: string;
+  intent: ActionIntent;
   command: Array<string>;
   runtime: CatalogName;
   placement: CatalogName;
@@ -2348,6 +2478,53 @@ export type RunReview = {
   comment?: string;
 };
 
+/**
+ * Stable logical key within the subject.
+ */
+export type GateKey = string;
+
+export type GateScope = {
+  kind: "repository" | "global" | "target" | "stage";
+  /**
+   * Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+   */
+  id: string;
+};
+
+export type PrometheusGateEvidence = {
+  prometheus: {
+    /**
+     * Finite sample from the Prometheus query.
+     */
+    value: number;
+  };
+};
+
+export type WebhookGateEvidence = {
+  webhook: {
+    code: string;
+    message: string;
+  };
+};
+
+export type LockGateEvidence = {
+  lock: ServerGateLock;
+};
+
+export type WindowGateEvidence = {
+  window: {
+    timeZone: string;
+    digest: string;
+    observation: WindowObservation;
+  };
+};
+
+export type GateEvidence =
+  | PrometheusGateEvidence
+  | WebhookGateEvidence
+  | LockGateEvidence
+  | WindowGateEvidence;
+
 export type RunArtifactInput = {
   artifactId: string;
   producerRunId: string;
@@ -2380,6 +2557,17 @@ export type Cancellation = {
    */
   requestedAt?: string;
   requestedBy?: ActorSnapshot;
+};
+
+export type GateOverrideCollection = {
+  /**
+   * Gates that can receive a new override on this waiting subject. Scope locks precede repository attachments.
+   */
+  eligible: Array<GateRequirement>;
+  /**
+   * Recorded decisions in chronological order, including superseded decisions and overrides of cleared locks.
+   */
+  decisions: Array<GateOverride>;
 };
 
 export type RunReviewDecision = "approved" | "rejected";
@@ -2417,6 +2605,7 @@ export type ApiKeyScope =
   | "slipramp:read"
   | "slipramp:runs:write"
   | "slipramp:runs:review"
+  | "slipramp:gates:manage"
   | "slipramp:runs:override-gates"
   | "slipramp:promotions:override-gates"
   | "slipramp:inbox:write"
@@ -2448,7 +2637,7 @@ export type KargoPromotionRequest = {
 };
 
 /**
- * Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
+ * Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved and is waiting for its applicable global, Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
  */
 export type KargoPromotionStatus =
   | "creating"
@@ -3590,6 +3779,10 @@ export type GetRepositoryCatalogErrors = {
    */
   405: Problem;
   /**
+   * The stored Action definition lacks a valid intent.
+   */
+  409: Problem;
+  /**
    * The active catalog could not be loaded.
    */
   500: Problem;
@@ -3646,6 +3839,10 @@ export type ExplainTargetActionErrors = {
    */
   405: Problem;
   /**
+   * The stored Action definition lacks a valid intent.
+   */
+  409: Problem;
+  /**
    * The Action explanation could not be resolved.
    */
   500: Problem;
@@ -3662,6 +3859,686 @@ export type ExplainTargetActionResponses = {
 
 export type ExplainTargetActionResponse =
   ExplainTargetActionResponses[keyof ExplainTargetActionResponses];
+
+export type GetGlobalGateScopeData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/gate-scopes/global";
+};
+
+export type GetGlobalGateScopeErrors = {
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type GetGlobalGateScopeError = GetGlobalGateScopeErrors[keyof GetGlobalGateScopeErrors];
+
+export type GetGlobalGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type GetGlobalGateScopeResponse =
+  GetGlobalGateScopeResponses[keyof GetGlobalGateScopeResponses];
+
+export type UnlockGlobalGateScopeData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/gate-scopes/global/lock";
+};
+
+export type UnlockGlobalGateScopeErrors = {
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type UnlockGlobalGateScopeError =
+  UnlockGlobalGateScopeErrors[keyof UnlockGlobalGateScopeErrors];
+
+export type UnlockGlobalGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type UnlockGlobalGateScopeResponse =
+  UnlockGlobalGateScopeResponses[keyof UnlockGlobalGateScopeResponses];
+
+export type LockGlobalGateScopeData = {
+  body: ServerGateLockRequest;
+  path?: never;
+  query?: never;
+  url: "/api/v1/gate-scopes/global/lock";
+};
+
+export type LockGlobalGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * A different lock is active.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type LockGlobalGateScopeError = LockGlobalGateScopeErrors[keyof LockGlobalGateScopeErrors];
+
+export type LockGlobalGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type LockGlobalGateScopeResponse =
+  LockGlobalGateScopeResponses[keyof LockGlobalGateScopeResponses];
+
+export type RemoveGlobalGateWindowData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/gate-scopes/global/window";
+};
+
+export type RemoveGlobalGateWindowErrors = {
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type RemoveGlobalGateWindowError =
+  RemoveGlobalGateWindowErrors[keyof RemoveGlobalGateWindowErrors];
+
+export type RemoveGlobalGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type RemoveGlobalGateWindowResponse =
+  RemoveGlobalGateWindowResponses[keyof RemoveGlobalGateWindowResponses];
+
+export type SetGlobalGateWindowData = {
+  body: WeeklyWindow;
+  path?: never;
+  query?: never;
+  url: "/api/v1/gate-scopes/global/window";
+};
+
+export type SetGlobalGateWindowErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type SetGlobalGateWindowError = SetGlobalGateWindowErrors[keyof SetGlobalGateWindowErrors];
+
+export type SetGlobalGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type SetGlobalGateWindowResponse =
+  SetGlobalGateWindowResponses[keyof SetGlobalGateWindowResponses];
+
+export type GetTargetGateScopeData = {
+  body?: never;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/targets/{targetId}";
+};
+
+export type GetTargetGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type GetTargetGateScopeError = GetTargetGateScopeErrors[keyof GetTargetGateScopeErrors];
+
+export type GetTargetGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type GetTargetGateScopeResponse =
+  GetTargetGateScopeResponses[keyof GetTargetGateScopeResponses];
+
+export type UnlockTargetGateScopeData = {
+  body?: never;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/targets/{targetId}/lock";
+};
+
+export type UnlockTargetGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type UnlockTargetGateScopeError =
+  UnlockTargetGateScopeErrors[keyof UnlockTargetGateScopeErrors];
+
+export type UnlockTargetGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type UnlockTargetGateScopeResponse =
+  UnlockTargetGateScopeResponses[keyof UnlockTargetGateScopeResponses];
+
+export type LockTargetGateScopeData = {
+  body: ServerGateLockRequest;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/targets/{targetId}/lock";
+};
+
+export type LockTargetGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * A different lock is active.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type LockTargetGateScopeError = LockTargetGateScopeErrors[keyof LockTargetGateScopeErrors];
+
+export type LockTargetGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type LockTargetGateScopeResponse =
+  LockTargetGateScopeResponses[keyof LockTargetGateScopeResponses];
+
+export type RemoveTargetGateWindowData = {
+  body?: never;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/targets/{targetId}/window";
+};
+
+export type RemoveTargetGateWindowErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type RemoveTargetGateWindowError =
+  RemoveTargetGateWindowErrors[keyof RemoveTargetGateWindowErrors];
+
+export type RemoveTargetGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type RemoveTargetGateWindowResponse =
+  RemoveTargetGateWindowResponses[keyof RemoveTargetGateWindowResponses];
+
+export type SetTargetGateWindowData = {
+  body: WeeklyWindow;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/targets/{targetId}/window";
+};
+
+export type SetTargetGateWindowErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type SetTargetGateWindowError = SetTargetGateWindowErrors[keyof SetTargetGateWindowErrors];
+
+export type SetTargetGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type SetTargetGateWindowResponse =
+  SetTargetGateWindowResponses[keyof SetTargetGateWindowResponses];
+
+export type GetStageGateScopeData = {
+  body?: never;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/stages/{stageId}";
+};
+
+export type GetStageGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type GetStageGateScopeError = GetStageGateScopeErrors[keyof GetStageGateScopeErrors];
+
+export type GetStageGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type GetStageGateScopeResponse =
+  GetStageGateScopeResponses[keyof GetStageGateScopeResponses];
+
+export type UnlockStageGateScopeData = {
+  body?: never;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/stages/{stageId}/lock";
+};
+
+export type UnlockStageGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type UnlockStageGateScopeError =
+  UnlockStageGateScopeErrors[keyof UnlockStageGateScopeErrors];
+
+export type UnlockStageGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type UnlockStageGateScopeResponse =
+  UnlockStageGateScopeResponses[keyof UnlockStageGateScopeResponses];
+
+export type LockStageGateScopeData = {
+  body: ServerGateLockRequest;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/stages/{stageId}/lock";
+};
+
+export type LockStageGateScopeErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * A different lock is active.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type LockStageGateScopeError = LockStageGateScopeErrors[keyof LockStageGateScopeErrors];
+
+export type LockStageGateScopeResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type LockStageGateScopeResponse =
+  LockStageGateScopeResponses[keyof LockStageGateScopeResponses];
+
+export type RemoveStageGateWindowData = {
+  body?: never;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/stages/{stageId}/window";
+};
+
+export type RemoveStageGateWindowErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type RemoveStageGateWindowError =
+  RemoveStageGateWindowErrors[keyof RemoveStageGateWindowErrors];
+
+export type RemoveStageGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type RemoveStageGateWindowResponse =
+  RemoveStageGateWindowResponses[keyof RemoveStageGateWindowResponses];
+
+export type SetStageGateWindowData = {
+  body: WeeklyWindow;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/gate-scopes/stages/{stageId}/window";
+};
+
+export type SetStageGateWindowErrors = {
+  /**
+   * Invalid scope identity or policy request.
+   */
+  400: Problem;
+  /**
+   * Product authentication is required.
+   */
+  401: Problem;
+  /**
+   * The principal lacks the required role or credential scope.
+   */
+  403: Problem;
+  /**
+   * The scope does not exist.
+   */
+  404: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The Server could not complete the operation.
+   */
+  500: Problem;
+};
+
+export type SetStageGateWindowError = SetStageGateWindowErrors[keyof SetStageGateWindowErrors];
+
+export type SetStageGateWindowResponses = {
+  /**
+   * Current scope and recent changes.
+   */
+  200: ServerGateScope;
+};
+
+export type SetStageGateWindowResponse =
+  SetStageGateWindowResponses[keyof SetStageGateWindowResponses];
 
 export type ListTargetsData = {
   body?: never;
@@ -3758,6 +4635,10 @@ export type GetTargetErrors = {
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
+  /**
+   * The stored Action definition lacks a valid intent.
+   */
+  409: Problem;
   /**
    * The Target could not be loaded.
    */
@@ -4811,14 +5692,58 @@ export type GetRunResponses = {
 
 export type GetRunResponse = GetRunResponses[keyof GetRunResponses];
 
+export type ListRunGateOverridesData = {
+  body?: never;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/gate-overrides";
+};
+
+export type ListRunGateOverridesErrors = {
+  /**
+   * Invalid subject identifier.
+   */
+  400: Problem;
+  /**
+   * A valid product credential is required.
+   */
+  401: Problem;
+  /**
+   * Read permission is required.
+   */
+  403: Problem;
+  /**
+   * The subject does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not load the overrides.
+   */
+  500: Problem;
+};
+
+export type ListRunGateOverridesError =
+  ListRunGateOverridesErrors[keyof ListRunGateOverridesErrors];
+
+export type ListRunGateOverridesResponses = {
+  /**
+   * Current override choices and durable decision history for the subject.
+   */
+  200: GateOverrideCollection;
+};
+
+export type ListRunGateOverridesResponse =
+  ListRunGateOverridesResponses[keyof ListRunGateOverridesResponses];
+
 export type OverrideRunGateData = {
   body: GateOverrideRequest;
   path: {
     runId: string;
-    gateName: CatalogName;
   };
   query?: never;
-  url: "/api/v1/runs/{runId}/gates/{gateName}/override";
+  url: "/api/v1/runs/{runId}/gate-overrides";
 };
 
 export type OverrideRunGateErrors = {
@@ -4835,7 +5760,7 @@ export type OverrideRunGateErrors = {
    */
   403: Problem;
   /**
-   * The requested Gate attachment does not exist.
+   * The requested subject does not exist.
    */
   404: Problem;
   /**
@@ -4856,9 +5781,9 @@ export type OverrideRunGateError = OverrideRunGateErrors[keyof OverrideRunGateEr
 
 export type OverrideRunGateResponses = {
   /**
-   * The override decision has been recorded.
+   * The affected Gate, including its recorded override history.
    */
-  204: void;
+  200: GateRequirement;
 };
 
 export type OverrideRunGateResponse = OverrideRunGateResponses[keyof OverrideRunGateResponses];
@@ -6149,14 +7074,58 @@ export type GetPromotionResponses = {
 
 export type GetPromotionResponse = GetPromotionResponses[keyof GetPromotionResponses];
 
+export type ListPromotionGateOverridesData = {
+  body?: never;
+  path: {
+    promotionId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotions/{promotionId}/gate-overrides";
+};
+
+export type ListPromotionGateOverridesErrors = {
+  /**
+   * Invalid subject identifier.
+   */
+  400: Problem;
+  /**
+   * A valid product credential is required.
+   */
+  401: Problem;
+  /**
+   * Read permission is required.
+   */
+  403: Problem;
+  /**
+   * The subject does not exist.
+   */
+  404: Problem;
+  /**
+   * The Server could not load the overrides.
+   */
+  500: Problem;
+};
+
+export type ListPromotionGateOverridesError =
+  ListPromotionGateOverridesErrors[keyof ListPromotionGateOverridesErrors];
+
+export type ListPromotionGateOverridesResponses = {
+  /**
+   * Current override choices and durable decision history for the subject.
+   */
+  200: GateOverrideCollection;
+};
+
+export type ListPromotionGateOverridesResponse =
+  ListPromotionGateOverridesResponses[keyof ListPromotionGateOverridesResponses];
+
 export type OverridePromotionGateData = {
   body: GateOverrideRequest;
   path: {
     promotionId: string;
-    gateName: CatalogName;
   };
   query?: never;
-  url: "/api/v1/promotions/{promotionId}/gates/{gateName}/override";
+  url: "/api/v1/promotions/{promotionId}/gate-overrides";
 };
 
 export type OverridePromotionGateErrors = {
@@ -6173,7 +7142,7 @@ export type OverridePromotionGateErrors = {
    */
   403: Problem;
   /**
-   * The requested Gate attachment does not exist.
+   * The requested subject does not exist.
    */
   404: Problem;
   /**
@@ -6195,9 +7164,9 @@ export type OverridePromotionGateError =
 
 export type OverridePromotionGateResponses = {
   /**
-   * The override decision has been recorded.
+   * The affected Gate, including its recorded override history.
    */
-  204: void;
+  200: GateRequirement;
 };
 
 export type OverridePromotionGateResponse =

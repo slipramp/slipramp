@@ -1,4 +1,5 @@
 import type { Run } from "~/api/generated";
+import { gateWaitLabel } from "../gates/gate-presentation.ts";
 
 export function runStatusColor(run: Run) {
   if (
@@ -29,13 +30,15 @@ export function runStatusColor(run: Run) {
   }
 }
 
-export function runStatusLabel(run: Pick<Run, "outcome" | "phase" | "review" | "schedulingState">) {
+export function runStatusLabel(
+  run: Pick<Run, "outcome" | "phase" | "review" | "schedulingState"> & Partial<Pick<Run, "gates">>,
+) {
   if (run.phase === "queued") {
     switch (run.schedulingState) {
       case "awaiting-review":
         return "Awaiting review";
       case "awaiting-gates":
-        return "Waiting for gates";
+        return gateWaitLabel(run.gates?.requirements ?? []);
       case "target-busy":
         return "Target busy";
       case "cluster-unreachable":

@@ -27,6 +27,15 @@ approved immediately; Kargo object delivery and Kargo's eventual outcome remain
 separate status facts. The callback used by review-oriented Kargo templates is
 optional for automatic Promotions.
 
+Before the first creation delivery of an automatic Promotion, Slipramp checks
+global and destination Stage locks and weekly windows together with any
+repository Gates attached to the Stage. Review-required Promotions can reach
+Kargo for preparation and check those Gates on the approved callback.
+Kargo-originated Promotions that call Slipramp use the same callback check.
+Promotion details show what is holding release and preserve the evidence used
+when it proceeds.
+Promotions that run entirely in Kargo bypass Slipramp Gates.
+
 `review-required` can be selected only when the Stage has complete review
 context. If a Stage later loses that context, Slipramp preserves the configured
 policy and blocks new Promotions. It never silently changes the policy to

@@ -45,9 +45,6 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 	service := &Service{assignments: runs}
 	gateEvaluatorProcessID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	service.gateEvaluatorProcessID = gateEvaluatorProcessID
-	location := time.FixedZone("test", -6*60*60)
-	claimedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
-	service.now = func() time.Time { return claimedAt }
 
 	assigned, err := service.NextRunAssignment(context.Background(), "colo")
 	if err != nil {
@@ -73,9 +70,7 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 			gateEvaluatorProcessID,
 		)
 	}
-	if !runs.claimedAt.Equal(claimedAt) || runs.claimedAt.Location() != time.UTC {
-		t.Errorf("claimed at = %s, want %s in UTC", runs.claimedAt, claimedAt)
-	}
+
 }
 
 func TestNextRunAssignmentReturnsNoAssignment(t *testing.T) {
@@ -116,7 +111,6 @@ type recordingAssignments struct {
 	claimClusterName            string
 	claimCapacity               SchedulingCapacity
 	claimGateEvaluatorProcessID uuid.UUID
-	claimedAt                   time.Time
 	claimed                     Run
 	claimError                  error
 }
@@ -132,13 +126,11 @@ func (s *recordingAssignments) ClaimQueuedRun(
 	clusterName string,
 	capacity SchedulingCapacity,
 	gateEvaluatorProcessID uuid.UUID,
-	claimedAt time.Time,
 ) (Run, error) {
 	s.claimCalls++
 	s.claimClusterName = clusterName
 	s.claimCapacity = capacity
 	s.claimGateEvaluatorProcessID = gateEvaluatorProcessID
-	s.claimedAt = claimedAt
 
 	return s.claimed, s.claimError
 }

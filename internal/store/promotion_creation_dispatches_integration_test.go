@@ -18,7 +18,7 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
 	delays := []time.Duration{5 * time.Second, 30 * time.Second}
 
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "colo",
 		ClaimedAt:        record.CreatedAt,
 		RetryDelays:      delays,
@@ -32,7 +32,7 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 		claimed.CreationDispatch.NextAttemptAt == nil || !claimed.CreationDispatch.NextAttemptAt.Equal(record.CreatedAt.Add(delays[0])) {
 		t.Errorf("first dispatch claim = %#v", claimed)
 	}
-	if _, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	if _, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "colo",
 		ClaimedAt:        record.CreatedAt.Add(time.Second),
 		RetryDelays:      delays,
@@ -59,7 +59,7 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 		t.Errorf("retryable dispatch = %#v", retrying)
 	}
 
-	claimed, err = fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	claimed, err = fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "colo",
 		ClaimedAt:        record.CreatedAt.Add(delays[0]),
 		RetryDelays:      delays,
@@ -156,8 +156,8 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 		DefinitionDigest:   digest,
 		EvaluatorProcessID: evaluatorID,
 		Observation: gate.Observation{
-			State: gate.ObservationBlocking,
-			Value: &observedValue,
+			State:    gate.ObservationBlocking,
+			Evidence: gate.PrometheusSample(observedValue),
 		},
 		EvaluatedAt: acceptedAt.Add(-10 * time.Second),
 		ValidUntil:  acceptedAt.Add(35 * time.Second),
@@ -168,7 +168,7 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 	assertNoPromotionCreationDispatch(t, fixture, claim)
 
 	observedValue = 0
-	observation.Observation = gate.Observation{State: gate.ObservationPassing, Value: &observedValue}
+	observation.Observation = gate.Observation{State: gate.ObservationPassing, Evidence: gate.PrometheusSample(observedValue)}
 	observation.EvaluatorProcessID = uuid.New()
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
 		t.Fatalf("record prior-process Promotion Gate observation: %v", err)
@@ -186,7 +186,7 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
 		t.Fatalf("record passing Promotion Gate observation: %v", err)
 	}
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 	if err != nil || claimed.ID != record.ID || claimed.CreationDispatch.AttemptCount != 1 {
 		t.Fatalf("claim released automatic Promotion = %#v, %v", claimed, err)
 	}
@@ -207,7 +207,7 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
              release_catalog_revision_id,
              release_definition_digest,
              release_evaluator_process_id,
-             release_observed_value,
+             (release_evidence #>> '{prometheus,value}')::double precision,
              release_evaluated_at,
              release_valid_until
          FROM promotion_gates
@@ -236,14 +236,14 @@ func TestAutomaticPromotionGateReleaseCommitsWithCreationClaimIntegration(t *tes
 	}
 
 	observedValue = 1
-	observation.Observation = gate.Observation{State: gate.ObservationBlocking, Value: &observedValue}
+	observation.Observation = gate.Observation{State: gate.ObservationBlocking, Evidence: gate.PrometheusSample(observedValue)}
 	observation.EvaluatedAt = acceptedAt.Add(30 * time.Second)
 	observation.ValidUntil = acceptedAt.Add(75 * time.Second)
 	if err := fixture.database.UpsertGateObservation(fixture.ctx, observation); err != nil {
 		t.Fatalf("record post-release blocking observation: %v", err)
 	}
 	claim.ClaimedAt = acceptedAt.Add(time.Minute)
-	retry, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	retry, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 	if err != nil || retry.ID != record.ID || retry.CreationDispatch.AttemptCount != 2 {
 		t.Fatalf("claim released Promotion retry = %#v, %v", retry, err)
 	}
@@ -259,7 +259,7 @@ func assertNoPromotionCreationDispatch(
 ) {
 	t.Helper()
 
-	if _, err := fixture.database.ClaimPromotionCreation(
+	if _, err := fixture.database.claimPromotionCreationAt(
 		fixture.ctx,
 		claim,
 	); !errors.Is(err, promotion.ErrNoCreationDispatch) {
@@ -279,12 +279,12 @@ func TestPromotionCreationDispatchExhaustionDoesNotBlockLaterWorkIntegration(t *
 		ExhaustedMessage: "dispatch attempts exhausted",
 	}
 
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 	if err != nil || claimed.ID != first.ID {
 		t.Fatalf("first claim = %#v, %v", claimed, err)
 	}
 	claim.ClaimedAt = second.CreatedAt
-	claimed, err = fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	claimed, err = fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 	if err != nil || claimed.ID != second.ID {
 		t.Fatalf("claim after exhaustion = %#v, %v", claimed, err)
 	}
@@ -298,7 +298,7 @@ func TestPromotionCreationDispatchExhaustionDoesNotBlockLaterWorkIntegration(t *
 		t.Errorf("exhausted Promotion = %#v", exhausted)
 	}
 	claim.ClaimedAt = second.CreatedAt.Add(time.Second)
-	if _, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim); !errors.Is(
+	if _, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim); !errors.Is(
 		err,
 		promotion.ErrNoCreationDispatch,
 	) {
@@ -317,7 +317,7 @@ func TestPromotionCreationDispatchRejectsWrongClusterAndTerminallyFailsIntegrati
 	createdAt := time.Date(2026, time.October, 23, 20, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
-	if _, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	if _, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "edge",
 		ClaimedAt:        record.CreatedAt,
 		RetryDelays:      []time.Duration{time.Second},
@@ -325,7 +325,7 @@ func TestPromotionCreationDispatchRejectsWrongClusterAndTerminallyFailsIntegrati
 	}); !errors.Is(err, promotion.ErrNoCreationDispatch) {
 		t.Fatalf("wrong-cluster claim error = %v", err)
 	}
-	if _, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	if _, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "colo",
 		ClaimedAt:        record.CreatedAt,
 		RetryDelays:      []time.Duration{time.Minute},
@@ -385,7 +385,7 @@ func TestConcurrentPromotionCreationDispatchClaimsReturnOneCommandIntegration(t 
 	results := make(chan result, 2)
 	for range 2 {
 		go func() {
-			claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+			claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 			results <- result{record: claimed, err: err}
 		}()
 	}
@@ -568,6 +568,9 @@ func TestKargoOriginatedPromotionBindsIdentityBeforeTerminalOutcomeIntegration(t
 		finished.KargoExecution.NextReconciliationAt != nil {
 		t.Fatalf("terminal Kargo Promotion = %#v, %v", finished, err)
 	}
+	if _, err := fixture.database.ReleasePromotion(fixture.ctx, accepted.ID, uuid.New()); !errors.Is(err, promotion.ErrTransitionConflict) {
+		t.Fatalf("callback release after terminal outcome = %v, want conflict", err)
+	}
 }
 
 func TestPromotionReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
@@ -717,7 +720,7 @@ func materializeOperatorPromotion(
 ) promotion.Promotion {
 	t.Helper()
 
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:      "colo",
 		ClaimedAt:        record.CreatedAt,
 		RetryDelays:      []time.Duration{time.Minute},
@@ -892,13 +895,12 @@ func TestAutomaticPromotionGateOverrideDispatchIntegration(t *testing.T) {
 	}
 	requirement := summaries[record.ID][0]
 	assertNoPromotionCreationDispatch(t, fixture, claim)
-	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: record.ID, GateName: requirement.Name,
-		DefinitionDigest: requirement.DefinitionDigest, Actor: fixture.actor, Reason: "Source outage", RecordedAt: claim.ClaimedAt,
+	request := gate.OverrideRequest{Subject: gate.PromotionSubject, SubjectID: record.ID, Reference: requirement.Reference, Actor: fixture.actor, Reason: "Source outage", RecordedAt: claim.ClaimedAt,
 		EvaluatorProcessID: claim.GateEvaluatorProcessID}
-	if err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
+	if _, err := fixture.database.RecordGateOverride(fixture.ctx, request); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := fixture.database.ClaimPromotionCreation(fixture.ctx, claim)
+	claimed, err := fixture.database.claimPromotionCreationAt(fixture.ctx, claim)
 	if err != nil || claimed.ID != record.ID {
 		t.Fatalf("claim by override = %v, %v", claimed.ID, err)
 	}
@@ -907,7 +909,7 @@ func TestAutomaticPromotionGateOverrideDispatchIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	released := summaries[record.ID][0]
-	if released.ReleasedAt == nil || released.Value != nil || len(released.Overrides) != 1 || released.Overrides[0].Actor != fixture.actor {
+	if released.ReleasedAt == nil || released.Evidence != nil || len(released.Overrides) != 1 || released.Overrides[0].Actor != fixture.actor {
 		t.Fatalf("override evidence at creation claim = %#v", released)
 	}
 }

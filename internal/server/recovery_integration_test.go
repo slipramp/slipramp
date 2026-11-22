@@ -323,7 +323,7 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 			Runtime:   "shell",
 			Placement: "infrastructure",
 			Actions: map[string]catalog.Action{
-				"deploy": {Command: []string{"sh", "deploy.sh"}},
+				"deploy": {Intent: "reconcile", Command: []string{"sh", "deploy.sh"}},
 			},
 		},
 		Source: catalog.Source{Path: ".slipramp/target.yaml", Document: 1},

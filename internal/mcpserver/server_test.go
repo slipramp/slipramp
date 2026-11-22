@@ -153,8 +153,8 @@ func TestHTTPTools(t *testing.T) {
 						Runtime:   "opentofu",
 						Placement: "homelab",
 						Actions: map[string]catalog.Action{
-							"apply":   {Command: []string{"tofu", "apply"}},
-							"preview": {Command: []string{"tofu", "plan"}},
+							"apply":   {Intent: "reconcile", Command: []string{"tofu", "apply"}},
+							"preview": {Intent: "preview", Command: []string{"tofu", "plan"}},
 						},
 					},
 				},

@@ -166,6 +166,8 @@ Run:
       description: >-
         Current reason a queued Run has not been assigned. Present only while
         phase is queued and derived from a point-in-time scheduling snapshot.
+        For awaiting-gates, the first blocking, unavailable, or unevaluated
+        requirement without a matching override is the primary Gate blocker.
     blockingRunId:
       type: string
       format: uuid

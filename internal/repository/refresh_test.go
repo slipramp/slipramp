@@ -164,7 +164,7 @@ func TestRefresherValidatesConfiguredGateSources(t *testing.T) {
 		sources  gate.SourceSet
 		accepted bool
 	}{
-		{name: "configured", sources: gate.SourceSet{"homelab": {}}, accepted: true},
+		{name: "configured", sources: gate.SourceSet{"homelab": gate.PrometheusSource{}}, accepted: true},
 		{name: "not configured", sources: gate.SourceSet{}, accepted: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -179,7 +179,8 @@ kind: Gate
 metadata:
   name: maintenance-safe
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: maintenance_active
     condition: {operator: equal, value: 0}
@@ -672,6 +673,7 @@ spec:
   placement: test
   actions:
     inspect:
+      intent: preview
       command: [inspect]
 `)},
 	}
@@ -711,6 +713,7 @@ spec:
   watch: [".slipramp/**"]
   actions:
     inspect:
+      intent: preview
       command: [inspect]
       parameters:
         retries:

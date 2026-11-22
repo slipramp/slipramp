@@ -1,14 +1,84 @@
-# Repository-defined release gates
+# Release Gates
 
-This document defines the repository-owned release Gate contract. Gates are
-opt-in current policy that can delay a Run assignment or Kargo Promotion
-release until an application-specific condition is safe. They are not
-execution steps, approvals, terminal outcomes, or a Server-owned authorization
-boundary.
+Repository authors can attach Prometheus or webhook Gates to Actions and Kargo
+Stages. The Server evaluates these Gates before assigning a Run or releasing
+a Promotion.
 
-The initial evaluator reads numeric observations from administrator-configured
-Prometheus sources. Runs and Promotions share the same Gate semantics and
-evidence model.
+## Accepted expansion
+
+| Gate type | Owner | Applies to | Evidence at release |
+| --- | --- | --- | --- |
+| Prometheus | Repository | Attached Action or Stage | Shared numeric observation for the definition digest |
+| Webhook | Repository | Attached Action or Stage | Evaluator decision for the individual Run or Promotion |
+| Window | Server | Global and Target or Stage | Open interval at the release instant and scope window version |
+| Lock | Server | Global and Target or Stage | Scope lock state, expiry and version at the release instant |
+
+The Server provides lock and window management for global, Target, and Stage scopes.
+Runs with frozen `reconcile` or `operation` intent check current global and
+Target policies, including policies added while the Run waits. Previews check
+explicitly attached repository Gates. Mediated Promotions check the global
+and destination Stage scopes together with their attached repository Gates.
+
+Run assignment requires every applicable Gate to pass or have an authorized
+override for that Run, Gate key, and exact version. The assignment records
+immutable evidence. Later observations and policy changes affect future claims.
+[Gate expansion implementation plan](./gate-expansion-plan.md)
+
+## Server lock persistence
+
+A scope has its own UUID and a unique reference to its Target or Stage. The
+global scope is a singleton. Migration 075 backfills all durable owners,
+including archived ones. An insert trigger creates the scope in the same
+transaction as each new owner. Archival and reactivation preserve that row.
+
+A lock mutation acquires the global scope row first, followed by the local row
+when applicable. The Server samples time after acquiring both rows. Each
+change updates the current lock and appends an event with its version in one
+transaction. The event retains the actor, reason, time, and original expiry.
+Expiry makes the hold inactive at the specified instant. A new lock after
+expiry takes the next version. Reads return a consistent snapshot of current
+state and recent events. [Lock management API](../GATES.md#manage-server-locks)
+
+Each subject's override collection exposes active global and applicable local
+locks under the key `lock/<scope-uuid>`. A mutating Run can waive its global
+or Target lock while queued. A Promotion can waive its global or Stage lock
+until its release boundary. Cancellation closes both paths. A preview can
+still waive an explicitly attached repository Gate.
+
+A lock override serializes with changes to the subject and the applicable scopes.
+It checks expiry after acquiring the locks. Run and Promotion overrides of
+Server Gates share one decision table with foreign keys to their subject and
+the exact policy event. The history retains both actors, both reasons, the
+lock's original expiry, and the decision time after unlock, expiry, or re-lock.
+A retry by the same principal with the same reason returns the existing decision
+while the subject and lock remain eligible.
+
+## Weekly window schedules
+
+A schedule names an IANA time zone and up to 128 weekday intervals. Times use
+24-hour `HH:MM` and include the opening minute. The closing minute is exclusive.
+Use `24:00` as the end of a day. Split an overnight interval at midnight across
+the two weekdays. The Server merges overlapping or adjacent intervals, including
+across Sunday and Monday.
+
+If a boundary falls in a skipped clock interval, that occurrence stays closed.
+For a repeated boundary, the later opening and earlier closing apply. An interval
+that spans the clock change keeps its real opening and closing instants. An
+all-week window has no next transition and renews its observation weekly.
+
+The Server evaluates the normalized schedule in the transaction that stores
+it. A coordinator refreshes observations at startup and at their deadlines.
+The effective state becomes unavailable at the expiry instant and for a future
+observation. Refreshes preserve the policy version. Each accepted update,
+including an equivalent schedule, advances the version. Removal advances it
+once. Updates and removals retain their actor and time in the scope audit.
+
+The key `window/<scope-uuid>` identifies the window on a waiting subject.
+Overrides are available for blocking and unavailable windows. Each decision
+retains the observation, definition digest, and time zone that the operator
+saw. A later opening or closing preserves the decision for that policy
+version. Replacing or removing the policy invalidates the waiver.
+[Window management API](../GATES.md#manage-weekly-windows)
 
 ## Repository contract
 
@@ -21,7 +91,8 @@ metadata:
   name: teamspeak-idle
   title: TeamSpeak has no active users
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: max_over_time(teamspeak_active_users{server="main"}[1m])
     condition:
@@ -29,8 +100,10 @@ spec:
       value: 0
 ```
 
-One Gate has exactly one typed Prometheus evaluator. Supported numeric
-operators are `equal`, `not-equal`, `less-than`, `less-than-or-equal`,
+The Server recognizes two repository evaluator types, Prometheus and webhook.
+Each type defines its policy, source configuration, and public evidence.
+Prometheus shares evaluations by normalized definition digest. Supported
+numeric operators are `equal`, `not-equal`, `less-than`, `less-than-or-equal`,
 `greater-than`, and `greater-than-or-equal`. Equality is exact. Queries can
 express tolerance or duration when either is required.
 
@@ -38,7 +111,7 @@ Portable catalog validation rejects duplicate Gate names, invalid resource or
 source names, empty or excessively large queries, unsupported operators,
 non-finite thresholds, duplicate Action references, and references to a Gate
 absent from the same catalog. Deployment validation additionally rejects a
-Gate that selects an unknown configured source. A configured source being
+Gate whose source is missing or has a different evaluator type. A configured source being
 temporarily unreachable does not invalidate a catalog.
 
 Actions attach an ordered, unique list of repository-local Gate names:
@@ -46,6 +119,8 @@ Actions attach an ordered, unique list of repository-local Gate names:
 ```yaml
 actions:
   deploy:
+    intent: reconcile
+    command: [./deploy.sh]
     gates:
       - teamspeak-idle
 ```
@@ -103,11 +178,11 @@ apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
-      evaluationInterval: 15s
-      timeout: 5s
-      maximumConcurrency: 4
+    type: prometheus
+    url: http://prometheus:9090
+    evaluationInterval: 15s
+    timeout: 5s
+    maximumConcurrency: 4
 ```
 
 Source configuration owns the fixed Prometheus base URL, evaluation interval,
@@ -130,17 +205,17 @@ encrypted network already protects the transport.
 
 The focused `internal/gate` package owns normalized definitions, source and
 condition validation, definition digests, comparison semantics, Prometheus
-response normalization, evaluation coordination, bounded diagnostics, and the
-shared Run and Promotion Gate summary. The Run and Promotion packages own
+and webhook response normalization, evaluation coordination, bounded
+diagnostics, and the shared Run and Promotion Gate summary. The Run and Promotion packages own
 their respective release decisions.
 
 An observation has one of three states:
 
 | State | Meaning |
 | --- | --- |
-| `passing` | One valid finite numeric result satisfies the condition. |
-| `blocking` | One valid finite numeric result does not satisfy the condition. |
-| `unavailable` | No trustworthy comparison can be made. |
+| `passing` | The evaluator allows this release. |
+| `blocking` | The evaluator denies this release. |
+| `unavailable` | The evaluator cannot make a trustworthy decision. |
 
 No observation is distinct from `unavailable` internally, but both fail
 closed. Product projections may use `unevaluated` before the first attempt.
@@ -148,7 +223,7 @@ Diagnostics are bounded and sanitized. They can identify timeout, source,
 cardinality, parsing, or freshness failures but cannot contain credentials or
 arbitrary upstream response bodies.
 
-The evaluator sends an instant query at the Server's current UTC time. It
+The Prometheus evaluator sends an instant query at the Server's current UTC time. It
 accepts a Prometheus scalar or an instant vector containing exactly one sample.
 It rejects empty or multi-series vectors, matrices, strings, histograms,
 unsupported result types, non-finite values, unsuccessful or malformed
@@ -161,8 +236,8 @@ Promotions:
 - Evaluate immediately for the first waiter and on new requirements, relevant
   review approval, definition changes, and Server startup.
 - Re-evaluate on the source interval while waiters remain.
-- Query once per unique normalized definition digest even when many subjects
-  share it.
+- Query Prometheus once per normalized definition digest. Webhook requests
+  additionally key on the subject type and UUID.
 - Read evaluation demand once per reconciliation and let each configured source
   process its latest demand independently.
 - Bound concurrency per source, add small jitter, and apply bounded failure
@@ -188,10 +263,21 @@ PostgreSQL is authoritative for requirements, current observations, and
 release evidence. Domain-specific association tables use real foreign keys;
 there is no polymorphic subject table.
 
-The current-observation projection is keyed by Repository, Gate name, active
-catalog revision, and normalized definition digest. It stores evaluator process
-identity, state, optional finite value, optional bounded diagnostic, evaluation
-time, and validity time. Evaluations update the projection in place rather than
+Prometheus observations are keyed by Repository, Gate name, active catalog
+revision, and normalized definition digest. A webhook observation also belongs
+to one subject and occupies that subject's requirement row. Observation writes
+lock the subject so release and overrides read a consistent decision. For the
+same revision, the evaluation start time orders observations so a delayed
+response cannot replace a newer decision. The Server
+sends the active policy revision and frozen subject facts to the operator-configured
+endpoint. Successful protocol responses carry a bounded public code and message.
+[Webhook protocol](../GATES.md#use-a-webhook-policy)
+
+Each observation stores evaluator process identity, state, optional type-tagged
+JSON evidence, optional bounded diagnostic,
+evaluation time, and validity time. A finite Prometheus sample is stored as
+`{"prometheus":{"value":0}}`. An unavailable observation has a diagnostic
+and SQL NULL evidence. Evaluations update the projection in place rather than
 retaining every poll indefinitely. Each hour the Server maintenance coordinator
 removes observations that expired at least 24 hours earlier and have no matching
 unreleased requirement. The Run or Promotion retains its release evidence.
@@ -219,10 +305,22 @@ new digest.
 
 ## Per-Gate overrides
 
+The Run and Promotion projections identify each repository attachment by
+`repository/<gate-name>`. Its origin is `repository` and its scope carries the
+owning Repository UUID. A resolved Gate reports the evaluator type and its
+exact version, the normalized definition digest. A stopped or missing
+definition retains its attachment identity. Released details use the frozen
+definition, version, observation and validity interval.
+
+Each historical decision derives its key from its attachment and its version
+from its recorded definition digest. This keeps same-policy attachments
+distinct even when they share an observation.
+
 Operators and administrators can override a blocking, unavailable, or unevaluated Gate on one
-waiting Run or Promotion. The submitted definition digest must match the active definition.
+waiting Run or Promotion. The submitted key and version must match the attachment and its active definition.
 A missing definition continues to block release. The decision records the actor, time, reason,
-and observed state. The latest decision applies while its digest matches. A digest change
+and observed state. A decision with a sample stores the same typed evidence
+under `observedEvidence`. The latest decision applies while its digest matches. A digest change
 requires a new decision and earlier decisions remain visible. Reruns and other subjects start
 with their own requirements.
 
@@ -239,18 +337,50 @@ available while a Run waits.
 Queue explanation uses this precedence:
 
 1. Pending review.
-2. Unreleased Gates.
-3. Target active Run capacity.
-4. Controller reachability.
-5. Cluster or Placement capacity.
-6. Ordinary FIFO eligibility.
+2. Active locks, global before Target.
+3. Closed or unavailable weekly windows, global before Target.
+4. Unsatisfied repository Gates in attachment order.
+5. Target active Run capacity.
+6. Controller reachability.
+7. Cluster or Placement capacity.
+8. Ordinary FIFO eligibility.
 
-The assignment transaction validates all Gate evidence, records immutable
-release evidence, and changes the Run from queued to assigned atomically. Queue
-position excludes Runs waiting for review or Gates. A later blocking
-observation never cancels or rewrites an assigned Run.
+The queue skips blocked Runs before assigning FIFO positions. The same Gate
+predicate filters the oldest eligible Run metric. A Controller poll first locks
+the candidate Run and its Target. For mutating Actions it acquires shared
+global and Target policy locks in that order. For an attachment it also locks
+the Repository. It samples database time after acquiring those locks and checks
+eligibility again. A weekly observation is fresh from its evaluation time up
+to its exclusive validity deadline.
+
+The assignment freezes both scope IDs and their independent lock and window
+versions, including scopes without active policy. It copies applicable lock
+and window evidence and the matching decisions. Every attached repository
+Gate records the same release time. The assignment and all evidence commit in
+one transaction. Controller redelivery returns the assigned Run. Historical
+assignments retain the evidence captured at the time.
 
 ## Promotion release
+
+The Server records successful callback approval in the release transaction,
+including for a Stage with no repository Gates. That receipt closes the
+callback override path. For a Slipramp-created automatic Promotion, the first
+creation dispatch closes it. Migration 076 treats historical approved,
+hydrated callbacks with no outstanding repository Gates as already released,
+because the earlier schema could not distinguish an ungated approval from an
+approval already returned to Kargo. Migration 080 preserves those callback
+receipts and the first-dispatch boundary for historical automatic Promotions.
+An existing waiter picks up the current policies on its next release check.
+
+Release locks the Promotion, global scope, destination Stage scope, and any
+attached Gate Repositories before sampling database time. Every active lock
+needs a waiver for its current version. Every configured window needs a fresh
+pass or a matching waiver. All repository Gates must pass or have their own
+matching waivers. The transaction records both scope versions, the observed
+policy and matching decisions, and the repository evidence at that instant.
+If any requirement still blocks, the transaction rolls back. A later poll or
+delivery retry uses the committed release. Cancellation and release serialize
+on the same Promotion row.
 
 Gate state remains separate from Promotion lifecycle, review, creation
 delivery, and Kargo execution outcome. An automatic Promotion can have
@@ -275,7 +405,8 @@ execution failure, not a Gate outcome.
 
 Slipramp can enforce only Promotion paths it mediates. A Kargo Promotion that
 neither originates in Slipramp nor calls the Slipramp PromotionTask bypasses
-repository-defined Gates.
+Slipramp release checks. The Controller can report that Promotion through
+Stage inventory. Observing a Kargo outcome creates no Slipramp release receipt.
 
 ## Product projection
 
@@ -290,7 +421,7 @@ conditions, and timestamps. Ungated subjects remain `not-required`.
 
 Other subject summaries are `waiting` or `released`. Their individual
 requirements project `unevaluated`, `passing`, `blocking`, `unavailable`, or
-`released`, along with the Gate name and title, finite observed value when
+`released`, along with the Gate name and title, typed `evidence` when
 present, operator and threshold, evaluation time, release time, and sanitized
 diagnostic. Released requirements use the title and condition from the release
 revision. While waiting, a Run whose Gate definition has disappeared uses the
@@ -313,7 +444,7 @@ type. It never labels metrics with PromQL, Repository, Gate, Target, or Stage
 names. Structured logs may include stable IDs and bounded error classes, but
 never query responses or credential material.
 
-The initial contract excludes cancellation of active work,
-additional evaluator types, subject-specific query interpolation,
+The implemented Prometheus contract excludes cancellation of active work,
+subject-specific query interpolation,
 repository-owned cadence or credentials, implicit attachment, workflow graphs,
 and retained observation history.

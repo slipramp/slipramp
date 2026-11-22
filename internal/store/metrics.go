@@ -68,7 +68,7 @@ func (d metricsSnapshotSource) LoadMetricsSnapshot(ctx context.Context, at time.
 	if err != nil {
 		return telemetry.MetricsSnapshot{}, fmt.Errorf("count pending Run reviews: %w", err)
 	}
-	waitingGateSubjects, err := queries.CountWaitingGateSubjects(ctx)
+	waitingGateSubjects, err := queries.CountWaitingGateSubjects(ctx, databaseTime(at))
 	if err != nil {
 		return telemetry.MetricsSnapshot{}, fmt.Errorf("count waiting Gate subjects: %w", err)
 	}

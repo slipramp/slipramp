@@ -16,43 +16,52 @@ func TestDecodeSourceFile(t *testing.T) {
 	const header = `apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 `
+	defaults := gate.PrometheusSource{
+		URL:                "http://prometheus:9090",
+		EvaluationInterval: gate.DefaultEvaluationInterval,
+		Timeout:            gate.DefaultRequestTimeout,
+		MaximumConcurrency: gate.DefaultMaximumConcurrency,
+	}
 	for _, test := range []struct {
 		name  string
 		input string
 		want  gate.SourceSet
 	}{
+		{name: "aliased sources", input: `sources:
+  first: &base
+    type: prometheus
+    url: http://prometheus:9090
+  second:
+    <<: *base
+  third: *base
+`, want: gate.SourceSet{"first": defaults, "second": defaults, "third": defaults}},
 		{name: "no sources", input: "sources: {}\n", want: gate.SourceSet{}},
 		{
 			name: "defaults",
 			input: `sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
+    type: prometheus
+    url: http://prometheus:9090
 `,
-			want: gate.SourceSet{"homelab": {Prometheus: gate.PrometheusSource{
-				URL:                "http://prometheus:9090",
-				EvaluationInterval: gate.DefaultEvaluationInterval,
-				Timeout:            gate.DefaultRequestTimeout,
-				MaximumConcurrency: gate.DefaultMaximumConcurrency,
-			}}},
+			want: gate.SourceSet{"homelab": defaults},
 		},
 		{
 			name: "explicit polling and transport settings",
 			input: `sources:
   production:
-    prometheus:
-      url: https://prometheus.example.com/metrics
-      publicUrl: https://metrics.example.com/prometheus
-      evaluationInterval: 30s
-      timeout: 8s
-      maximumConcurrency: 7
-      bearerTokenFile: /var/run/slipramp/gates/token
-      tls:
-        caFile: /var/run/slipramp/gates/ca.crt
-        clientCertificateFile: /var/run/slipramp/gates/tls.crt
-        clientKeyFile: /var/run/slipramp/gates/tls.key
+    type: prometheus
+    url: https://prometheus.example.com/metrics
+    publicUrl: https://metrics.example.com/prometheus
+    evaluationInterval: 30s
+    timeout: 8s
+    maximumConcurrency: 7
+    bearerTokenFile: /var/run/slipramp/gates/token
+    tls:
+      caFile: /var/run/slipramp/gates/ca.crt
+      clientCertificateFile: /var/run/slipramp/gates/tls.crt
+      clientKeyFile: /var/run/slipramp/gates/tls.key
 `,
-			want: gate.SourceSet{"production": {Prometheus: gate.PrometheusSource{
+			want: gate.SourceSet{"production": gate.PrometheusSource{
 				URL:                "https://prometheus.example.com/metrics",
 				PublicURL:          "https://metrics.example.com/prometheus",
 				EvaluationInterval: 30 * time.Second,
@@ -64,7 +73,7 @@ kind: GateSourceConfig
 					ClientCertificateFile: "/var/run/slipramp/gates/tls.crt",
 					ClientKeyFile:         "/var/run/slipramp/gates/tls.key",
 				},
-			}}},
+			}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -90,9 +99,19 @@ func TestDecodeSourceFileRejectsInvalidConfiguration(t *testing.T) {
 		wantError string
 	}{
 		{
+			name:      "unregistered source type",
+			configure: func(input string) string { return strings.Replace(input, "type: prometheus", "type: other", 1) },
+			wantError: "unknown Gate evaluator type",
+		},
+		{
+			name:      "missing source type",
+			configure: func(input string) string { return strings.Replace(input, "type: prometheus", "", 1) },
+			wantError: "evaluator type is required",
+		},
+		{
 			name:      "unknown field",
-			configure: func(input string) string { return input + "      extra: true\n" },
-			wantError: "field extra not found",
+			configure: func(input string) string { return input + "    extra: true\n" },
+			wantError: "extra",
 		},
 		{
 			name:      "multiple documents",
@@ -151,49 +170,49 @@ func TestDecodeSourceFileRejectsInvalidConfiguration(t *testing.T) {
 		{
 			name: "public URL with credentials",
 			configure: func(input string) string {
-				return input + "      publicUrl: https://user:password@metrics.example.com\n"
+				return input + "    publicUrl: https://user:password@metrics.example.com\n"
 			},
 			wantError: "publicUrl: prometheus URL must not contain credentials",
 		},
 		{
 			name: "invalid interval",
 			configure: func(input string) string {
-				return input + "      evaluationInterval: soon\n"
+				return input + "    evaluationInterval: soon\n"
 			},
 			wantError: "evaluation interval",
 		},
 		{
 			name: "timeout equals interval",
 			configure: func(input string) string {
-				return input + "      evaluationInterval: 5s\n      timeout: 5s\n"
+				return input + "    evaluationInterval: 5s\n    timeout: 5s\n"
 			},
 			wantError: "shorter than the evaluation interval",
 		},
 		{
 			name: "excessive concurrency",
 			configure: func(input string) string {
-				return input + "      maximumConcurrency: 33\n"
+				return input + "    maximumConcurrency: 33\n"
 			},
 			wantError: "between 1 and 32",
 		},
 		{
 			name: "relative bearer token file",
 			configure: func(input string) string {
-				return input + "      bearerTokenFile: token\n"
+				return input + "    bearerTokenFile: token\n"
 			},
 			wantError: "bearer token file must be an absolute path",
 		},
 		{
 			name: "empty bearer token file",
 			configure: func(input string) string {
-				return input + "      bearerTokenFile: \"\"\n"
+				return input + "    bearerTokenFile: \"\"\n"
 			},
 			wantError: "bearer token file must not be empty",
 		},
 		{
 			name: "TLS with HTTP",
 			configure: func(input string) string {
-				return input + "      tls:\n        caFile: /certificates/ca.crt\n"
+				return input + "    tls:\n      caFile: /certificates/ca.crt\n"
 			},
 			wantError: "requires an HTTPS URL",
 		},
@@ -202,7 +221,7 @@ func TestDecodeSourceFileRejectsInvalidConfiguration(t *testing.T) {
 			configure: func(input string) string {
 				input = strings.Replace(input, "http://", "https://", 1)
 
-				return input + "      tls:\n        clientCertificateFile: /certificates/tls.crt\n"
+				return input + "    tls:\n      clientCertificateFile: /certificates/tls.crt\n"
 			},
 			wantError: "certificate and key files must be configured together",
 		},
@@ -212,8 +231,8 @@ func TestDecodeSourceFileRejectsInvalidConfiguration(t *testing.T) {
 kind: GateSourceConfig
 sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
+    type: prometheus
+    url: http://prometheus:9090
 `
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

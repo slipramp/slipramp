@@ -21,6 +21,7 @@ func TestEffectiveActionAppliesDefaultsWithoutMutatingTarget(t *testing.T) {
 		Limits:   map[string]string{"memory": "1Gi"},
 	}
 	target.Spec.Actions["preview"] = catalog.Action{
+		Intent:      "preview",
 		Command:     []string{"terraform", "plan"},
 		Placement:   "preview-cluster",
 		Credentials: map[string]string{"backend": "preview-backend"},

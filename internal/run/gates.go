@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/gate"
 )
 
@@ -21,7 +22,7 @@ func (s *Service) GateSummaries(
 ) (map[uuid.UUID]gate.Summary, error) {
 	ids := make([]uuid.UUID, 0, len(records))
 	for _, record := range records {
-		if len(record.Snapshot.Action.Gates) > 0 {
+		if record.Snapshot.Action.Intent != catalog.ActionIntentPreview || len(record.Snapshot.Action.Gates) > 0 {
 			ids = append(ids, record.ID)
 		}
 	}

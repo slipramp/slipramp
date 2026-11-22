@@ -11,115 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const claimQueuedRun = `-- name: ClaimQueuedRun :one
-WITH active_runs AS (
-    SELECT active.placement_name
-    FROM runs AS active
-    WHERE active.cluster_name = $2
-      AND active.phase IN ('assigned', 'preparing', 'running')
-), candidate AS (
-    SELECT queued.id
-    FROM runs AS queued
-    JOIN targets AS target_state
-      ON target_state.id = queued.target_id
-    WHERE queued.cluster_name = $2
-      AND queued.phase = 'queued'
-      AND queued.review_state IN ('not-required', 'approved')
-      AND queued.id NOT IN (
-          SELECT run_id FROM runs_awaiting_gates($3::uuid, $1::timestamptz)
-      )
-      AND (
-          SELECT count(*)
-          FROM active_runs
-      ) < $4::integer
-      AND (
-          NOT ($5::jsonb ? queued.placement_name)
-          OR COALESCE((
-              SELECT count(*)
-              FROM active_runs
-              WHERE placement_name = queued.placement_name
-          ), 0) < ($5::jsonb ->> queued.placement_name)::bigint
-      )
-      AND (
-          SELECT count(*)
-          FROM runs AS active
-          WHERE active.target_id = queued.target_id
-            AND active.phase IN ('assigned', 'preparing', 'running')
-      ) < target_state.maximum_active_runs
-    ORDER BY queued.created_at, queued.id
-    FOR UPDATE OF queued, target_state SKIP LOCKED
-    LIMIT 1
+const assignEligibleRun = `-- name: AssignEligibleRun :execrows
+UPDATE runs SET phase = 'assigned', assigned_at = $1, server_gate_release_evidence = $2
+WHERE id = $3 AND phase = 'queued' AND id IN (
+    SELECT run_id FROM assignable_cluster_runs($4::text, $5::integer,
+        $6::jsonb, $7::uuid, $1::timestamptz)
 )
-UPDATE runs
-SET phase = 'assigned',
-    assigned_at = $1
-FROM candidate
-WHERE runs.id = candidate.id
-RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_revision_id, runs.commit_sha, runs.target_name, runs.action_name, runs.parameters, runs.placement_name, runs.cluster_name, runs.source, runs.idempotency_key, runs.request_digest, runs.snapshot, runs.created_at, runs.assigned_at, runs.preparing_at, runs.started_at, runs.finished_at, runs.last_observed_at, runs.cancellation_requested_at, runs.job_uid, runs.outcome_reason, runs.outcome_message, runs.exit_code, runs.created_by_principal_id, runs.created_by_snapshot, runs.canceled_by_principal_id, runs.canceled_by_snapshot, runs.rerun_of_run_id, runs.rerun_mode, runs.target_id, runs.target_relevance_commit_sha, runs.review_state, runs.review_decided_by_principal_id, runs.review_decided_by_snapshot, runs.review_decided_at, runs.review_comment, runs.action_image_id, runs.checkout_image_id, runs.harness_image_id
 `
 
-type ClaimQueuedRunParams struct {
-	AssignedAt                 pgtype.Timestamptz
+type AssignEligibleRunParams struct {
+	CheckedAt                  pgtype.Timestamptz
+	Evidence                   []byte
+	ID                         pgtype.UUID
 	ClusterName                string
-	EvaluatorProcessID         pgtype.UUID
 	ClusterMaximumActiveRuns   int32
 	PlacementMaximumActiveRuns []byte
+	EvaluatorProcessID         pgtype.UUID
 }
 
-func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) (Run, error) {
-	row := q.db.QueryRow(ctx, claimQueuedRun,
-		arg.AssignedAt,
+func (q *Queries) AssignEligibleRun(ctx context.Context, arg AssignEligibleRunParams) (int64, error) {
+	result, err := q.db.Exec(ctx, assignEligibleRun,
+		arg.CheckedAt,
+		arg.Evidence,
+		arg.ID,
 		arg.ClusterName,
-		arg.EvaluatorProcessID,
 		arg.ClusterMaximumActiveRuns,
 		arg.PlacementMaximumActiveRuns,
+		arg.EvaluatorProcessID,
 	)
-	var i Run
-	err := row.Scan(
-		&i.ID,
-		&i.Phase,
-		&i.Outcome,
-		&i.RepositoryID,
-		&i.CatalogRevisionID,
-		&i.CommitSha,
-		&i.TargetName,
-		&i.ActionName,
-		&i.Parameters,
-		&i.PlacementName,
-		&i.ClusterName,
-		&i.Source,
-		&i.IdempotencyKey,
-		&i.RequestDigest,
-		&i.Snapshot,
-		&i.CreatedAt,
-		&i.AssignedAt,
-		&i.PreparingAt,
-		&i.StartedAt,
-		&i.FinishedAt,
-		&i.LastObservedAt,
-		&i.CancellationRequestedAt,
-		&i.JobUid,
-		&i.OutcomeReason,
-		&i.OutcomeMessage,
-		&i.ExitCode,
-		&i.CreatedByPrincipalID,
-		&i.CreatedBySnapshot,
-		&i.CanceledByPrincipalID,
-		&i.CanceledBySnapshot,
-		&i.RerunOfRunID,
-		&i.RerunMode,
-		&i.TargetID,
-		&i.TargetRelevanceCommitSha,
-		&i.ReviewState,
-		&i.ReviewDecidedByPrincipalID,
-		&i.ReviewDecidedBySnapshot,
-		&i.ReviewDecidedAt,
-		&i.ReviewComment,
-		&i.ActionImageID,
-		&i.CheckoutImageID,
-		&i.HarnessImageID,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countPendingRunReviews = `-- name: CountPendingRunReviews :one
@@ -273,7 +196,7 @@ INSERT INTO runs (
     $22
 )
 ON CONFLICT DO NOTHING
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 `
 
 type CreateRunParams struct {
@@ -370,6 +293,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -453,7 +377,7 @@ SET review_state = $1,
         ELSE outcome_reason
     END
 WHERE id = $6
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 `
 
 type DecideRunReviewParams struct {
@@ -518,6 +442,7 @@ func (q *Queries) DecideRunReview(ctx context.Context, arg DecideRunReviewParams
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -534,7 +459,7 @@ SET cancellation_requested_at = $1,
 WHERE id = $4
   AND phase = 'queued'
   AND cancellation_requested_at IS NULL
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 `
 
 type FinishQueuedRunCancellationParams struct {
@@ -595,6 +520,7 @@ func (q *Queries) FinishQueuedRunCancellation(ctx context.Context, arg FinishQue
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -666,7 +592,7 @@ func (q *Queries) GetArtifactInputCandidate(ctx context.Context, artifactID pgty
 }
 
 const getAssignedRunForCluster = `-- name: GetAssignedRunForCluster :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE cluster_name = $1
   AND phase = 'assigned'
@@ -720,6 +646,7 @@ func (q *Queries) GetAssignedRunForCluster(ctx context.Context, clusterName stri
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -755,7 +682,7 @@ func (q *Queries) GetOldestEligibleRunCreatedAt(ctx context.Context, arg GetOlde
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE id = $1
 `
@@ -806,12 +733,13 @@ func (q *Queries) GetRun(ctx context.Context, id pgtype.UUID) (Run, error) {
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
 
 const getRunByIdempotencyKey = `-- name: GetRunByIdempotencyKey :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE idempotency_key = $1
   AND (
@@ -879,12 +807,13 @@ func (q *Queries) GetRunByIdempotencyKey(ctx context.Context, arg GetRunByIdempo
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
 
 const getRunForCancel = `-- name: GetRunForCancel :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -936,12 +865,13 @@ func (q *Queries) GetRunForCancel(ctx context.Context, id pgtype.UUID) (Run, err
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
 
 const getRunForReview = `-- name: GetRunForReview :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -993,6 +923,7 @@ func (q *Queries) GetRunForReview(ctx context.Context, id pgtype.UUID) (Run, err
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -1170,7 +1101,7 @@ func (q *Queries) GetRunSchedulingSnapshots(ctx context.Context, arg GetRunSched
 }
 
 const getRunToCancelForCluster = `-- name: GetRunToCancelForCluster :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE cluster_name = $1
   AND cancellation_requested_at IS NOT NULL
@@ -1225,6 +1156,7 @@ func (q *Queries) GetRunToCancelForCluster(ctx context.Context, clusterName stri
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }
@@ -1280,7 +1212,7 @@ func (q *Queries) ListActiveRunStatesForMetrics(ctx context.Context) ([]ListActi
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 FROM runs
 WHERE (
     $1::uuid IS NULL
@@ -1419,6 +1351,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 			&i.ActionImageID,
 			&i.CheckoutImageID,
 			&i.HarnessImageID,
+			&i.ServerGateReleaseEvidence,
 		); err != nil {
 			return nil, err
 		}
@@ -1428,6 +1361,82 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockRunAssignmentCandidate = `-- name: LockRunAssignmentCandidate :one
+SELECT queued.id, queued.phase, queued.outcome, queued.repository_id, queued.catalog_revision_id, queued.commit_sha, queued.target_name, queued.action_name, queued.parameters, queued.placement_name, queued.cluster_name, queued.source, queued.idempotency_key, queued.request_digest, queued.snapshot, queued.created_at, queued.assigned_at, queued.preparing_at, queued.started_at, queued.finished_at, queued.last_observed_at, queued.cancellation_requested_at, queued.job_uid, queued.outcome_reason, queued.outcome_message, queued.exit_code, queued.created_by_principal_id, queued.created_by_snapshot, queued.canceled_by_principal_id, queued.canceled_by_snapshot, queued.rerun_of_run_id, queued.rerun_mode, queued.target_id, queued.target_relevance_commit_sha, queued.review_state, queued.review_decided_by_principal_id, queued.review_decided_by_snapshot, queued.review_decided_at, queued.review_comment, queued.action_image_id, queued.checkout_image_id, queued.harness_image_id, queued.server_gate_release_evidence FROM runs queued JOIN targets ON targets.id = queued.target_id
+WHERE queued.phase = 'queued' AND queued.id IN (
+    SELECT run_id FROM assignable_cluster_runs($1::text, $2::integer,
+        $3::jsonb, $4::uuid, $5::timestamptz)
+)
+ORDER BY queued.created_at, queued.id
+FOR NO KEY UPDATE OF queued, targets SKIP LOCKED
+LIMIT 1
+`
+
+type LockRunAssignmentCandidateParams struct {
+	ClusterName                string
+	ClusterMaximumActiveRuns   int32
+	PlacementMaximumActiveRuns []byte
+	EvaluatorProcessID         pgtype.UUID
+	CheckedAt                  pgtype.Timestamptz
+}
+
+func (q *Queries) LockRunAssignmentCandidate(ctx context.Context, arg LockRunAssignmentCandidateParams) (Run, error) {
+	row := q.db.QueryRow(ctx, lockRunAssignmentCandidate,
+		arg.ClusterName,
+		arg.ClusterMaximumActiveRuns,
+		arg.PlacementMaximumActiveRuns,
+		arg.EvaluatorProcessID,
+		arg.CheckedAt,
+	)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.Source,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+		&i.CreatedByPrincipalID,
+		&i.CreatedBySnapshot,
+		&i.CanceledByPrincipalID,
+		&i.CanceledBySnapshot,
+		&i.RerunOfRunID,
+		&i.RerunMode,
+		&i.TargetID,
+		&i.TargetRelevanceCommitSha,
+		&i.ReviewState,
+		&i.ReviewDecidedByPrincipalID,
+		&i.ReviewDecidedBySnapshot,
+		&i.ReviewDecidedAt,
+		&i.ReviewComment,
+		&i.ActionImageID,
+		&i.CheckoutImageID,
+		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
+	)
+	return i, err
 }
 
 const recordTargetSyncAttempt = `-- name: RecordTargetSyncAttempt :execrows
@@ -1476,7 +1485,7 @@ SET cancellation_requested_at = $1,
 WHERE id = $4
   AND phase IN ('assigned', 'preparing', 'running')
   AND cancellation_requested_at IS NULL
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id, target_relevance_commit_sha, review_state, review_decided_by_principal_id, review_decided_by_snapshot, review_decided_at, review_comment, action_image_id, checkout_image_id, harness_image_id, server_gate_release_evidence
 `
 
 type RequestActiveRunCancellationParams struct {
@@ -1537,6 +1546,7 @@ func (q *Queries) RequestActiveRunCancellation(ctx context.Context, arg RequestA
 		&i.ActionImageID,
 		&i.CheckoutImageID,
 		&i.HarnessImageID,
+		&i.ServerGateReleaseEvidence,
 	)
 	return i, err
 }

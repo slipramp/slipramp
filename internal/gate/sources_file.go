@@ -2,6 +2,7 @@ package gate
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,29 +22,29 @@ const (
 )
 
 type sourceFileDocument struct {
-	APIVersion string                      `yaml:"apiVersion"`
-	Kind       string                      `yaml:"kind"`
-	Sources    map[string]sourceFileSource `yaml:"sources"`
-}
-
-type sourceFileSource struct {
-	Prometheus sourceFilePrometheus `yaml:"prometheus"`
+	APIVersion string               `yaml:"apiVersion"`
+	Kind       string               `yaml:"kind"`
+	Sources    map[string]yaml.Node `yaml:"sources"`
 }
 
 type sourceFilePrometheus struct {
-	URL                string         `yaml:"url"`
-	PublicURL          string         `yaml:"publicUrl,omitempty"`
-	EvaluationInterval *string        `yaml:"evaluationInterval,omitempty"`
-	Timeout            *string        `yaml:"timeout,omitempty"`
-	MaximumConcurrency *int           `yaml:"maximumConcurrency,omitempty"`
-	BearerTokenFile    *string        `yaml:"bearerTokenFile,omitempty"`
-	TLS                *sourceFileTLS `yaml:"tls,omitempty"`
+	sourceFileHTTP
+	PublicURL string `json:"publicUrl,omitempty"`
+}
+
+type sourceFileHTTP struct {
+	URL                string         `json:"url"`
+	EvaluationInterval *string        `json:"evaluationInterval,omitempty"`
+	Timeout            *string        `json:"timeout,omitempty"`
+	MaximumConcurrency *int           `json:"maximumConcurrency,omitempty"`
+	BearerTokenFile    *string        `json:"bearerTokenFile,omitempty"`
+	TLS                *sourceFileTLS `json:"tls,omitempty"`
 }
 
 type sourceFileTLS struct {
-	CAFile                *string `yaml:"caFile,omitempty"`
-	ClientCertificateFile *string `yaml:"clientCertificateFile,omitempty"`
-	ClientKeyFile         *string `yaml:"clientKeyFile,omitempty"`
+	CAFile                *string `json:"caFile,omitempty"`
+	ClientCertificateFile *string `json:"clientCertificateFile,omitempty"`
+	ClientKeyFile         *string `json:"clientKeyFile,omitempty"`
 }
 
 // LoadSourceFile reads and validates one versioned Gate source configuration
@@ -81,65 +82,24 @@ func DecodeSourceFile(input io.Reader) (SourceSet, error) {
 
 	sources := make(SourceSet, len(document.Sources))
 	for _, name := range slices.Sorted(maps.Keys(document.Sources)) {
-		encoded := document.Sources[name].Prometheus
-		evaluationInterval, err := optionalSourceDuration(
-			fmt.Sprintf("Gate source %q Prometheus evaluation interval", name),
-			encoded.EvaluationInterval,
-			DefaultEvaluationInterval,
-		)
+		node := document.Sources[name]
+		evaluator, fields, err := evaluatorFields(&node)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode Gate source %q: %w", name, err)
 		}
-		timeout, err := optionalSourceDuration(
-			fmt.Sprintf("Gate source %q Prometheus timeout", name),
-			encoded.Timeout,
-			DefaultRequestTimeout,
-		)
+		codec, err := lookupEvaluator(evaluator)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode Gate source %q: %w", name, err)
 		}
-		maximumConcurrency := DefaultMaximumConcurrency
-		if encoded.MaximumConcurrency != nil {
-			maximumConcurrency = *encoded.MaximumConcurrency
+		raw, err := validatedFields(fields, codec.sourceSchema)
+		if err != nil {
+			return nil, fmt.Errorf("validate Gate source %q: %w", name, err)
 		}
-
-		prometheus := PrometheusSource{
-			URL:                encoded.URL,
-			PublicURL:          encoded.PublicURL,
-			EvaluationInterval: evaluationInterval,
-			Timeout:            timeout,
-			MaximumConcurrency: maximumConcurrency,
+		source, err := codec.decodeSource(name, raw)
+		if err != nil {
+			return nil, fmt.Errorf("decode Gate source %q: %w", name, err)
 		}
-		if encoded.BearerTokenFile != nil {
-			if *encoded.BearerTokenFile == "" {
-				return nil, fmt.Errorf("gate source %q Prometheus bearer token file must not be empty", name)
-			}
-			prometheus.BearerTokenFile = *encoded.BearerTokenFile
-		}
-		if encoded.TLS != nil {
-			var tlsErr error
-			prometheus.TLS.CAFile, tlsErr = optionalSourceFile(name, "TLS CA file", encoded.TLS.CAFile)
-			if tlsErr != nil {
-				return nil, tlsErr
-			}
-			prometheus.TLS.ClientCertificateFile, tlsErr = optionalSourceFile(
-				name,
-				"TLS client certificate file",
-				encoded.TLS.ClientCertificateFile,
-			)
-			if tlsErr != nil {
-				return nil, tlsErr
-			}
-			prometheus.TLS.ClientKeyFile, tlsErr = optionalSourceFile(
-				name,
-				"TLS client key file",
-				encoded.TLS.ClientKeyFile,
-			)
-			if tlsErr != nil {
-				return nil, tlsErr
-			}
-		}
-		sources[name] = Source{Prometheus: prometheus}
+		sources[name] = source
 	}
 
 	if err := sources.Validate(); err != nil {
@@ -147,6 +107,90 @@ func DecodeSourceFile(input io.Reader) (SourceSet, error) {
 	}
 
 	return sources, nil
+}
+
+func decodePrometheusSource(name string, fields json.RawMessage) (Source, error) {
+	var encoded sourceFilePrometheus
+	if err := decodePayload(fields, &encoded); err != nil {
+		return nil, err
+	}
+	config, err := encoded.settings(name)
+	if err != nil {
+		return nil, err
+	}
+	return PrometheusSource{HTTPSource: config, PublicURL: encoded.PublicURL}, nil
+}
+
+func decodeWebhookSource(name string, fields json.RawMessage) (Source, error) {
+	var encoded sourceFileHTTP
+	if err := decodePayload(fields, &encoded); err != nil {
+		return nil, err
+	}
+	config, err := encoded.settings(name)
+	if err != nil {
+		return nil, err
+	}
+	return WebhookSource{HTTPSource: config}, nil
+}
+
+func (encoded sourceFileHTTP) settings(name string) (HTTPSource, error) {
+	evaluationInterval, err := optionalSourceDuration(
+		fmt.Sprintf("Gate source %q evaluation interval", name),
+		encoded.EvaluationInterval,
+		DefaultEvaluationInterval,
+	)
+	if err != nil {
+		return HTTPSource{}, err
+	}
+	timeout, err := optionalSourceDuration(
+		fmt.Sprintf("Gate source %q timeout", name),
+		encoded.Timeout,
+		DefaultRequestTimeout,
+	)
+	if err != nil {
+		return HTTPSource{}, err
+	}
+	maximumConcurrency := DefaultMaximumConcurrency
+	if encoded.MaximumConcurrency != nil {
+		maximumConcurrency = *encoded.MaximumConcurrency
+	}
+
+	config := HTTPSource{
+		URL:                encoded.URL,
+		EvaluationInterval: evaluationInterval,
+		Timeout:            timeout,
+		MaximumConcurrency: maximumConcurrency,
+	}
+	if encoded.BearerTokenFile != nil {
+		if *encoded.BearerTokenFile == "" {
+			return HTTPSource{}, fmt.Errorf("gate source %q bearer token file must not be empty", name)
+		}
+		config.BearerTokenFile = *encoded.BearerTokenFile
+	}
+	if encoded.TLS != nil {
+		var tlsErr error
+		config.TLS.CAFile, tlsErr = optionalSourceFile(name, "TLS CA file", encoded.TLS.CAFile)
+		if tlsErr != nil {
+			return HTTPSource{}, tlsErr
+		}
+		config.TLS.ClientCertificateFile, tlsErr = optionalSourceFile(
+			name,
+			"TLS client certificate file",
+			encoded.TLS.ClientCertificateFile,
+		)
+		if tlsErr != nil {
+			return HTTPSource{}, tlsErr
+		}
+		config.TLS.ClientKeyFile, tlsErr = optionalSourceFile(
+			name,
+			"TLS client key file",
+			encoded.TLS.ClientKeyFile,
+		)
+		if tlsErr != nil {
+			return HTTPSource{}, tlsErr
+		}
+	}
+	return config, nil
 }
 
 func optionalSourceDuration(description string, encoded *string, fallback time.Duration) (time.Duration, error) {
@@ -162,7 +206,7 @@ func optionalSourceFile(sourceName, description string, encoded *string) (string
 		return "", nil
 	}
 	if *encoded == "" {
-		return "", fmt.Errorf("gate source %q Prometheus %s must not be empty", sourceName, description)
+		return "", fmt.Errorf("gate source %q %s must not be empty", sourceName, description)
 	}
 
 	return *encoded, nil

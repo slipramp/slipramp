@@ -414,9 +414,7 @@ function ActionCard({
               {actionDefinition.title ?? name}
             </Text>
             {actionDefinition.title ? <Code>{name}</Code> : null}
-            {actionDefinition.intent ? (
-              <Badge variant="outline">{actionDefinition.intent}</Badge>
-            ) : null}
+            <Badge variant="outline">{actionDefinition.intent}</Badge>
             {inputCount > 0 ? (
               <Text c="dimmed" size="sm">
                 {inputCount} input{inputCount === 1 ? "" : "s"}

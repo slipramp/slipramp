@@ -138,7 +138,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		mcpserver.ToolCallRejected,
 		10*time.Millisecond,
 	)
-	metrics.ObserveGateEvaluation(t.Context(), gate.ObservationPassing, 30*time.Millisecond)
+	metrics.ObserveGateEvaluation(t.Context(), gate.PrometheusType, gate.ObservationPassing, "", 30*time.Millisecond)
+	metrics.ObserveGateEvaluation(t.Context(), gate.WebhookType, gate.ObservationUnavailable, "timeout", time.Second)
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
@@ -227,6 +228,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		`result="passing"`,
 		" 1",
 	)
+	assertMetricLine(t, firstScrape, "slipramp_gate_evaluation_attempts_total",
+		`source_type="webhook"`, `result="unavailable"`, `failure_class="timeout"`, " 1")
 	assertMetricLine(
 		t,
 		firstScrape,

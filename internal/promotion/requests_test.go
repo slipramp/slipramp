@@ -16,8 +16,7 @@ type recordingPromotionRequestStore struct {
 	record                    Promotion
 	releasePromotionID        uuid.UUID
 	releaseEvaluatorProcessID uuid.UUID
-	releasedAt                time.Time
-	released                  bool
+	releaseStatus             KargoResponseStatus
 	err                       error
 	releaseErr                error
 }
@@ -39,17 +38,15 @@ func (s *recordingPromotionRequestStore) AcceptPromotionRequest(
 	return s.record, s.err
 }
 
-func (s *recordingPromotionRequestStore) ReleasePromotionGates(
+func (s *recordingPromotionRequestStore) ReleasePromotion(
 	_ context.Context,
 	promotionID uuid.UUID,
 	evaluatorProcessID uuid.UUID,
-	releasedAt time.Time,
-) (bool, error) {
+) (KargoResponseStatus, error) {
 	s.releasePromotionID = promotionID
 	s.releaseEvaluatorProcessID = evaluatorProcessID
-	s.releasedAt = releasedAt
 
-	return s.released, s.releaseErr
+	return s.releaseStatus, s.releaseErr
 }
 
 func TestKargoRequestDigestIsStableAndCoversEveryFact(t *testing.T) {
@@ -132,6 +129,7 @@ func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {
 		UpdatedAt:   now.Add(-time.Hour),
 	}
 	store := &recordingPromotionRequestStore{
+		releaseStatus: KargoResponseStatusGated,
 		record: Promotion{
 			ID:            promotionID,
 			StageSnapshot: PromotionStageSnapshot{Gates: []string{"network-idle"}},
@@ -165,17 +163,18 @@ func TestRequestServiceSubmitsValidatedPromotionAcceptance(t *testing.T) {
 		store.acceptance.AcceptedAt.Nanosecond() != 123456000 {
 		t.Errorf("acceptance = %#v, submission = %#v", store.acceptance, submission)
 	}
-	if store.releasePromotionID != promotionID || store.releaseEvaluatorProcessID != evaluatorProcessID ||
-		!store.releasedAt.Equal(store.acceptance.AcceptedAt) {
-		t.Errorf("Gate release = %s, %s, %s", store.releasePromotionID, store.releaseEvaluatorProcessID, store.releasedAt)
+	if store.releasePromotionID != promotionID || store.releaseEvaluatorProcessID != evaluatorProcessID {
+		t.Errorf("Gate release = %s, %s", store.releasePromotionID, store.releaseEvaluatorProcessID)
 	}
 	if notifier.calls != 1 {
 		t.Errorf("Gate evaluation notifications = %d, want 1", notifier.calls)
 	}
 
-	store.released = true
+	store.releaseStatus = KargoResponseStatus(LifecycleApproved)
+	store.record.StageSnapshot.Gates = nil
+	store.releasePromotionID = uuid.Nil
 	submission, err = service.SubmitKargoPromotion(t.Context(), "prod", validKargoRequest(), principal)
-	if err != nil || submission.Status != KargoResponseStatus(LifecycleApproved) {
+	if err != nil || submission.Status != KargoResponseStatus(LifecycleApproved) || store.releasePromotionID != promotionID {
 		t.Errorf("released submission = %#v, %v", submission, err)
 	}
 }

@@ -36,7 +36,8 @@ metadata:
   name: network-idle
   title: Network has no active changes
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: max_over_time(network_active_changes[1m])
     condition:
@@ -136,8 +137,8 @@ spec:
 	}
 	if len(loaded.Gates) != 1 ||
 		loaded.Gates[0].Metadata.Name != "network-idle" ||
-		loaded.Gates[0].Spec.Prometheus.Source != "homelab" ||
-		loaded.Gates[0].Spec.Prometheus.Condition.Operator != gate.OperatorEqual {
+		loaded.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition).Source != "homelab" ||
+		loaded.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition).Condition.Operator != gate.OperatorEqual {
 		t.Errorf("Gates = %#v", loaded.Gates)
 	}
 
@@ -274,6 +275,7 @@ metadata:
 spec:
   actions:
     sync:
+      intent: reconcile
       command: [sync]
       triggers:
         - name: external
@@ -291,6 +293,7 @@ metadata:
 spec:
   actions:
     sync:
+      intent: reconcile
       command: [sync]
       triggers:
         - name: reconcile

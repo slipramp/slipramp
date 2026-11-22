@@ -142,7 +142,7 @@ func validCatalog() catalog.Catalog {
 	return catalog.Catalog{
 		Gates: []catalog.Gate{{
 			Metadata: catalog.Metadata{Name: "network-idle"},
-			Spec: gate.Definition{Prometheus: gate.PrometheusDefinition{
+			Spec: gate.Definition{Evaluator: &gate.PrometheusDefinition{
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
 				Condition: gate.Condition{
@@ -166,6 +166,7 @@ func validCatalog() catalog.Catalog {
 				Placement: "infrastructure-admin",
 				Actions: map[string]catalog.Action{
 					"preview": {
+						Intent:  "preview",
 						Command: []string{"terraform", "plan"},
 					},
 				},

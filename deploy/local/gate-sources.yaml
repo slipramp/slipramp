@@ -2,13 +2,13 @@ apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 sources:
   homelab-prom:
-    prometheus:
-      # For live gate evaluations, run from the Slipramp checkout:
-      # kubectl --kubeconfig ../kcloud-ops/kubeconfig --context homelab -n monitoring port-forward svc/prometheus-homelab-mesh 19090:9090
-      url: http://127.0.0.1:19090
-      publicUrl: http://127.0.0.1:19090
+    type: prometheus
+    # For live gate evaluations, run from the Slipramp checkout:
+    # kubectl --kubeconfig ../kcloud-ops/kubeconfig --context homelab -n monitoring port-forward svc/prometheus-homelab-mesh 19090:9090
+    url: http://127.0.0.1:19090
+    publicUrl: http://127.0.0.1:19090
   prod-prom:
-    prometheus:
-      # kubectl --kubeconfig ../kcloud-ops/kubeconfig --context prod-sjc1 -n monitoring port-forward svc/kube-prometheus-stack-prometheus 19091:9090
-      url: http://127.0.0.1:19091
-      publicUrl: http://127.0.0.1:19091
+    type: prometheus
+    # kubectl --kubeconfig ../kcloud-ops/kubeconfig --context prod-sjc1 -n monitoring port-forward svc/kube-prometheus-stack-prometheus 19091:9090
+    url: http://127.0.0.1:19091
+    publicUrl: http://127.0.0.1:19091

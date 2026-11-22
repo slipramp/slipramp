@@ -1,0 +1,367 @@
+globalGateScope:
+  get:
+    operationId: getGlobalGateScope
+    summary: Inspect the global Gate scope
+    description: Returns current lock and window policies, their effective states, and recent changes.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": &scopeState
+        description: Current scope and recent changes.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/gates.yaml#/ServerGateScope
+      "401": &unauthenticated
+        description: Product authentication is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403": &forbidden
+        description: The principal lacks the required role or credential scope.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404": &missing
+        description: The scope does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500": &failure
+        description: The Server could not complete the operation.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+globalGateScopeLock:
+  put:
+    operationId: lockGlobalGateScope
+    summary: Lock the global Gate scope
+    description: Records an operator hold. An identical request from its creator returns the existing active lock.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/ServerGateLockRequest
+    responses:
+      "200": *scopeState
+      "400": &invalid
+        description: Invalid scope identity or policy request.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "409": &conflict
+        description: A different lock is active.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: unlockGlobalGateScope
+    summary: Unlock the global Gate scope
+    description: Clears the current hold. Unlocking an inactive scope is idempotent.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+targetGateScope:
+  parameters:
+    - name: targetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getTargetGateScope
+    summary: Inspect the Target Gate scope
+    description: Returns current lock and window policies, their effective states, and recent changes.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+targetGateScopeLock:
+  parameters:
+    - name: targetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  put:
+    operationId: lockTargetGateScope
+    summary: Lock the Target Gate scope
+    description: Records an operator hold. An identical request from its creator returns the existing active lock.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/ServerGateLockRequest
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "409": *conflict
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: unlockTargetGateScope
+    summary: Unlock the Target Gate scope
+    description: Clears the current hold. Unlocking an inactive scope is idempotent.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+stageGateScope:
+  parameters:
+    - name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getStageGateScope
+    summary: Inspect the Stage Gate scope
+    description: Returns current lock and window policies, their effective states, and recent changes.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+stageGateScopeLock:
+  parameters:
+    - name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  put:
+    operationId: lockStageGateScope
+    summary: Lock the Stage Gate scope
+    description: Records an operator hold. An identical request from its creator returns the existing active lock.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/ServerGateLockRequest
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "409": *conflict
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: unlockStageGateScope
+    summary: Unlock the Stage Gate scope
+    description: Clears the current hold. Unlocking an inactive scope is idempotent.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+globalGateScopeWindow:
+  put:
+    operationId: setGlobalGateWindow
+    summary: Set the weekly window for the global Gate scope
+    description: Every accepted update starts a new window version.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/WeeklyWindow
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: removeGlobalGateWindow
+    summary: Remove the weekly window for the global Gate scope
+    description: Removing an absent window returns the current scope.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+targetGateScopeWindow:
+  parameters:
+    - name: targetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  put:
+    operationId: setTargetGateWindow
+    summary: Set the weekly window for the Target Gate scope
+    description: Every accepted update starts a new window version.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/WeeklyWindow
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: removeTargetGateWindow
+    summary: Remove the weekly window for the Target Gate scope
+    description: Removing an absent window returns the current scope.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure
+
+stageGateScopeWindow:
+  parameters:
+    - name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  put:
+    operationId: setStageGateWindow
+    summary: Set the weekly window for the Stage Gate scope
+    description: Every accepted update starts a new window version.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/gates.yaml#/WeeklyWindow
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "500": *failure
+  delete:
+    operationId: removeStageGateWindow
+    summary: Remove the weekly window for the Stage Gate scope
+    description: Removing an absent window returns the current scope.
+    tags: [Gates]
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    responses:
+      "200": *scopeState
+      "400": *invalid
+      "401": *unauthenticated
+      "403": *forbidden
+      "404": *missing
+      "500": *failure

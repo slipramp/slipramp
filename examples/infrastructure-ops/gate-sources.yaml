@@ -2,5 +2,5 @@ apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
+    type: prometheus
+    url: http://prometheus:9090

@@ -44,7 +44,7 @@ func TestRunCapacityIntegration(t *testing.T) {
 
 			first, second := createCapacityTestRuns(t, ctx, database)
 			claimedAt := first.CreatedAt.Add(time.Minute)
-			claimed, err := database.ClaimQueuedRun(ctx, "colo", test.capacity, uuid.Nil, claimedAt)
+			claimed, err := database.claimQueuedRunAt(ctx, "colo", test.capacity, uuid.Nil, claimedAt)
 			if err != nil {
 				t.Fatalf("claim first Run: %v", err)
 			}
@@ -52,7 +52,7 @@ func TestRunCapacityIntegration(t *testing.T) {
 				t.Fatalf("claimed Run = %s, want %s", claimed.ID, first.ID)
 			}
 
-			if _, err := database.ClaimQueuedRun(
+			if _, err := database.claimQueuedRunAt(
 				ctx,
 				"colo",
 				test.capacity,
@@ -122,7 +122,7 @@ func TestSchedulingSnapshotRanksUnrequestedRunsInFIFOOrder(t *testing.T) {
 	if _, err := database.CreateRun(ctx, remote, nil); err != nil {
 		t.Fatal(err)
 	}
-	_, err = database.ClaimQueuedRun(ctx, remote.ClusterName, testSchedulingCapacity(), uuid.Nil, remote.CreatedAt)
+	_, err = database.claimQueuedRunAt(ctx, remote.ClusterName, testSchedulingCapacity(), uuid.Nil, remote.CreatedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestTargetRunCapacityIntegration(t *testing.T) {
 	}
 
 	capacity := testSchedulingCapacity()
-	if _, err := database.ClaimQueuedRun(ctx, "colo", capacity, uuid.Nil, createdAt.Add(6*time.Minute)); err != nil {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", capacity, uuid.Nil, createdAt.Add(6*time.Minute)); err != nil {
 		t.Fatalf("claim first Run: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestTargetRunCapacityIntegration(t *testing.T) {
 	for range 2 {
 		go func() {
 			<-start
-			_, err := database.ClaimQueuedRun(ctx, "colo", capacity, uuid.Nil, createdAt.Add(7*time.Minute))
+			_, err := database.claimQueuedRunAt(ctx, "colo", capacity, uuid.Nil, createdAt.Add(7*time.Minute))
 			results <- err
 		}()
 	}
@@ -284,7 +284,7 @@ func createCapacityTestRuns(t *testing.T, ctx context.Context, database *Databas
 				Repository: run.RepositorySnapshot{
 					Name: "infrastructure", CloneURL: "https://example.com/infrastructure.git", Branch: "main",
 				},
-				Target: targetSnapshot, Action: catalog.EffectiveAction{Name: "preview"},
+				Target: targetSnapshot, Action: catalog.EffectiveAction{Name: "preview", Intent: "preview"},
 				Runtime: refresh.Revision.Catalog.Runtimes[0],
 				Placement: run.PlacementSnapshot{
 					Name: "infrastructure", ClusterName: "colo", JobNamespace: "slipramp-runs",

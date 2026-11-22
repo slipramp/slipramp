@@ -7,7 +7,7 @@ import (
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
-const productAPIContract = 2
+const productAPIContract = 6
 
 func (h *Handler) GetClientCompatibility(
 	context.Context,

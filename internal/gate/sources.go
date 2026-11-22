@@ -20,16 +20,23 @@ const (
 	MaximumSourceConcurrency  = 32
 )
 
-// SourceSet is the administrator-configured collection of Gate metric sources.
+// SourceSet is the administrator-configured collection of Gate evaluator sources.
 type SourceSet map[string]Source
 
-type Source struct {
-	Prometheus PrometheusSource
+type Source interface {
+	Type() string
+	Validate() error
+	Schedule() (time.Duration, int)
+	Open() (Evaluator, error)
 }
 
 type PrometheusSource struct {
+	HTTPSource
+	PublicURL string
+}
+
+type HTTPSource struct {
 	URL                string
-	PublicURL          string
 	EvaluationInterval time.Duration
 	Timeout            time.Duration
 	MaximumConcurrency int
@@ -49,15 +56,23 @@ func (s SourceSet) Names() []string {
 
 // QueryURL opens the requirement's expression in its source's browser-facing viewer.
 func (s SourceSet) QueryURL(requirement Requirement) *string {
-	definition := requirement.Prometheus
-	if definition == nil || requirement.State == RequirementStopped {
+	if requirement.Policy == nil || requirement.State == RequirementStopped {
 		return nil
 	}
-	publicURL := s[definition.Source].Prometheus.PublicURL
-	if publicURL == "" {
+	source := s[requirement.Policy.SourceName()]
+	viewer, ok := source.(interface{ QueryURL(Requirement) *string })
+	if !ok || source.Type() != requirement.Policy.Type() {
 		return nil
 	}
-	base, err := validatePrometheusURL(publicURL)
+	return viewer.QueryURL(requirement)
+}
+
+func (s PrometheusSource) QueryURL(requirement Requirement) *string {
+	definition, ok := requirement.Policy.(*PrometheusDefinition)
+	if !ok || s.PublicURL == "" {
+		return nil
+	}
+	base, err := validateSourceURL(PrometheusType, s.PublicURL)
 	if err != nil {
 		return nil
 	}
@@ -69,7 +84,7 @@ func (s SourceSet) QueryURL(requirement Requirement) *string {
 	evaluatedAt := requirement.EvaluatedAt
 	if evaluatedAt == nil && requirement.State == RequirementReleased && len(requirement.Overrides) > 0 {
 		last := requirement.Overrides[len(requirement.Overrides)-1]
-		if last.DefinitionDigest == requirement.DefinitionDigest {
+		if last.Reference == requirement.Reference {
 			evaluatedAt = last.EvaluatedAt
 		}
 	}
@@ -85,7 +100,10 @@ func (s SourceSet) Validate() error {
 		if err := kubevalidate.DNSLabel("Gate source name", name); err != nil {
 			return err
 		}
-		if err := s[name].Prometheus.validate(); err != nil {
+		if s[name] == nil {
+			return fmt.Errorf("missing Gate source %q", name)
+		}
+		if err := s[name].Validate(); err != nil {
 			return fmt.Errorf("validate Gate source %q: %w", name, err)
 		}
 	}
@@ -93,28 +111,38 @@ func (s SourceSet) Validate() error {
 	return nil
 }
 
-func (s PrometheusSource) validate() error {
-	parsed, err := validatePrometheusURL(s.URL)
-	if err != nil {
-		return err
-	}
+func (PrometheusSource) Type() string { return PrometheusType }
+func (s HTTPSource) Schedule() (time.Duration, int) {
+	return s.EvaluationInterval, s.MaximumConcurrency
+}
+func (s PrometheusSource) Open() (Evaluator, error) { return NewPrometheusEvaluator(s) }
+
+func (s PrometheusSource) Validate() error {
 	if s.PublicURL != "" {
-		if _, err := validatePrometheusURL(s.PublicURL); err != nil {
+		if _, err := validateSourceURL(PrometheusType, s.PublicURL); err != nil {
 			return fmt.Errorf("publicUrl: %w", err)
 		}
 	}
+	return s.validate(PrometheusType)
+}
+
+func (s HTTPSource) validate(kind string) error {
+	parsed, err := validateSourceURL(kind, s.URL)
+	if err != nil {
+		return err
+	}
 	if s.EvaluationInterval <= 0 {
-		return fmt.Errorf("prometheus evaluation interval must be positive")
+		return fmt.Errorf("%s evaluation interval must be positive", kind)
 	}
 	if s.Timeout <= 0 {
-		return fmt.Errorf("prometheus timeout must be positive")
+		return fmt.Errorf("%s timeout must be positive", kind)
 	}
 	if s.Timeout >= s.EvaluationInterval {
-		return fmt.Errorf("prometheus timeout must be shorter than the evaluation interval")
+		return fmt.Errorf("%s timeout must be shorter than the evaluation interval", kind)
 	}
 	if s.MaximumConcurrency <= 0 || s.MaximumConcurrency > MaximumSourceConcurrency {
 		return fmt.Errorf(
-			"prometheus maximum concurrency must be between 1 and %d",
+			"%s maximum concurrency must be between 1 and %d", kind,
 			MaximumSourceConcurrency,
 		)
 	}
@@ -130,36 +158,36 @@ func (s PrometheusSource) validate() error {
 	}
 	for _, file := range files {
 		if file.path != "" && !filepath.IsAbs(file.path) {
-			return fmt.Errorf("prometheus %s must be an absolute path", file.description)
+			return fmt.Errorf("%s %s must be an absolute path", kind, file.description)
 		}
 	}
 	if (s.TLS.ClientCertificateFile == "") != (s.TLS.ClientKeyFile == "") {
-		return fmt.Errorf("prometheus TLS client certificate and key files must be configured together")
+		return fmt.Errorf("%s TLS client certificate and key files must be configured together", kind)
 	}
 	if parsed.Scheme != "https" && s.TLS != (TLSConfig{}) {
-		return fmt.Errorf("prometheus TLS configuration requires an HTTPS URL")
+		return fmt.Errorf("%s TLS configuration requires an HTTPS URL", kind)
 	}
 
 	return nil
 }
 
-func validatePrometheusURL(value string) (*url.URL, error) {
+func validateSourceURL(kind, value string) (*url.URL, error) {
 	if strings.TrimSpace(value) == "" {
-		return nil, fmt.Errorf("prometheus URL is required")
+		return nil, fmt.Errorf("%s URL is required", kind)
 	}
 	if strings.TrimSpace(value) != value {
-		return nil, fmt.Errorf("prometheus URL must not have leading or trailing whitespace")
+		return nil, fmt.Errorf("%s URL must not have leading or trailing whitespace", kind)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Hostname() == "" || parsed.Opaque != "" {
-		return nil, fmt.Errorf("prometheus URL must be an absolute URL")
+		return nil, fmt.Errorf("%s URL must be an absolute URL", kind)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, fmt.Errorf("prometheus URL must use HTTP or HTTPS")
+		return nil, fmt.Errorf("%s URL must use HTTP or HTTPS", kind)
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(value, "#") {
-		return nil, fmt.Errorf("prometheus URL must not contain credentials, a query, or a fragment")
+		return nil, fmt.Errorf("%s URL must not contain credentials, a query, or a fragment", kind)
 	}
 
 	return parsed, nil

@@ -249,7 +249,7 @@ func validateActionPortable(
 			seenGates[gateName] = index
 		}
 	}
-	add(".intent", "catalog.intent.invalid", validateIntent(actionName, action.Intent))
+	add(".intent", "catalog.intent.invalid", action.Intent.Validate(actionName))
 	add(".command", "catalog.command.invalid", validateCommand(actionName, action.Command))
 
 	var runtime Runtime
@@ -607,12 +607,14 @@ func mergePlacementResources(
 	}, actionResources)
 }
 
-func validateIntent(actionName, intent string) error {
+var ErrInvalidActionIntent = errors.New("intent must be reconcile, preview, or operation")
+
+func (intent ActionIntent) Validate(actionName string) error {
 	switch intent {
-	case "", "reconcile", "preview", "operation":
+	case ActionIntentPreview, ActionIntentReconcile, ActionIntentOperation:
 		return nil
 	default:
-		return fmt.Errorf("action %q intent must be reconcile, preview, or operation", actionName)
+		return fmt.Errorf("action %q %w", actionName, ErrInvalidActionIntent)
 	}
 }
 

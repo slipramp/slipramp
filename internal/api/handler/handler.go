@@ -42,6 +42,7 @@ type Handler struct {
 	notifications            NotificationService
 	runs                     RunService
 	gateSources              gate.SourceSet
+	gateScopes               gate.ScopeService
 	gateOverrides            GateOverrideStore
 	gateEvaluatorProcessID   uuid.UUID
 	artifacts                ArtifactService
@@ -95,6 +96,8 @@ type Dependencies struct {
 	Notifications            NotificationService
 	Runs                     RunService
 	GateSources              gate.SourceSet
+	GateScopes               gate.ScopeStore
+	WindowWake               gate.EvaluationNotifier
 	GateOverrides            GateOverrideStore
 	GateEvaluatorProcessID   uuid.UUID
 	Artifacts                ArtifactService
@@ -136,6 +139,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		notifications:            dependencies.Notifications,
 		runs:                     dependencies.Runs,
 		gateSources:              dependencies.GateSources,
+		gateScopes:               gate.NewScopeService(dependencies.GateScopes, dependencies.WindowWake),
 		gateOverrides:            dependencies.GateOverrides,
 		gateEvaluatorProcessID:   dependencies.GateEvaluatorProcessID,
 		artifacts:                dependencies.Artifacts,

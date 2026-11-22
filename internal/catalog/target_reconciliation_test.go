@@ -12,8 +12,8 @@ func TestCompareReconciliation(t *testing.T) {
 	desired := strings.Repeat("a", 40)
 	matching := desired
 	different := strings.Repeat("b", 40)
-	syncTarget := Target{Spec: TargetSpec{Actions: map[string]Action{"sync": {}}}}
-	withoutSync := Target{Spec: TargetSpec{Actions: map[string]Action{"preview": {}}}}
+	syncTarget := Target{Spec: TargetSpec{Actions: map[string]Action{"sync": {Intent: "reconcile"}}}}
+	withoutSync := Target{Spec: TargetSpec{Actions: map[string]Action{"preview": {Intent: "preview"}}}}
 	archivedAt := time.Now()
 
 	tests := []struct {

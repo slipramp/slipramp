@@ -371,24 +371,25 @@ SELECT *
 FROM promotions
 WHERE cancellation_requested_at IS NULL
   AND source = 'slipramp'
-  AND next_dispatch_at <= sqlc.arg(due_at)
+  AND next_dispatch_at <= least(sqlc.arg(due_at)::timestamptz, sqlc.arg(checked_at)::timestamptz)
   AND dispatched_at IS NULL
   AND dispatch_failed_at IS NULL
   AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
   AND (
       review_required
-      OR NOT EXISTS (
-          SELECT 1
-          FROM promotion_gates
-          WHERE promotion_gates.promotion_id = promotions.id
-            AND promotion_gates.released_at IS NULL
-            AND NOT EXISTS (
-                SELECT 1
-                FROM eligible_gate_evidence(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(due_at)) AS evidence
-                WHERE evidence.subject_type = 'promotion'
-                  AND evidence.subject_id = promotion_gates.promotion_id
-                  AND evidence.gate_name = promotion_gates.gate_name
-            )
+      OR dispatch_attempt_count > 0
+      OR (
+          NOT EXISTS (
+              SELECT FROM promotion_server_gate_checks(sqlc.arg(checked_at)::timestamptz) c
+              WHERE c.promotion_id = promotions.id AND NOT (c.passing OR c.overridden)
+          )
+          AND NOT EXISTS (
+              SELECT FROM promotion_gates g WHERE g.promotion_id = promotions.id AND g.released_at IS NULL
+                AND NOT EXISTS (
+                    SELECT FROM eligible_gate_evidence(sqlc.arg(evaluator_process_id)::uuid, sqlc.arg(checked_at)) e
+                    WHERE e.subject_type = 'promotion' AND e.subject_id = g.promotion_id AND e.gate_name = g.gate_name
+                )
+          )
       )
   )
 ORDER BY next_dispatch_at, created_at, id
@@ -398,6 +399,7 @@ LIMIT 1;
 -- name: ClaimPromotionCreationDispatch :one
 UPDATE promotions
 SET dispatch_attempt_count = dispatch_attempt_count + 1,
+    server_gate_release_evidence = coalesce(server_gate_release_evidence, sqlc.narg(release_evidence)::jsonb),
     next_dispatch_at = sqlc.arg(next_dispatch_at),
     last_dispatch_at = sqlc.arg(claimed_at),
     dispatch_diagnostic = NULL,
@@ -420,6 +422,10 @@ WHERE id = sqlc.arg(id)
   AND dispatched_at IS NULL
   AND dispatch_failed_at IS NULL
 RETURNING *;
+
+-- name: MarkPromotionCallbackReleased :exec
+UPDATE promotions SET callback_released = true, server_gate_release_evidence = sqlc.arg(release_evidence)
+WHERE id = sqlc.arg(id);
 
 -- name: LockPromotion :one
 SELECT *

@@ -176,11 +176,11 @@ apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
-      evaluationInterval: 15s
-      timeout: 5s
-      maximumConcurrency: 4
+    type: prometheus
+    url: http://prometheus:9090
+    evaluationInterval: 15s
+    timeout: 5s
+    maximumConcurrency: 4
 ```
 
 The evaluation interval defaults to 15 seconds, the request timeout defaults
@@ -197,19 +197,19 @@ together, and TLS settings require an HTTPS source:
 ```yaml
 sources:
   production:
-    prometheus:
-      url: https://prometheus.example.com
-      bearerTokenFile: /var/run/slipramp/gates/token
-      tls:
-        caFile: /var/run/slipramp/gates/ca.crt
-        clientCertificateFile: /var/run/slipramp/gates/tls.crt
-        clientKeyFile: /var/run/slipramp/gates/tls.key
+    type: prometheus
+    url: https://prometheus.example.com
+    bearerTokenFile: /var/run/slipramp/gates/token
+    tls:
+      caFile: /var/run/slipramp/gates/ca.crt
+      clientCertificateFile: /var/run/slipramp/gates/tls.crt
+      clientKeyFile: /var/run/slipramp/gates/tls.key
 ```
 
 Secret file contents remain transport configuration and are not part of the
-catalog contract. Repository refresh rejects a Gate whose source name is not
-present in the Server's current source configuration; an unreachable configured
-source does not invalidate the catalog.
+catalog contract. Repository refresh checks that the source exists and its
+`type` matches the catalog Gate's `spec.evaluator.type`. Reachability is checked
+at evaluation time.
 
 See [Release Gates](./GATES.md) for attachment examples, rollout order,
 operational metrics, recovery behavior, and troubleshooting.
@@ -230,8 +230,9 @@ integrations:
     maximumStageObservationAge: 5m
 ```
 
-Repository-defined Promotion Gates, review, previews, and candidate-branch
-cleanup use optional additional configuration:
+Global and Stage locks and weekly windows apply to mediated Promotions even
+on a native-only integration. Repository-defined Promotion Gates, review,
+previews, and candidate-branch cleanup use optional additional configuration:
 
 ```yaml
 apiVersion: slipramp.com/v1alpha1
@@ -327,9 +328,10 @@ parent traversal are invalid.
 
 Promotion Gates are an ordered JSON array of distinct Gate names from the
 matched Repository's active catalog. The annotation may be omitted or set to
-an empty array when no Gate applies. A gated Stage must supply a Repository URL
-that maps to exactly one active Repository allowed by the integration; Gate
-resolution occurs when Slipramp accepts a Promotion.
+an empty array when no repository Gate is attached. A Stage with attached
+repository Gates must supply a Repository URL that maps to exactly one active
+Repository allowed by the integration. Slipramp resolves the Gates when it
+accepts a Promotion.
 
 The product reports native promotion, Slipramp review, and branch drift as
 separate capabilities. Missing enrichment disables only review, previews,

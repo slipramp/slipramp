@@ -33,26 +33,9 @@ func validateGatePortable(input Catalog, definition Gate) Diagnostics {
 		"catalog.gate.title-invalid",
 		validatePresentationTitle("Gate metadata.title", definition.Metadata.Title),
 	)
-	add(
-		"spec.prometheus.source",
-		"catalog.gate.source-invalid",
-		kubevalidate.DNSLabel("Gate Prometheus source", definition.Spec.Prometheus.Source),
-	)
-	add(
-		"spec.prometheus.query",
-		"catalog.gate.query-invalid",
-		gate.ValidateQuery(definition.Spec.Prometheus.Query),
-	)
-	add(
-		"spec.prometheus.condition.operator",
-		"catalog.gate.operator-invalid",
-		gate.ValidateOperator(definition.Spec.Prometheus.Condition.Operator),
-	)
-	add(
-		"spec.prometheus.condition.value",
-		"catalog.gate.threshold-invalid",
-		gate.ValidateThreshold(definition.Spec.Prometheus.Condition.Value),
-	)
+	for _, issue := range definition.Spec.Issues() {
+		add("spec.evaluator."+issue.Field, issue.Code, issue.Err)
+	}
 
 	return diagnostics
 }
@@ -60,21 +43,25 @@ func validateGatePortable(input Catalog, definition Gate) Diagnostics {
 func ValidateGateDeployment(input Catalog, sources gate.SourceSet) Diagnostics {
 	diagnostics := Diagnostics{}
 	for _, catalogGate := range input.Gates {
-		if _, ok := sources[catalogGate.Spec.Prometheus.Source]; ok {
+		policy := catalogGate.Spec.Evaluator
+		if policy == nil {
 			continue
 		}
-
+		source := sources[policy.SourceName()]
+		var code string
+		var err error
+		switch {
+		case source == nil:
+			code = "catalog.gate.source-not-found"
+			err = fmt.Errorf("referenced Gate source %q is not configured", policy.SourceName())
+		case source.Type() != policy.Type():
+			code = "catalog.gate.source-type-mismatch"
+			err = fmt.Errorf("configured Gate source %q has type %q, expected %q", policy.SourceName(), source.Type(), policy.Type())
+		default:
+			continue
+		}
 		diagnostics = append(diagnostics, errorDiagnostic(
-			input,
-			GateKind,
-			catalogGate.Metadata.Name,
-			catalogGate.Source,
-			"spec.prometheus.source",
-			"catalog.gate.source-not-found",
-			fmt.Errorf(
-				"Gate Prometheus source %q is not configured",
-				catalogGate.Spec.Prometheus.Source,
-			),
+			input, GateKind, catalogGate.Metadata.Name, catalogGate.Source, "spec.evaluator.source", code, err,
 		))
 	}
 	sortDiagnostics(diagnostics)

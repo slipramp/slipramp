@@ -270,11 +270,9 @@ private struct ActionRow: View {
 
                 Spacer()
 
-                if let intent = action.intent {
-                    Text(intent.replacingOccurrences(of: "-", with: " ").capitalized)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
+                Text(action.intent.rawValue.capitalized)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
 
             if action.title != nil {

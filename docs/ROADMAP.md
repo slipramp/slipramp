@@ -7,6 +7,12 @@ When work lands, update the design and remove or narrow the corresponding item.
 The sections below group related work; they are not release commitments or a
 strict priority order.
 
+## Release Gates
+
+- [ ] Add global, Target, and Stage policy management to the operator views.
+
+[Gate expansion implementation plan](./design/gate-expansion-plan.md)
+
 ## Kargo operations
 
 - [ ] Extend Kargo integration acceptance to Kargo v2 and HTTPS Git
@@ -120,7 +126,7 @@ Revisit these only when an operator need justifies focused design:
   explicit delivery retries, user subscriptions, or interactive provider
   decisions. Preserve the transition, deduplication, recovery, noise, and
   security boundaries in [notification delivery](./DESIGN.md#notification-delivery).
-- Protected Targets, branch restrictions, maintenance windows, image policy, or
+- Protected Targets, branch restrictions, image policy, or
   broader authorization. Such controls must preserve the opt-in safety model.
 - Workflow graphs and multi-step pipelines, only if independent Actions and
   scripts cease to meet actual requirements.

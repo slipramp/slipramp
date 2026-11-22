@@ -139,7 +139,9 @@ func summarize(result catalog.Result, placements *placement.Set, gateSources *ga
 	referencedPlacements := map[string]struct{}{}
 	referencedGateSources := map[string]struct{}{}
 	for _, catalogGate := range result.Catalog.Gates {
-		referencedGateSources[catalogGate.Spec.Prometheus.Source] = struct{}{}
+		if policy := catalogGate.Spec.Evaluator; policy != nil {
+			referencedGateSources[policy.SourceName()] = struct{}{}
+		}
 	}
 	for _, target := range result.Catalog.Targets {
 		actions += len(target.Spec.Actions)

@@ -48,6 +48,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 			ClusterName:              "colo",
 			Snapshot: run.Snapshot{
 				Action: catalog.EffectiveAction{
+					Intent:           "preview",
 					Title:            "Preview changes",
 					Description:      "Creates a Terraform plan.",
 					DocumentationURL: "https://docs.example.com/actions/preview",
@@ -777,12 +778,14 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	blockingRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	snapshotAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
+	repositoryID := uuid.New()
+	validUntil := snapshotAt.Add(time.Minute)
 	observedValue := 1.0
 	operator := "equal"
 	threshold := 0.0
 	runs := &recordingRunService{
 		loaded: run.Run{
-			ID: runID, Phase: run.PhaseQueued, ClusterName: "colo",
+			ID: runID, RepositoryID: repositoryID, Phase: run.PhaseQueued, ClusterName: "colo",
 			Review: run.Review{State: run.ReviewStateNotRequired}, Parameters: map[string]any{},
 		},
 		scheduling: map[uuid.UUID]run.Scheduling{
@@ -795,8 +798,11 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 			runID: {
 				{
 					Name: "network-idle", Title: "Network idle",
-					State: gate.RequirementBlocking, Value: &observedValue,
-					Prometheus: &gate.PrometheusDefinition{
+					Key: "repository/network-idle", Version: "current",
+					Origin: gate.RepositoryOrigin, Type: gate.PrometheusType,
+					Scope: gate.Scope{Kind: gate.RepositoryScope, ID: repositoryID}, ValidUntil: &validUntil,
+					State: gate.RequirementBlocking, Evidence: gate.PrometheusSample(observedValue),
+					Policy: &gate.PrometheusDefinition{
 						Source: "prod", Query: "up", Condition: gate.Condition{Operator: operator, Value: threshold},
 					},
 					EvaluatedAt: &snapshotAt,
@@ -834,9 +840,13 @@ func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
 		t.Fatalf("Gate summary = %#v", result.Gates)
 	}
 	requirement := result.Gates.Requirements[0]
-	if requirement.Name != "network-idle" || requirement.Title == nil ||
+	if requirement.Key != "repository/network-idle" || requirement.Version == nil || *requirement.Version != "current" ||
+		requirement.Scope.ID != repositoryID || requirement.Origin != api.GateOriginRepository ||
+		requirement.Scope.Kind != api.GateScopeRepository || requirement.Type == nil || *requirement.Type != gate.PrometheusType ||
+		requirement.ValidUntil == nil || !requirement.ValidUntil.Equal(validUntil) ||
+		requirement.Name != "network-idle" || requirement.Title == nil ||
 		*requirement.Title != "Network idle" || requirement.State != api.GateRequirementStateBlocking ||
-		requirement.Value == nil || *requirement.Value != observedValue ||
+		requirement.Evidence.PrometheusValue() == nil || *requirement.Evidence.PrometheusValue() != observedValue ||
 		requirement.Operator == nil || *requirement.Operator != api.GateOperatorEqual ||
 		requirement.Threshold == nil || *requirement.Threshold != threshold ||
 		requirement.EvaluatedAt == nil || !requirement.EvaluatedAt.Equal(snapshotAt) {

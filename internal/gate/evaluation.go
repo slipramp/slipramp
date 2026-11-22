@@ -24,6 +24,9 @@ const (
 // EvaluationDemand identifies an active catalog definition with unreleased requirements.
 // The catalog digest lets several attachments share one Prometheus query.
 type EvaluationDemand struct {
+	Subject           *EvaluationSubject
+	RepositoryName    string
+	CommitSHA         string
 	RepositoryID      uuid.UUID
 	GateName          string
 	CatalogRevisionID uuid.UUID
@@ -33,6 +36,18 @@ type EvaluationDemand struct {
 	LastRequestedAt   time.Time
 }
 
+// Shared evaluators reuse results for the same policy. Subject-scoped
+// evaluators also include the Run or Promotion receiving the decision.
+func (d EvaluationDemand) evaluationKey() string {
+	if !d.Definition.Evaluator.SubjectScoped() {
+		return d.DefinitionDigest
+	}
+	if d.Subject == nil {
+		return ""
+	}
+	return string(d.Subject.Type) + "/" + d.Subject.ID.String() + "/" + d.DefinitionDigest
+}
+
 type EvaluationStore interface {
 	// Demand is ordered by Repository, Gate name, and catalog revision.
 	ListGateEvaluationDemand(context.Context) ([]EvaluationDemand, error)
@@ -40,7 +55,7 @@ type EvaluationStore interface {
 }
 
 type EvaluationObserver interface {
-	ObserveGateEvaluation(context.Context, ObservationState, time.Duration)
+	ObserveGateEvaluation(context.Context, string, ObservationState, string, time.Duration)
 }
 
 // EvaluationNotifier wakes the evaluator after durable requirements or active
@@ -50,16 +65,18 @@ type EvaluationNotifier interface {
 	Notify()
 }
 
-type definitionEvaluator interface {
-	Evaluate(context.Context, Definition, time.Time) Observation
+type Evaluator interface {
+	Evaluate(context.Context, EvaluationDemand, time.Time) Observation
+	Close()
 }
 
 type evaluationSource struct {
-	evaluator definitionEvaluator
-	interval  time.Duration
-	slots     chan struct{}
-	demand    chan []EvaluationDemand
-	states    map[string]evaluationState
+	evaluatorType string
+	evaluator     Evaluator
+	interval      time.Duration
+	slots         chan struct{}
+	demand        chan []EvaluationDemand
+	states        map[string]evaluationState
 }
 
 type evaluationState struct {
@@ -69,12 +86,12 @@ type evaluationState struct {
 }
 
 type evaluationTask struct {
-	digest           string
+	key              string
 	demand           []EvaluationDemand
 	previousFailures int
 }
 
-type Coordinator struct {
+type EvaluationCoordinator struct {
 	store     EvaluationStore
 	sources   map[string]*evaluationSource
 	logger    *slog.Logger
@@ -85,15 +102,15 @@ type Coordinator struct {
 	wakeups   chan struct{}
 }
 
-// NewCoordinator labels observations with this Server's processID. Dispatch
+// NewEvaluationCoordinator labels observations with this Server's processID. Dispatch
 // and metrics use the same ID to reject evidence from earlier processes.
-func NewCoordinator(
+func NewEvaluationCoordinator(
 	store EvaluationStore,
 	sources SourceSet,
 	processID uuid.UUID,
 	logger *slog.Logger,
 	observer EvaluationObserver,
-) (*Coordinator, error) {
+) (*EvaluationCoordinator, error) {
 	if store == nil {
 		return nil, errors.New("Gate evaluation store is required") //nolint:staticcheck // Gate is a domain name.
 	}
@@ -108,22 +125,38 @@ func NewCoordinator(
 	}
 
 	ready := make(map[string]*evaluationSource, len(sources))
+	// An initialization error can follow successfully opened sources.
+	initialized := false
+	defer func() {
+		if !initialized {
+			for _, source := range ready {
+				source.evaluator.Close()
+			}
+		}
+	}()
 	for _, name := range sources.Names() {
-		config := sources[name].Prometheus
-		evaluator, err := NewPrometheusEvaluator(config)
+		config := sources[name]
+		evaluatorType := config.Type()
+		if _, err := lookupEvaluator(evaluatorType); err != nil {
+			return nil, err
+		}
+		interval, concurrency := config.Schedule()
+		evaluator, err := config.Open()
 		if err != nil {
 			return nil, fmt.Errorf("initialize Gate source %q: %w", name, err)
 		}
 		ready[name] = &evaluationSource{
-			evaluator: evaluator,
-			interval:  config.EvaluationInterval,
-			slots:     make(chan struct{}, config.MaximumConcurrency),
-			demand:    make(chan []EvaluationDemand, 1),
-			states:    make(map[string]evaluationState),
+			evaluatorType: evaluatorType,
+			evaluator:     evaluator,
+			interval:      interval,
+			slots:         make(chan struct{}, concurrency),
+			demand:        make(chan []EvaluationDemand, 1),
+			states:        make(map[string]evaluationState),
 		}
 	}
 
-	return &Coordinator{
+	initialized = true
+	return &EvaluationCoordinator{
 		store:     store,
 		sources:   ready,
 		logger:    logger.With("component", "gate_evaluator"),
@@ -137,7 +170,7 @@ func NewCoordinator(
 	}, nil
 }
 
-func (c *Coordinator) Run(ctx context.Context) {
+func (c *EvaluationCoordinator) Run(ctx context.Context) {
 	var workers sync.WaitGroup
 	for name, source := range c.sources {
 		workers.Go(func() { c.runSource(ctx, name, source) })
@@ -160,14 +193,14 @@ func (c *Coordinator) Run(ctx context.Context) {
 	}
 }
 
-func (c *Coordinator) Notify() {
+func (c *EvaluationCoordinator) Notify() {
 	select {
 	case c.wakeups <- struct{}{}:
 	default:
 	}
 }
 
-func (c *Coordinator) refreshDemand(ctx context.Context) {
+func (c *EvaluationCoordinator) refreshDemand(ctx context.Context) {
 	demand, err := c.store.ListGateEvaluationDemand(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -178,9 +211,13 @@ func (c *Coordinator) refreshDemand(ctx context.Context) {
 
 	bySource := make(map[string][]EvaluationDemand, len(c.sources))
 	for _, item := range demand {
-		name := item.Definition.Prometheus.Source
+		policy := item.Definition.Evaluator
+		if policy == nil {
+			continue
+		}
+		name := policy.SourceName()
 		// The active catalog can outlive a source removed at Server restart.
-		if _, configured := c.sources[name]; configured {
+		if source, configured := c.sources[name]; configured && source.evaluatorType == policy.Type() {
 			bySource[name] = append(bySource[name], item)
 		}
 	}
@@ -195,7 +232,8 @@ func (c *Coordinator) refreshDemand(ctx context.Context) {
 	}
 }
 
-func (c *Coordinator) runSource(ctx context.Context, name string, source *evaluationSource) {
+func (c *EvaluationCoordinator) runSource(ctx context.Context, name string, source *evaluationSource) {
+	defer source.evaluator.Close()
 	for {
 		select {
 		case <-ctx.Done():
@@ -208,26 +246,27 @@ func (c *Coordinator) runSource(ctx context.Context, name string, source *evalua
 	}
 }
 
-func (c *Coordinator) reconcileSource(ctx context.Context, source *evaluationSource, demand []EvaluationDemand) error {
-	demandByDigest := make(map[string][]EvaluationDemand)
+func (c *EvaluationCoordinator) reconcileSource(ctx context.Context, source *evaluationSource, demand []EvaluationDemand) error {
+	demandByKey := make(map[string][]EvaluationDemand)
 	for _, item := range demand {
-		demandByDigest[item.DefinitionDigest] = append(demandByDigest[item.DefinitionDigest], item)
+		key := item.evaluationKey()
+		demandByKey[key] = append(demandByKey[key], item)
 	}
 
 	now := c.now().UTC()
-	activeStates := make(map[string]evaluationState, len(demandByDigest))
-	tasks := make([]evaluationTask, 0, len(demandByDigest))
-	digests := slices.Sorted(maps.Keys(demandByDigest))
-	for _, digest := range digests {
-		requests := demandByDigest[digest]
-		state, found := source.states[digest]
-		if found && slices.Equal(state.demand, requests) && now.Before(state.next) {
-			activeStates[digest] = state
+	activeStates := make(map[string]evaluationState, len(demandByKey))
+	tasks := make([]evaluationTask, 0, len(demandByKey))
+	keys := slices.Sorted(maps.Keys(demandByKey))
+	for _, key := range keys {
+		requests := demandByKey[key]
+		state, found := source.states[key]
+		if found && slices.EqualFunc(state.demand, requests, sameDemand) && now.Before(state.next) {
+			activeStates[key] = state
 			continue
 		}
 
 		tasks = append(tasks, evaluationTask{
-			digest:           digest,
+			key:              key,
 			demand:           requests,
 			previousFailures: state.failures,
 		})
@@ -238,7 +277,7 @@ func (c *Coordinator) reconcileSource(ctx context.Context, source *evaluationSou
 		return err
 	}
 	for index, state := range results {
-		activeStates[tasks[index].digest] = state
+		activeStates[tasks[index].key] = state
 	}
 
 	source.states = activeStates
@@ -246,7 +285,13 @@ func (c *Coordinator) reconcileSource(ctx context.Context, source *evaluationSou
 	return nil
 }
 
-func (c *Coordinator) evaluate(
+func sameDemand(a, b EvaluationDemand) bool {
+	return a.RepositoryID == b.RepositoryID && a.GateName == b.GateName &&
+		a.CatalogRevisionID == b.CatalogRevisionID && a.DefinitionDigest == b.DefinitionDigest &&
+		a.WaiterCount == b.WaiterCount && a.LastRequestedAt.Equal(b.LastRequestedAt)
+}
+
+func (c *EvaluationCoordinator) evaluate(
 	ctx context.Context,
 	source *evaluationSource,
 	tasks []evaluationTask,
@@ -276,19 +321,24 @@ schedule:
 	return results, ctx.Err()
 }
 
-func (c *Coordinator) evaluateDefinition(
+func (c *EvaluationCoordinator) evaluateDefinition(
 	ctx context.Context,
 	source *evaluationSource,
 	task evaluationTask,
 ) (evaluationState, error) {
 	startedAt := time.Now()
 	now := c.now().UTC()
-	observation := source.evaluator.Evaluate(ctx, task.demand[0].Definition, now)
-	if err := observation.Validate(); err != nil {
-		return evaluationState{}, fmt.Errorf("validate Gate evaluation result: %w", err)
+	observation := source.evaluator.Evaluate(ctx, task.demand[0], now)
+	if err := observation.Validate(); err != nil ||
+		(observation.Evidence != nil && observation.Evidence.Payload.Type() != source.evaluatorType) {
+		observation = Observation{
+			State: ObservationUnavailable, Diagnostic: "The evaluator returned invalid evidence.",
+		}
 	}
 	if c.observer != nil {
-		c.observer.ObserveGateEvaluation(ctx, observation.State, time.Since(startedAt))
+		c.observer.ObserveGateEvaluation(
+			ctx, source.evaluatorType, observation.State, observation.FailureClass, time.Since(startedAt),
+		)
 	}
 
 	validUntil := now.Add(observationValidityIntervals * source.interval)
@@ -297,11 +347,15 @@ func (c *Coordinator) evaluateDefinition(
 			RepositoryID:       item.RepositoryID,
 			GateName:           item.GateName,
 			CatalogRevisionID:  item.CatalogRevisionID,
-			DefinitionDigest:   task.digest,
+			DefinitionDigest:   item.DefinitionDigest,
 			EvaluatorProcessID: c.processID,
 			Observation:        observation,
 			EvaluatedAt:        now,
 			ValidUntil:         validUntil,
+		}
+		if item.Subject != nil {
+			record.SubjectType = item.Subject.Type
+			record.SubjectID = item.Subject.ID
 		}
 		if err := c.store.UpsertGateObservation(ctx, record); err != nil {
 			return evaluationState{}, fmt.Errorf("record Gate observation for %q: %w", item.GateName, err)

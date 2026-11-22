@@ -38,6 +38,24 @@ paths:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
   /api/v1/targets/{targetId}/actions/{actionName}/explanation:
     $ref: ./paths/catalog.yaml#/actionExplanation
+  /api/v1/gate-scopes/global:
+    $ref: ./paths/gates.yaml#/globalGateScope
+  /api/v1/gate-scopes/global/lock:
+    $ref: ./paths/gates.yaml#/globalGateScopeLock
+  /api/v1/gate-scopes/global/window:
+    $ref: ./paths/gates.yaml#/globalGateScopeWindow
+  /api/v1/gate-scopes/targets/{targetId}:
+    $ref: ./paths/gates.yaml#/targetGateScope
+  /api/v1/gate-scopes/targets/{targetId}/lock:
+    $ref: ./paths/gates.yaml#/targetGateScopeLock
+  /api/v1/gate-scopes/targets/{targetId}/window:
+    $ref: ./paths/gates.yaml#/targetGateScopeWindow
+  /api/v1/gate-scopes/stages/{stageId}:
+    $ref: ./paths/gates.yaml#/stageGateScope
+  /api/v1/gate-scopes/stages/{stageId}/lock:
+    $ref: ./paths/gates.yaml#/stageGateScopeLock
+  /api/v1/gate-scopes/stages/{stageId}/window:
+    $ref: ./paths/gates.yaml#/stageGateScopeWindow
   /api/v1/targets:
     $ref: ./paths/catalog.yaml#/targets
   /api/v1/targets/{targetId}:
@@ -76,7 +94,7 @@ paths:
     $ref: ./paths/runs.yaml#/runs
   /api/v1/runs/{runId}:
     $ref: ./paths/runs.yaml#/run
-  /api/v1/runs/{runId}/gates/{gateName}/override:
+  /api/v1/runs/{runId}/gate-overrides:
     $ref: ./paths/runs.yaml#/overrideRunGate
   /api/v1/runs/{runId}/cancel:
     $ref: ./paths/runs.yaml#/cancelRun
@@ -126,7 +144,7 @@ paths:
     $ref: ./paths/promotions.yaml#/promotions
   /api/v1/promotions/{promotionId}:
     $ref: ./paths/promotions.yaml#/promotion
-  /api/v1/promotions/{promotionId}/gates/{gateName}/override:
+  /api/v1/promotions/{promotionId}/gate-overrides:
     $ref: ./paths/promotions.yaml#/overridePromotionGate
   /api/v1/promotions/{promotionId}/cancel:
     $ref: ./paths/promotions.yaml#/cancelPromotion
@@ -300,6 +318,8 @@ components:
       $ref: ./components/runs.yaml#/RunRerunMode
     ActorSnapshot:
       $ref: ./components/common.yaml#/ActorSnapshot
+    ServerGateScope:
+      $ref: ./components/gates.yaml#/ServerGateScope
     GateSummary:
       $ref: ./components/gates.yaml#/GateSummary
     GateSummaryState:

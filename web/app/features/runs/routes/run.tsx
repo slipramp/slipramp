@@ -87,6 +87,7 @@ import { pageTitle } from "~/shared/page-title";
 import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
+import { firstBlockingGate } from "~/features/gates/gate-presentation";
 import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { reportDetailRequestState, type ReportLoad } from "~/features/runs/run-reports";
@@ -184,13 +185,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   if (formValue(formData, "intent") === "override-gate") {
     const result = await overrideRunGate({
       client: createServerAPIClient(request, context),
-      path: { runId: params.runId, gateName: formValue(formData, "gateName") },
+      path: { runId: params.runId },
       body: {
-        definitionDigest: formValue(formData, "definitionDigest"),
+        key: formValue(formData, "gateKey"),
+        version: formValue(formData, "version"),
         reason: formValue(formData, "reason"),
       },
     });
-    if (result.response?.status === 204) return { message: "Gate override recorded." };
+    if (result.data) return { message: "Gate override recorded." };
     return { error: result.error?.detail ?? "The Gate override could not be recorded." };
   }
   const intent = formData.get("intent");
@@ -838,8 +840,18 @@ function runQueueExplanation(run: Run): ReactNode {
   switch (run.schedulingState) {
     case "awaiting-review":
       return "This Run must be approved before it can enter the eligible FIFO queue.";
-    case "awaiting-gates":
-      return "Each Gate needs a fresh pass or an override before assignment.";
+    case "awaiting-gates": {
+      const gate = firstBlockingGate(run.gates.requirements);
+      if (!gate) return "Each Gate needs a fresh pass or an override before assignment.";
+      const name = gate.title ?? gate.name;
+      if (gate.evidence && "lock" in gate.evidence)
+        return `${name} is holding this Run. ${gate.evidence.lock.reason}`;
+      if (gate.type === "window" && gate.state === "blocking")
+        return `${name} is closed. This Run can proceed when the window opens or an operator overrides it.`;
+      if (gate.state === "unavailable")
+        return `${name} is unavailable. ${gate.diagnostic ?? ""}`.trim();
+      return `This Run is waiting for ${name} to pass or receive an override.`;
+    }
     case "target-busy":
       return run.blockingRunId ? (
         <>

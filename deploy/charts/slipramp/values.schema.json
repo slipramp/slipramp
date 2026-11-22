@@ -618,39 +618,39 @@
     "gateSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prometheus"],
+      "required": ["type", "url"],
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "webhook" } } },
+          "then": { "not": { "required": ["publicUrl"] } }
+        }
+      ],
       "properties": {
-        "prometheus": {
+        "type": { "enum": ["prometheus", "webhook"] },
+        "url": { "type": "string", "pattern": "^https?://[^[:space:]@/?#]+(?:/[^[:space:]?#]*)?$" },
+        "publicUrl": { "type": "string", "pattern": "^https?://[^[:space:]@/?#]+(?:/[^[:space:]?#]*)?$" },
+        "evaluationInterval": { "$ref": "#/$defs/duration" },
+        "timeout": { "$ref": "#/$defs/duration" },
+        "maximumConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "credentials": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["url"],
+          "required": ["secretName"],
           "properties": {
-            "url": { "type": "string", "pattern": "^https?://[^[:space:]?#]+(?:/[^[:space:]?#]*)?$" },
-            "publicUrl": { "type": "string", "pattern": "^https?://[^[:space:]@/?#]+(?:/[^[:space:]?#]*)?$" },
-            "evaluationInterval": { "$ref": "#/$defs/duration" },
-            "timeout": { "$ref": "#/$defs/duration" },
-            "maximumConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 },
-            "credentials": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["secretName"],
-              "properties": {
-                "secretName": { "$ref": "#/$defs/dnsSubdomain" },
-                "bearerTokenKey": { "$ref": "#/$defs/secretKey" },
-                "caKey": { "$ref": "#/$defs/secretKey" },
-                "clientCertificateKey": { "$ref": "#/$defs/secretKey" },
-                "clientKeyKey": { "$ref": "#/$defs/secretKey" }
-              },
-              "anyOf": [
-                { "required": ["bearerTokenKey"] },
-                { "required": ["caKey"] },
-                { "required": ["clientCertificateKey", "clientKeyKey"] }
-              ],
-              "dependentRequired": {
-                "clientCertificateKey": ["clientKeyKey"],
-                "clientKeyKey": ["clientCertificateKey"]
-              }
-            }
+            "secretName": { "$ref": "#/$defs/dnsSubdomain" },
+            "bearerTokenKey": { "$ref": "#/$defs/secretKey" },
+            "caKey": { "$ref": "#/$defs/secretKey" },
+            "clientCertificateKey": { "$ref": "#/$defs/secretKey" },
+            "clientKeyKey": { "$ref": "#/$defs/secretKey" }
+          },
+          "anyOf": [
+            { "required": ["bearerTokenKey"] },
+            { "required": ["caKey"] },
+            { "required": ["clientCertificateKey", "clientKeyKey"] }
+          ],
+          "dependentRequired": {
+            "clientCertificateKey": ["clientKeyKey"],
+            "clientKeyKey": ["clientCertificateKey"]
           }
         }
       }

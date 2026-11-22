@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	ErrOverrideInvalid     = errors.New("a Gate override requires a definition digest and a reason of 1 to 1024 characters")
-	ErrRequirementNotFound = errors.New("the Gate attachment does not exist")
-	ErrOverrideConflict    = errors.New("the Gate is no longer waiting for this override or its definition has changed")
+	ErrOverrideInvalid  = errors.New("a Gate override requires a valid Gate key, a policy version, and a reason of 1 to 1024 characters")
+	ErrSubjectNotFound  = errors.New("the Gate subject does not exist")
+	ErrOverrideConflict = errors.New("the Gate is no longer eligible for this override or its version has changed")
 )
 
 type SubjectType string
@@ -25,10 +25,9 @@ const (
 )
 
 type OverrideRequest struct {
-	Subject            SubjectType
-	SubjectID          uuid.UUID
-	GateName           string
-	DefinitionDigest   string
+	Subject   SubjectType
+	SubjectID uuid.UUID
+	Reference
 	Reason             string
 	Actor              productidentity.ActorSnapshot
 	RecordedAt         time.Time
@@ -37,21 +36,34 @@ type OverrideRequest struct {
 
 func (r OverrideRequest) Validate() error {
 	if (r.Subject != RunSubject && r.Subject != PromotionSubject) || r.SubjectID == uuid.Nil ||
-		r.EvaluatorProcessID == uuid.Nil || r.RecordedAt.IsZero() || r.Actor.Validate() != nil ||
-		validateDefinitionDigest(r.DefinitionDigest) != nil || strings.TrimSpace(r.Reason) == "" ||
-		strings.ContainsRune(r.Reason, 0) || utf8.RuneCountInString(r.Reason) > 1024 {
+		r.EvaluatorProcessID == uuid.Nil || r.RecordedAt.IsZero() || r.Actor.Validate() != nil {
+		return ErrOverrideInvalid
+	}
+	_, _, server := r.Key.ServerScope()
+	if (!server && !r.Key.validRepositoryKey()) || !r.Version.valid() ||
+		strings.TrimSpace(r.Reason) == "" || strings.ContainsRune(r.Reason, 0) || utf8.RuneCountInString(r.Reason) > 1024 {
 		return ErrOverrideInvalid
 	}
 	return nil
 }
 
 type Override struct {
-	DefinitionDigest string                        `json:"definitionDigest"`
+	Reference
+	Decision
+}
+
+// Decision captures the immutable operator action and evidence at decision time.
+type Decision struct {
 	Reason           string                        `json:"reason"`
 	Actor            productidentity.ActorSnapshot `json:"actor"`
 	RecordedAt       time.Time                     `json:"recordedAt"`
 	ObservedState    RequirementState              `json:"observedState"`
-	ObservedValue    *float64                      `json:"observedValue,omitempty"`
+	ObservedEvidence *Evidence                     `json:"observedEvidence,omitempty"`
 	EvaluatedAt      *time.Time                    `json:"evaluatedAt,omitempty"`
 	Diagnostic       string                        `json:"diagnostic,omitempty"`
+}
+
+type OverrideCollection struct {
+	Eligible  []Requirement
+	Decisions []Override
 }

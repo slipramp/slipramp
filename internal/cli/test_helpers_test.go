@@ -61,6 +61,7 @@ spec:
   placement: test
   actions:
     inspect:
+      intent: preview
       command: [inspect]
 `
 

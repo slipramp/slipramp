@@ -83,9 +83,7 @@ struct ActionDetailView: View {
                 )
             }
 
-            if let intent = action.intent {
-                LabeledContent("Intent", value: display(intent))
-            }
+            LabeledContent("Intent", value: display(action.intent.rawValue))
 
             if let value = action.documentationUrl, let url = URL(string: value) {
                 Link(destination: url) {

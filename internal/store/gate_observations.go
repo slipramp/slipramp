@@ -24,8 +24,17 @@ func (d *Database) ListGateEvaluationDemand(ctx context.Context) ([]gate.Evaluat
 		if err := json.Unmarshal(row.Spec, &definition); err != nil {
 			return nil, fmt.Errorf("decode Gate definition for %q: %w", row.GateName, err)
 		}
+		var subject *gate.EvaluationSubject
+		if row.Subject != nil {
+			if err := json.Unmarshal(row.Subject, &subject); err != nil {
+				return nil, fmt.Errorf("decode Gate evaluation subject: %w", err)
+			}
+		}
 		demand = append(demand, gate.EvaluationDemand{
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
+			Subject:           subject,
+			RepositoryName:    row.RepositoryName,
+			CommitSHA:         row.CommitSha,
 			GateName:          row.GateName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
 			Definition:        definition,
@@ -46,18 +55,50 @@ func (d *Database) UpsertGateObservation(
 		return fmt.Errorf("validate Gate observation: %w", err)
 	}
 
-	err := d.queries.UpsertGateObservation(ctx, storedb.UpsertGateObservationParams{
+	var payload []byte
+	if record.Observation.Evidence != nil {
+		var err error
+		payload, err = json.Marshal(record.Observation.Evidence)
+		if err != nil {
+			return fmt.Errorf("encode Gate observation: %w", err)
+		}
+	}
+	shared := storedb.UpsertGateObservationParams{
 		RepositoryID:       databaseUUID(record.RepositoryID),
 		GateName:           record.GateName,
 		CatalogRevisionID:  databaseUUID(record.CatalogRevisionID),
 		DefinitionDigest:   record.DefinitionDigest,
 		EvaluatorProcessID: databaseUUID(record.EvaluatorProcessID),
 		State:              string(record.Observation.State),
-		Value:              record.Observation.Value,
+		Evidence:           payload,
 		Diagnostic:         nullableText(record.Observation.Diagnostic),
 		EvaluatedAt:        databaseTime(record.EvaluatedAt.UTC()),
 		ValidUntil:         databaseTime(record.ValidUntil.UTC()),
-	})
+	}
+	var err error
+	if record.SubjectID == uuid.Nil {
+		err = d.queries.UpsertGateObservation(ctx, shared)
+	} else {
+		subject := storedb.RecordRunGateObservationParams{
+			SubjectID:          databaseUUID(record.SubjectID),
+			RepositoryID:       shared.RepositoryID,
+			GateName:           shared.GateName,
+			CatalogRevisionID:  shared.CatalogRevisionID,
+			DefinitionDigest:   &shared.DefinitionDigest,
+			EvaluatorProcessID: shared.EvaluatorProcessID,
+			State:              &shared.State,
+			Evidence:           payload,
+			Diagnostic:         shared.Diagnostic,
+			EvaluatedAt:        shared.EvaluatedAt,
+			ValidUntil:         shared.ValidUntil,
+		}
+		if record.SubjectType == gate.RunSubject {
+			err = d.queries.RecordRunGateObservation(ctx, subject)
+		} else {
+			err = d.queries.RecordPromotionGateObservation(ctx, storedb.RecordPromotionGateObservationParams(subject))
+		}
+	}
+
 	if err != nil {
 		return fmt.Errorf("upsert Gate observation: %w", err)
 	}

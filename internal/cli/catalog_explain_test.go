@@ -39,7 +39,7 @@ func TestCatalogExplainTextAndJSON(t *testing.T) {
 					"operations", "inspect", "Base command", "Final argv: [\"inspect\"]", "a=b",
 					"Action title: Inspect infrastructure", "Action description: Shows current state.",
 					"Action documentation URL: https://docs.example.com/actions/inspect",
-					"Runtime", "Timeout", "Parameter force: supplied: false", "Force execution",
+					"Intent: preview", "Runtime", "Timeout", "Parameter force: supplied: false", "Force execution",
 					"Parameter optional: omitted", "Inspection report", "Target operations default",
 					".slipramp/catalog.yaml document 2", "Target watch patterns",
 				} {
@@ -58,6 +58,7 @@ func TestCatalogExplainTextAndJSON(t *testing.T) {
 			}
 			if document.SchemaVersion != 2 || document.Target.Value.Name != "operations" ||
 				document.Action.Value != "inspect" || document.Placement.ConfigurationAvailable != deployment ||
+				document.Intent.Value != "preview" ||
 				document.ActionTitle.Value != "Inspect infrastructure" ||
 				document.ActionDescription.Value != "Shows current state." ||
 				document.ActionDocumentationURL.Value != "https://docs.example.com/actions/inspect" ||
@@ -191,6 +192,7 @@ spec:
       title: Inspect infrastructure
       description: Shows current state.
       documentationUrl: https://docs.example.com/actions/inspect
+      intent: preview
       command: [inspect]
       parameters:
         force:

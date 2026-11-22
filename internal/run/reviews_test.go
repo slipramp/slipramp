@@ -25,7 +25,7 @@ func TestDecideRunReviewNormalizesComment(t *testing.T) {
 	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
 	runs := &recordingRuns{reviewed: Run{
 		ID: runID, Phase: PhaseQueued, ClusterName: "colo", Review: Review{State: ReviewStateApproved},
-		Snapshot: Snapshot{Action: catalog.EffectiveAction{Gates: []string{"network-idle"}}},
+		Snapshot: Snapshot{Action: catalog.EffectiveAction{Intent: "preview", Gates: []string{"network-idle"}}},
 	}}
 	commands := &recordingControllerCommandNotifier{}
 	gateEvaluations := &recordingGateEvaluationNotifier{}

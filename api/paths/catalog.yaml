@@ -58,6 +58,12 @@ repositoryCatalog:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The stored Action definition lacks a valid intent.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "500":
         description: The active catalog could not be loaded.
         content:
@@ -128,6 +134,12 @@ actionExplanation:
               $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The stored Action definition lacks a valid intent.
         content:
           application/problem+json:
             schema:
@@ -283,6 +295,12 @@ target:
               $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The stored Action definition lacks a valid intent.
         content:
           application/problem+json:
             schema:

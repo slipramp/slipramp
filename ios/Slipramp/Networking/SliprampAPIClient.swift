@@ -219,6 +219,8 @@ struct SliprampAPIClient: @unchecked Sendable {
             throw try httpError(status: 404, problem: response.body.applicationProblemJson)
         case let .methodNotAllowed(response):
             throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .conflict(response):
+            throw try httpError(status: 409, problem: response.body.applicationProblemJson)
         case let .internalServerError(response):
             throw try httpError(status: 500, problem: response.body.applicationProblemJson)
         case let .undocumented(statusCode, _):

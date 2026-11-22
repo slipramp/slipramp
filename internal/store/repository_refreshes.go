@@ -335,6 +335,7 @@ type catalogSnapshotDefinition struct {
 	SourceDocument   int32           `json:"sourceDocument"`
 	Definition       json.RawMessage `json:"definition"`
 	DefinitionDigest string          `json:"-"`
+	SubjectScoped    bool            `json:"-"`
 }
 
 // catalogSnapshotManifest is the durable content identity contract. Keep it in
@@ -411,6 +412,7 @@ func newCatalogSnapshotManifest(contents catalog.Catalog) (catalogSnapshotManife
 			SourceDocument:   int32(gate.Source.Document),
 			Definition:       definition,
 			DefinitionDigest: definitionDigest,
+			SubjectScoped:    gate.Spec.Evaluator.SubjectScoped(),
 		})
 	}
 
@@ -475,6 +477,7 @@ func createCatalogSnapshotDefinitions(
 				SourceDocument:    gate.SourceDocument,
 				Definition:        gate.Definition,
 				DefinitionDigest:  gate.DefinitionDigest,
+				SubjectScoped:     gate.SubjectScoped,
 			},
 		)
 		if err != nil {

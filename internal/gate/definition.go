@@ -6,53 +6,106 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"strings"
-	"unicode/utf8"
+	"slices"
 
-	"github.com/slipramp/slipramp/internal/kubevalidate"
-)
-
-const (
-	MaximumQueryLength = 16 * 1024
-
-	OperatorEqual              = "equal"
-	OperatorNotEqual           = "not-equal"
-	OperatorLessThan           = "less-than"
-	OperatorLessThanOrEqual    = "less-than-or-equal"
-	OperatorGreaterThan        = "greater-than"
-	OperatorGreaterThanOrEqual = "greater-than-or-equal"
+	"go.yaml.in/yaml/v3"
 )
 
 // Definition is the catalog-independent policy evaluated for one Gate name.
 // Presentation metadata and the Gate name are deliberately excluded so
-// equivalent definitions share one evaluation.
+// equivalent definitions have the same digest.
 type Definition struct {
-	Prometheus PrometheusDefinition `json:"prometheus" yaml:"prometheus"`
+	Evaluator Policy `json:"-" yaml:"-"`
 }
 
-type PrometheusDefinition struct {
-	Source    string    `json:"source" yaml:"source"`
-	Query     string    `json:"query" yaml:"query"`
-	Condition Condition `json:"condition" yaml:"condition"`
+type Policy interface {
+	Type() string
+	SourceName() string
+	SubjectScoped() bool
+	ValidateFields() []FieldIssue
+	Normalized() Policy
 }
 
-type Condition struct {
-	Operator string  `json:"operator" yaml:"operator"`
-	Value    float64 `json:"value" yaml:"value"`
+type FieldIssue struct {
+	Field string
+	Code  string
+	Err   error
+}
+
+func (d Definition) MarshalJSON() ([]byte, error) {
+	if d.Evaluator == nil {
+		return nil, errors.New("missing Gate evaluator")
+	}
+	return encodeTagged(d.Evaluator)
+}
+
+func (d *Definition) UnmarshalJSON(data []byte) error {
+	name, raw, err := splitTaggedPayload(data)
+	if err != nil {
+		return err
+	}
+	codec, err := lookupEvaluator(name)
+	if err != nil {
+		return err
+	}
+	var fields any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if err := codec.policySchema.Validate(fields); err != nil {
+		return fmt.Errorf("invalid stored %s policy: %w", name, err)
+	}
+	decoded, err := codec.decodeDefinition(raw)
+	if err == nil {
+		*d = decoded
+	}
+	return err
+}
+
+func (d Definition) MarshalYAML() (any, error) {
+	if d.Evaluator == nil {
+		return nil, errors.New("missing Gate evaluator")
+	}
+	var node yaml.Node
+	if err := node.Encode(d.Evaluator); err != nil {
+		return nil, err
+	}
+	node.Content = append([]*yaml.Node{
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: "type"},
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: d.Evaluator.Type()},
+	}, node.Content...)
+	return map[string]*yaml.Node{"evaluator": &node}, nil
+}
+
+func (d *Definition) UnmarshalYAML(node *yaml.Node) error {
+	var spec map[string]yaml.Node
+	if err := node.Decode(&spec); err != nil {
+		return err
+	}
+	evaluator, found := spec["evaluator"]
+	if !found || len(spec) != 1 {
+		return errors.New("expected exactly one evaluator field in Gate spec")
+	}
+	decoded, err := decodeEvaluatorDefinition(&evaluator)
+	if err == nil {
+		*d = decoded
+	}
+	return err
+}
+
+func (d Definition) Issues() []FieldIssue {
+	if d.Evaluator == nil {
+		return []FieldIssue{{
+			Field: "type", Code: "catalog.gate.type-invalid", Err: errors.New("missing Gate evaluator"),
+		}}
+	}
+	return slices.DeleteFunc(d.Evaluator.ValidateFields(), func(issue FieldIssue) bool { return issue.Err == nil })
 }
 
 func (d Definition) Validate() error {
-	if err := kubevalidate.DNSLabel("Gate Prometheus source", d.Prometheus.Source); err != nil {
-		return err
+	if issues := d.Issues(); len(issues) > 0 {
+		return issues[0].Err
 	}
-	if err := ValidateQuery(d.Prometheus.Query); err != nil {
-		return err
-	}
-	if err := d.Prometheus.Condition.Validate(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -60,95 +113,10 @@ func (d Definition) Digest() (string, error) {
 	if err := d.Validate(); err != nil {
 		return "", err
 	}
-
-	normalized := d
-	if normalized.Prometheus.Condition.Value == 0 {
-		// Equal numeric thresholds must have equal digests. JSON otherwise
-		// preserves the sign bit on negative zero.
-		normalized.Prometheus.Condition.Value = 0
-	}
-	contents, err := json.Marshal(normalized)
+	contents, err := encodeTagged(d.Evaluator.Normalized())
 	if err != nil {
 		return "", fmt.Errorf("encode Gate definition: %w", err)
 	}
-
 	digest := sha256.Sum256(contents)
-
 	return hex.EncodeToString(digest[:]), nil
-}
-
-func ValidateQuery(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return errors.New("Gate Prometheus query is required") //nolint:staticcheck // Gate is a domain name.
-	}
-	if strings.TrimSpace(value) != value {
-		return errors.New("Gate Prometheus query must not have leading or trailing whitespace") //nolint:staticcheck // Gate is a domain name.
-	}
-	if utf8.RuneCountInString(value) > MaximumQueryLength {
-		return fmt.Errorf( //nolint:staticcheck // Gate is a domain name.
-			"Gate Prometheus query must not exceed %d characters",
-			MaximumQueryLength,
-		)
-	}
-
-	return nil
-}
-
-func (c Condition) Validate() error {
-	if err := ValidateOperator(c.Operator); err != nil {
-		return err
-	}
-	return ValidateThreshold(c.Value)
-}
-
-func ValidateThreshold(value float64) error {
-	if !isFinite(value) {
-		return errors.New("Gate condition value must be finite") //nolint:staticcheck // Gate is a domain name.
-	}
-
-	return nil
-}
-
-func ValidateOperator(value string) error {
-	switch value {
-	case OperatorEqual,
-		OperatorNotEqual,
-		OperatorLessThan,
-		OperatorLessThanOrEqual,
-		OperatorGreaterThan,
-		OperatorGreaterThanOrEqual:
-		return nil
-	default:
-		return fmt.Errorf("Gate condition operator %q is not supported", value) //nolint:staticcheck // Gate is a domain name.
-	}
-}
-
-func (c Condition) Compare(value float64) (bool, error) {
-	if err := c.Validate(); err != nil {
-		return false, err
-	}
-	if !isFinite(value) {
-		return false, errors.New("Gate observation value must be finite") //nolint:staticcheck // Gate is a domain name.
-	}
-
-	switch c.Operator {
-	case OperatorEqual:
-		return value == c.Value, nil
-	case OperatorNotEqual:
-		return value != c.Value, nil
-	case OperatorLessThan:
-		return value < c.Value, nil
-	case OperatorLessThanOrEqual:
-		return value <= c.Value, nil
-	case OperatorGreaterThan:
-		return value > c.Value, nil
-	case OperatorGreaterThanOrEqual:
-		return value >= c.Value, nil
-	default:
-		panic("validated Gate operator was not handled")
-	}
-}
-
-func isFinite(value float64) bool {
-	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }

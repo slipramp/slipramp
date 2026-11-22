@@ -730,6 +730,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 		Parameters:               map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
 		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("f", 64),
 		Snapshot: run.Snapshot{
+			Action: catalog.EffectiveAction{Name: "apply", Intent: "reconcile"},
 			Inputs: map[string]run.ArtifactInput{"plan": candidate},
 		},
 		CreatedAt: createdAt.Add(3 * time.Minute),
@@ -1076,6 +1077,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
 		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("f", 64),
 		Snapshot: run.Snapshot{
+			Action: catalog.EffectiveAction{Name: "apply", Intent: "reconcile"},
 			Inputs: map[string]run.ArtifactInput{"plan": candidate},
 		},
 		CreatedAt: sealedAt.Add(2 * time.Minute),
@@ -1101,6 +1103,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
 		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("e", 64),
 		Snapshot: run.Snapshot{
+			Action: catalog.EffectiveAction{Name: "apply", Intent: "reconcile"},
 			Inputs: map[string]run.ArtifactInput{"stale": staleCandidate},
 		},
 		CreatedAt: sealedAt.Add(3 * time.Minute),
@@ -1205,7 +1208,8 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 			},
 			Target: refresh.Revision.Catalog.Targets[0],
 			Action: catalog.EffectiveAction{
-				Name: "preview",
+				Intent: "preview",
+				Name:   "preview",
 				Artifacts: map[string]catalog.Artifact{
 					"plan": {
 						Path:      "plan.tfplan",

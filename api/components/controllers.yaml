@@ -518,6 +518,7 @@ RunAssignmentAction:
   type: object
   required:
     - name
+    - intent
     - command
     - runtime
     - placement
@@ -525,8 +526,7 @@ RunAssignmentAction:
     name:
       $ref: ./runs.yaml#/CatalogName
     intent:
-      type: string
-      minLength: 1
+      $ref: ./catalog.yaml#/ActionIntent
     command:
       type: array
       minItems: 1

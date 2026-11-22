@@ -15,6 +15,12 @@ func (d *Database) ClaimPromotionCreation(
 	ctx context.Context,
 	claim promotion.CreationDispatchClaim,
 ) (promotion.Promotion, error) {
+	return d.claimPromotionCreation(ctx, claim, (*storedb.Queries).ServerGateCheckTime)
+}
+
+func (d *Database) claimPromotionCreation(
+	ctx context.Context, claim promotion.CreationDispatchClaim, checkTime gateCheckClock,
+) (promotion.Promotion, error) {
 	if err := claim.Validate(); err != nil {
 		return promotion.Promotion{}, err
 	}
@@ -30,10 +36,15 @@ func (d *Database) ClaimPromotionCreation(
 	exhausted := false
 
 	for {
+		checkedAt, err := checkTime(queries, ctx)
+		if err != nil {
+			return promotion.Promotion{}, fmt.Errorf("read Promotion selection time: %w", err)
+		}
 		row, lockErr := queries.LockNextPromotionCreationDispatch(
 			ctx,
 			storedb.LockNextPromotionCreationDispatchParams{
 				DueAt:              databaseTime(claim.ClaimedAt),
+				CheckedAt:          checkedAt,
 				ClusterName:        claim.ClusterName,
 				EvaluatorProcessID: databaseUUID(claim.GateEvaluatorProcessID),
 			},
@@ -56,16 +67,16 @@ func (d *Database) ClaimPromotionCreation(
 		if decodeErr != nil {
 			return promotion.Promotion{}, decodeErr
 		}
-		if !current.ReviewRequired && len(current.StageSnapshot.Gates) > 0 {
-			released, err := tryReleasePromotionGates(
-				ctx, queries, current.ID, claim.GateEvaluatorProcessID, claim.ClaimedAt,
-			)
+		var evidence []byte
+		if !current.ReviewRequired && row.DispatchAttemptCount == 0 && !row.CallbackReleased {
+			evidence, checkedAt, err = releasePromotionEvidence(ctx, queries, current, claim.GateEvaluatorProcessID, checkTime)
 			if err != nil {
 				return promotion.Promotion{}, err
 			}
-			if !released {
+			if evidence == nil {
 				return promotion.Promotion{}, promotion.ErrNoCreationDispatch
 			}
+			claim.ClaimedAt = checkedAt.Time.UTC()
 		}
 
 		transition, transitionErr := promotion.TransitionCreationDispatchClaim(
@@ -101,6 +112,7 @@ func (d *Database) ClaimPromotionCreation(
 				ClaimedAt:            databaseTime(claim.ClaimedAt),
 				ID:                   databaseUUID(current.ID),
 				ExpectedAttemptCount: int32(current.CreationDispatch.AttemptCount),
+				ReleaseEvidence:      evidence,
 			},
 		)
 		if claimErr != nil {

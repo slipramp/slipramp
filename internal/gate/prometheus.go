@@ -21,11 +21,11 @@ type PrometheusEvaluator struct {
 }
 
 func NewPrometheusEvaluator(source PrometheusSource) (*PrometheusEvaluator, error) {
-	if err := source.validate(); err != nil {
+	if err := source.Validate(); err != nil {
 		return nil, err
 	}
 
-	transport, bearerToken, err := prometheusTransport(source)
+	transport, bearerToken, err := sourceTransport(source.HTTPSource)
 	if err != nil {
 		return nil, err
 	}
@@ -41,18 +41,24 @@ func NewPrometheusEvaluator(source PrometheusSource) (*PrometheusEvaluator, erro
 	}, nil
 }
 
+func (e *PrometheusEvaluator) Close() {
+	e.httpClient.CloseIdleConnections()
+}
+
 func (e *PrometheusEvaluator) Evaluate(
 	ctx context.Context,
-	definition Definition,
+	demand EvaluationDemand,
 	evaluationTime time.Time,
 ) Observation {
-	if err := definition.Validate(); err != nil {
+	definition := demand.Definition
+	policy, ok := definition.Evaluator.(*PrometheusDefinition)
+	if !ok || definition.Validate() != nil {
 		return unavailable("Gate definition is invalid.")
 	}
 
 	requestURL := *e.endpoint
 	parameters := requestURL.Query()
-	parameters.Set("query", definition.Prometheus.Query)
+	parameters.Set("query", policy.Query)
 	parameters.Set("time", evaluationTime.UTC().Format(time.RFC3339Nano))
 	requestURL.RawQuery = parameters.Encode()
 
@@ -88,7 +94,7 @@ func (e *PrometheusEvaluator) Evaluate(
 	if diagnostic != "" {
 		return unavailable(diagnostic)
 	}
-	passing, err := definition.Prometheus.Condition.Compare(value)
+	passing, err := policy.Condition.Compare(value)
 	if err != nil {
 		return unavailable("Prometheus result could not be compared.")
 	}
@@ -98,7 +104,7 @@ func (e *PrometheusEvaluator) Evaluate(
 		state = ObservationPassing
 	}
 
-	return Observation{State: state, Value: &value}
+	return Observation{State: state, Evidence: PrometheusSample(value)}
 }
 
 func readBounded(reader io.Reader, maximum int64) ([]byte, bool, error) {

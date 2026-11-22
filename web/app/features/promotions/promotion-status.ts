@@ -1,3 +1,4 @@
+import { gateWaitLabel } from "../gates/gate-presentation.ts";
 import type { Promotion } from "~/api/generated";
 
 type PromotionState = Pick<
@@ -86,7 +87,7 @@ export function promotionOverallStatus(promotion: PromotionState): PromotionStat
     return {
       color: "yellow",
       description: "Waiting for Gate release",
-      label: "Waiting for gates",
+      label: gateWaitLabel(promotion.gates.requirements),
     };
   }
 
@@ -250,7 +251,7 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
     return {
       color: "yellow",
       description: "Kargo delivery starts after Gate release",
-      label: "Waiting for gates",
+      label: gateWaitLabel(promotion.gates.requirements),
     };
   }
   if (promotion.status === "creating" || promotion.status === "approved") {
@@ -292,7 +293,7 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
     return {
       color: "yellow",
       description: "Kargo execution starts after Gate release",
-      label: "Waiting for gates",
+      label: gateWaitLabel(promotion.gates.requirements),
     };
   }
   if (

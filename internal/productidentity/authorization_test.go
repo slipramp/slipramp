@@ -310,7 +310,7 @@ func TestAuthenticationValidate(t *testing.T) {
 	t.Parallel()
 
 	allScopes := []Scope{
-		ScopeRunsOverrideGates, ScopePromotionsOverrideGates,
+		ScopeRunsOverrideGates, ScopePromotionsOverrideGates, ScopeGatesManage,
 		ScopeRead,
 		ScopeRunsWrite,
 		ScopeRunsReview,

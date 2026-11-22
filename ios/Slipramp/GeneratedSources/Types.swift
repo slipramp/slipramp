@@ -1153,7 +1153,7 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Run/phase`.
             internal var phase: Components.Schemas.RunPhase
-            /// Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+            /// Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
             ///
             /// - Remark: Generated from `#/components/schemas/Run/schedulingState`.
             internal enum SchedulingStatePayload: String, Codable, Hashable, Sendable, CaseIterable {
@@ -1164,7 +1164,7 @@ internal enum Components {
                 case clusterCapacity = "cluster-capacity"
                 case eligible = "eligible"
             }
-            /// Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+            /// Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
             ///
             /// - Remark: Generated from `#/components/schemas/Run/schedulingState`.
             internal var schedulingState: Components.Schemas.Run.SchedulingStatePayload?
@@ -1349,7 +1349,7 @@ internal enum Components {
             /// - Parameters:
             ///   - id: Stable identity of the immutable action execution.
             ///   - phase: Durable lifecycle position of the Run.
-            ///   - schedulingState: Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+            ///   - schedulingState: Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
             ///   - blockingRunId: One active Run contributing to exhausted Target capacity. Present only when schedulingState is target-busy.
             ///   - queueAgeSeconds: Whole seconds since the queued Run was created, evaluated at schedulingSnapshotAt. This is historical age, not an execution ETA.
             ///   - eligiblePosition: One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
@@ -1711,7 +1711,7 @@ internal enum Components {
         internal struct GateSummary: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GateSummary/state`.
             internal var state: Components.Schemas.GateSummaryState
-            /// Required Gates in their stable attachment order.
+            /// Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
             ///
             /// - Remark: Generated from `#/components/schemas/GateSummary/requirements`.
             internal var requirements: [Components.Schemas.GateRequirement]
@@ -1719,7 +1719,7 @@ internal enum Components {
             ///
             /// - Parameters:
             ///   - state:
-            ///   - requirements: Required Gates in their stable attachment order.
+            ///   - requirements: Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
             internal init(
                 state: Components.Schemas.GateSummaryState,
                 requirements: [Components.Schemas.GateRequirement]
@@ -1753,18 +1753,29 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/GateRequirement/queryUrl`.
             internal var queryUrl: Swift.String?
-            /// Digest of the active or released Gate definition.
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/key`.
+            internal var key: Components.Schemas.GateKey
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/version`.
+            internal var version: Components.Schemas.GateVersion?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/origin`.
+            internal enum OriginPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case repository = "repository"
+                case server = "server"
+            }
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/origin`.
+            internal var origin: Components.Schemas.GateRequirement.OriginPayload
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/scope`.
+            internal var scope: Components.Schemas.GateScope
+            /// Repository evaluator type, lock, or window for the current or released policy.
             ///
-            /// - Remark: Generated from `#/components/schemas/GateRequirement/definitionDigest`.
-            internal var definitionDigest: Swift.String?
-            /// Operator decisions in chronological order. The latest applies when its digest matches the definition.
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/type`.
+            internal var _type: Swift.String?
+            /// Operator decisions in chronological order. The latest applies when its key and version match the Gate.
             ///
             /// - Remark: Generated from `#/components/schemas/GateRequirement/overrides`.
             internal var overrides: [Components.Schemas.GateOverride]?
-            /// Finite observed value from current or immutable release evidence.
-            ///
-            /// - Remark: Generated from `#/components/schemas/GateRequirement/value`.
-            internal var value: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/evidence`.
+            internal var evidence: Components.Schemas.GateEvidence?
             /// - Remark: Generated from `#/components/schemas/GateRequirement/operator`.
             internal var _operator: Components.Schemas.GateOperator?
             /// Finite comparison threshold from the current or released definition.
@@ -1773,6 +1784,10 @@ internal enum Components {
             internal var threshold: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/GateRequirement/evaluatedAt`.
             internal var evaluatedAt: Foundation.Date?
+            /// Exclusive end of the displayed observation’s validity, frozen at release.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateRequirement/validUntil`.
+            internal var validUntil: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/GateRequirement/releasedAt`.
             internal var releasedAt: Foundation.Date?
             /// Bounded sanitized explanation for an unavailable requirement.
@@ -1786,12 +1801,17 @@ internal enum Components {
             ///   - title:
             ///   - state:
             ///   - queryUrl: Opens the active or released PromQL in the configured viewer at the observation time, when available.
-            ///   - definitionDigest: Digest of the active or released Gate definition.
-            ///   - overrides: Operator decisions in chronological order. The latest applies when its digest matches the definition.
-            ///   - value: Finite observed value from current or immutable release evidence.
+            ///   - key:
+            ///   - version:
+            ///   - origin:
+            ///   - scope:
+            ///   - _type: Repository evaluator type, lock, or window for the current or released policy.
+            ///   - overrides: Operator decisions in chronological order. The latest applies when its key and version match the Gate.
+            ///   - evidence:
             ///   - _operator:
             ///   - threshold: Finite comparison threshold from the current or released definition.
             ///   - evaluatedAt:
+            ///   - validUntil: Exclusive end of the displayed observation’s validity, frozen at release.
             ///   - releasedAt:
             ///   - diagnostic: Bounded sanitized explanation for an unavailable requirement.
             internal init(
@@ -1799,12 +1819,17 @@ internal enum Components {
                 title: Swift.String? = nil,
                 state: Components.Schemas.GateRequirementState,
                 queryUrl: Swift.String? = nil,
-                definitionDigest: Swift.String? = nil,
+                key: Components.Schemas.GateKey,
+                version: Components.Schemas.GateVersion? = nil,
+                origin: Components.Schemas.GateRequirement.OriginPayload,
+                scope: Components.Schemas.GateScope,
+                _type: Swift.String? = nil,
                 overrides: [Components.Schemas.GateOverride]? = nil,
-                value: Swift.Double? = nil,
+                evidence: Components.Schemas.GateEvidence? = nil,
                 _operator: Components.Schemas.GateOperator? = nil,
                 threshold: Swift.Double? = nil,
                 evaluatedAt: Foundation.Date? = nil,
+                validUntil: Foundation.Date? = nil,
                 releasedAt: Foundation.Date? = nil,
                 diagnostic: Swift.String? = nil
             ) {
@@ -1812,12 +1837,17 @@ internal enum Components {
                 self.title = title
                 self.state = state
                 self.queryUrl = queryUrl
-                self.definitionDigest = definitionDigest
+                self.key = key
+                self.version = version
+                self.origin = origin
+                self.scope = scope
+                self._type = _type
                 self.overrides = overrides
-                self.value = value
+                self.evidence = evidence
                 self._operator = _operator
                 self.threshold = threshold
                 self.evaluatedAt = evaluatedAt
+                self.validUntil = validUntil
                 self.releasedAt = releasedAt
                 self.diagnostic = diagnostic
             }
@@ -1826,12 +1856,17 @@ internal enum Components {
                 case title
                 case state
                 case queryUrl
-                case definitionDigest
+                case key
+                case version
+                case origin
+                case scope
+                case _type = "type"
                 case overrides
-                case value
+                case evidence
                 case _operator = "operator"
                 case threshold
                 case evaluatedAt
+                case validUntil
                 case releasedAt
                 case diagnostic
             }
@@ -1849,8 +1884,10 @@ internal enum Components {
         }
         /// - Remark: Generated from `#/components/schemas/GateOverride`.
         internal struct GateOverride: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/GateOverride/definitionDigest`.
-            internal var definitionDigest: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GateOverride/key`.
+            internal var key: Components.Schemas.GateKey
+            /// - Remark: Generated from `#/components/schemas/GateOverride/version`.
+            internal var version: Components.Schemas.GateVersion
             /// - Remark: Generated from `#/components/schemas/GateOverride/reason`.
             internal var reason: Swift.String
             /// - Remark: Generated from `#/components/schemas/GateOverride/actor`.
@@ -1859,8 +1896,8 @@ internal enum Components {
             internal var recordedAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GateOverride/observedState`.
             internal var observedState: Components.Schemas.GateRequirementState
-            /// - Remark: Generated from `#/components/schemas/GateOverride/observedValue`.
-            internal var observedValue: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/GateOverride/observedEvidence`.
+            internal var observedEvidence: Components.Schemas.GateEvidence?
             /// - Remark: Generated from `#/components/schemas/GateOverride/evaluatedAt`.
             internal var evaluatedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/GateOverride/diagnostic`.
@@ -1868,40 +1905,44 @@ internal enum Components {
             /// Creates a new `GateOverride`.
             ///
             /// - Parameters:
-            ///   - definitionDigest:
+            ///   - key:
+            ///   - version:
             ///   - reason:
             ///   - actor:
             ///   - recordedAt:
             ///   - observedState:
-            ///   - observedValue:
+            ///   - observedEvidence:
             ///   - evaluatedAt:
             ///   - diagnostic:
             internal init(
-                definitionDigest: Swift.String,
+                key: Components.Schemas.GateKey,
+                version: Components.Schemas.GateVersion,
                 reason: Swift.String,
                 actor: Components.Schemas.ActorSnapshot,
                 recordedAt: Foundation.Date,
                 observedState: Components.Schemas.GateRequirementState,
-                observedValue: Swift.Double? = nil,
+                observedEvidence: Components.Schemas.GateEvidence? = nil,
                 evaluatedAt: Foundation.Date? = nil,
                 diagnostic: Swift.String? = nil
             ) {
-                self.definitionDigest = definitionDigest
+                self.key = key
+                self.version = version
                 self.reason = reason
                 self.actor = actor
                 self.recordedAt = recordedAt
                 self.observedState = observedState
-                self.observedValue = observedValue
+                self.observedEvidence = observedEvidence
                 self.evaluatedAt = evaluatedAt
                 self.diagnostic = diagnostic
             }
             internal enum CodingKeys: String, CodingKey {
-                case definitionDigest
+                case key
+                case version
                 case reason
                 case actor
                 case recordedAt
                 case observedState
-                case observedValue
+                case observedEvidence
                 case evaluatedAt
                 case diagnostic
             }
@@ -3710,6 +3751,14 @@ internal enum Components {
                 case limits
             }
         }
+        /// Declared purpose of the Action, frozen when a Run is created.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActionIntent`.
+        internal enum ActionIntent: String, Codable, Hashable, Sendable, CaseIterable {
+            case preview = "preview"
+            case reconcile = "reconcile"
+            case operation = "operation"
+        }
         /// - Remark: Generated from `#/components/schemas/ParameterArgument`.
         internal struct ParameterArgument: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ParameterArgument/name`.
@@ -4066,7 +4115,7 @@ internal enum Components {
             /// - Remark: Generated from `#/components/schemas/Action/documentationUrl`.
             internal var documentationUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Action/intent`.
-            internal var intent: Swift.String?
+            internal var intent: Components.Schemas.ActionIntent
             /// - Remark: Generated from `#/components/schemas/Action/command`.
             internal var command: [Swift.String]
             /// - Remark: Generated from `#/components/schemas/Action/runtime`.
@@ -4183,7 +4232,7 @@ internal enum Components {
                 title: Swift.String? = nil,
                 description: Swift.String? = nil,
                 documentationUrl: Swift.String? = nil,
-                intent: Swift.String? = nil,
+                intent: Components.Schemas.ActionIntent,
                 command: [Swift.String],
                 runtime: Swift.String? = nil,
                 placement: Swift.String? = nil,
@@ -4564,6 +4613,148 @@ internal enum Components {
                 case reconciliation
             }
         }
+        /// Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+        ///
+        /// - Remark: Generated from `#/components/schemas/GateVersion`.
+        internal typealias GateVersion = Swift.String
+        /// - Remark: Generated from `#/components/schemas/WindowObservation`.
+        internal struct WindowObservation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/state`.
+            internal enum StatePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case passing = "passing"
+                case blocking = "blocking"
+            }
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/state`.
+            internal var state: Components.Schemas.WindowObservation.StatePayload
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/evaluatedAt`.
+            internal var evaluatedAt: Foundation.Date
+            /// Exclusive observation expiry.
+            ///
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/validUntil`.
+            internal var validUntil: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/intervalStart`.
+            internal var intervalStart: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/WindowObservation/nextTransition`.
+            internal var nextTransition: Foundation.Date?
+            /// Creates a new `WindowObservation`.
+            ///
+            /// - Parameters:
+            ///   - state:
+            ///   - evaluatedAt:
+            ///   - validUntil: Exclusive observation expiry.
+            ///   - intervalStart:
+            ///   - nextTransition:
+            internal init(
+                state: Components.Schemas.WindowObservation.StatePayload,
+                evaluatedAt: Foundation.Date,
+                validUntil: Foundation.Date,
+                intervalStart: Foundation.Date? = nil,
+                nextTransition: Foundation.Date? = nil
+            ) {
+                self.state = state
+                self.evaluatedAt = evaluatedAt
+                self.validUntil = validUntil
+                self.intervalStart = intervalStart
+                self.nextTransition = nextTransition
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case state
+                case evaluatedAt
+                case validUntil
+                case intervalStart
+                case nextTransition
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.state = try container.decode(
+                    Components.Schemas.WindowObservation.StatePayload.self,
+                    forKey: .state
+                )
+                self.evaluatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .evaluatedAt
+                )
+                self.validUntil = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .validUntil
+                )
+                self.intervalStart = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .intervalStart
+                )
+                self.nextTransition = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .nextTransition
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "state",
+                    "evaluatedAt",
+                    "validUntil",
+                    "intervalStart",
+                    "nextTransition"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ServerGateLock`.
+        internal struct ServerGateLock: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ServerGateLock/reason`.
+            internal var reason: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ServerGateLock/actor`.
+            internal var actor: Components.Schemas.ActorSnapshot
+            /// - Remark: Generated from `#/components/schemas/ServerGateLock/createdAt`.
+            internal var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ServerGateLock/expiresAt`.
+            internal var expiresAt: Foundation.Date?
+            /// Creates a new `ServerGateLock`.
+            ///
+            /// - Parameters:
+            ///   - reason:
+            ///   - actor:
+            ///   - createdAt:
+            ///   - expiresAt:
+            internal init(
+                reason: Swift.String,
+                actor: Components.Schemas.ActorSnapshot,
+                createdAt: Foundation.Date,
+                expiresAt: Foundation.Date? = nil
+            ) {
+                self.reason = reason
+                self.actor = actor
+                self.createdAt = createdAt
+                self.expiresAt = expiresAt
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case reason
+                case actor
+                case createdAt
+                case expiresAt
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.reason = try container.decode(
+                    Swift.String.self,
+                    forKey: .reason
+                )
+                self.actor = try container.decode(
+                    Components.Schemas.ActorSnapshot.self,
+                    forKey: .actor
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.expiresAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .expiresAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "reason",
+                    "actor",
+                    "createdAt",
+                    "expiresAt"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionSource`.
         internal enum PromotionSource: String, Codable, Hashable, Sendable, CaseIterable {
             case kargo = "kargo"
@@ -4787,6 +4978,326 @@ internal enum Components {
                 case decidedBy
                 case decidedAt
                 case comment
+            }
+        }
+        /// Stable logical key within the subject.
+        ///
+        /// - Remark: Generated from `#/components/schemas/GateKey`.
+        internal typealias GateKey = Swift.String
+        /// - Remark: Generated from `#/components/schemas/GateScope`.
+        internal struct GateScope: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GateScope/kind`.
+            internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case repository = "repository"
+                case global = "global"
+                case target = "target"
+                case stage = "stage"
+            }
+            /// - Remark: Generated from `#/components/schemas/GateScope/kind`.
+            internal var kind: Components.Schemas.GateScope.KindPayload
+            /// Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+            ///
+            /// - Remark: Generated from `#/components/schemas/GateScope/id`.
+            internal var id: Swift.String
+            /// Creates a new `GateScope`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id: Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+            internal init(
+                kind: Components.Schemas.GateScope.KindPayload,
+                id: Swift.String
+            ) {
+                self.kind = kind
+                self.id = id
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.kind = try container.decode(
+                    Components.Schemas.GateScope.KindPayload.self,
+                    forKey: .kind
+                )
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "kind",
+                    "id"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PrometheusGateEvidence`.
+        internal struct PrometheusGateEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrometheusGateEvidence/prometheus`.
+            internal struct PrometheusPayload: Codable, Hashable, Sendable {
+                /// Finite sample from the Prometheus query.
+                ///
+                /// - Remark: Generated from `#/components/schemas/PrometheusGateEvidence/prometheus/value`.
+                internal var value: Swift.Double
+                /// Creates a new `PrometheusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value: Finite sample from the Prometheus query.
+                internal init(value: Swift.Double) {
+                    self.value = value
+                }
+                internal enum CodingKeys: String, CodingKey {
+                    case value
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.value = try container.decode(
+                        Swift.Double.self,
+                        forKey: .value
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "value"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PrometheusGateEvidence/prometheus`.
+            internal var prometheus: Components.Schemas.PrometheusGateEvidence.PrometheusPayload
+            /// Creates a new `PrometheusGateEvidence`.
+            ///
+            /// - Parameters:
+            ///   - prometheus:
+            internal init(prometheus: Components.Schemas.PrometheusGateEvidence.PrometheusPayload) {
+                self.prometheus = prometheus
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case prometheus
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.prometheus = try container.decode(
+                    Components.Schemas.PrometheusGateEvidence.PrometheusPayload.self,
+                    forKey: .prometheus
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "prometheus"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/WebhookGateEvidence`.
+        internal struct WebhookGateEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/WebhookGateEvidence/webhook`.
+            internal struct WebhookPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/WebhookGateEvidence/webhook/code`.
+                internal var code: Swift.String
+                /// - Remark: Generated from `#/components/schemas/WebhookGateEvidence/webhook/message`.
+                internal var message: Swift.String
+                /// Creates a new `WebhookPayload`.
+                ///
+                /// - Parameters:
+                ///   - code:
+                ///   - message:
+                internal init(
+                    code: Swift.String,
+                    message: Swift.String
+                ) {
+                    self.code = code
+                    self.message = message
+                }
+                internal enum CodingKeys: String, CodingKey {
+                    case code
+                    case message
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.code = try container.decode(
+                        Swift.String.self,
+                        forKey: .code
+                    )
+                    self.message = try container.decode(
+                        Swift.String.self,
+                        forKey: .message
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "code",
+                        "message"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/WebhookGateEvidence/webhook`.
+            internal var webhook: Components.Schemas.WebhookGateEvidence.WebhookPayload
+            /// Creates a new `WebhookGateEvidence`.
+            ///
+            /// - Parameters:
+            ///   - webhook:
+            internal init(webhook: Components.Schemas.WebhookGateEvidence.WebhookPayload) {
+                self.webhook = webhook
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case webhook
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.webhook = try container.decode(
+                    Components.Schemas.WebhookGateEvidence.WebhookPayload.self,
+                    forKey: .webhook
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "webhook"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/LockGateEvidence`.
+        internal struct LockGateEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/LockGateEvidence/lock`.
+            internal var lock: Components.Schemas.ServerGateLock
+            /// Creates a new `LockGateEvidence`.
+            ///
+            /// - Parameters:
+            ///   - lock:
+            internal init(lock: Components.Schemas.ServerGateLock) {
+                self.lock = lock
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case lock
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.lock = try container.decode(
+                    Components.Schemas.ServerGateLock.self,
+                    forKey: .lock
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "lock"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/WindowGateEvidence`.
+        internal struct WindowGateEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/WindowGateEvidence/window`.
+            internal struct WindowPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/WindowGateEvidence/window/timeZone`.
+                internal var timeZone: Swift.String
+                /// - Remark: Generated from `#/components/schemas/WindowGateEvidence/window/digest`.
+                internal var digest: Swift.String
+                /// - Remark: Generated from `#/components/schemas/WindowGateEvidence/window/observation`.
+                internal var observation: Components.Schemas.WindowObservation
+                /// Creates a new `WindowPayload`.
+                ///
+                /// - Parameters:
+                ///   - timeZone:
+                ///   - digest:
+                ///   - observation:
+                internal init(
+                    timeZone: Swift.String,
+                    digest: Swift.String,
+                    observation: Components.Schemas.WindowObservation
+                ) {
+                    self.timeZone = timeZone
+                    self.digest = digest
+                    self.observation = observation
+                }
+                internal enum CodingKeys: String, CodingKey {
+                    case timeZone
+                    case digest
+                    case observation
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.timeZone = try container.decode(
+                        Swift.String.self,
+                        forKey: .timeZone
+                    )
+                    self.digest = try container.decode(
+                        Swift.String.self,
+                        forKey: .digest
+                    )
+                    self.observation = try container.decode(
+                        Components.Schemas.WindowObservation.self,
+                        forKey: .observation
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "timeZone",
+                        "digest",
+                        "observation"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/WindowGateEvidence/window`.
+            internal var window: Components.Schemas.WindowGateEvidence.WindowPayload
+            /// Creates a new `WindowGateEvidence`.
+            ///
+            /// - Parameters:
+            ///   - window:
+            internal init(window: Components.Schemas.WindowGateEvidence.WindowPayload) {
+                self.window = window
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case window
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.window = try container.decode(
+                    Components.Schemas.WindowGateEvidence.WindowPayload.self,
+                    forKey: .window
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "window"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GateEvidence`.
+        internal enum GateEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GateEvidence/case1`.
+            case PrometheusGateEvidence(Components.Schemas.PrometheusGateEvidence)
+            /// - Remark: Generated from `#/components/schemas/GateEvidence/case2`.
+            case WebhookGateEvidence(Components.Schemas.WebhookGateEvidence)
+            /// - Remark: Generated from `#/components/schemas/GateEvidence/case3`.
+            case LockGateEvidence(Components.Schemas.LockGateEvidence)
+            /// - Remark: Generated from `#/components/schemas/GateEvidence/case4`.
+            case WindowGateEvidence(Components.Schemas.WindowGateEvidence)
+            internal init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self = .PrometheusGateEvidence(try .init(from: decoder))
+                    return
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self = .WebhookGateEvidence(try .init(from: decoder))
+                    return
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self = .LockGateEvidence(try .init(from: decoder))
+                    return
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self = .WindowGateEvidence(try .init(from: decoder))
+                    return
+                } catch {
+                    errors.append(error)
+                }
+                throw Swift.DecodingError.failedToDecodeOneOfSchema(
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            internal func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .PrometheusGateEvidence(value):
+                    try value.encode(to: encoder)
+                case let .WebhookGateEvidence(value):
+                    try value.encode(to: encoder)
+                case let .LockGateEvidence(value):
+                    try value.encode(to: encoder)
+                case let .WindowGateEvidence(value):
+                    try value.encode(to: encoder)
+                }
             }
         }
         /// - Remark: Generated from `#/components/schemas/RunArtifactInput`.
@@ -7585,6 +8096,57 @@ internal enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Conflict: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/409/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/409/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.Conflict.Body
+                /// Creates a new `Conflict`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.Conflict.Body) {
+                    self.body = body
+                }
+            }
+            /// The stored Action definition lacks a valid intent.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Operations.GetTarget.Output.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            internal var conflict: Operations.GetTarget.Output.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
                             response: self
                         )
                     }

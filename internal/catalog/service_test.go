@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -48,6 +49,7 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 					Placement: "production",
 					Actions: map[string]Action{
 						"plan": {
+							Intent:  "preview",
 							Command: []string{"tool", "plan"},
 							Parameters: map[string]Parameter{
 								"region": {
@@ -88,6 +90,13 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 	if len(explanation.Parameters) != 1 || explanation.Parameters[0].Supplied ||
 		explanation.Parameters[0].Value != nil {
 		t.Errorf("omitted required parameter = %#v", explanation.Parameters)
+	}
+	action := store.target.Target.Spec.Actions["plan"]
+	action.Intent = ""
+	store.target.Target.Spec.Actions["plan"] = action
+	_, err = NewService(store, placements, gate.SourceSet{}).ExplainAction(t.Context(), targetID, "plan")
+	if !errors.Is(err, ErrInvalidActionIntent) {
+		t.Errorf("unclassified stored Action explanation error = %v", err)
 	}
 }
 

@@ -27,18 +27,21 @@ const (
 	ObservationUnavailable ObservationState = "unavailable"
 )
 
-// Observation contains only the normalized value and a bounded diagnostic.
-// Prometheus labels and response bodies never leave the evaluator.
+// Observation carries the normalized public evidence or an unavailable diagnostic.
 type Observation struct {
-	State      ObservationState
-	Value      *float64
-	Diagnostic string
+	// FailureClass is a bounded evaluator-owned telemetry label.
+	FailureClass string
+	State        ObservationState
+	Evidence     *Evidence
+	Diagnostic   string
 }
 
 // CurrentObservation is the replaceable evidence for one active Gate
 // definition. Release also requires the evaluator process identity and
 // validity window to match the current Server process and time.
 type CurrentObservation struct {
+	SubjectType        SubjectType
+	SubjectID          uuid.UUID
 	RepositoryID       uuid.UUID
 	GateName           string
 	CatalogRevisionID  uuid.UUID
@@ -50,6 +53,18 @@ type CurrentObservation struct {
 }
 
 func (o CurrentObservation) Validate() error {
+	switch o.SubjectType {
+	case "":
+		if o.SubjectID != uuid.Nil {
+			return errors.New("shared observation cannot have a subject ID")
+		}
+	case RunSubject, PromotionSubject:
+		if o.SubjectID == uuid.Nil {
+			return errors.New("subject observation requires a subject ID")
+		}
+	default:
+		return errors.New("invalid observation subject type")
+	}
 	if o.RepositoryID == uuid.Nil {
 		return errors.New( //nolint:staticcheck // Gate and Repository are domain names.
 			"Gate observation Repository ID is required",
@@ -89,15 +104,18 @@ func (o CurrentObservation) Validate() error {
 func (o Observation) Validate() error {
 	switch o.State {
 	case ObservationPassing, ObservationBlocking:
-		if o.Value == nil || !isFinite(*o.Value) {
-			return errors.New("passing or blocking Gate observation requires a finite value")
+		if o.Evidence == nil || o.Evidence.Payload == nil {
+			return errors.New("passing or blocking Gate observation requires evidence")
+		}
+		if err := o.Evidence.Payload.Validate(); err != nil {
+			return err
 		}
 		if o.Diagnostic != "" {
 			return errors.New("passing or blocking Gate observation must not include a diagnostic")
 		}
 	case ObservationUnavailable:
-		if o.Value != nil {
-			return errors.New("unavailable Gate observation must not include a value")
+		if o.Evidence != nil {
+			return errors.New("unavailable Gate observation must not include evidence")
 		}
 		if strings.TrimSpace(o.Diagnostic) == "" {
 			return errors.New("unavailable Gate observation requires a diagnostic")

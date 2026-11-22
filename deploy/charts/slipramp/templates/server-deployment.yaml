@@ -226,7 +226,7 @@ spec:
               readOnly: true
             {{- end }}
             {{- range $name, $source := .Values.server.gates.sources }}
-            {{- with $source.prometheus.credentials }}
+            {{- with $source.credentials }}
             - name: gate-source-{{ sha256sum $name | trunc 12 }}
               mountPath: /var/run/slipramp/gate-sources/{{ $name }}
               readOnly: true
@@ -266,7 +266,7 @@ spec:
           emptyDir: {}
         {{- end }}
         {{- range $name, $source := .Values.server.gates.sources }}
-        {{- with $source.prometheus.credentials }}
+        {{- with $source.credentials }}
         - name: gate-source-{{ sha256sum $name | trunc 12 }}
           secret:
             secretName: {{ .secretName }}

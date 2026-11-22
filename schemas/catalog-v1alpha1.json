@@ -253,7 +253,12 @@
                     "format": "uri"
                   },
                   "intent": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "preview",
+                      "reconcile",
+                      "operation"
+                    ]
                   },
                   "command": {
                     "type": [
@@ -507,6 +512,7 @@
                   }
                 },
                 "required": [
+                  "intent",
                   "command"
                 ],
                 "additionalProperties": false
@@ -559,54 +565,88 @@
         "spec": {
           "type": "object",
           "properties": {
-            "prometheus": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string",
-                  "maxLength": 63,
-                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
-                },
-                "query": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 16384
-                },
-                "condition": {
+            "evaluator": {
+              "oneOf": [
+                {
                   "type": "object",
                   "properties": {
-                    "operator": {
+                    "source": {
                       "type": "string",
-                      "enum": [
-                        "equal",
-                        "not-equal",
-                        "less-than",
-                        "less-than-or-equal",
-                        "greater-than",
-                        "greater-than-or-equal"
-                      ]
+                      "maxLength": 63,
+                      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
                     },
-                    "value": {
-                      "type": "number"
+                    "query": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 16384
+                    },
+                    "condition": {
+                      "type": "object",
+                      "properties": {
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "equal",
+                            "not-equal",
+                            "less-than",
+                            "less-than-or-equal",
+                            "greater-than",
+                            "greater-than-or-equal"
+                          ]
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "operator",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "type": {
+                      "const": "prometheus"
                     }
                   },
                   "required": [
-                    "operator",
-                    "value"
+                    "type",
+                    "source",
+                    "query",
+                    "condition"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 64,
+                      "propertyNames": {
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "type": {
+                      "const": "webhook"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "source",
+                    "input"
                   ],
                   "additionalProperties": false
                 }
-              },
-              "required": [
-                "source",
-                "query",
-                "condition"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
-            "prometheus"
+            "evaluator"
           ],
           "additionalProperties": false
         }

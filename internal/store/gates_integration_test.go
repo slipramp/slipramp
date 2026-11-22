@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -42,7 +43,7 @@ func TestInactiveGateObservationCleanupPreservesActiveDemandIntegration(t *testi
 		CatalogRevisionID:  oldRevisionID,
 		DefinitionDigest:   digest,
 		EvaluatorProcessID: uuid.New(),
-		Observation:        gate.Observation{State: gate.ObservationPassing, Value: &value},
+		Observation:        gate.Observation{State: gate.ObservationPassing, Evidence: gate.PrometheusSample(value)},
 		EvaluatedAt:        now.Add(-90 * time.Minute),
 		ValidUntil:         now.Add(-89 * time.Minute),
 	}
@@ -127,7 +128,7 @@ func TestPrometheusGateEvaluationRecoversAndRequiresCurrentProcessIntegration(t 
 
 	sourceState.Store(1)
 	evaluatePrometheusGate(t, ctx, database, source.URL, restartedProcess, gate.ObservationPassing)
-	assigned, err := database.ClaimQueuedRun(
+	assigned, err := database.claimQueuedRunAt(
 		ctx,
 		"colo",
 		testSchedulingCapacity(),
@@ -153,20 +154,20 @@ func evaluatePrometheusGate(
 	t.Helper()
 
 	store := recordingGateStore{Database: database, observations: make(chan gate.CurrentObservation, 1)}
-	coordinator, err := gate.NewCoordinator(
+	coordinator, err := gate.NewEvaluationCoordinator(
 		store,
-		gate.SourceSet{"homelab": {Prometheus: gate.PrometheusSource{
+		gate.SourceSet{"homelab": gate.PrometheusSource{
 			URL:                sourceURL,
 			EvaluationInterval: 15 * time.Second,
 			Timeout:            5 * time.Second,
 			MaximumConcurrency: 2,
-		}}},
+		}},
 		processID,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("NewCoordinator() error = %v", err)
+		t.Fatalf("NewEvaluationCoordinator() error = %v", err)
 	}
 
 	runContext, cancel := context.WithCancel(ctx)
@@ -228,9 +229,9 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	wantDefinition := persistedCatalog("1.14.3").Gates[0].Spec
 	if requirements.State() != gate.SummaryWaiting || len(requirements) != 2 ||
 		requirements[0].Name != "network-idle" || requirements[0].State != gate.RequirementUnevaluated ||
-		requirements[0].Prometheus == nil || *requirements[0].Prometheus != wantDefinition.Prometheus ||
+		requirements[0].Policy == nil || !reflect.DeepEqual(requirements[0].Policy, wantDefinition.Evaluator) ||
 		requirements[1].Name != "change-window" || requirements[1].State != gate.RequirementUnavailable ||
-		requirements[1].Prometheus != nil {
+		requirements[1].Policy != nil {
 		t.Fatalf("ordered Run Gate requirements = %#v", requirements)
 	}
 	targets, err := database.ListGateEvaluationDemand(ctx)
@@ -240,7 +241,7 @@ func TestRunGateRequirementsCommitWithRunIntegration(t *testing.T) {
 	if len(targets) != 1 || targets[0].RepositoryID != repositoryID ||
 		targets[0].GateName != "network-idle" || targets[0].CatalogRevisionID != revisionID ||
 		targets[0].WaiterCount != 1 || !targets[0].LastRequestedAt.Equal(createdAt) ||
-		targets[0].Definition != wantDefinition {
+		!reflect.DeepEqual(targets[0].Definition, wantDefinition) {
 		t.Errorf("Gate evaluation demand = %#v", targets)
 	}
 	metricsSource := database.MetricsSnapshotSource(uuid.Nil)
@@ -337,8 +338,8 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 		DefinitionDigest:   digest,
 		EvaluatorProcessID: evaluatorID,
 		Observation: gate.Observation{
-			State: gate.ObservationBlocking,
-			Value: &observedValue,
+			State:    gate.ObservationBlocking,
+			Evidence: gate.PrometheusSample(observedValue),
 		},
 		EvaluatedAt: assignedAt.Add(-10 * time.Second),
 		ValidUntil:  assignedAt.Add(35 * time.Second),
@@ -350,8 +351,8 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 
 	observedValue = 0
 	observation.Observation = gate.Observation{
-		State: gate.ObservationPassing,
-		Value: &observedValue,
+		State:    gate.ObservationPassing,
+		Evidence: gate.PrometheusSample(observedValue),
 	}
 	observation.EvaluatedAt = assignedAt.Add(-time.Minute)
 	observation.ValidUntil = assignedAt
@@ -371,7 +372,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	requirements := waiting[record.ID]
 	if len(requirements) != 1 || requirements[0].State != gate.RequirementPassing ||
-		requirements[0].Value == nil || *requirements[0].Value != observedValue ||
+		requirements[0].Evidence.PrometheusValue() == nil || *requirements[0].Evidence.PrometheusValue() != observedValue ||
 		requirements[0].EvaluatedAt == nil || !requirements[0].EvaluatedAt.Equal(observation.EvaluatedAt) {
 		t.Errorf("observed Run Gate projection = %#v", requirements)
 	}
@@ -379,8 +380,8 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	releaseRevisionID := uuid.New()
 	releaseCatalog := persistedCatalog("1.14.4")
 	releaseCatalog.Gates[0].Metadata.Title = "Release window"
-	releaseCatalog.Gates[0].Spec.Prometheus.Query = "sum(active_sessions)"
-	releaseCatalog.Gates[0].Spec.Prometheus.Condition.Value = 2
+	releaseCatalog.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition).Query = "sum(active_sessions)"
+	releaseCatalog.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition).Condition.Value = 2
 	refresh := successfulCatalogRefresh(
 		strings.Repeat("c", 40),
 		assignedAt.Add(-5*time.Second),
@@ -400,11 +401,11 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	observedValue = 2
 	observation.CatalogRevisionID = releaseRevisionID
 	observation.DefinitionDigest = digest
-	observation.Observation.Value = &observedValue
+	observation.Observation.Evidence = gate.PrometheusSample(observedValue)
 	if err := database.UpsertGateObservation(ctx, observation); err != nil {
 		t.Fatalf("record changed passing Gate observation: %v", err)
 	}
-	claimed, err := database.ClaimQueuedRun(
+	claimed, err := database.claimQueuedRunAt(
 		ctx,
 		"colo",
 		testSchedulingCapacity(),
@@ -436,7 +437,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
              release_definition,
              release_definition_digest,
              release_evaluator_process_id,
-             release_observed_value,
+             (release_evidence #>> '{prometheus,value}')::double precision,
              release_evaluated_at,
              release_valid_until
          FROM run_gates
@@ -461,7 +462,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	}
 	if !releasedAt.Equal(assignedAt) ||
 		uuid.UUID(releaseCatalogRevisionID.Bytes) != releaseRevisionID ||
-		releasedDefinition != definition ||
+		!reflect.DeepEqual(releasedDefinition, definition) ||
 		releaseDefinitionDigest != digest ||
 		uuid.UUID(releaseEvaluatorID.Bytes) != evaluatorID ||
 		releaseObservedValue != observedValue ||
@@ -480,7 +481,7 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	laterAt := assignedAt.Add(time.Minute)
 	laterRefresh := successfulCatalogRefresh(strings.Repeat("d", 40), laterAt, uuid.New())
 	laterRefresh.Revision.Catalog = persistedCatalog("1.14.5")
-	laterRefresh.Revision.Catalog.Gates[0].Spec.Prometheus.Source = "other"
+	laterRefresh.Revision.Catalog.Gates[0].Spec.Evaluator.(*gate.PrometheusDefinition).Source = "other"
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, laterRefresh); err != nil {
 		t.Fatalf("change query and source after release: %v", err)
 	}
@@ -492,8 +493,8 @@ func TestRunGateReleaseCommitsWithAssignmentIntegration(t *testing.T) {
 	summary := summaries[claimed.ID]
 	if summary.State() != gate.SummaryReleased || len(summary) != 1 ||
 		summary[0].Title != "Release window" || summary[0].ReleasedAt == nil || !summary[0].ReleasedAt.Equal(assignedAt) ||
-		summary[0].Prometheus == nil || *summary[0].Prometheus != definition.Prometheus ||
-		summary[0].Value == nil || *summary[0].Value != observedValue {
+		summary[0].Policy == nil || !reflect.DeepEqual(summary[0].Policy, definition.Evaluator) ||
+		summary[0].Evidence.PrometheusValue() == nil || *summary[0].Evidence.PrometheusValue() != observedValue {
 		t.Errorf("released Run Gate summary = %#v", summary)
 	}
 	if got := summaries[ungated.ID].State(); got != gate.SummaryNotRequired {
@@ -509,7 +510,7 @@ func assertNoGateRunAssignment(
 ) {
 	t.Helper()
 
-	_, err := database.ClaimQueuedRun(
+	_, err := database.claimQueuedRunAt(
 		t.Context(),
 		"colo",
 		testSchedulingCapacity(),

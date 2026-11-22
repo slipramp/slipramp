@@ -647,7 +647,7 @@ func assignmentActionResponse(action catalog.EffectiveAction) api.RunAssignmentA
 
 	return api.RunAssignmentAction{
 		Name:                 api.CatalogName(action.Name),
-		Intent:               optionalString(action.Intent),
+		Intent:               api.ActionIntent(action.Intent),
 		Command:              append([]string(nil), action.Command...),
 		Runtime:              api.CatalogName(action.Runtime),
 		Placement:            api.CatalogName(action.Placement),

@@ -47,9 +47,15 @@ Portable validation accepts unknown but well-formed Placement and Gate source
 names because both belong to a Slipramp installation rather than the
 repository. It reports which referenced Placements and Gate sources were not
 checked.
+Portable validation checks the fields for the registered `spec.evaluator.type`.
+Deployment validation checks that the named source uses the same evaluator type.
 Deployment validation is offline too: the supplied configuration contains
 references and static settings, not Secret values, and the CLI never contacts
 Kubernetes or Prometheus.
+
+Every Action requires an explicit `intent` of `preview`, `reconcile`, or
+`operation`. Portable validation reports a missing or unknown value at
+`spec.actions.<name>.intent`. [Action resolution](./design/catalog.md#action-resolution-and-parameters)
 
 Operator-facing Action and Parameter titles and descriptions and Artifact
 descriptions are bounded catalog values. Action `documentationUrl` must be an

@@ -92,6 +92,7 @@ func testRevision() catalog.Revision {
 					Timeout:   "30m",
 					Actions: map[string]catalog.Action{
 						"preview": {
+							Intent:  "preview",
 							Command: []string{"terraform", "plan"},
 							Parameters: map[string]catalog.Parameter{
 								"mode": {

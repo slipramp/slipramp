@@ -37,3 +37,34 @@ test("queued status presents the derived scheduling reason", () => {
     "Eligible",
   );
 });
+
+test("the queued badge names the first unsatisfied Gate in release order", () => {
+  const lock = {
+    title: "Global lock",
+    type: "lock",
+    key: "lock/global",
+    version: "4",
+    state: "blocking",
+  };
+  const window = {
+    title: "Target window",
+    type: "window",
+    key: "window/target",
+    version: "2",
+    state: "unavailable",
+  };
+  const run = {
+    phase: "queued",
+    review: { state: "approved" },
+    schedulingState: "awaiting-gates",
+    gates: { requirements: [lock, window, { name: "network-idle", state: "unevaluated" }] },
+  };
+  lock.overrides = [{ key: lock.key, version: "3" }];
+  assert.equal(runStatusLabel(run), "Global lock active");
+  lock.overrides.push({ key: lock.key, version: "4" });
+  assert.equal(runStatusLabel(run), "Target window unavailable");
+  window.state = "passing";
+  assert.equal(runStatusLabel(run), "Waiting for network-idle");
+  run.schedulingState = "awaiting-review";
+  assert.equal(runStatusLabel(run), "Awaiting review");
+});

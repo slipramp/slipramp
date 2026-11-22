@@ -22,7 +22,7 @@ typealias ActionParameter = Components.Schemas.Parameter
 typealias ActionParameterValue = Components.Schemas.ParameterValue
 
 enum ClientCompatibilityPolicy {
-    static let productAPIContract = 2
+    static let productAPIContract = 6
 
     static func validate(_ compatibility: ServerCompatibility) throws {
         guard compatibility.productApiContract == productAPIContract else {

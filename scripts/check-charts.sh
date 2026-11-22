@@ -187,8 +187,14 @@ gates_checksum_default=$(grep -E 'checksum/gates:' "$server_render" | awk '{prin
   >"$test_directory/server-gates.yaml"
 gates_checksum_changed=$(grep -E 'checksum/gates:' "$test_directory/server-gates.yaml" | awk '{print $2}')
 test "$gates_checksum_default" != "$gates_checksum_changed" || fail "Gate source change did not change the rollout checksum"
+assert_contains "$test_directory/server-gates.yaml" 'type: "webhook"'
+assert_contains "$test_directory/server-gates.yaml" 'url: "https://policy.example.com/evaluate"'
+assert_contains "$test_directory/server-gates.yaml" 'bearerTokenFile: /var/run/slipramp/gate-sources/change-policy/bearer-token'
+assert_contains "$test_directory/server-gates.yaml" 'secretName: policy-gate'
+assert_contains "$test_directory/server-gates.yaml" 'key: policy-token'
 assert_contains "$test_directory/server-gates.yaml" 'name: SLIPRAMP_GATE_SOURCES_FILE'
 assert_contains "$test_directory/server-gates.yaml" 'kind: GateSourceConfig'
+assert_contains "$test_directory/server-gates.yaml" 'type: "prometheus"'
 assert_contains "$test_directory/server-gates.yaml" 'url: "https://prometheus.monitoring.svc:9090"'
 assert_contains "$test_directory/server-gates.yaml" 'publicUrl: "https://metrics.example.com/prometheus"'
 assert_contains "$test_directory/server-gates.yaml" '/var/run/slipramp/gate-sources/production/bearer-token'
@@ -378,9 +384,19 @@ assert_render_fails "Notification route with unknown event" \
   --set-json 'server.notifications.routes=[{"events":["run.failed"],"destinations":["operations"]}]'
 assert_render_fails "Gate source with incomplete client certificate credentials" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
-  --set-string server.gates.sources.production.prometheus.url=https://prometheus.example.com \
-  --set-string server.gates.sources.production.prometheus.credentials.secretName=prometheus-gate \
-  --set-string server.gates.sources.production.prometheus.credentials.clientCertificateKey=tls.crt
+  --set-string server.gates.sources.production.type=prometheus \
+  --set-string server.gates.sources.production.url=https://prometheus.example.com \
+  --set-string server.gates.sources.production.credentials.secretName=prometheus-gate \
+  --set-string server.gates.sources.production.credentials.clientCertificateKey=tls.crt
+assert_render_fails "Webhook URL with user information" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.gates.sources.policy.type=webhook \
+  --set-string server.gates.sources.policy.url=https://user@policy.example.com/evaluate
+assert_render_fails "Webhook source with a viewer URL" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.gates.sources.policy.type=webhook \
+  --set-string server.gates.sources.policy.url=https://policy.example.com/evaluate \
+  --set-string server.gates.sources.policy.publicUrl=https://policy.example.com
 assert_render_fails "HTTPRoute without a parent reference" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
   --set httpRoute.enabled=true --set-json httpRoute.hostnames='["slipramp.test"]'

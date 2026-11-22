@@ -26,7 +26,7 @@ const (
 	RequirementStopped     RequirementState = "stopped"
 )
 
-// Summary lists requirements in attachment order. Its zero value represents ungated work.
+// Summary orders scope locks and windows before attached repository Gates. Its zero value represents ungated work.
 type Summary []Requirement
 
 func (s Summary) State() SummaryState {
@@ -46,25 +46,31 @@ func (s Summary) State() SummaryState {
 }
 
 type Requirement struct {
-	DefinitionDigest string
-	Overrides        []Override
-	Name             string
-	Title            string
-	State            RequirementState
-	Value            *float64
-	Prometheus       *PrometheusDefinition
-	EvaluatedAt      *time.Time
-	ReleasedAt       *time.Time
-	Diagnostic       string
+	Reference
+	Origin      Origin
+	Scope       Scope
+	Type        string
+	Overrides   []Override
+	Name        string
+	Title       string
+	State       RequirementState
+	Evidence    *Evidence
+	Policy      Policy
+	EvaluatedAt *time.Time
+	ValidUntil  *time.Time
+	ReleasedAt  *time.Time
+	Diagnostic  string
 }
 
 // RequirementEvidence holds the fields needed to show one Gate requirement.
 // After release, its definition and observation come from the stored release evidence.
 type RequirementEvidence struct {
+	RepositoryID       uuid.UUID
+	DefinitionDigest   string
 	Canceled           bool
 	Name               string
 	Title              string
-	Prometheus         *PrometheusDefinition
+	Policy             Policy
 	Observation        Observation
 	EvaluatedAt        *time.Time
 	ReleasedAt         *time.Time
@@ -73,37 +79,52 @@ type RequirementEvidence struct {
 }
 
 func (e RequirementEvidence) RequirementAt(processID uuid.UUID, at time.Time) Requirement {
-	requirement := Requirement{Name: e.Name, Title: e.Title, Prometheus: e.Prometheus}
+	requirement := Requirement{
+		Name: e.Name, Title: e.Title, Origin: RepositoryOrigin,
+		Scope: Scope{Kind: RepositoryScope, ID: e.RepositoryID},
+		Key:   RepositoryKey(e.Name),
+	}
+	if e.Canceled && e.ReleasedAt == nil {
+		requirement.State = RequirementStopped
+		return requirement
+	}
+	if e.Policy != nil {
+		requirement.Policy = e.Policy
+		requirement.Type = e.Policy.Type()
+		requirement.Version = Version(e.DefinitionDigest)
+	}
 	if e.ReleasedAt != nil {
 		requirement.State = RequirementReleased
-		requirement.Value = e.Observation.Value
+		requirement.Evidence = e.Observation.Evidence
 		requirement.EvaluatedAt = e.EvaluatedAt
+		if e.EvaluatedAt != nil {
+			requirement.ValidUntil = &e.ValidUntil
+		}
 		requirement.ReleasedAt = e.ReleasedAt
 		return requirement
 	}
 
-	if e.Canceled {
-		return Requirement{Name: e.Name, Title: e.Title, State: RequirementStopped}
-	}
-
-	switch {
-	case e.Prometheus == nil:
+	if e.Policy == nil {
 		requirement.State = RequirementUnavailable
 		requirement.Diagnostic = "The Gate definition is not available in the active catalog."
-	case e.EvaluatedAt == nil || e.EvaluatorProcessID != processID:
+		return requirement
+	}
+	if e.EvaluatedAt == nil || e.EvaluatorProcessID != processID {
 		requirement.State = RequirementUnevaluated
+		return requirement
+	}
+	requirement.EvaluatedAt = e.EvaluatedAt
+	requirement.ValidUntil = &e.ValidUntil
+	switch {
 	case e.EvaluatedAt.After(at):
 		requirement.State = RequirementUnavailable
-		requirement.EvaluatedAt = e.EvaluatedAt
 		requirement.Diagnostic = "The latest Gate observation is in the future."
 	case !e.ValidUntil.After(at):
 		requirement.State = RequirementUnavailable
-		requirement.EvaluatedAt = e.EvaluatedAt
 		requirement.Diagnostic = "The latest Gate observation is stale."
 	default:
 		requirement.State = RequirementState(e.Observation.State)
-		requirement.EvaluatedAt = e.EvaluatedAt
-		requirement.Value = e.Observation.Value
+		requirement.Evidence = e.Observation.Evidence
 		requirement.Diagnostic = e.Observation.Diagnostic
 	}
 

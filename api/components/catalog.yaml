@@ -76,7 +76,7 @@ CatalogExplanation:
     actionDocumentationUrl:
       $ref: "#/ExplainedString"
     intent:
-      $ref: "#/ExplainedString"
+      $ref: "#/ExplainedActionIntent"
     process:
       $ref: "#/ProcessExplanation"
     parameters:
@@ -170,6 +170,25 @@ ExplainedString:
   properties:
     value:
       type: string
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedActionIntent:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ActionIntent"
     resolved:
       type: boolean
     provenance:
@@ -1056,9 +1075,15 @@ TargetSpec:
       additionalProperties:
         $ref: "#/Action"
 
+ActionIntent:
+  type: string
+  enum: [preview, reconcile, operation]
+  description: Declared purpose of the Action, frozen when a Run is created.
+
 Action:
   type: object
   required:
+    - intent
     - command
   properties:
     title:
@@ -1077,8 +1102,7 @@ Action:
       minLength: 1
       maxLength: 2048
     intent:
-      type: string
-      minLength: 1
+      $ref: "#/ActionIntent"
     command:
       type: array
       minItems: 1

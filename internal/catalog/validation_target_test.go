@@ -511,7 +511,6 @@ func TestValidateRejectsActionRequestAbovePlacementLimit(t *testing.T) {
 
 func addPreviewAndApply(input *catalog.Catalog) {
 	preview := input.Targets[0].Spec.Actions["preview"]
-	preview.Intent = "preview"
 	preview.Artifacts = map[string]catalog.Artifact{
 		"plan": {
 			Path:      "/slipramp/artifacts/plan.tfplan",

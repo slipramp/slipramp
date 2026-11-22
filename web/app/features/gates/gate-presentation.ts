@@ -1,4 +1,9 @@
-import type { GateOperator, GateRequirement, GateSummaryState } from "~/api/generated";
+import type {
+  GateEvidence,
+  GateOperator,
+  GateRequirement,
+  GateSummaryState,
+} from "~/api/generated";
 
 type BadgePresentation = { label: string; color: string };
 
@@ -27,7 +32,20 @@ const operatorLabels = {
   "greater-than-or-equal": "Greater than or equal to",
 } satisfies Record<GateOperator, string>;
 
-export function gateConditionLabel(requirement: Pick<GateRequirement, "operator" | "threshold">) {
+export function gateEvidenceLabel(evidence: GateEvidence) {
+  if ("webhook" in evidence) return `${evidence.webhook.code} · ${evidence.webhook.message}`;
+  if ("window" in evidence)
+    return `${evidence.window.observation.state} · ${evidence.window.timeZone}`;
+  if ("lock" in evidence) return `${evidence.lock.reason} · ${evidence.lock.actor.displayName}`;
+  return String(evidence.prometheus.value);
+}
+
+export function gateConditionLabel(
+  requirement: Pick<GateRequirement, "operator" | "threshold" | "type">,
+) {
+  if (requirement.type === "lock") return "Lock cleared, expired, or overridden";
+  if (requirement.type === "window") return "Open weekly window";
+  if (requirement.type === "webhook") return "Passing webhook decision";
   if (requirement.operator === undefined || requirement.threshold === undefined) {
     return "Definition unavailable";
   }
@@ -37,15 +55,37 @@ export function gateConditionLabel(requirement: Pick<GateRequirement, "operator"
 
 export function hasMatchingOverride(requirement: GateRequirement) {
   const latest = requirement.overrides?.at(-1);
-  return latest !== undefined && latest.definitionDigest === requirement.definitionDigest;
+  return (
+    Boolean(requirement.version) &&
+    latest?.key === requirement.key &&
+    latest?.version === requirement.version
+  );
 }
 
 export function gateCanBeOverridden(requirement: GateRequirement) {
   return (
-    Boolean(requirement.definitionDigest) &&
+    Boolean(requirement.version) &&
     !hasMatchingOverride(requirement) &&
     (requirement.state === "blocking" ||
       requirement.state === "unavailable" ||
       requirement.state === "unevaluated")
   );
+}
+
+export function firstBlockingGate(requirements: readonly GateRequirement[]) {
+  return requirements.find(
+    (gate) =>
+      !hasMatchingOverride(gate) &&
+      (gate.state === "blocking" || gate.state === "unavailable" || gate.state === "unevaluated"),
+  );
+}
+
+export function gateWaitLabel(requirements: readonly GateRequirement[]) {
+  const gate = firstBlockingGate(requirements);
+  if (!gate) return "Waiting for gates";
+  const title = gate.title ?? gate.name;
+  if (gate.type === "lock") return `${title} active`;
+  if (gate.type === "window")
+    return `${title} ${gate.state === "blocking" ? "closed" : "unavailable"}`;
+  return `Waiting for ${title}`;
 }

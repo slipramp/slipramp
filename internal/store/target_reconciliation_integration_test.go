@@ -190,7 +190,7 @@ func reconciliationCatalog() catalog.Catalog {
 	preview := target.Spec.Actions["preview"]
 	preview.Intent = "reconcile"
 	target.Spec.Actions["preview"] = preview
-	target.Spec.Actions["sync"] = catalog.Action{Command: []string{"terraform", "apply"}}
+	target.Spec.Actions["sync"] = catalog.Action{Intent: "reconcile", Command: []string{"terraform", "apply"}}
 
 	return result
 }
@@ -224,7 +224,7 @@ func createReconciliationRun(
 		ClusterName:              "colo",
 		Source:                   run.Source{Type: run.SourceTypeManual},
 		RequestDigest:            strings.Repeat("e", 64),
-		Snapshot:                 run.Snapshot{},
+		Snapshot:                 run.Snapshot{Action: catalog.EffectiveAction{Name: actionName, Intent: "reconcile"}},
 		CreatedAt:                createdAt,
 	}
 	created, err := database.CreateRun(ctx, record, nil)
@@ -243,7 +243,7 @@ func claimReconciliationRun(
 	assignedAt time.Time,
 ) {
 	t.Helper()
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt)
+	claimed, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt)
 	if err != nil {
 		t.Fatalf("claim Run %s: %v", wantRunID, err)
 	}

@@ -4,7 +4,8 @@ metadata:
   name: maintenance-window-open
   title: Infrastructure maintenance window is open
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: slipramp_example_maintenance_window_open
     condition:

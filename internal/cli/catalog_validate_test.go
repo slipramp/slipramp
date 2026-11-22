@@ -109,7 +109,8 @@ kind: Gate
 metadata:
   name: maintenance-safe
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: maintenance_active
     condition: {operator: equal, value: 0}
@@ -143,6 +144,31 @@ spec:
 	if code != cli.ExitInvalid || stderr != "" ||
 		!strings.Contains(output, "catalog.gate.source-not-found") {
 		t.Fatalf("missing source exit = %d, output = %q, stderr = %q", code, output, stderr)
+	}
+}
+
+func TestCatalogValidateWebhookSourceType(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	repo := writeRepository(t, dir, validCatalog+`
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Gate
+metadata: {name: approval}
+spec:
+  evaluator: {type: webhook, source: homelab, input: {policy: deploy}}
+`)
+	for _, tc := range []struct {
+		sourceType string
+		want       int
+	}{
+		{"webhook", cli.ExitValid}, {"prometheus", cli.ExitInvalid},
+	} {
+		writeFile(t, filepath.Join(dir, "sources.yaml"), strings.Replace(validGateSources, "type: prometheus", "type: "+tc.sourceType, 1))
+		code, output, stderr := runApp(t, dir, "catalog", "validate", "--gate-sources", "sources.yaml", filepath.Base(repo))
+		if code != tc.want || stderr != "" || (code == cli.ExitInvalid && !strings.Contains(output, "catalog.gate.source-type-mismatch")) {
+			t.Fatalf("%s source: exit %d, output %q, stderr %q", tc.sourceType, code, output, stderr)
+		}
 	}
 }
 
@@ -207,6 +233,7 @@ spec:
   placement: test
   actions:
     inspect:
+      intent: preview
       command: [inspect]
 `
 
@@ -215,6 +242,6 @@ apiVersion: slipramp.com/v1alpha1
 kind: GateSourceConfig
 sources:
   homelab:
-    prometheus:
-      url: http://prometheus:9090
+    type: prometheus
+    url: http://prometheus:9090
 `

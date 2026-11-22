@@ -909,6 +909,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: The stored Action definition lacks a valid intent.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '500':
           description: The active catalog could not be loaded.
           content:
@@ -976,8 +982,803 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: The stored Action definition lacks a valid intent.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '500':
           description: The Action explanation could not be resolved.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/global:
+    get:
+      operationId: getGlobalGateScope
+      summary: Inspect the global Gate scope
+      description: Returns current lock and window policies, their effective states, and recent changes.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/global/lock:
+    put:
+      operationId: lockGlobalGateScope
+      summary: Lock the global Gate scope
+      description: Records an operator hold. An identical request from its creator returns the existing active lock.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServerGateLockRequest'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: A different lock is active.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: unlockGlobalGateScope
+      summary: Unlock the global Gate scope
+      description: Clears the current hold. Unlocking an inactive scope is idempotent.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/global/window:
+    put:
+      operationId: setGlobalGateWindow
+      summary: Set the weekly window for the global Gate scope
+      description: Every accepted update starts a new window version.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeeklyWindow'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: removeGlobalGateWindow
+      summary: Remove the weekly window for the global Gate scope
+      description: Removing an absent window returns the current scope.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/targets/{targetId}:
+    parameters:
+      - name: targetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getTargetGateScope
+      summary: Inspect the Target Gate scope
+      description: Returns current lock and window policies, their effective states, and recent changes.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/targets/{targetId}/lock:
+    parameters:
+      - name: targetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: lockTargetGateScope
+      summary: Lock the Target Gate scope
+      description: Records an operator hold. An identical request from its creator returns the existing active lock.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServerGateLockRequest'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: A different lock is active.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: unlockTargetGateScope
+      summary: Unlock the Target Gate scope
+      description: Clears the current hold. Unlocking an inactive scope is idempotent.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/targets/{targetId}/window:
+    parameters:
+      - name: targetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: setTargetGateWindow
+      summary: Set the weekly window for the Target Gate scope
+      description: Every accepted update starts a new window version.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeeklyWindow'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: removeTargetGateWindow
+      summary: Remove the weekly window for the Target Gate scope
+      description: Removing an absent window returns the current scope.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/stages/{stageId}:
+    parameters:
+      - name: stageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getStageGateScope
+      summary: Inspect the Stage Gate scope
+      description: Returns current lock and window policies, their effective states, and recent changes.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/stages/{stageId}/lock:
+    parameters:
+      - name: stageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: lockStageGateScope
+      summary: Lock the Stage Gate scope
+      description: Records an operator hold. An identical request from its creator returns the existing active lock.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServerGateLockRequest'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: A different lock is active.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: unlockStageGateScope
+      summary: Unlock the Stage Gate scope
+      description: Clears the current hold. Unlocking an inactive scope is idempotent.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/gate-scopes/stages/{stageId}/window:
+    parameters:
+      - name: stageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: setStageGateWindow
+      summary: Set the weekly window for the Stage Gate scope
+      description: Every accepted update starts a new window version.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeeklyWindow'
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The Server could not complete the operation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      operationId: removeStageGateWindow
+      summary: Remove the weekly window for the Stage Gate scope
+      description: Removing an absent window returns the current scope.
+      tags:
+        - Gates
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      responses:
+        '200':
+          description: Current scope and recent changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerGateScope'
+        '400':
+          description: Invalid scope identity or policy request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Product authentication is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The principal lacks the required role or credential scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The scope does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not complete the operation.
           content:
             application/problem+json:
               schema:
@@ -1120,6 +1921,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '405':
           description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The stored Action definition lacks a valid intent.
           content:
             application/problem+json:
               schema:
@@ -2447,8 +3254,60 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-  /api/v1/runs/{runId}/gates/{gateName}/override:
-    put:
+  /api/v1/runs/{runId}/gate-overrides:
+    get:
+      operationId: listRunGateOverrides
+      summary: Inspect eligible Gates and override history for a Run
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Runs
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current override choices and durable decision history for the subject.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateOverrideCollection'
+        '400':
+          description: Invalid subject identifier.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid product credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Read permission is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The subject does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not load the overrides.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
       operationId: overrideRunGate
       summary: Override one Gate for a waiting Run
       security:
@@ -2463,11 +3322,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: gateName
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/CatalogName'
       requestBody:
         required: true
         content:
@@ -2475,8 +3329,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GateOverrideRequest'
       responses:
-        '204':
-          description: The override decision has been recorded.
+        '200':
+          description: The affected Gate, including its recorded override history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateRequirement'
         '400':
           description: The override request is invalid.
           content:
@@ -2496,7 +3354,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: The requested Gate attachment does not exist.
+          description: The requested subject does not exist.
           content:
             application/problem+json:
               schema:
@@ -4143,8 +5001,60 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
-  /api/v1/promotions/{promotionId}/gates/{gateName}/override:
-    put:
+  /api/v1/promotions/{promotionId}/gate-overrides:
+    get:
+      operationId: listPromotionGateOverrides
+      summary: Inspect eligible Gates and override history for a Promotion
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Promotions
+      parameters:
+        - name: promotionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current override choices and durable decision history for the subject.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateOverrideCollection'
+        '400':
+          description: Invalid subject identifier.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid product credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Read permission is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The subject does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The Server could not load the overrides.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
       operationId: overridePromotionGate
       summary: Override one Gate for a waiting Promotion
       security:
@@ -4159,11 +5069,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: gateName
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/CatalogName'
       requestBody:
         required: true
         content:
@@ -4171,8 +5076,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GateOverrideRequest'
       responses:
-        '204':
-          description: The override decision has been recorded.
+        '200':
+          description: The affected Gate, including its recorded override history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateRequirement'
         '400':
           description: The override request is invalid.
           content:
@@ -4192,7 +5101,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: The requested Gate attachment does not exist.
+          description: The requested subject does not exist.
           content:
             application/problem+json:
               schema:
@@ -4791,8 +5700,8 @@ components:
           maxLength: 128
         productApiContract:
           type: integer
-          minimum: 2
-          maximum: 2
+          minimum: 6
+          maximum: 6
         authenticationMethods:
           type: array
           minItems: 1
@@ -5708,7 +6617,7 @@ components:
         actionDocumentationUrl:
           $ref: '#/components/schemas/ExplainedString'
         intent:
-          $ref: '#/components/schemas/ExplainedString'
+          $ref: '#/components/schemas/ExplainedActionIntent'
         process:
           $ref: '#/components/schemas/ProcessExplanation'
         parameters:
@@ -6432,7 +7341,7 @@ components:
             - RunSchedulingStateClusterUnreachable
             - RunSchedulingStateClusterCapacity
             - RunSchedulingStateEligible
-          description: Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+          description: Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
         blockingRunId:
           type: string
           format: uuid
@@ -6658,6 +7567,63 @@ components:
           minLength: 1
           maxLength: 200
           description: Immutable display-name snapshot captured with the operation.
+    ServerGateScope:
+      description: Current operator policy. Mutating Run assignment enforces global and Target policies. Promotion release enforces global and destination Stage policies before automatic creation delivery or callback approval.
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - checkedAt
+        - lockVersion
+        - events
+        - windowVersion
+        - windowEvents
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable identity of the Server Gate scope.
+        kind:
+          type: string
+          enum:
+            - global
+            - target
+            - stage
+          x-enum-varnames:
+            - GlobalGateScope
+            - TargetGateScope
+            - StageGateScope
+        targetId:
+          type: string
+          format: uuid
+        stageId:
+          type: string
+          format: uuid
+        checkedAt:
+          type: string
+          format: date-time
+          description: Instant used to check lock expiry and window freshness.
+        windowVersion:
+          $ref: '#/components/schemas/GateVersion'
+        window:
+          $ref: '#/components/schemas/ScopeWindow'
+        windowEvents:
+          type: array
+          description: Most recent window updates and removals, newest first.
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ServerWindowEvent'
+        lockVersion:
+          $ref: '#/components/schemas/GateVersion'
+        lock:
+          $ref: '#/components/schemas/ServerGateLock'
+        events:
+          type: array
+          description: Most recent lock changes, newest first. Expiry is recorded on the lock event.
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ServerGateLockEvent'
     GateSummary:
       type: object
       required:
@@ -6670,7 +7636,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GateRequirement'
-          description: Required Gates in their stable attachment order.
+          description: Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
     GateSummaryState:
       type: string
       description: Stopped means cancellation ended the wait before Gate release.
@@ -6682,7 +7648,10 @@ components:
     GateRequirement:
       type: object
       required:
+        - key
         - name
+        - origin
+        - scope
         - state
       properties:
         name:
@@ -6696,19 +7665,30 @@ components:
           type: string
           format: uri
           description: Opens the active or released PromQL in the configured viewer at the observation time, when available.
-        definitionDigest:
+        key:
+          $ref: '#/components/schemas/GateKey'
+        version:
+          $ref: '#/components/schemas/GateVersion'
+        origin:
           type: string
-          pattern: ^[0-9a-f]{64}$
-          description: Digest of the active or released Gate definition.
+          enum:
+            - repository
+            - server
+          x-enum-varnames:
+            - GateOriginRepository
+            - GateOriginServer
+        scope:
+          $ref: '#/components/schemas/GateScope'
+        type:
+          type: string
+          description: Repository evaluator type, lock, or window for the current or released policy.
         overrides:
           type: array
-          description: Operator decisions in chronological order. The latest applies when its digest matches the definition.
+          description: Operator decisions in chronological order. The latest applies when its key and version match the Gate.
           items:
             $ref: '#/components/schemas/GateOverride'
-        value:
-          type: number
-          format: double
-          description: Finite observed value from current or immutable release evidence.
+        evidence:
+          $ref: '#/components/schemas/GateEvidence'
         operator:
           $ref: '#/components/schemas/GateOperator'
         threshold:
@@ -6718,6 +7698,10 @@ components:
         evaluatedAt:
           type: string
           format: date-time
+        validUntil:
+          type: string
+          format: date-time
+          description: Exclusive end of the displayed observation’s validity, frozen at release.
         releasedAt:
           type: string
           format: date-time
@@ -6739,14 +7723,17 @@ components:
     GateOverride:
       type: object
       required:
-        - definitionDigest
+        - key
+        - version
         - reason
         - actor
         - recordedAt
         - observedState
       properties:
-        definitionDigest:
-          type: string
+        key:
+          $ref: '#/components/schemas/GateKey'
+        version:
+          $ref: '#/components/schemas/GateVersion'
         reason:
           type: string
         actor:
@@ -6756,9 +7743,8 @@ components:
           format: date-time
         observedState:
           $ref: '#/components/schemas/GateRequirementState'
-        observedValue:
-          type: number
-          format: double
+        observedEvidence:
+          $ref: '#/components/schemas/GateEvidence'
         evaluatedAt:
           type: string
           format: date-time
@@ -6768,12 +7754,14 @@ components:
       type: object
       additionalProperties: false
       required:
-        - definitionDigest
+        - key
+        - version
         - reason
       properties:
-        definitionDigest:
-          type: string
-          pattern: ^[0-9a-f]{64}$
+        key:
+          $ref: '#/components/schemas/GateKey'
+        version:
+          $ref: '#/components/schemas/GateVersion'
         reason:
           type: string
           minLength: 1
@@ -8479,6 +9467,13 @@ components:
           additionalProperties:
             type: string
             minLength: 1
+    ActionIntent:
+      type: string
+      enum:
+        - preview
+        - reconcile
+        - operation
+      description: Declared purpose of the Action, frozen when a Run is created.
     ParameterArgument:
       type: object
       properties:
@@ -8618,6 +9613,7 @@ components:
     Action:
       type: object
       required:
+        - intent
         - command
       properties:
         title:
@@ -8636,8 +9632,7 @@ components:
           minLength: 1
           maxLength: 2048
         intent:
-          type: string
-          minLength: 1
+          $ref: '#/components/schemas/ActionIntent'
         command:
           type: array
           minItems: 1
@@ -8869,6 +9864,24 @@ components:
       properties:
         value:
           type: string
+        resolved:
+          type: boolean
+        provenance:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExplanationOrigin'
+        unresolvedReason:
+          type: string
+    ExplainedActionIntent:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+        - resolved
+        - provenance
+      properties:
+        value:
+          $ref: '#/components/schemas/ActionIntent'
         resolved:
           type: boolean
         provenance:
@@ -9302,6 +10315,216 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CatalogRelatedLocation'
+    GateVersion:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+    WeeklyWindow:
+      x-go-type: gate.WeeklyWindow
+      x-go-type-import:
+        name: gate
+        path: github.com/slipramp/slipramp/internal/gate
+      type: object
+      additionalProperties: false
+      required:
+        - timeZone
+        - weekly
+      properties:
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: IANA time zone name.
+        weekly:
+          type: array
+          minItems: 1
+          maxItems: 128
+          description: At most 128 day intervals after expanding the days. Split overnight intervals at midnight.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - days
+              - start
+              - end
+            properties:
+              days:
+                type: array
+                minItems: 1
+                maxItems: 7
+                items:
+                  type: string
+                  enum:
+                    - monday
+                    - tuesday
+                    - wednesday
+                    - thursday
+                    - friday
+                    - saturday
+                    - sunday
+              start:
+                type: string
+                pattern: ^(?:[01][0-9]|2[0-3]):[0-5][0-9]$
+              end:
+                type: string
+                pattern: ^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]|24:00)$
+    WindowObservation:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+        - evaluatedAt
+        - validUntil
+      properties:
+        state:
+          type: string
+          enum:
+            - passing
+            - blocking
+          x-enum-varnames:
+            - WindowObservationPassing
+            - WindowObservationBlocking
+        evaluatedAt:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+          description: Exclusive observation expiry.
+        intervalStart:
+          type: string
+          format: date-time
+        nextTransition:
+          type: string
+          format: date-time
+    ScopeWindow:
+      x-go-type: gate.ScopeWindow
+      x-go-type-import:
+        name: gate
+        path: github.com/slipramp/slipramp/internal/gate
+      type: object
+      additionalProperties: false
+      required:
+        - definition
+        - digest
+        - state
+        - observation
+      properties:
+        definition:
+          $ref: '#/components/schemas/WeeklyWindow'
+        digest:
+          type: string
+        state:
+          type: string
+          enum:
+            - passing
+            - blocking
+            - unavailable
+          description: Effective state at checkedAt. An expired or future observation is unavailable.
+        observation:
+          $ref: '#/components/schemas/WindowObservation'
+    ServerWindowEvent:
+      type: object
+      required:
+        - action
+        - priorVersion
+        - version
+        - actor
+        - recordedAt
+      properties:
+        action:
+          type: string
+          enum:
+            - set
+            - remove
+          x-enum-varnames:
+            - ServerGateWindowSet
+            - ServerGateWindowRemoved
+        priorVersion:
+          $ref: '#/components/schemas/GateVersion'
+        version:
+          $ref: '#/components/schemas/GateVersion'
+        actor:
+          $ref: '#/components/schemas/ActorSnapshot'
+        recordedAt:
+          type: string
+          format: date-time
+        definition:
+          $ref: '#/components/schemas/WeeklyWindow'
+        digest:
+          type: string
+    ServerGateLock:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+        - actor
+        - createdAt
+      properties:
+        reason:
+          type: string
+        actor:
+          $ref: '#/components/schemas/ActorSnapshot'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    ServerGateLockEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - priorVersion
+        - version
+        - reason
+        - actor
+        - recordedAt
+      properties:
+        action:
+          type: string
+          enum:
+            - lock
+            - unlock
+          x-enum-varnames:
+            - ServerGateLockCreated
+            - ServerGateLockReleased
+        priorVersion:
+          $ref: '#/components/schemas/GateVersion'
+        version:
+          $ref: '#/components/schemas/GateVersion'
+        reason:
+          type: string
+          description: Reason supplied when the lock was created.
+        actor:
+          $ref: '#/components/schemas/ActorSnapshot'
+        recordedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiry originally requested on a lock event.
+    ServerGateLockRequest:
+      x-go-type: gate.LockRequest
+      x-go-type-import:
+        name: gate
+        path: github.com/slipramp/slipramp/internal/gate
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        expiresAt:
+          type: string
+          format: date-time
+          description: Exclusive end of the hold. Omit for an indefinite lock.
     PlacementResourceRequirements:
       type: object
       additionalProperties: false
@@ -9481,6 +10704,7 @@ components:
       type: object
       required:
         - name
+        - intent
         - command
         - runtime
         - placement
@@ -9488,8 +10712,7 @@ components:
         name:
           $ref: '#/components/schemas/CatalogName'
         intent:
-          type: string
-          minLength: 1
+          $ref: '#/components/schemas/ActionIntent'
         command:
           type: array
           minItems: 1
@@ -9869,6 +11092,107 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+    GateKey:
+      type: string
+      description: Stable logical key within the subject.
+      pattern: ^(?:repository/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?|(?:lock|window)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$
+    GateScope:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+      properties:
+        kind:
+          type: string
+          enum:
+            - repository
+            - global
+            - target
+            - stage
+          x-enum-varnames:
+            - GateScopeRepository
+            - GateScopeGlobal
+            - GateScopeTarget
+            - GateScopeStage
+        id:
+          type: string
+          format: uuid
+          description: Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+    PrometheusGateEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - prometheus
+      properties:
+        prometheus:
+          type: object
+          additionalProperties: false
+          required:
+            - value
+          properties:
+            value:
+              type: number
+              format: double
+              description: Finite sample from the Prometheus query.
+    WebhookGateEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - webhook
+      properties:
+        webhook:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              pattern: ^[a-z0-9][a-z0-9._-]{0,63}$
+            message:
+              type: string
+              minLength: 1
+              maxLength: 256
+    LockGateEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - lock
+      properties:
+        lock:
+          $ref: '#/components/schemas/ServerGateLock'
+    WindowGateEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - window
+      properties:
+        window:
+          type: object
+          additionalProperties: false
+          required:
+            - timeZone
+            - digest
+            - observation
+          properties:
+            timeZone:
+              type: string
+            digest:
+              type: string
+            observation:
+              $ref: '#/components/schemas/WindowObservation'
+    GateEvidence:
+      x-go-type: gate.Evidence
+      x-go-type-import:
+        name: gate
+        path: github.com/slipramp/slipramp/internal/gate
+      oneOf:
+        - $ref: '#/components/schemas/PrometheusGateEvidence'
+        - $ref: '#/components/schemas/WebhookGateEvidence'
+        - $ref: '#/components/schemas/LockGateEvidence'
+        - $ref: '#/components/schemas/WindowGateEvidence'
     RunArtifactInput:
       type: object
       required:
@@ -9953,6 +11277,22 @@ components:
           description: Time the first operator request was recorded.
         requestedBy:
           $ref: '#/components/schemas/ActorSnapshot'
+    GateOverrideCollection:
+      type: object
+      required:
+        - eligible
+        - decisions
+      properties:
+        eligible:
+          type: array
+          description: Gates that can receive a new override on this waiting subject. Scope locks precede repository attachments.
+          items:
+            $ref: '#/components/schemas/GateRequirement'
+        decisions:
+          type: array
+          description: Recorded decisions in chronological order, including superseded decisions and overrides of cleared locks.
+          items:
+            $ref: '#/components/schemas/GateOverride'
     RunReviewDecision:
       type: string
       enum:
@@ -10036,6 +11376,7 @@ components:
         - slipramp:read
         - slipramp:runs:write
         - slipramp:runs:review
+        - slipramp:gates:manage
         - slipramp:runs:override-gates
         - slipramp:promotions:override-gates
         - slipramp:inbox:write
@@ -10080,7 +11421,7 @@ components:
           pattern: ^kargo/promotion/.+$
     KargoPromotionStatus:
       type: string
-      description: Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
+      description: Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved and is waiting for its applicable global, Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
       enum:
         - creating
         - preparing

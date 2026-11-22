@@ -37,7 +37,7 @@ func TestRunCancellationRaceWithAssignmentIntegration(t *testing.T) {
 	}()
 	go func() {
 		<-start
-		result, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, at)
+		result, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, at)
 		claimed <- claimResult{record: result, err: err}
 	}()
 	close(start)
@@ -76,7 +76,7 @@ func TestConcurrentRunCancellationRequestsIntegration(t *testing.T) {
 
 	record := singleCancellationTestRun(t, ctx, database)
 	assignedAt := record.CreatedAt.Add(time.Minute)
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
 		t.Fatalf("claim Run: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestRunCancellationRaceWithTerminalObservationIntegration(t *testing.T) {
 
 	record := singleCancellationTestRun(t, ctx, database)
 	assignedAt := record.CreatedAt.Add(time.Minute)
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt); err != nil {
 		t.Fatalf("claim Run: %v", err)
 	}
 
@@ -215,7 +215,7 @@ func TestActiveRunCancellationSurvivesDatabaseReopenIntegration(t *testing.T) {
 
 	record := singleCancellationTestRun(t, ctx, database)
 	assignedAt := record.CreatedAt.Add(time.Minute)
-	assigned, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt)
+	assigned, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, assignedAt)
 	if err != nil {
 		t.Fatalf("claim Run: %v", err)
 	}

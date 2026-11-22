@@ -115,11 +115,19 @@ func (s TargetSpec) EffectiveMaximumActiveRuns() int32 {
 	return *s.MaximumActiveRuns
 }
 
+type ActionIntent string
+
+const (
+	ActionIntentPreview   ActionIntent = "preview"
+	ActionIntentReconcile ActionIntent = "reconcile"
+	ActionIntentOperation ActionIntent = "operation"
+)
+
 type Action struct {
 	Title            string               `json:"title,omitempty"            yaml:"title,omitempty"`
 	Description      string               `json:"description,omitempty"      yaml:"description,omitempty"`
 	DocumentationURL string               `json:"documentationUrl,omitempty" yaml:"documentationUrl,omitempty"`
-	Intent           string               `json:"intent,omitempty"           yaml:"intent,omitempty"`
+	Intent           ActionIntent         `json:"intent"                     yaml:"intent"`
 	Command          []string             `json:"command"                    yaml:"command"`
 	Runtime          string               `json:"runtime,omitempty"          yaml:"runtime,omitempty"`
 	Placement        string               `json:"placement,omitempty"        yaml:"placement,omitempty"`

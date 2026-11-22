@@ -24,6 +24,7 @@ const (
 	RoleViewer   Role = "viewer"
 
 	ScopeRead                    Scope = "slipramp:read"
+	ScopeGatesManage             Scope = "slipramp:gates:manage"
 	ScopeRunsWrite               Scope = "slipramp:runs:write"
 	ScopeRunsOverrideGates       Scope = "slipramp:runs:override-gates"
 	ScopePromotionsOverrideGates Scope = "slipramp:promotions:override-gates"
@@ -242,6 +243,7 @@ func (s Scope) valid() bool {
 	switch s {
 	case ScopeRead,
 		ScopeRunsWrite,
+		ScopeGatesManage,
 		ScopeRunsOverrideGates,
 		ScopePromotionsOverrideGates,
 		ScopeRunsReview,

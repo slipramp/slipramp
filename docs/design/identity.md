@@ -74,6 +74,8 @@ is no bootstrap API key or anonymous product bypass.
 | Read product state, history, logs, and non-sensitive Artifact contents | viewer | `slipramp:read` |
 | Create, rerun, or cancel Runs | operator | `slipramp:runs:write` |
 | Decide Run reviews | operator | `slipramp:runs:review` |
+| Manage a Target or Stage Gate lock or window | operator | `slipramp:gates:manage` |
+| Manage the global Gate lock or window | admin | `slipramp:gates:manage` |
 | Override one Run Gate | operator | `slipramp:runs:override-gates` |
 | Override one Promotion Gate | operator | `slipramp:promotions:override-gates` |
 | Acknowledge Inbox problems | operator | `slipramp:inbox:write` |
@@ -85,6 +87,10 @@ Scopes intersect with the Principal's role and do not imply one another.
 `slipramp:admin` grants all scopes only when the Principal role also authorizes
 the operation. Sensitive Artifact contents require operator or administrator
 role in addition to read scope.
+
+The Run and Promotion override permissions cover an applicable global or local
+lock or window on that one subject. Changing the policy for everyone requires
+the scope's Gate-management permission.
 
 Historical Principals and keys are disabled or revoked rather than deleted.
 API-key rotation is create, update clients, then revoke.

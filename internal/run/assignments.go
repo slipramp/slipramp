@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,7 +16,6 @@ type AssignmentStore interface {
 		clusterName string,
 		capacity SchedulingCapacity,
 		gateEvaluatorProcessID uuid.UUID,
-		claimedAt time.Time,
 	) (Run, error)
 }
 
@@ -43,7 +41,6 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		clusterName,
 		s.AssignmentCapacity(clusterName),
 		s.gateEvaluatorProcessID,
-		s.now().UTC(),
 	)
 	if err != nil {
 		if errors.Is(err, ErrNoRunAssignment) {

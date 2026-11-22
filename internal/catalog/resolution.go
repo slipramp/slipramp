@@ -10,7 +10,7 @@ type EffectiveAction struct {
 	Title            string
 	Description      string
 	DocumentationURL string
-	Intent           string
+	Intent           ActionIntent
 	Command          []string
 	Runtime          string
 	Placement        string

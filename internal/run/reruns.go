@@ -63,6 +63,9 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 		}
 	}
 
+	if err := original.Snapshot.Action.Intent.Validate(original.ActionName); err != nil {
+		return Run{}, fmt.Errorf("%w: frozen %w", ErrInvalidRequest, err)
+	}
 	createdBy, err := actorSnapshot(request.Actor)
 	if err != nil {
 		return Run{}, err

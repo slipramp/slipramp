@@ -114,18 +114,24 @@ server:
   gates:
     sources:
       production:
-        prometheus:
-          url: https://prometheus.monitoring.svc:9090
-          publicUrl: https://metrics.example.com/prometheus
-          evaluationInterval: 15s
-          timeout: 5s
-          maximumConcurrency: 4
-          credentials:
-            secretName: prometheus-gate
-            bearerTokenKey: bearer-token
-            caKey: ca.crt
-            clientCertificateKey: tls.crt
-            clientKeyKey: tls.key
+        type: prometheus
+        url: https://prometheus.monitoring.svc:9090
+        publicUrl: https://metrics.example.com/prometheus
+        evaluationInterval: 15s
+        timeout: 5s
+        maximumConcurrency: 4
+        credentials:
+          secretName: prometheus-gate
+          bearerTokenKey: bearer-token
+          caKey: ca.crt
+          clientCertificateKey: tls.crt
+          clientKeyKey: tls.key
+      change-policy:
+        type: webhook
+        url: https://policy.example.com/slipramp/evaluate
+        credentials:
+          secretName: change-policy
+          bearerTokenKey: token
 ```
 
 Credential fields are optional and select keys from one operator-managed

@@ -13,9 +13,15 @@ and freezes:
 
 - Repository and checkout commit;
 - catalog revision and independent Target relevance marker;
-- Target, Action, Runtime, and effective Placement contract;
+- Target, Action and its declared intent, Runtime, and effective Placement contract;
 - normalized parameters and selected input Artifacts;
 - Run source and optional actor snapshot.
+
+Run creation requires a valid Action intent in the selected revision. An exact
+rerun requires a valid intent in the frozen snapshot. A latest rerun resolves
+the current Action. Repository Gates can be attached to any intent. Global
+and Target locks and windows use the frozen intent to govern
+`reconcile` and `operation` Runs at assignment. [Release Gates](./gates.md)
 
 For unpinned requests, catalog resolution uses the immutable revision ID read
 with the Target relevance marker, so concurrent refresh cannot mix the two.
@@ -35,6 +41,8 @@ Clients cannot choose a source value directly.
 PostgreSQL is the scheduling authority. A Controller claims the oldest eligible
 queued Run for its Cluster while enforcing:
 
+- the Run's review state and attached repository Gates
+- current global and Target locks and weekly windows for mutating Actions
 - the Target's active Run limit, which defaults to one;
 - the installation's Cluster concurrency limit;
 - any tighter Placement concurrency limit;
@@ -46,10 +54,10 @@ Runs; lowering it blocks new assignments without canceling active Runs.
 Infrastructure commands are never retried implicitly.
 
 Queue explanation is derived at one read time and is not persisted as mutable
-state. Pending review takes precedence, followed by exhausted Target capacity,
-Controller reachability, Cluster or Placement capacity, and ordinary
-eligibility. Queue age and FIFO position are facts at that read time, not
-execution estimates.
+state. Pending review takes precedence, followed by unsatisfied locks, weekly
+windows, attached repository Gates, exhausted Target capacity, Controller
+reachability, Cluster or Placement capacity, and ordinary eligibility. Queue
+age and FIFO position describe the queue at the time of the read.
 
 Lifecycle phase, terminal outcome, review state, cancellation intent, Job
 identity, observed container image identities, exit code, diagnostics, and

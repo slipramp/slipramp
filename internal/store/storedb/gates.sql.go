@@ -11,23 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countUnreleasedPromotionGates = `-- name: CountUnreleasedPromotionGates :one
-SELECT count(*)
-FROM promotion_gates
-WHERE promotion_id = $1
-  AND released_at IS NULL
-`
-
-func (q *Queries) CountUnreleasedPromotionGates(ctx context.Context, promotionID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnreleasedPromotionGates, promotionID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countWaitingGateSubjects = `-- name: CountWaitingGateSubjects :many
 SELECT subject_type, count(DISTINCT subject_id) AS subject_count
-FROM waiting_gate_requirements
+FROM (
+    SELECT subject_type, subject_id FROM waiting_gate_requirements
+    UNION ALL
+    SELECT 'run', run_id FROM run_server_gate_checks($1::timestamptz)
+    UNION ALL
+    SELECT 'promotion', promotion_id FROM promotion_server_gate_checks($1::timestamptz)
+) requirements
 GROUP BY subject_type
 `
 
@@ -36,8 +28,8 @@ type CountWaitingGateSubjectsRow struct {
 	SubjectCount int64
 }
 
-func (q *Queries) CountWaitingGateSubjects(ctx context.Context) ([]CountWaitingGateSubjectsRow, error) {
-	rows, err := q.db.Query(ctx, countWaitingGateSubjects)
+func (q *Queries) CountWaitingGateSubjects(ctx context.Context, checkedAt pgtype.Timestamptz) ([]CountWaitingGateSubjectsRow, error) {
+	rows, err := q.db.Query(ctx, countWaitingGateSubjects, checkedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -56,31 +48,76 @@ func (q *Queries) CountWaitingGateSubjects(ctx context.Context) ([]CountWaitingG
 	return items, nil
 }
 
-const deleteInactiveGateObservations = `-- name: DeleteInactiveGateObservations :execrows
-DELETE FROM gate_observations
-WHERE gate_observations.valid_until < $1
-  AND NOT EXISTS (
-      SELECT 1
-      FROM gate_evaluation_demand AS active
-      WHERE active.repository_id = gate_observations.repository_id
-        AND active.gate_name = gate_observations.gate_name
-        AND active.catalog_revision_id = gate_observations.catalog_revision_id
-        AND active.definition_digest = gate_observations.definition_digest
-  )
+const deleteInactiveGateObservations = `-- name: DeleteInactiveGateObservations :one
+WITH shared AS (
+    DELETE FROM gate_observations
+    WHERE gate_observations.valid_until < $1
+      AND NOT EXISTS (
+          SELECT 1
+          FROM gate_evaluation_demand AS active
+          WHERE active.repository_id = gate_observations.repository_id
+            AND active.gate_name = gate_observations.gate_name
+            AND active.catalog_revision_id = gate_observations.catalog_revision_id
+            AND active.definition_digest = gate_observations.definition_digest
+      )
+    RETURNING 1
+), cleared_run AS (
+    UPDATE run_gates AS g
+    SET current_catalog_revision_id = NULL, current_definition_digest = NULL,
+        current_evaluator_process_id = NULL, current_state = NULL, current_evidence = NULL,
+        current_diagnostic = NULL, current_evaluated_at = NULL, current_valid_until = NULL
+    WHERE g.current_valid_until < $1
+      AND NOT EXISTS (
+          SELECT 1 FROM subject_gate_evaluation_demand AS w
+          WHERE w.subject_type = 'run' AND w.subject_id = g.run_id AND w.gate_name = g.gate_name
+            AND w.catalog_revision_id = g.current_catalog_revision_id AND w.definition_digest = g.current_definition_digest
+      )
+    RETURNING 1
+), cleared_promotion AS (
+    UPDATE promotion_gates AS g
+    SET current_catalog_revision_id = NULL, current_definition_digest = NULL,
+        current_evaluator_process_id = NULL, current_state = NULL, current_evidence = NULL,
+        current_diagnostic = NULL, current_evaluated_at = NULL, current_valid_until = NULL
+    WHERE g.current_valid_until < $1
+      AND NOT EXISTS (
+          SELECT 1 FROM subject_gate_evaluation_demand AS w
+          WHERE w.subject_type = 'promotion' AND w.subject_id = g.promotion_id AND w.gate_name = g.gate_name
+            AND w.catalog_revision_id = g.current_catalog_revision_id AND w.definition_digest = g.current_definition_digest
+      )
+    RETURNING 1
+)
+SELECT ((SELECT count(*) FROM shared) + (SELECT count(*) FROM cleared_run)
+    + (SELECT count(*) FROM cleared_promotion))::bigint AS deleted
 `
 
 func (q *Queries) DeleteInactiveGateObservations(ctx context.Context, inactiveBefore pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteInactiveGateObservations, inactiveBefore)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, deleteInactiveGateObservations, inactiveBefore)
+	var deleted int64
+	err := row.Scan(&deleted)
+	return deleted, err
 }
 
 const listGateEvaluationDemand = `-- name: ListGateEvaluationDemand :many
-SELECT repository_id, gate_name, catalog_revision_id, spec, definition_digest, waiter_count, last_requested_at
-FROM gate_evaluation_demand
-ORDER BY repository_id, gate_name, catalog_revision_id
+WITH demand AS (
+    SELECT d.repository_id, d.gate_name, d.catalog_revision_id, d.spec, d.definition_digest,
+        d.waiter_count, d.last_requested_at, NULL::jsonb AS subject, ''::text AS repository_name, ''::text AS commit_sha
+    FROM gate_evaluation_demand AS d
+    UNION ALL
+    SELECT w.repository_id, w.gate_name, w.catalog_revision_id, w.spec, w.definition_digest, 1, w.requested_at,
+        jsonb_build_object('type', w.subject_type, 'id', w.subject_id) ||
+        CASE WHEN w.subject_type = 'run' THEN jsonb_build_object('run', jsonb_build_object(
+            'targetId', r.target_id, 'targetName', r.target_name, 'actionName', r.action_name,
+            'intent', r.snapshot #>> '{action,Intent}', 'catalogRevisionId', r.catalog_revision_id, 'commitSha', r.commit_sha))
+        ELSE jsonb_build_object('promotion', jsonb_build_object('stageId', p.stage_id, 'integration', p.integration,
+            'cluster', p.stage_snapshot->>'cluster', 'project', p.stage_snapshot->>'project', 'stageName', p.stage_snapshot->>'name'))
+        END, w.repository_name, w.commit_sha
+    FROM subject_gate_evaluation_demand AS w
+    LEFT JOIN runs AS r ON w.subject_type = 'run' AND w.subject_id = r.id
+    LEFT JOIN promotions AS p ON w.subject_type = 'promotion' AND w.subject_id = p.id
+)
+SELECT repository_id, gate_name, catalog_revision_id, spec, definition_digest, waiter_count, last_requested_at,
+    subject, repository_name, commit_sha
+FROM demand ORDER BY repository_id, gate_name, catalog_revision_id, subject->>'type', subject->>'id'
 `
 
 type ListGateEvaluationDemandRow struct {
@@ -91,6 +128,9 @@ type ListGateEvaluationDemandRow struct {
 	DefinitionDigest  string
 	WaiterCount       int64
 	LastRequestedAt   pgtype.Timestamptz
+	Subject           []byte
+	RepositoryName    string
+	CommitSha         string
 }
 
 func (q *Queries) ListGateEvaluationDemand(ctx context.Context) ([]ListGateEvaluationDemandRow, error) {
@@ -110,6 +150,9 @@ func (q *Queries) ListGateEvaluationDemand(ctx context.Context) ([]ListGateEvalu
 			&i.DefinitionDigest,
 			&i.WaiterCount,
 			&i.LastRequestedAt,
+			&i.Subject,
+			&i.RepositoryName,
+			&i.CommitSha,
 		); err != nil {
 			return nil, err
 		}
@@ -124,7 +167,7 @@ func (q *Queries) ListGateEvaluationDemand(ctx context.Context) ([]ListGateEvalu
 const listGateRequirementEvidence = `-- name: ListGateRequirementEvidence :many
 WITH requirements AS (
     SELECT
-        run_gates.run_id AS subject_id,
+        'run'::text AS subject_type, run_gates.run_id AS subject_id,
         run_gates.repository_id,
         run_gates.gate_name,
         run_gates.attachment_order,
@@ -134,8 +177,9 @@ WITH requirements AS (
         run_gates.released_at,
         run_gates.release_catalog_revision_id,
         run_gates.release_definition,
-        run_gates.release_observed_value,
-        run_gates.release_evaluated_at
+        run_gates.release_evidence,
+        run_gates.release_evaluated_at,
+        run_gates.release_valid_until
     FROM run_gates
     JOIN runs ON runs.id = run_gates.run_id
     WHERE run_gates.run_id = ANY($1::uuid[])
@@ -143,31 +187,32 @@ WITH requirements AS (
     UNION ALL
 
     SELECT
-        pg.promotion_id, pg.repository_id, pg.gate_name, pg.attachment_order, NULL::uuid,
+        'promotion', pg.promotion_id, pg.repository_id, pg.gate_name, pg.attachment_order, NULL::uuid,
         promotions.cancellation_requested_at IS NOT NULL,
         pg.overrides, pg.release_definition_digest,
         pg.released_at, pg.release_catalog_revision_id, pg.release_definition,
-        pg.release_observed_value, pg.release_evaluated_at
+        pg.release_evidence, pg.release_evaluated_at, pg.release_valid_until
     FROM promotion_gates AS pg
     JOIN promotions ON promotions.id = pg.promotion_id
     WHERE pg.promotion_id = ANY($2::uuid[])
 )
 SELECT
+    requirements.repository_id,
     requirements.subject_id,
     requirements.gate_name,
     requirements.canceled::boolean AS canceled,
     requirements.overrides,
     COALESCE(requirements.release_definition_digest, active_gate.definition_digest, '')::text AS definition_digest,
     COALESCE(COALESCE(active_gate.definition, historical_gate.definition)->'metadata'->>'title', '')::text AS title,
-    (COALESCE(requirements.release_definition, active_gate.definition->'spec')->'prometheus')::jsonb AS prometheus,
+    COALESCE(requirements.release_definition, active_gate.definition->'spec')::jsonb AS definition,
     requirements.released_at,
-    requirements.release_observed_value,
-    observation.value AS observed_value,
+    requirements.release_evidence,
+    observation.evidence AS observed_evidence,
     COALESCE(requirements.release_evaluated_at, observation.evaluated_at)::timestamptz AS evaluated_at,
     observation.evaluator_process_id,
     observation.state AS observation_state,
     observation.diagnostic AS observation_diagnostic,
-    observation.valid_until
+    COALESCE(requirements.release_valid_until, observation.valid_until)::timestamptz AS valid_until
 FROM requirements
 JOIN repositories ON repositories.id = requirements.repository_id
 LEFT JOIN catalog_revisions AS active_revision
@@ -184,8 +229,10 @@ LEFT JOIN catalog_revisions AS historical_revision
 LEFT JOIN catalog_gates AS historical_gate
   ON historical_gate.catalog_snapshot_id = historical_revision.catalog_snapshot_id
  AND historical_gate.name = requirements.gate_name
-LEFT JOIN gate_observations AS observation
-  ON observation.repository_id = requirements.repository_id
+LEFT JOIN gate_current_observations AS observation
+  ON observation.subject_type = CASE WHEN active_gate.subject_scoped THEN requirements.subject_type ELSE 'shared' END
+    AND (observation.subject_type = 'shared' OR observation.subject_id = requirements.subject_id)
+ AND observation.repository_id = requirements.repository_id
  AND observation.gate_name = requirements.gate_name
  AND observation.catalog_revision_id = active_revision.id
  AND observation.definition_digest = active_gate.definition_digest
@@ -198,16 +245,17 @@ type ListGateRequirementEvidenceParams struct {
 }
 
 type ListGateRequirementEvidenceRow struct {
+	RepositoryID          pgtype.UUID
 	SubjectID             pgtype.UUID
 	GateName              string
 	Canceled              bool
 	Overrides             []byte
 	DefinitionDigest      string
 	Title                 string
-	Prometheus            []byte
+	Definition            []byte
 	ReleasedAt            pgtype.Timestamptz
-	ReleaseObservedValue  *float64
-	ObservedValue         *float64
+	ReleaseEvidence       []byte
+	ObservedEvidence      []byte
 	EvaluatedAt           pgtype.Timestamptz
 	EvaluatorProcessID    pgtype.UUID
 	ObservationState      *string
@@ -225,21 +273,128 @@ func (q *Queries) ListGateRequirementEvidence(ctx context.Context, arg ListGateR
 	for rows.Next() {
 		var i ListGateRequirementEvidenceRow
 		if err := rows.Scan(
+			&i.RepositoryID,
 			&i.SubjectID,
 			&i.GateName,
 			&i.Canceled,
 			&i.Overrides,
 			&i.DefinitionDigest,
 			&i.Title,
-			&i.Prometheus,
+			&i.Definition,
 			&i.ReleasedAt,
-			&i.ReleaseObservedValue,
-			&i.ObservedValue,
+			&i.ReleaseEvidence,
+			&i.ObservedEvidence,
 			&i.EvaluatedAt,
 			&i.EvaluatorProcessID,
 			&i.ObservationState,
 			&i.ObservationDiagnostic,
 			&i.ValidUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubjectServerGateReleases = `-- name: ListSubjectServerGateReleases :many
+SELECT id, server_gate_release_evidence FROM runs
+WHERE id = ANY($1::uuid[]) AND server_gate_release_evidence IS NOT NULL
+UNION ALL
+SELECT id, server_gate_release_evidence FROM promotions
+WHERE id = ANY($2::uuid[]) AND server_gate_release_evidence IS NOT NULL
+`
+
+type ListSubjectServerGateReleasesParams struct {
+	RunIds       []pgtype.UUID
+	PromotionIds []pgtype.UUID
+}
+
+type ListSubjectServerGateReleasesRow struct {
+	ID                        pgtype.UUID
+	ServerGateReleaseEvidence []byte
+}
+
+func (q *Queries) ListSubjectServerGateReleases(ctx context.Context, arg ListSubjectServerGateReleasesParams) ([]ListSubjectServerGateReleasesRow, error) {
+	rows, err := q.db.Query(ctx, listSubjectServerGateReleases, arg.RunIds, arg.PromotionIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSubjectServerGateReleasesRow
+	for rows.Next() {
+		var i ListSubjectServerGateReleasesRow
+		if err := rows.Scan(&i.ID, &i.ServerGateReleaseEvidence); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWaitingSubjectGateScopes = `-- name: ListWaitingSubjectGateScopes :many
+WITH waiting AS (
+    SELECT id, target_id, NULL::uuid AS stage_id FROM runs
+    WHERE id = ANY($2::uuid[]) AND phase = 'queued'
+      AND snapshot #>> '{action,Intent}' IN ('operation','reconcile')
+    UNION ALL
+    SELECT id, NULL::uuid, stage_id FROM waiting_promotion_gate_subjects
+    WHERE id = ANY($3::uuid[])
+)
+SELECT waiting.id AS subject_id, server_gate_scopes.id, server_gate_scopes.kind, server_gate_scopes.target_id, server_gate_scopes.stage_id, server_gate_scopes.lock_version, server_gate_scopes.lock_reason, server_gate_scopes.lock_actor_id, server_gate_scopes.lock_actor, server_gate_scopes.locked_at, server_gate_scopes.lock_expires_at, server_gate_scopes.window_version, server_gate_scopes.window_definition, server_gate_scopes.window_digest, server_gate_scopes.window_state, server_gate_scopes.window_evaluated_at, server_gate_scopes.window_valid_until, server_gate_scopes.window_interval_start, server_gate_scopes.window_next_transition
+FROM waiting JOIN server_gate_scopes ON kind = 'global'
+    OR server_gate_scopes.target_id = waiting.target_id OR server_gate_scopes.stage_id = waiting.stage_id
+WHERE window_definition IS NOT NULL OR
+    (locked_at IS NOT NULL AND (lock_expires_at IS NULL OR lock_expires_at > $1::timestamptz))
+ORDER BY waiting.id, (kind <> 'global')
+`
+
+type ListWaitingSubjectGateScopesParams struct {
+	CheckedAt    pgtype.Timestamptz
+	RunIds       []pgtype.UUID
+	PromotionIds []pgtype.UUID
+}
+
+type ListWaitingSubjectGateScopesRow struct {
+	SubjectID       pgtype.UUID
+	ServerGateScope ServerGateScope
+}
+
+func (q *Queries) ListWaitingSubjectGateScopes(ctx context.Context, arg ListWaitingSubjectGateScopesParams) ([]ListWaitingSubjectGateScopesRow, error) {
+	rows, err := q.db.Query(ctx, listWaitingSubjectGateScopes, arg.CheckedAt, arg.RunIds, arg.PromotionIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWaitingSubjectGateScopesRow
+	for rows.Next() {
+		var i ListWaitingSubjectGateScopesRow
+		if err := rows.Scan(
+			&i.SubjectID,
+			&i.ServerGateScope.ID,
+			&i.ServerGateScope.Kind,
+			&i.ServerGateScope.TargetID,
+			&i.ServerGateScope.StageID,
+			&i.ServerGateScope.LockVersion,
+			&i.ServerGateScope.LockReason,
+			&i.ServerGateScope.LockActorID,
+			&i.ServerGateScope.LockActor,
+			&i.ServerGateScope.LockedAt,
+			&i.ServerGateScope.LockExpiresAt,
+			&i.ServerGateScope.WindowVersion,
+			&i.ServerGateScope.WindowDefinition,
+			&i.ServerGateScope.WindowDigest,
+			&i.ServerGateScope.WindowState,
+			&i.ServerGateScope.WindowEvaluatedAt,
+			&i.ServerGateScope.WindowValidUntil,
+			&i.ServerGateScope.WindowIntervalStart,
+			&i.ServerGateScope.WindowNextTransition,
 		); err != nil {
 			return nil, err
 		}
@@ -261,7 +416,7 @@ WHERE repositories.id IN (
       AND promotion_gates.released_at IS NULL
 )
 ORDER BY repositories.id
-FOR UPDATE
+FOR SHARE
 `
 
 func (q *Queries) LockPromotionGateRepositories(ctx context.Context, promotionID pgtype.UUID) ([]pgtype.UUID, error) {
@@ -284,40 +439,74 @@ func (q *Queries) LockPromotionGateRepositories(ctx context.Context, promotionID
 	return items, nil
 }
 
-const lockQueuedRunGateRepositories = `-- name: LockQueuedRunGateRepositories :many
-SELECT repositories.id
-FROM repositories
-WHERE repositories.id IN (
-    SELECT run_gates.repository_id
-    FROM run_gates
-    JOIN runs
-      ON runs.id = run_gates.run_id
-    WHERE runs.cluster_name = $1
-      AND runs.phase = 'queued'
-      AND run_gates.released_at IS NULL
-)
-ORDER BY repositories.id
-FOR UPDATE
+const lockRunGateRepository = `-- name: LockRunGateRepository :one
+SELECT id FROM repositories WHERE id = $1 FOR SHARE SKIP LOCKED
 `
 
-func (q *Queries) LockQueuedRunGateRepositories(ctx context.Context, clusterName string) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, lockQueuedRunGateRepositories, clusterName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []pgtype.UUID
-	for rows.Next() {
-		var id pgtype.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+// A refresh can hold the Repository while updating the locked Target or Run.
+// Defer this claim to the next Controller poll when a writer already holds it.
+func (q *Queries) LockRunGateRepository(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockRunGateRepository, id)
+	var id_2 pgtype.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const recordPromotionGateObservation = `-- name: RecordPromotionGateObservation :exec
+UPDATE promotion_gates SET
+    current_catalog_revision_id = $1,
+    current_definition_digest = $2,
+    current_evaluator_process_id = $3,
+    current_state = $4,
+    current_evidence = $5,
+    current_diagnostic = $6,
+    current_evaluated_at = $7,
+    current_valid_until = $8
+WHERE promotion_gates.promotion_id = (
+    SELECT subject.id FROM promotions AS subject WHERE subject.id = $9 FOR NO KEY UPDATE
+)
+  AND promotion_gates.gate_name = $10
+  AND promotion_gates.repository_id = $11 AND released_at IS NULL
+  AND (current_catalog_revision_id IS DISTINCT FROM $1
+       OR current_evaluated_at < $7)
+  AND EXISTS (
+      SELECT 1 FROM subject_gate_evaluation_demand AS w
+      WHERE w.subject_type = 'promotion' AND w.subject_id = promotion_gates.promotion_id
+        AND w.gate_name = promotion_gates.gate_name AND w.catalog_revision_id = $1
+        AND w.definition_digest = $2
+  )
+`
+
+type RecordPromotionGateObservationParams struct {
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   *string
+	EvaluatorProcessID pgtype.UUID
+	State              *string
+	Evidence           []byte
+	Diagnostic         *string
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
+	SubjectID          pgtype.UUID
+	GateName           string
+	RepositoryID       pgtype.UUID
+}
+
+// Serialize observation replacement with release, override, and cancellation on this subject.
+func (q *Queries) RecordPromotionGateObservation(ctx context.Context, arg RecordPromotionGateObservationParams) error {
+	_, err := q.db.Exec(ctx, recordPromotionGateObservation,
+		arg.CatalogRevisionID,
+		arg.DefinitionDigest,
+		arg.EvaluatorProcessID,
+		arg.State,
+		arg.Evidence,
+		arg.Diagnostic,
+		arg.EvaluatedAt,
+		arg.ValidUntil,
+		arg.SubjectID,
+		arg.GateName,
+		arg.RepositoryID,
+	)
+	return err
 }
 
 const recordPromotionGateOverride = `-- name: RecordPromotionGateOverride :execrows
@@ -331,6 +520,11 @@ WHERE promotion_gates.promotion_id = $2
       WHERE waiting.subject_type = 'promotion' AND waiting.subject_id = promotion_gates.promotion_id
         AND waiting.gate_name = promotion_gates.gate_name
         AND evidence.definition_digest = $4
+        AND NOT EXISTS (
+            SELECT 1 FROM eligible_gate_evidence($5::uuid, $6::timestamptz) AS eligible
+            WHERE eligible.subject_type = evidence.subject_type AND eligible.subject_id = evidence.subject_id
+                AND eligible.gate_name = evidence.gate_name
+        )
   )
 `
 
@@ -339,6 +533,8 @@ type RecordPromotionGateOverrideParams struct {
 	PromotionID      pgtype.UUID
 	GateName         string
 	DefinitionDigest string
+	ProcessID        pgtype.UUID
+	CheckedAt        pgtype.Timestamptz
 }
 
 func (q *Queries) RecordPromotionGateOverride(ctx context.Context, arg RecordPromotionGateOverrideParams) (int64, error) {
@@ -347,11 +543,70 @@ func (q *Queries) RecordPromotionGateOverride(ctx context.Context, arg RecordPro
 		arg.PromotionID,
 		arg.GateName,
 		arg.DefinitionDigest,
+		arg.ProcessID,
+		arg.CheckedAt,
 	)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const recordRunGateObservation = `-- name: RecordRunGateObservation :exec
+UPDATE run_gates SET
+    current_catalog_revision_id = $1,
+    current_definition_digest = $2,
+    current_evaluator_process_id = $3,
+    current_state = $4,
+    current_evidence = $5,
+    current_diagnostic = $6,
+    current_evaluated_at = $7,
+    current_valid_until = $8
+WHERE run_gates.run_id = (
+    SELECT subject.id FROM runs AS subject WHERE subject.id = $9 FOR NO KEY UPDATE
+)
+  AND run_gates.gate_name = $10
+  AND run_gates.repository_id = $11 AND released_at IS NULL
+  AND (current_catalog_revision_id IS DISTINCT FROM $1
+       OR current_evaluated_at < $7)
+  AND EXISTS (
+      SELECT 1 FROM subject_gate_evaluation_demand AS w
+      WHERE w.subject_type = 'run' AND w.subject_id = run_gates.run_id
+        AND w.gate_name = run_gates.gate_name AND w.catalog_revision_id = $1
+        AND w.definition_digest = $2
+  )
+`
+
+type RecordRunGateObservationParams struct {
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   *string
+	EvaluatorProcessID pgtype.UUID
+	State              *string
+	Evidence           []byte
+	Diagnostic         *string
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
+	SubjectID          pgtype.UUID
+	GateName           string
+	RepositoryID       pgtype.UUID
+}
+
+// Serialize observation replacement with release, override, and cancellation on this subject.
+func (q *Queries) RecordRunGateObservation(ctx context.Context, arg RecordRunGateObservationParams) error {
+	_, err := q.db.Exec(ctx, recordRunGateObservation,
+		arg.CatalogRevisionID,
+		arg.DefinitionDigest,
+		arg.EvaluatorProcessID,
+		arg.State,
+		arg.Evidence,
+		arg.Diagnostic,
+		arg.EvaluatedAt,
+		arg.ValidUntil,
+		arg.SubjectID,
+		arg.GateName,
+		arg.RepositoryID,
+	)
+	return err
 }
 
 const recordRunGateOverride = `-- name: RecordRunGateOverride :execrows
@@ -365,6 +620,11 @@ WHERE run_gates.run_id = $2
       WHERE waiting.subject_type = 'run' AND waiting.subject_id = run_gates.run_id
         AND waiting.gate_name = run_gates.gate_name
         AND evidence.definition_digest = $4
+        AND NOT EXISTS (
+            SELECT 1 FROM eligible_gate_evidence($5::uuid, $6::timestamptz) AS eligible
+            WHERE eligible.subject_type = evidence.subject_type AND eligible.subject_id = evidence.subject_id
+                AND eligible.gate_name = evidence.gate_name
+        )
   )
 `
 
@@ -373,6 +633,8 @@ type RecordRunGateOverrideParams struct {
 	RunID            pgtype.UUID
 	GateName         string
 	DefinitionDigest string
+	ProcessID        pgtype.UUID
+	CheckedAt        pgtype.Timestamptz
 }
 
 func (q *Queries) RecordRunGateOverride(ctx context.Context, arg RecordRunGateOverrideParams) (int64, error) {
@@ -381,6 +643,8 @@ func (q *Queries) RecordRunGateOverride(ctx context.Context, arg RecordRunGateOv
 		arg.RunID,
 		arg.GateName,
 		arg.DefinitionDigest,
+		arg.ProcessID,
+		arg.CheckedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -391,11 +655,14 @@ func (q *Queries) RecordRunGateOverride(ctx context.Context, arg RecordRunGateOv
 const releasePromotionGates = `-- name: ReleasePromotionGates :execrows
 UPDATE promotion_gates
 SET released_at = $1,
+    current_catalog_revision_id = NULL, current_definition_digest = NULL,
+    current_evaluator_process_id = NULL, current_state = NULL, current_evidence = NULL,
+    current_diagnostic = NULL, current_evaluated_at = NULL, current_valid_until = NULL,
     release_catalog_revision_id = evidence.catalog_revision_id,
     release_definition = evidence.spec,
     release_definition_digest = evidence.definition_digest,
     release_evaluator_process_id = evidence.evaluator_process_id,
-    release_observed_value = evidence.value,
+    release_evidence = evidence.evidence,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
 FROM eligible_gate_evidence($3::uuid, $1::timestamptz) AS evidence
@@ -423,11 +690,14 @@ func (q *Queries) ReleasePromotionGates(ctx context.Context, arg ReleasePromotio
 const releaseRunGates = `-- name: ReleaseRunGates :execrows
 UPDATE run_gates
 SET released_at = $1,
+    current_catalog_revision_id = NULL, current_definition_digest = NULL,
+    current_evaluator_process_id = NULL, current_state = NULL, current_evidence = NULL,
+    current_diagnostic = NULL, current_evaluated_at = NULL, current_valid_until = NULL,
     release_catalog_revision_id = evidence.catalog_revision_id,
     release_definition = evidence.spec,
     release_definition_digest = evidence.definition_digest,
     release_evaluator_process_id = evidence.evaluator_process_id,
-    release_observed_value = evidence.value,
+    release_evidence = evidence.evidence,
     release_evaluated_at = evidence.evaluated_at,
     release_valid_until = evidence.valid_until
 FROM eligible_gate_evidence($3::uuid, $1::timestamptz) AS evidence
@@ -452,6 +722,94 @@ func (q *Queries) ReleaseRunGates(ctx context.Context, arg ReleaseRunGatesParams
 	return result.RowsAffected(), nil
 }
 
+const sharePromotionGateScopes = `-- name: SharePromotionGateScopes :many
+SELECT id, kind, target_id, stage_id, lock_version, lock_reason, lock_actor_id, lock_actor, locked_at, lock_expires_at, window_version, window_definition, window_digest, window_state, window_evaluated_at, window_valid_until, window_interval_start, window_next_transition FROM server_gate_scopes WHERE kind = 'global' OR stage_id = $1
+ORDER BY (kind <> 'global') FOR SHARE
+`
+
+func (q *Queries) SharePromotionGateScopes(ctx context.Context, stageID pgtype.UUID) ([]ServerGateScope, error) {
+	rows, err := q.db.Query(ctx, sharePromotionGateScopes, stageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServerGateScope
+	for rows.Next() {
+		var i ServerGateScope
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.TargetID,
+			&i.StageID,
+			&i.LockVersion,
+			&i.LockReason,
+			&i.LockActorID,
+			&i.LockActor,
+			&i.LockedAt,
+			&i.LockExpiresAt,
+			&i.WindowVersion,
+			&i.WindowDefinition,
+			&i.WindowDigest,
+			&i.WindowState,
+			&i.WindowEvaluatedAt,
+			&i.WindowValidUntil,
+			&i.WindowIntervalStart,
+			&i.WindowNextTransition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const shareRunGateScopes = `-- name: ShareRunGateScopes :many
+SELECT id, kind, target_id, stage_id, lock_version, lock_reason, lock_actor_id, lock_actor, locked_at, lock_expires_at, window_version, window_definition, window_digest, window_state, window_evaluated_at, window_valid_until, window_interval_start, window_next_transition FROM server_gate_scopes WHERE kind = 'global' OR target_id = $1
+ORDER BY (kind <> 'global') FOR SHARE
+`
+
+func (q *Queries) ShareRunGateScopes(ctx context.Context, targetID pgtype.UUID) ([]ServerGateScope, error) {
+	rows, err := q.db.Query(ctx, shareRunGateScopes, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServerGateScope
+	for rows.Next() {
+		var i ServerGateScope
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.TargetID,
+			&i.StageID,
+			&i.LockVersion,
+			&i.LockReason,
+			&i.LockActorID,
+			&i.LockActor,
+			&i.LockedAt,
+			&i.LockExpiresAt,
+			&i.WindowVersion,
+			&i.WindowDefinition,
+			&i.WindowDigest,
+			&i.WindowState,
+			&i.WindowEvaluatedAt,
+			&i.WindowValidUntil,
+			&i.WindowIntervalStart,
+			&i.WindowNextTransition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertGateObservation = `-- name: UpsertGateObservation :exec
 INSERT INTO gate_observations (
     repository_id,
@@ -460,7 +818,7 @@ INSERT INTO gate_observations (
     definition_digest,
     evaluator_process_id,
     state,
-    value,
+    evidence,
     diagnostic,
     evaluated_at,
     valid_until
@@ -484,7 +842,7 @@ ON CONFLICT (
 ) DO UPDATE
 SET evaluator_process_id = EXCLUDED.evaluator_process_id,
     state = EXCLUDED.state,
-    value = EXCLUDED.value,
+    evidence = EXCLUDED.evidence,
     diagnostic = EXCLUDED.diagnostic,
     evaluated_at = EXCLUDED.evaluated_at,
     valid_until = EXCLUDED.valid_until
@@ -497,7 +855,7 @@ type UpsertGateObservationParams struct {
 	DefinitionDigest   string
 	EvaluatorProcessID pgtype.UUID
 	State              string
-	Value              *float64
+	Evidence           []byte
 	Diagnostic         *string
 	EvaluatedAt        pgtype.Timestamptz
 	ValidUntil         pgtype.Timestamptz
@@ -511,7 +869,7 @@ func (q *Queries) UpsertGateObservation(ctx context.Context, arg UpsertGateObser
 		arg.DefinitionDigest,
 		arg.EvaluatorProcessID,
 		arg.State,
-		arg.Value,
+		arg.Evidence,
 		arg.Diagnostic,
 		arg.EvaluatedAt,
 		arg.ValidUntil,

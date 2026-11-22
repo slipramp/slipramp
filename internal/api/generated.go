@@ -20,7 +20,29 @@ import (
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	catalog "github.com/slipramp/slipramp/internal/catalog"
+	gate "github.com/slipramp/slipramp/internal/gate"
 )
+
+// Defines values for ActionIntent.
+const (
+	ActionIntentOperation ActionIntent = "operation"
+	ActionIntentPreview   ActionIntent = "preview"
+	ActionIntentReconcile ActionIntent = "reconcile"
+)
+
+// Valid indicates whether the value is a known member of the ActionIntent enum.
+func (e ActionIntent) Valid() bool {
+	switch e {
+	case ActionIntentOperation:
+		return true
+	case ActionIntentPreview:
+		return true
+	case ActionIntentReconcile:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for ActionTriggerReview.
 const (
@@ -385,6 +407,24 @@ func (e GateOperator) Valid() bool {
 	}
 }
 
+// Defines values for GateRequirementOrigin.
+const (
+	GateOriginRepository GateRequirementOrigin = "repository"
+	GateOriginServer     GateRequirementOrigin = "server"
+)
+
+// Valid indicates whether the value is a known member of the GateRequirementOrigin enum.
+func (e GateRequirementOrigin) Valid() bool {
+	switch e {
+	case GateOriginRepository:
+		return true
+	case GateOriginServer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GateRequirementState.
 const (
 	GateRequirementStateBlocking    GateRequirementState = "blocking"
@@ -409,6 +449,30 @@ func (e GateRequirementState) Valid() bool {
 	case GateRequirementStateUnavailable:
 		return true
 	case GateRequirementStateUnevaluated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GateScopeKind.
+const (
+	GateScopeGlobal     GateScopeKind = "global"
+	GateScopeRepository GateScopeKind = "repository"
+	GateScopeStage      GateScopeKind = "stage"
+	GateScopeTarget     GateScopeKind = "target"
+)
+
+// Valid indicates whether the value is a known member of the GateScopeKind enum.
+func (e GateScopeKind) Valid() bool {
+	switch e {
+	case GateScopeGlobal:
+		return true
+	case GateScopeRepository:
+		return true
+	case GateScopeStage:
+		return true
+	case GateScopeTarget:
 		return true
 	default:
 		return false
@@ -1822,6 +1886,63 @@ func (e RuntimeKind) Valid() bool {
 	}
 }
 
+// Defines values for ServerGateLockEventAction.
+const (
+	ServerGateLockCreated  ServerGateLockEventAction = "lock"
+	ServerGateLockReleased ServerGateLockEventAction = "unlock"
+)
+
+// Valid indicates whether the value is a known member of the ServerGateLockEventAction enum.
+func (e ServerGateLockEventAction) Valid() bool {
+	switch e {
+	case ServerGateLockCreated:
+		return true
+	case ServerGateLockReleased:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerGateScopeKind.
+const (
+	GlobalGateScope ServerGateScopeKind = "global"
+	StageGateScope  ServerGateScopeKind = "stage"
+	TargetGateScope ServerGateScopeKind = "target"
+)
+
+// Valid indicates whether the value is a known member of the ServerGateScopeKind enum.
+func (e ServerGateScopeKind) Valid() bool {
+	switch e {
+	case GlobalGateScope:
+		return true
+	case StageGateScope:
+		return true
+	case TargetGateScope:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerWindowEventAction.
+const (
+	ServerGateWindowRemoved ServerWindowEventAction = "remove"
+	ServerGateWindowSet     ServerWindowEventAction = "set"
+)
+
+// Valid indicates whether the value is a known member of the ServerWindowEventAction enum.
+func (e ServerWindowEventAction) Valid() bool {
+	switch e {
+	case ServerGateWindowRemoved:
+		return true
+	case ServerGateWindowSet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StepReportKind.
 const (
 	StepReportKindStepReport StepReportKind = "step-report"
@@ -2029,6 +2150,24 @@ func (e TerraformPlanReportSummaryMode) Valid() bool {
 	}
 }
 
+// Defines values for WindowObservationState.
+const (
+	WindowObservationBlocking WindowObservationState = "blocking"
+	WindowObservationPassing  WindowObservationState = "passing"
+)
+
+// Valid indicates whether the value is a known member of the WindowObservationState enum.
+func (e WindowObservationState) Valid() bool {
+	switch e {
+	case WindowObservationBlocking:
+		return true
+	case WindowObservationPassing:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogoutParamsXSliprampCSRF.
 const (
 	N1 LogoutParamsXSliprampCSRF = "1"
@@ -2170,17 +2309,22 @@ type Action struct {
 	DocumentationURL *string                         `json:"documentationUrl,omitempty"`
 	Gates            *[]CatalogName                  `json:"gates,omitempty"`
 	Inputs           *map[string]ArtifactInput       `json:"inputs,omitempty"`
-	Intent           *string                         `json:"intent,omitempty"`
-	Parameters       *map[string]Parameter           `json:"parameters,omitempty"`
-	Placement        *string                         `json:"placement,omitempty"`
-	Resources        *ResourceRequirements           `json:"resources,omitempty"`
-	Runtime          *string                         `json:"runtime,omitempty"`
-	Timeout          *string                         `json:"timeout,omitempty"`
+
+	// Intent Declared purpose of the Action, frozen when a Run is created.
+	Intent     ActionIntent          `json:"intent"`
+	Parameters *map[string]Parameter `json:"parameters,omitempty"`
+	Placement  *string               `json:"placement,omitempty"`
+	Resources  *ResourceRequirements `json:"resources,omitempty"`
+	Runtime    *string               `json:"runtime,omitempty"`
+	Timeout    *string               `json:"timeout,omitempty"`
 
 	// Title Operator-facing display title. The action map key remains its stable identity.
 	Title    *string          `json:"title,omitempty"`
 	Triggers *[]ActionTrigger `json:"triggers,omitempty"`
 }
+
+// ActionIntent Declared purpose of the Action, frozen when a Run is created.
+type ActionIntent string
 
 // ActionTrigger Exactly one of git or schedule is present.
 type ActionTrigger struct {
@@ -2617,6 +2761,16 @@ type ExecutionImages struct {
 	Harness *string `json:"harness,omitempty"`
 }
 
+// ExplainedActionIntent defines model for ExplainedActionIntent.
+type ExplainedActionIntent struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+
+	// Value Declared purpose of the Action, frozen when a Run is created.
+	Value ActionIntent `json:"value"`
+}
+
 // ExplainedActionTrigger defines model for ExplainedActionTrigger.
 type ExplainedActionTrigger struct {
 	Provenance       []ExplanationOrigin `json:"provenance"`
@@ -2748,46 +2902,73 @@ type FailedGitTriggerDeliveryList struct {
 	Total  int                        `json:"total"`
 }
 
+// GateEvidence defines model for GateEvidence.
+type GateEvidence = gate.Evidence
+
+// GateKey Stable logical key within the subject.
+type GateKey = string
+
 // GateOperator defines model for GateOperator.
 type GateOperator string
 
 // GateOverride defines model for GateOverride.
 type GateOverride struct {
-	Actor            ActorSnapshot `json:"actor"`
-	DefinitionDigest string        `json:"definitionDigest"`
-	Diagnostic       *string       `json:"diagnostic,omitempty"`
-	EvaluatedAt      *time.Time    `json:"evaluatedAt,omitempty"`
+	Actor       ActorSnapshot `json:"actor"`
+	Diagnostic  *string       `json:"diagnostic,omitempty"`
+	EvaluatedAt *time.Time    `json:"evaluatedAt,omitempty"`
+
+	// Key Stable logical key within the subject.
+	Key              GateKey       `json:"key"`
+	ObservedEvidence *GateEvidence `json:"observedEvidence,omitempty"`
 
 	// ObservedState Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 	ObservedState GateRequirementState `json:"observedState"`
-	ObservedValue *float64             `json:"observedValue,omitempty"`
 	Reason        string               `json:"reason"`
 	RecordedAt    time.Time            `json:"recordedAt"`
+
+	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	Version GateVersion `json:"version"`
+}
+
+// GateOverrideCollection defines model for GateOverrideCollection.
+type GateOverrideCollection struct {
+	// Decisions Recorded decisions in chronological order, including superseded decisions and overrides of cleared locks.
+	Decisions []GateOverride `json:"decisions"`
+
+	// Eligible Gates that can receive a new override on this waiting subject. Scope locks precede repository attachments.
+	Eligible []GateRequirement `json:"eligible"`
 }
 
 // GateOverrideRequest defines model for GateOverrideRequest.
 type GateOverrideRequest struct {
-	DefinitionDigest string `json:"definitionDigest"`
-	Reason           string `json:"reason"`
+	// Key Stable logical key within the subject.
+	Key    GateKey `json:"key"`
+	Reason string  `json:"reason"`
+
+	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	Version GateVersion `json:"version"`
 }
 
 // GateRequirement defines model for GateRequirement.
 type GateRequirement struct {
-	// DefinitionDigest Digest of the active or released Gate definition.
-	DefinitionDigest *string `json:"definitionDigest,omitempty"`
-
 	// Diagnostic Bounded sanitized explanation for an unavailable requirement.
 	Diagnostic  *string       `json:"diagnostic,omitempty"`
 	EvaluatedAt *time.Time    `json:"evaluatedAt,omitempty"`
-	Name        CatalogName   `json:"name"`
-	Operator    *GateOperator `json:"operator,omitempty"`
+	Evidence    *GateEvidence `json:"evidence,omitempty"`
 
-	// Overrides Operator decisions in chronological order. The latest applies when its digest matches the definition.
+	// Key Stable logical key within the subject.
+	Key      GateKey               `json:"key"`
+	Name     CatalogName           `json:"name"`
+	Operator *GateOperator         `json:"operator,omitempty"`
+	Origin   GateRequirementOrigin `json:"origin"`
+
+	// Overrides Operator decisions in chronological order. The latest applies when its key and version match the Gate.
 	Overrides *[]GateOverride `json:"overrides,omitempty"`
 
 	// QueryURL Opens the active or released PromQL in the configured viewer at the observation time, when available.
 	QueryURL   *string    `json:"queryUrl,omitempty"`
 	ReleasedAt *time.Time `json:"releasedAt,omitempty"`
+	Scope      GateScope  `json:"scope"`
 
 	// State Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 	State GateRequirementState `json:"state"`
@@ -2796,16 +2977,35 @@ type GateRequirement struct {
 	Threshold *float64 `json:"threshold,omitempty"`
 	Title     *string  `json:"title,omitempty"`
 
-	// Value Finite observed value from current or immutable release evidence.
-	Value *float64 `json:"value,omitempty"`
+	// Type Repository evaluator type, lock, or window for the current or released policy.
+	Type *string `json:"type,omitempty"`
+
+	// ValidUntil Exclusive end of the displayed observation’s validity, frozen at release.
+	ValidUntil *time.Time `json:"validUntil,omitempty"`
+
+	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	Version *GateVersion `json:"version,omitempty"`
 }
+
+// GateRequirementOrigin defines model for GateRequirement.Origin.
+type GateRequirementOrigin string
 
 // GateRequirementState Stopped requirements retain the attached Gate name and have no release evidence or current observation.
 type GateRequirementState string
 
+// GateScope defines model for GateScope.
+type GateScope struct {
+	// ID Repository UUID for an attachment, or Server Gate scope UUID for a lock or window.
+	ID   openapi_types.UUID `json:"id"`
+	Kind GateScopeKind      `json:"kind"`
+}
+
+// GateScopeKind defines model for GateScope.Kind.
+type GateScopeKind string
+
 // GateSummary defines model for GateSummary.
 type GateSummary struct {
-	// Requirements Required Gates in their stable attachment order.
+	// Requirements Scope locks come first, followed by weekly windows, each global before the Target or Stage. Repository Gates follow in attachment order.
 	Requirements []GateRequirement `json:"requirements"`
 
 	// State Stopped means cancellation ended the wait before Gate release.
@@ -2814,6 +3014,9 @@ type GateSummary struct {
 
 // GateSummaryState Stopped means cancellation ended the wait before Gate release.
 type GateSummaryState string
+
+// GateVersion Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+type GateVersion = string
 
 // GitCommit defines model for GitCommit.
 type GitCommit struct {
@@ -3117,12 +3320,12 @@ type KargoPromotionResponse struct {
 	Message             *string            `json:"message,omitempty"`
 	ReviewRequired      bool               `json:"reviewRequired"`
 
-	// Status Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
+	// Status Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved and is waiting for its applicable global, Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
 	Status    KargoPromotionStatus `json:"status"`
 	UpdatedAt time.Time            `json:"updatedAt"`
 }
 
-// KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved but its repository-defined Gates have not released execution. Canceling keeps the callback waiting for the Kargo abort.
+// KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved and is waiting for its applicable global, Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
 type KargoPromotionStatus string
 
 // KargoStageSnapshot defines model for KargoStageSnapshot.
@@ -3130,6 +3333,11 @@ type KargoStageSnapshot struct {
 	ObservedAt time.Time                   `json:"observedAt"`
 	SnapshotID openapi_types.UUID          `json:"snapshotId"`
 	Stages     []PromotionStageObservation `json:"stages"`
+}
+
+// LockGateEvidence defines model for LockGateEvidence.
+type LockGateEvidence struct {
+	Lock ServerGateLock `json:"lock"`
 }
 
 // LogCursor defines model for LogCursor.
@@ -3562,6 +3770,14 @@ type ProductPrincipal struct {
 	Kind        string             `json:"kind"`
 	PrincipalID openapi_types.UUID `json:"principalId"`
 	Role        string             `json:"role"`
+}
+
+// PrometheusGateEvidence defines model for PrometheusGateEvidence.
+type PrometheusGateEvidence struct {
+	Prometheus struct {
+		// Value Finite sample from the Prometheus query.
+		Value float64 `json:"value"`
+	} `json:"prometheus"`
 }
 
 // Promotion defines model for Promotion.
@@ -4498,7 +4714,7 @@ type Run struct {
 	// SchedulingSnapshotAt Evaluation time for the derived scheduling fields.
 	SchedulingSnapshotAt *time.Time `json:"schedulingSnapshotAt,omitempty"`
 
-	// SchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+	// SchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
 	SchedulingState *RunSchedulingState `json:"schedulingState,omitempty"`
 	Source          RunSource           `json:"source"`
 	StartedAt       *time.Time          `json:"startedAt,omitempty"`
@@ -4514,7 +4730,7 @@ type Run struct {
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
 type RunObservationState string
 
-// RunSchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+// RunSchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
 type RunSchedulingState string
 
 // RunArtifactAccess defines model for RunArtifactAccess.
@@ -4574,17 +4790,19 @@ type RunAssignment struct {
 
 // RunAssignmentAction defines model for RunAssignmentAction.
 type RunAssignmentAction struct {
-	Artifacts            *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
-	Command              []string                        `json:"command"`
-	Credentials          *map[string]CatalogName         `json:"credentials,omitempty"`
-	Inputs               *map[string]ArtifactInput       `json:"inputs,omitempty"`
-	Intent               *string                         `json:"intent,omitempty"`
-	Name                 CatalogName                     `json:"name"`
-	ParameterDefinitions *map[string]Parameter           `json:"parameterDefinitions,omitempty"`
-	Placement            CatalogName                     `json:"placement"`
-	Resources            *ResourceRequirements           `json:"resources,omitempty"`
-	Runtime              CatalogName                     `json:"runtime"`
-	Timeout              *string                         `json:"timeout,omitempty"`
+	Artifacts   *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
+	Command     []string                        `json:"command"`
+	Credentials *map[string]CatalogName         `json:"credentials,omitempty"`
+	Inputs      *map[string]ArtifactInput       `json:"inputs,omitempty"`
+
+	// Intent Declared purpose of the Action, frozen when a Run is created.
+	Intent               ActionIntent          `json:"intent"`
+	Name                 CatalogName           `json:"name"`
+	ParameterDefinitions *map[string]Parameter `json:"parameterDefinitions,omitempty"`
+	Placement            CatalogName           `json:"placement"`
+	Resources            *ResourceRequirements `json:"resources,omitempty"`
+	Runtime              CatalogName           `json:"runtime"`
+	Timeout              *string               `json:"timeout,omitempty"`
 }
 
 // RunAssignmentCredential defines model for RunAssignmentCredential.
@@ -4814,6 +5032,89 @@ type ScheduleTrigger struct {
 	// Cron Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.
 	Cron string `json:"cron"`
 }
+
+// ScopeWindow defines model for ScopeWindow.
+type ScopeWindow = gate.ScopeWindow
+
+// ServerGateLock defines model for ServerGateLock.
+type ServerGateLock struct {
+	Actor     ActorSnapshot `json:"actor"`
+	CreatedAt time.Time     `json:"createdAt"`
+	ExpiresAt *time.Time    `json:"expiresAt,omitempty"`
+	Reason    string        `json:"reason"`
+}
+
+// ServerGateLockEvent defines model for ServerGateLockEvent.
+type ServerGateLockEvent struct {
+	Action ServerGateLockEventAction `json:"action"`
+	Actor  ActorSnapshot             `json:"actor"`
+
+	// ExpiresAt Expiry originally requested on a lock event.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// PriorVersion Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	PriorVersion GateVersion `json:"priorVersion"`
+
+	// Reason Reason supplied when the lock was created.
+	Reason     string    `json:"reason"`
+	RecordedAt time.Time `json:"recordedAt"`
+
+	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	Version GateVersion `json:"version"`
+}
+
+// ServerGateLockEventAction defines model for ServerGateLockEvent.Action.
+type ServerGateLockEventAction string
+
+// ServerGateLockRequest defines model for ServerGateLockRequest.
+type ServerGateLockRequest = gate.LockRequest
+
+// ServerGateScope Current operator policy. Mutating Run assignment enforces global and Target policies. Promotion release enforces global and destination Stage policies before automatic creation delivery or callback approval.
+type ServerGateScope struct {
+	// CheckedAt Instant used to check lock expiry and window freshness.
+	CheckedAt time.Time `json:"checkedAt"`
+
+	// Events Most recent lock changes, newest first. Expiry is recorded on the lock event.
+	Events []ServerGateLockEvent `json:"events"`
+
+	// ID Stable identity of the Server Gate scope.
+	ID   openapi_types.UUID  `json:"id"`
+	Kind ServerGateScopeKind `json:"kind"`
+	Lock *ServerGateLock     `json:"lock,omitempty"`
+
+	// LockVersion Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	LockVersion GateVersion         `json:"lockVersion"`
+	StageID     *openapi_types.UUID `json:"stageId,omitempty"`
+	TargetID    *openapi_types.UUID `json:"targetId,omitempty"`
+	Window      *ScopeWindow        `json:"window,omitempty"`
+
+	// WindowEvents Most recent window updates and removals, newest first.
+	WindowEvents []ServerWindowEvent `json:"windowEvents"`
+
+	// WindowVersion Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	WindowVersion GateVersion `json:"windowVersion"`
+}
+
+// ServerGateScopeKind defines model for ServerGateScope.Kind.
+type ServerGateScopeKind string
+
+// ServerWindowEvent defines model for ServerWindowEvent.
+type ServerWindowEvent struct {
+	Action     ServerWindowEventAction `json:"action"`
+	Actor      ActorSnapshot           `json:"actor"`
+	Definition *WeeklyWindow           `json:"definition,omitempty"`
+	Digest     *string                 `json:"digest,omitempty"`
+
+	// PriorVersion Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	PriorVersion GateVersion `json:"priorVersion"`
+	RecordedAt   time.Time   `json:"recordedAt"`
+
+	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
+	Version GateVersion `json:"version"`
+}
+
+// ServerWindowEventAction defines model for ServerWindowEvent.Action.
+type ServerWindowEventAction string
 
 // ServiceAccountCreate defines model for ServiceAccountCreate.
 type ServiceAccountCreate struct {
@@ -5054,6 +5355,40 @@ type TerraformPlanReportSummaryKind string
 
 // TerraformPlanReportSummaryMode defines model for TerraformPlanReportSummary.Mode.
 type TerraformPlanReportSummaryMode string
+
+// WebhookGateEvidence defines model for WebhookGateEvidence.
+type WebhookGateEvidence struct {
+	Webhook struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"webhook"`
+}
+
+// WeeklyWindow defines model for WeeklyWindow.
+type WeeklyWindow = gate.WeeklyWindow
+
+// WindowGateEvidence defines model for WindowGateEvidence.
+type WindowGateEvidence struct {
+	Window struct {
+		Digest      string            `json:"digest"`
+		Observation WindowObservation `json:"observation"`
+		TimeZone    string            `json:"timeZone"`
+	} `json:"window"`
+}
+
+// WindowObservation defines model for WindowObservation.
+type WindowObservation struct {
+	EvaluatedAt    time.Time              `json:"evaluatedAt"`
+	IntervalStart  *time.Time             `json:"intervalStart,omitempty"`
+	NextTransition *time.Time             `json:"nextTransition,omitempty"`
+	State          WindowObservationState `json:"state"`
+
+	// ValidUntil Exclusive observation expiry.
+	ValidUntil time.Time `json:"validUntil"`
+}
+
+// WindowObservationState defines model for WindowObservation.State.
+type WindowObservationState string
 
 // Limit defines model for Limit.
 type Limit = int
@@ -5433,6 +5768,24 @@ type CreateAPIKeyJSONRequestBody = APIKeyCreate
 
 // ExchangeNativeOIDCLoginJSONRequestBody defines body for ExchangeNativeOIDCLogin for application/json ContentType.
 type ExchangeNativeOIDCLoginJSONRequestBody = NativeOIDCExchange
+
+// LockGlobalGateScopeJSONRequestBody defines body for LockGlobalGateScope for application/json ContentType.
+type LockGlobalGateScopeJSONRequestBody = ServerGateLockRequest
+
+// SetGlobalGateWindowJSONRequestBody defines body for SetGlobalGateWindow for application/json ContentType.
+type SetGlobalGateWindowJSONRequestBody = WeeklyWindow
+
+// LockStageGateScopeJSONRequestBody defines body for LockStageGateScope for application/json ContentType.
+type LockStageGateScopeJSONRequestBody = ServerGateLockRequest
+
+// SetStageGateWindowJSONRequestBody defines body for SetStageGateWindow for application/json ContentType.
+type SetStageGateWindowJSONRequestBody = WeeklyWindow
+
+// LockTargetGateScopeJSONRequestBody defines body for LockTargetGateScope for application/json ContentType.
+type LockTargetGateScopeJSONRequestBody = ServerGateLockRequest
+
+// SetTargetGateWindowJSONRequestBody defines body for SetTargetGateWindow for application/json ContentType.
+type SetTargetGateWindowJSONRequestBody = WeeklyWindow
 
 // AcknowledgeInboxProblemsJSONRequestBody defines body for AcknowledgeInboxProblems for application/json ContentType.
 type AcknowledgeInboxProblemsJSONRequestBody = InboxProblemAcknowledgements
@@ -6204,6 +6557,177 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 	ListCommits(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetGlobalGateScope Inspect the global Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Corresponds with GET /api/v1/gate-scopes/global (the `GetGlobalGateScope` operationId).
+	GetGlobalGateScope(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlockGlobalGateScope Unlock the global Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/global/lock (the `UnlockGlobalGateScope` operationId).
+	UnlockGlobalGateScope(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockGlobalGateScopeWithBody Lock the global Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+	LockGlobalGateScopeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockGlobalGateScope Lock the global Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+	LockGlobalGateScope(ctx context.Context, body LockGlobalGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveGlobalGateWindow Remove the weekly window for the global Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/global/window (the `RemoveGlobalGateWindow` operationId).
+	RemoveGlobalGateWindow(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetGlobalGateWindowWithBody Set the weekly window for the global Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+	SetGlobalGateWindowWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetGlobalGateWindow Set the weekly window for the global Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+	SetGlobalGateWindow(ctx context.Context, body SetGlobalGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetStageGateScope Inspect the Stage Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Corresponds with GET /api/v1/gate-scopes/stages/{stageId} (the `GetStageGateScope` operationId).
+	GetStageGateScope(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlockStageGateScope Unlock the Stage Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/lock (the `UnlockStageGateScope` operationId).
+	UnlockStageGateScope(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockStageGateScopeWithBody Lock the Stage Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+	LockStageGateScopeWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockStageGateScope Lock the Stage Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+	LockStageGateScope(ctx context.Context, stageID openapi_types.UUID, body LockStageGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveStageGateWindow Remove the weekly window for the Stage Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/window (the `RemoveStageGateWindow` operationId).
+	RemoveStageGateWindow(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetStageGateWindowWithBody Set the weekly window for the Stage Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+	SetStageGateWindowWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetStageGateWindow Set the weekly window for the Stage Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+	SetStageGateWindow(ctx context.Context, stageID openapi_types.UUID, body SetStageGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTargetGateScope Inspect the Target Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Corresponds with GET /api/v1/gate-scopes/targets/{targetId} (the `GetTargetGateScope` operationId).
+	GetTargetGateScope(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlockTargetGateScope Unlock the Target Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/lock (the `UnlockTargetGateScope` operationId).
+	UnlockTargetGateScope(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockTargetGateScopeWithBody Lock the Target Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+	LockTargetGateScopeWithBody(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LockTargetGateScope Lock the Target Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+	LockTargetGateScope(ctx context.Context, targetID openapi_types.UUID, body LockTargetGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveTargetGateWindow Remove the weekly window for the Target Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/window (the `RemoveTargetGateWindow` operationId).
+	RemoveTargetGateWindow(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTargetGateWindowWithBody Set the weekly window for the Target Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+	SetTargetGateWindowWithBody(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTargetGateWindow Set the weekly window for the Target Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+	SetTargetGateWindow(ctx context.Context, targetID openapi_types.UUID, body SetTargetGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
 	//
 	// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
@@ -6445,19 +6969,24 @@ type ClientInterface interface {
 	// Corresponds with PUT /api/v1/promotions/{promotionId}/decision (the `DecidePromotion` operationId).
 	DecidePromotion(ctx context.Context, promotionID PromotionID, body DecidePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPromotionGateOverrides Inspect eligible Gates and override history for a Promotion
+	//
+	// Corresponds with GET /api/v1/promotions/{promotionId}/gate-overrides (the `ListPromotionGateOverrides` operationId).
+	ListPromotionGateOverrides(ctx context.Context, promotionID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// OverridePromotionGateWithBody Override one Gate for a waiting Promotion
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-	OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OverridePromotionGate Override one Gate for a waiting Promotion
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-	OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+	OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRepositories List repositories
 	//
@@ -6597,19 +7126,24 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRunGateOverrides Inspect eligible Gates and override history for a Run
+	//
+	// Corresponds with GET /api/v1/runs/{runId}/gate-overrides (the `ListRunGateOverrides` operationId).
+	ListRunGateOverrides(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// OverrideRunGateWithBody Override one Gate for a waiting Run
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-	OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+	OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OverrideRunGate Override one Gate for a waiting Run
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-	OverrideRunGate(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+	OverrideRunGate(ctx context.Context, runID openapi_types.UUID, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StreamRunLog Stream retained and live Run log bytes
 	//
@@ -7143,6 +7677,387 @@ func (c *Client) ListClusters(ctx context.Context, params *ListClustersParams, r
 // Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 func (c *Client) ListCommits(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListCommitsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetGlobalGateScope Inspect the global Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Corresponds with GET /api/v1/gate-scopes/global (the `GetGlobalGateScope` operationId).
+func (c *Client) GetGlobalGateScope(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetGlobalGateScopeRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UnlockGlobalGateScope Unlock the global Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/global/lock (the `UnlockGlobalGateScope` operationId).
+func (c *Client) UnlockGlobalGateScope(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlockGlobalGateScopeRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockGlobalGateScopeWithBody Lock the global Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+func (c *Client) LockGlobalGateScopeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockGlobalGateScopeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockGlobalGateScope Lock the global Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+func (c *Client) LockGlobalGateScope(ctx context.Context, body LockGlobalGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockGlobalGateScopeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveGlobalGateWindow Remove the weekly window for the global Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/global/window (the `RemoveGlobalGateWindow` operationId).
+func (c *Client) RemoveGlobalGateWindow(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveGlobalGateWindowRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetGlobalGateWindowWithBody Set the weekly window for the global Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+func (c *Client) SetGlobalGateWindowWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetGlobalGateWindowRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetGlobalGateWindow Set the weekly window for the global Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+func (c *Client) SetGlobalGateWindow(ctx context.Context, body SetGlobalGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetGlobalGateWindowRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetStageGateScope Inspect the Stage Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Corresponds with GET /api/v1/gate-scopes/stages/{stageId} (the `GetStageGateScope` operationId).
+func (c *Client) GetStageGateScope(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetStageGateScopeRequest(c.Server, stageID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UnlockStageGateScope Unlock the Stage Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/lock (the `UnlockStageGateScope` operationId).
+func (c *Client) UnlockStageGateScope(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlockStageGateScopeRequest(c.Server, stageID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockStageGateScopeWithBody Lock the Stage Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+func (c *Client) LockStageGateScopeWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockStageGateScopeRequestWithBody(c.Server, stageID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockStageGateScope Lock the Stage Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+func (c *Client) LockStageGateScope(ctx context.Context, stageID openapi_types.UUID, body LockStageGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockStageGateScopeRequest(c.Server, stageID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveStageGateWindow Remove the weekly window for the Stage Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/window (the `RemoveStageGateWindow` operationId).
+func (c *Client) RemoveStageGateWindow(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveStageGateWindowRequest(c.Server, stageID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetStageGateWindowWithBody Set the weekly window for the Stage Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+func (c *Client) SetStageGateWindowWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetStageGateWindowRequestWithBody(c.Server, stageID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetStageGateWindow Set the weekly window for the Stage Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+func (c *Client) SetStageGateWindow(ctx context.Context, stageID openapi_types.UUID, body SetStageGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetStageGateWindowRequest(c.Server, stageID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTargetGateScope Inspect the Target Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Corresponds with GET /api/v1/gate-scopes/targets/{targetId} (the `GetTargetGateScope` operationId).
+func (c *Client) GetTargetGateScope(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTargetGateScopeRequest(c.Server, targetID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UnlockTargetGateScope Unlock the Target Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/lock (the `UnlockTargetGateScope` operationId).
+func (c *Client) UnlockTargetGateScope(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlockTargetGateScopeRequest(c.Server, targetID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockTargetGateScopeWithBody Lock the Target Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+func (c *Client) LockTargetGateScopeWithBody(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockTargetGateScopeRequestWithBody(c.Server, targetID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// LockTargetGateScope Lock the Target Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+func (c *Client) LockTargetGateScope(ctx context.Context, targetID openapi_types.UUID, body LockTargetGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLockTargetGateScopeRequest(c.Server, targetID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveTargetGateWindow Remove the weekly window for the Target Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/window (the `RemoveTargetGateWindow` operationId).
+func (c *Client) RemoveTargetGateWindow(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveTargetGateWindowRequest(c.Server, targetID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTargetGateWindowWithBody Set the weekly window for the Target Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+func (c *Client) SetTargetGateWindowWithBody(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTargetGateWindowRequestWithBody(c.Server, targetID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTargetGateWindow Set the weekly window for the Target Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+func (c *Client) SetTargetGateWindow(ctx context.Context, targetID openapi_types.UUID, body SetTargetGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTargetGateWindowRequest(c.Server, targetID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7744,13 +8659,28 @@ func (c *Client) DecidePromotion(ctx context.Context, promotionID PromotionID, b
 	return c.Client.Do(req)
 }
 
+// ListPromotionGateOverrides Inspect eligible Gates and override history for a Promotion
+//
+// Corresponds with GET /api/v1/promotions/{promotionId}/gate-overrides (the `ListPromotionGateOverrides` operationId).
+func (c *Client) ListPromotionGateOverrides(ctx context.Context, promotionID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPromotionGateOverridesRequest(c.Server, promotionID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // OverridePromotionGateWithBody Override one Gate for a waiting Promotion
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-func (c *Client) OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOverridePromotionGateRequestWithBody(c.Server, promotionID, gateName, contentType, body)
+// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+func (c *Client) OverridePromotionGateWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverridePromotionGateRequestWithBody(c.Server, promotionID, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7765,9 +8695,9 @@ func (c *Client) OverridePromotionGateWithBody(ctx context.Context, promotionID 
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-func (c *Client) OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOverridePromotionGateRequest(c.Server, promotionID, gateName, body)
+// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+func (c *Client) OverridePromotionGate(ctx context.Context, promotionID openapi_types.UUID, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverridePromotionGateRequest(c.Server, promotionID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8096,13 +9026,28 @@ func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEdi
 	return c.Client.Do(req)
 }
 
+// ListRunGateOverrides Inspect eligible Gates and override history for a Run
+//
+// Corresponds with GET /api/v1/runs/{runId}/gate-overrides (the `ListRunGateOverrides` operationId).
+func (c *Client) ListRunGateOverrides(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunGateOverridesRequest(c.Server, runID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // OverrideRunGateWithBody Override one Gate for a waiting Run
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-func (c *Client) OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOverrideRunGateRequestWithBody(c.Server, runID, gateName, contentType, body)
+// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+func (c *Client) OverrideRunGateWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverrideRunGateRequestWithBody(c.Server, runID, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8117,9 +9062,9 @@ func (c *Client) OverrideRunGateWithBody(ctx context.Context, runID openapi_type
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-func (c *Client) OverrideRunGate(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOverrideRunGateRequest(c.Server, runID, gateName, body)
+// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+func (c *Client) OverrideRunGate(ctx context.Context, runID openapi_types.UUID, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOverrideRunGateRequest(c.Server, runID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9435,6 +10380,559 @@ func NewListCommitsRequest(server string, params *ListCommitsParams) (*http.Requ
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetGlobalGateScopeRequest constructs an http.Request for the GetGlobalGateScope method
+func NewGetGlobalGateScopeRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/global")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnlockGlobalGateScopeRequest constructs an http.Request for the UnlockGlobalGateScope method
+func NewUnlockGlobalGateScopeRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/global/lock")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewLockGlobalGateScopeRequest calls the generic LockGlobalGateScope builder with application/json body
+func NewLockGlobalGateScopeRequest(server string, body LockGlobalGateScopeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLockGlobalGateScopeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewLockGlobalGateScopeRequestWithBody constructs an http.Request for the LockGlobalGateScope method, with any body, and a specified content type
+func NewLockGlobalGateScopeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/global/lock")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveGlobalGateWindowRequest constructs an http.Request for the RemoveGlobalGateWindow method
+func NewRemoveGlobalGateWindowRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/global/window")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetGlobalGateWindowRequest calls the generic SetGlobalGateWindow builder with application/json body
+func NewSetGlobalGateWindowRequest(server string, body SetGlobalGateWindowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetGlobalGateWindowRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetGlobalGateWindowRequestWithBody constructs an http.Request for the SetGlobalGateWindow method, with any body, and a specified content type
+func NewSetGlobalGateWindowRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/global/window")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetStageGateScopeRequest constructs an http.Request for the GetStageGateScope method
+func NewGetStageGateScopeRequest(server string, stageID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/stages/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnlockStageGateScopeRequest constructs an http.Request for the UnlockStageGateScope method
+func NewUnlockStageGateScopeRequest(server string, stageID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/stages/%s/lock", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewLockStageGateScopeRequest calls the generic LockStageGateScope builder with application/json body
+func NewLockStageGateScopeRequest(server string, stageID openapi_types.UUID, body LockStageGateScopeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLockStageGateScopeRequestWithBody(server, stageID, "application/json", bodyReader)
+}
+
+// NewLockStageGateScopeRequestWithBody constructs an http.Request for the LockStageGateScope method, with any body, and a specified content type
+func NewLockStageGateScopeRequestWithBody(server string, stageID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/stages/%s/lock", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveStageGateWindowRequest constructs an http.Request for the RemoveStageGateWindow method
+func NewRemoveStageGateWindowRequest(server string, stageID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/stages/%s/window", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetStageGateWindowRequest calls the generic SetStageGateWindow builder with application/json body
+func NewSetStageGateWindowRequest(server string, stageID openapi_types.UUID, body SetStageGateWindowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetStageGateWindowRequestWithBody(server, stageID, "application/json", bodyReader)
+}
+
+// NewSetStageGateWindowRequestWithBody constructs an http.Request for the SetStageGateWindow method, with any body, and a specified content type
+func NewSetStageGateWindowRequestWithBody(server string, stageID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/stages/%s/window", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTargetGateScopeRequest constructs an http.Request for the GetTargetGateScope method
+func NewGetTargetGateScopeRequest(server string, targetID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/targets/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnlockTargetGateScopeRequest constructs an http.Request for the UnlockTargetGateScope method
+func NewUnlockTargetGateScopeRequest(server string, targetID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/targets/%s/lock", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewLockTargetGateScopeRequest calls the generic LockTargetGateScope builder with application/json body
+func NewLockTargetGateScopeRequest(server string, targetID openapi_types.UUID, body LockTargetGateScopeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLockTargetGateScopeRequestWithBody(server, targetID, "application/json", bodyReader)
+}
+
+// NewLockTargetGateScopeRequestWithBody constructs an http.Request for the LockTargetGateScope method, with any body, and a specified content type
+func NewLockTargetGateScopeRequestWithBody(server string, targetID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/targets/%s/lock", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveTargetGateWindowRequest constructs an http.Request for the RemoveTargetGateWindow method
+func NewRemoveTargetGateWindowRequest(server string, targetID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/targets/%s/window", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetTargetGateWindowRequest calls the generic SetTargetGateWindow builder with application/json body
+func NewSetTargetGateWindowRequest(server string, targetID openapi_types.UUID, body SetTargetGateWindowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTargetGateWindowRequestWithBody(server, targetID, "application/json", bodyReader)
+}
+
+// NewSetTargetGateWindowRequestWithBody constructs an http.Request for the SetTargetGateWindow method, with any body, and a specified content type
+func NewSetTargetGateWindowRequestWithBody(server string, targetID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gate-scopes/targets/%s/window", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -11340,19 +12838,8 @@ func NewDecidePromotionRequestWithBody(server string, promotionID PromotionID, c
 	return req, nil
 }
 
-// NewOverridePromotionGateRequest calls the generic OverridePromotionGate builder with application/json body
-func NewOverridePromotionGateRequest(server string, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewOverridePromotionGateRequestWithBody(server, promotionID, gateName, "application/json", bodyReader)
-}
-
-// NewOverridePromotionGateRequestWithBody constructs an http.Request for the OverridePromotionGate method, with any body, and a specified content type
-func NewOverridePromotionGateRequestWithBody(server string, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader) (*http.Request, error) {
+// NewListPromotionGateOverridesRequest constructs an http.Request for the ListPromotionGateOverrides method
+func NewListPromotionGateOverridesRequest(server string, promotionID openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11362,19 +12849,12 @@ func NewOverridePromotionGateRequestWithBody(server string, promotionID openapi_
 		return nil, err
 	}
 
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gateName", gateName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/promotions/%s/gates/%s/override", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/api/v1/promotions/%s/gate-overrides", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -11384,7 +12864,52 @@ func NewOverridePromotionGateRequestWithBody(server string, promotionID openapi_
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewOverridePromotionGateRequest calls the generic OverridePromotionGate builder with application/json body
+func NewOverridePromotionGateRequest(server string, promotionID openapi_types.UUID, body OverridePromotionGateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewOverridePromotionGateRequestWithBody(server, promotionID, "application/json", bodyReader)
+}
+
+// NewOverridePromotionGateRequestWithBody constructs an http.Request for the OverridePromotionGate method, with any body, and a specified content type
+func NewOverridePromotionGateRequestWithBody(server string, promotionID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "promotionId", promotionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotions/%s/gate-overrides", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -12182,19 +13707,8 @@ func NewCancelRunRequest(server string, runID openapi_types.UUID) (*http.Request
 	return req, nil
 }
 
-// NewOverrideRunGateRequest calls the generic OverrideRunGate builder with application/json body
-func NewOverrideRunGateRequest(server string, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewOverrideRunGateRequestWithBody(server, runID, gateName, "application/json", bodyReader)
-}
-
-// NewOverrideRunGateRequestWithBody constructs an http.Request for the OverrideRunGate method, with any body, and a specified content type
-func NewOverrideRunGateRequestWithBody(server string, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader) (*http.Request, error) {
+// NewListRunGateOverridesRequest constructs an http.Request for the ListRunGateOverrides method
+func NewListRunGateOverridesRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -12204,19 +13718,12 @@ func NewOverrideRunGateRequestWithBody(server string, runID openapi_types.UUID, 
 		return nil, err
 	}
 
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gateName", gateName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/runs/%s/gates/%s/override", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/gate-overrides", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12226,7 +13733,52 @@ func NewOverrideRunGateRequestWithBody(server string, runID openapi_types.UUID, 
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewOverrideRunGateRequest calls the generic OverrideRunGate builder with application/json body
+func NewOverrideRunGateRequest(server string, runID openapi_types.UUID, body OverrideRunGateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewOverrideRunGateRequestWithBody(server, runID, "application/json", bodyReader)
+}
+
+// NewOverrideRunGateRequestWithBody constructs an http.Request for the OverrideRunGate method, with any body, and a specified content type
+func NewOverrideRunGateRequestWithBody(server string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/gate-overrides", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -13495,6 +15047,195 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 	ListCommitsWithResponse(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*ListCommitsResponse, error)
 
+	// GetGlobalGateScopeWithResponse Inspect the global Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/gate-scopes/global (the `GetGlobalGateScope` operationId).
+	GetGlobalGateScopeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetGlobalGateScopeResponse, error)
+
+	// UnlockGlobalGateScopeWithResponse Unlock the global Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/global/lock (the `UnlockGlobalGateScope` operationId).
+	UnlockGlobalGateScopeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*UnlockGlobalGateScopeResponse, error)
+
+	// LockGlobalGateScopeWithBodyWithResponse Lock the global Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+	LockGlobalGateScopeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockGlobalGateScopeResponse, error)
+
+	// LockGlobalGateScopeWithResponse Lock the global Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+	LockGlobalGateScopeWithResponse(ctx context.Context, body LockGlobalGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockGlobalGateScopeResponse, error)
+
+	// RemoveGlobalGateWindowWithResponse Remove the weekly window for the global Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/global/window (the `RemoveGlobalGateWindow` operationId).
+	RemoveGlobalGateWindowWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RemoveGlobalGateWindowResponse, error)
+
+	// SetGlobalGateWindowWithBodyWithResponse Set the weekly window for the global Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+	SetGlobalGateWindowWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetGlobalGateWindowResponse, error)
+
+	// SetGlobalGateWindowWithResponse Set the weekly window for the global Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+	SetGlobalGateWindowWithResponse(ctx context.Context, body SetGlobalGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetGlobalGateWindowResponse, error)
+
+	// GetStageGateScopeWithResponse Inspect the Stage Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/gate-scopes/stages/{stageId} (the `GetStageGateScope` operationId).
+	GetStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetStageGateScopeResponse, error)
+
+	// UnlockStageGateScopeWithResponse Unlock the Stage Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/lock (the `UnlockStageGateScope` operationId).
+	UnlockStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*UnlockStageGateScopeResponse, error)
+
+	// LockStageGateScopeWithBodyWithResponse Lock the Stage Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+	LockStageGateScopeWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockStageGateScopeResponse, error)
+
+	// LockStageGateScopeWithResponse Lock the Stage Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+	LockStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, body LockStageGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockStageGateScopeResponse, error)
+
+	// RemoveStageGateWindowWithResponse Remove the weekly window for the Stage Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/window (the `RemoveStageGateWindow` operationId).
+	RemoveStageGateWindowWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveStageGateWindowResponse, error)
+
+	// SetStageGateWindowWithBodyWithResponse Set the weekly window for the Stage Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+	SetStageGateWindowWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStageGateWindowResponse, error)
+
+	// SetStageGateWindowWithResponse Set the weekly window for the Stage Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+	SetStageGateWindowWithResponse(ctx context.Context, stageID openapi_types.UUID, body SetStageGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStageGateWindowResponse, error)
+
+	// GetTargetGateScopeWithResponse Inspect the Target Gate scope
+	//
+	// Returns current lock and window policies, their effective states, and recent changes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/gate-scopes/targets/{targetId} (the `GetTargetGateScope` operationId).
+	GetTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetTargetGateScopeResponse, error)
+
+	// UnlockTargetGateScopeWithResponse Unlock the Target Gate scope
+	//
+	// Clears the current hold. Unlocking an inactive scope is idempotent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/lock (the `UnlockTargetGateScope` operationId).
+	UnlockTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*UnlockTargetGateScopeResponse, error)
+
+	// LockTargetGateScopeWithBodyWithResponse Lock the Target Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+	LockTargetGateScopeWithBodyWithResponse(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockTargetGateScopeResponse, error)
+
+	// LockTargetGateScopeWithResponse Lock the Target Gate scope
+	//
+	// Records an operator hold. An identical request from its creator returns the existing active lock.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+	LockTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, body LockTargetGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockTargetGateScopeResponse, error)
+
+	// RemoveTargetGateWindowWithResponse Remove the weekly window for the Target Gate scope
+	//
+	// Removing an absent window returns the current scope.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/window (the `RemoveTargetGateWindow` operationId).
+	RemoveTargetGateWindowWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveTargetGateWindowResponse, error)
+
+	// SetTargetGateWindowWithBodyWithResponse Set the weekly window for the Target Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+	SetTargetGateWindowWithBodyWithResponse(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTargetGateWindowResponse, error)
+
+	// SetTargetGateWindowWithResponse Set the weekly window for the Target Gate scope
+	//
+	// Every accepted update starts a new window version.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+	SetTargetGateWindowWithResponse(ctx context.Context, targetID openapi_types.UUID, body SetTargetGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTargetGateWindowResponse, error)
+
 	// ListFailedGitTriggerDeliveriesWithResponse List failed Git-trigger deliveries
 	//
 	// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
@@ -13778,19 +15519,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/v1/promotions/{promotionId}/decision (the `DecidePromotion` operationId).
 	DecidePromotionWithResponse(ctx context.Context, promotionID PromotionID, body DecidePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*DecidePromotionResponse, error)
 
+	// ListPromotionGateOverridesWithResponse Inspect eligible Gates and override history for a Promotion
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/promotions/{promotionId}/gate-overrides (the `ListPromotionGateOverrides` operationId).
+	ListPromotionGateOverridesWithResponse(ctx context.Context, promotionID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListPromotionGateOverridesResponse, error)
+
 	// OverridePromotionGateWithBodyWithResponse Override one Gate for a waiting Promotion
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-	OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
+	// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
 
 	// OverridePromotionGateWithResponse Override one Gate for a waiting Promotion
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-	OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
+	// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+	OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error)
 
 	// ListRepositoriesWithResponse List repositories
 	//
@@ -13950,19 +15698,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelRunResponse, error)
 
+	// ListRunGateOverridesWithResponse Inspect eligible Gates and override history for a Run
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/runs/{runId}/gate-overrides (the `ListRunGateOverrides` operationId).
+	ListRunGateOverridesWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListRunGateOverridesResponse, error)
+
 	// OverrideRunGateWithBodyWithResponse Override one Gate for a waiting Run
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-	OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
+	// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+	OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
 
 	// OverrideRunGateWithResponse Override one Gate for a waiting Run
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-	OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
+	// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+	OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error)
 
 	// StreamRunLogWithResponse Stream retained and live Run log bytes
 	//
@@ -15349,6 +17104,1188 @@ func (r ListCommitsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListCommitsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetGlobalGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetGlobalGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetGlobalGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetGlobalGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetGlobalGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetGlobalGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetGlobalGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetGlobalGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetGlobalGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetGlobalGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnlockGlobalGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UnlockGlobalGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r UnlockGlobalGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UnlockGlobalGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UnlockGlobalGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r UnlockGlobalGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UnlockGlobalGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlockGlobalGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlockGlobalGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnlockGlobalGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type LockGlobalGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LockGlobalGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r LockGlobalGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r LockGlobalGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LockGlobalGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LockGlobalGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LockGlobalGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveGlobalGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RemoveGlobalGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RemoveGlobalGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RemoveGlobalGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RemoveGlobalGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RemoveGlobalGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveGlobalGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveGlobalGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveGlobalGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveGlobalGateWindowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetGlobalGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetGlobalGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r SetGlobalGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SetGlobalGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetGlobalGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetGlobalGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetGlobalGateWindowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetStageGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetStageGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetStageGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetStageGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetStageGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetStageGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetStageGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetStageGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetStageGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetStageGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetStageGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnlockStageGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UnlockStageGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r UnlockStageGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r UnlockStageGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UnlockStageGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UnlockStageGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r UnlockStageGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UnlockStageGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlockStageGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlockStageGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnlockStageGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type LockStageGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LockStageGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r LockStageGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r LockStageGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LockStageGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LockStageGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LockStageGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveStageGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RemoveStageGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RemoveStageGateWindowResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RemoveStageGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RemoveStageGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RemoveStageGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RemoveStageGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveStageGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveStageGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveStageGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveStageGateWindowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetStageGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetStageGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r SetStageGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SetStageGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetStageGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetStageGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetStageGateWindowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetTargetGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTargetGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetTargetGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetTargetGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetTargetGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetTargetGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetTargetGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTargetGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTargetGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTargetGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTargetGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnlockTargetGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UnlockTargetGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r UnlockTargetGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r UnlockTargetGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UnlockTargetGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UnlockTargetGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r UnlockTargetGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UnlockTargetGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlockTargetGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlockTargetGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnlockTargetGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type LockTargetGateScopeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LockTargetGateScopeResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r LockTargetGateScopeResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r LockTargetGateScopeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LockTargetGateScopeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LockTargetGateScopeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LockTargetGateScopeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveTargetGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RemoveTargetGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RemoveTargetGateWindowResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RemoveTargetGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RemoveTargetGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RemoveTargetGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RemoveTargetGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveTargetGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveTargetGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveTargetGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveTargetGateWindowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetTargetGateWindowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServerGateScope
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetTargetGateWindowResponse) GetJSON200() *ServerGateScope {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r SetTargetGateWindowResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SetTargetGateWindowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTargetGateWindowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTargetGateWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetTargetGateWindowResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17532,9 +20469,87 @@ func (r DecidePromotionResponse) ContentType() string {
 	return ""
 }
 
+type ListPromotionGateOverridesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GateOverrideCollection
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPromotionGateOverridesResponse) GetJSON200() *GateOverrideCollection {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPromotionGateOverridesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPromotionGateOverridesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPromotionGateOverridesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListPromotionGateOverridesResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPromotionGateOverridesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPromotionGateOverridesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPromotionGateOverridesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPromotionGateOverridesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPromotionGateOverridesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type OverridePromotionGateResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GateRequirement
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -17549,6 +20564,11 @@ type OverridePromotionGateResponse struct {
 	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r OverridePromotionGateResponse) GetJSON200() *GateRequirement {
+	return r.JSON200
 }
 
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
@@ -17969,6 +20989,8 @@ type GetRepositoryCatalogResponse struct {
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -18001,6 +21023,11 @@ func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON404() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -18784,9 +21811,87 @@ func (r CancelRunResponse) ContentType() string {
 	return ""
 }
 
+type ListRunGateOverridesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GateOverrideCollection
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRunGateOverridesResponse) GetJSON200() *GateOverrideCollection {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRunGateOverridesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRunGateOverridesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRunGateOverridesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListRunGateOverridesResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListRunGateOverridesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRunGateOverridesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRunGateOverridesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRunGateOverridesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRunGateOverridesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type OverrideRunGateResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GateRequirement
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -18801,6 +21906,11 @@ type OverrideRunGateResponse struct {
 	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r OverrideRunGateResponse) GetJSON200() *GateRequirement {
+	return r.JSON200
 }
 
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
@@ -19309,6 +22419,8 @@ type GetTargetResponse struct {
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -19336,6 +22448,11 @@ func (r GetTargetResponse) GetApplicationProblemJSON404() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r GetTargetResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -19387,6 +22504,8 @@ type ExplainTargetActionResponse struct {
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -19419,6 +22538,11 @@ func (r ExplainTargetActionResponse) GetApplicationProblemJSON404() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r ExplainTargetActionResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -20823,6 +23947,321 @@ func (c *ClientWithResponses) ListCommitsWithResponse(ctx context.Context, param
 	return ParseListCommitsResponse(rsp)
 }
 
+// GetGlobalGateScopeWithResponse Inspect the global Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/gate-scopes/global (the `GetGlobalGateScope` operationId).
+func (c *ClientWithResponses) GetGlobalGateScopeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetGlobalGateScopeResponse, error) {
+	rsp, err := c.GetGlobalGateScope(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetGlobalGateScopeResponse(rsp)
+}
+
+// UnlockGlobalGateScopeWithResponse Unlock the global Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/global/lock (the `UnlockGlobalGateScope` operationId).
+func (c *ClientWithResponses) UnlockGlobalGateScopeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*UnlockGlobalGateScopeResponse, error) {
+	rsp, err := c.UnlockGlobalGateScope(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlockGlobalGateScopeResponse(rsp)
+}
+
+// LockGlobalGateScopeWithBodyWithResponse Lock the global Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+func (c *ClientWithResponses) LockGlobalGateScopeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockGlobalGateScopeResponse, error) {
+	rsp, err := c.LockGlobalGateScopeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockGlobalGateScopeResponse(rsp)
+}
+
+// LockGlobalGateScopeWithResponse Lock the global Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/lock (the `LockGlobalGateScope` operationId).
+func (c *ClientWithResponses) LockGlobalGateScopeWithResponse(ctx context.Context, body LockGlobalGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockGlobalGateScopeResponse, error) {
+	rsp, err := c.LockGlobalGateScope(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockGlobalGateScopeResponse(rsp)
+}
+
+// RemoveGlobalGateWindowWithResponse Remove the weekly window for the global Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/global/window (the `RemoveGlobalGateWindow` operationId).
+func (c *ClientWithResponses) RemoveGlobalGateWindowWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RemoveGlobalGateWindowResponse, error) {
+	rsp, err := c.RemoveGlobalGateWindow(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveGlobalGateWindowResponse(rsp)
+}
+
+// SetGlobalGateWindowWithBodyWithResponse Set the weekly window for the global Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+func (c *ClientWithResponses) SetGlobalGateWindowWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetGlobalGateWindowResponse, error) {
+	rsp, err := c.SetGlobalGateWindowWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetGlobalGateWindowResponse(rsp)
+}
+
+// SetGlobalGateWindowWithResponse Set the weekly window for the global Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/global/window (the `SetGlobalGateWindow` operationId).
+func (c *ClientWithResponses) SetGlobalGateWindowWithResponse(ctx context.Context, body SetGlobalGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetGlobalGateWindowResponse, error) {
+	rsp, err := c.SetGlobalGateWindow(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetGlobalGateWindowResponse(rsp)
+}
+
+// GetStageGateScopeWithResponse Inspect the Stage Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/gate-scopes/stages/{stageId} (the `GetStageGateScope` operationId).
+func (c *ClientWithResponses) GetStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetStageGateScopeResponse, error) {
+	rsp, err := c.GetStageGateScope(ctx, stageID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetStageGateScopeResponse(rsp)
+}
+
+// UnlockStageGateScopeWithResponse Unlock the Stage Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/lock (the `UnlockStageGateScope` operationId).
+func (c *ClientWithResponses) UnlockStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*UnlockStageGateScopeResponse, error) {
+	rsp, err := c.UnlockStageGateScope(ctx, stageID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlockStageGateScopeResponse(rsp)
+}
+
+// LockStageGateScopeWithBodyWithResponse Lock the Stage Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+func (c *ClientWithResponses) LockStageGateScopeWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockStageGateScopeResponse, error) {
+	rsp, err := c.LockStageGateScopeWithBody(ctx, stageID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockStageGateScopeResponse(rsp)
+}
+
+// LockStageGateScopeWithResponse Lock the Stage Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/lock (the `LockStageGateScope` operationId).
+func (c *ClientWithResponses) LockStageGateScopeWithResponse(ctx context.Context, stageID openapi_types.UUID, body LockStageGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockStageGateScopeResponse, error) {
+	rsp, err := c.LockStageGateScope(ctx, stageID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockStageGateScopeResponse(rsp)
+}
+
+// RemoveStageGateWindowWithResponse Remove the weekly window for the Stage Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/stages/{stageId}/window (the `RemoveStageGateWindow` operationId).
+func (c *ClientWithResponses) RemoveStageGateWindowWithResponse(ctx context.Context, stageID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveStageGateWindowResponse, error) {
+	rsp, err := c.RemoveStageGateWindow(ctx, stageID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveStageGateWindowResponse(rsp)
+}
+
+// SetStageGateWindowWithBodyWithResponse Set the weekly window for the Stage Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+func (c *ClientWithResponses) SetStageGateWindowWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStageGateWindowResponse, error) {
+	rsp, err := c.SetStageGateWindowWithBody(ctx, stageID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetStageGateWindowResponse(rsp)
+}
+
+// SetStageGateWindowWithResponse Set the weekly window for the Stage Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/stages/{stageId}/window (the `SetStageGateWindow` operationId).
+func (c *ClientWithResponses) SetStageGateWindowWithResponse(ctx context.Context, stageID openapi_types.UUID, body SetStageGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStageGateWindowResponse, error) {
+	rsp, err := c.SetStageGateWindow(ctx, stageID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetStageGateWindowResponse(rsp)
+}
+
+// GetTargetGateScopeWithResponse Inspect the Target Gate scope
+//
+// Returns current lock and window policies, their effective states, and recent changes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/gate-scopes/targets/{targetId} (the `GetTargetGateScope` operationId).
+func (c *ClientWithResponses) GetTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetTargetGateScopeResponse, error) {
+	rsp, err := c.GetTargetGateScope(ctx, targetID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTargetGateScopeResponse(rsp)
+}
+
+// UnlockTargetGateScopeWithResponse Unlock the Target Gate scope
+//
+// Clears the current hold. Unlocking an inactive scope is idempotent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/lock (the `UnlockTargetGateScope` operationId).
+func (c *ClientWithResponses) UnlockTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*UnlockTargetGateScopeResponse, error) {
+	rsp, err := c.UnlockTargetGateScope(ctx, targetID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlockTargetGateScopeResponse(rsp)
+}
+
+// LockTargetGateScopeWithBodyWithResponse Lock the Target Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+func (c *ClientWithResponses) LockTargetGateScopeWithBodyWithResponse(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LockTargetGateScopeResponse, error) {
+	rsp, err := c.LockTargetGateScopeWithBody(ctx, targetID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockTargetGateScopeResponse(rsp)
+}
+
+// LockTargetGateScopeWithResponse Lock the Target Gate scope
+//
+// Records an operator hold. An identical request from its creator returns the existing active lock.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/lock (the `LockTargetGateScope` operationId).
+func (c *ClientWithResponses) LockTargetGateScopeWithResponse(ctx context.Context, targetID openapi_types.UUID, body LockTargetGateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*LockTargetGateScopeResponse, error) {
+	rsp, err := c.LockTargetGateScope(ctx, targetID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLockTargetGateScopeResponse(rsp)
+}
+
+// RemoveTargetGateWindowWithResponse Remove the weekly window for the Target Gate scope
+//
+// Removing an absent window returns the current scope.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/gate-scopes/targets/{targetId}/window (the `RemoveTargetGateWindow` operationId).
+func (c *ClientWithResponses) RemoveTargetGateWindowWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveTargetGateWindowResponse, error) {
+	rsp, err := c.RemoveTargetGateWindow(ctx, targetID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveTargetGateWindowResponse(rsp)
+}
+
+// SetTargetGateWindowWithBodyWithResponse Set the weekly window for the Target Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+func (c *ClientWithResponses) SetTargetGateWindowWithBodyWithResponse(ctx context.Context, targetID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTargetGateWindowResponse, error) {
+	rsp, err := c.SetTargetGateWindowWithBody(ctx, targetID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTargetGateWindowResponse(rsp)
+}
+
+// SetTargetGateWindowWithResponse Set the weekly window for the Target Gate scope
+//
+// Every accepted update starts a new window version.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /api/v1/gate-scopes/targets/{targetId}/window (the `SetTargetGateWindow` operationId).
+func (c *ClientWithResponses) SetTargetGateWindowWithResponse(ctx context.Context, targetID openapi_types.UUID, body SetTargetGateWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTargetGateWindowResponse, error) {
+	rsp, err := c.SetTargetGateWindow(ctx, targetID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTargetGateWindowResponse(rsp)
+}
+
 // ListFailedGitTriggerDeliveriesWithResponse List failed Git-trigger deliveries
 //
 // Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
@@ -21316,13 +24755,26 @@ func (c *ClientWithResponses) DecidePromotionWithResponse(ctx context.Context, p
 	return ParseDecidePromotionResponse(rsp)
 }
 
+// ListPromotionGateOverridesWithResponse Inspect eligible Gates and override history for a Promotion
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/promotions/{promotionId}/gate-overrides (the `ListPromotionGateOverrides` operationId).
+func (c *ClientWithResponses) ListPromotionGateOverridesWithResponse(ctx context.Context, promotionID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListPromotionGateOverridesResponse, error) {
+	rsp, err := c.ListPromotionGateOverrides(ctx, promotionID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPromotionGateOverridesResponse(rsp)
+}
+
 // OverridePromotionGateWithBodyWithResponse Override one Gate for a waiting Promotion
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-func (c *ClientWithResponses) OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
-	rsp, err := c.OverridePromotionGateWithBody(ctx, promotionID, gateName, contentType, body, reqEditors...)
+// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+func (c *ClientWithResponses) OverridePromotionGateWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
+	rsp, err := c.OverridePromotionGateWithBody(ctx, promotionID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -21333,9 +24785,9 @@ func (c *ClientWithResponses) OverridePromotionGateWithBodyWithResponse(ctx cont
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override (the `OverridePromotionGate` operationId).
-func (c *ClientWithResponses) OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, gateName CatalogName, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
-	rsp, err := c.OverridePromotionGate(ctx, promotionID, gateName, body, reqEditors...)
+// Corresponds with POST /api/v1/promotions/{promotionId}/gate-overrides (the `OverridePromotionGate` operationId).
+func (c *ClientWithResponses) OverridePromotionGateWithResponse(ctx context.Context, promotionID openapi_types.UUID, body OverridePromotionGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverridePromotionGateResponse, error) {
+	rsp, err := c.OverridePromotionGate(ctx, promotionID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -21608,13 +25060,26 @@ func (c *ClientWithResponses) CancelRunWithResponse(ctx context.Context, runID o
 	return ParseCancelRunResponse(rsp)
 }
 
+// ListRunGateOverridesWithResponse Inspect eligible Gates and override history for a Run
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/runs/{runId}/gate-overrides (the `ListRunGateOverrides` operationId).
+func (c *ClientWithResponses) ListRunGateOverridesWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListRunGateOverridesResponse, error) {
+	rsp, err := c.ListRunGateOverrides(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRunGateOverridesResponse(rsp)
+}
+
 // OverrideRunGateWithBodyWithResponse Override one Gate for a waiting Run
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-func (c *ClientWithResponses) OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
-	rsp, err := c.OverrideRunGateWithBody(ctx, runID, gateName, contentType, body, reqEditors...)
+// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+func (c *ClientWithResponses) OverrideRunGateWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
+	rsp, err := c.OverrideRunGateWithBody(ctx, runID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -21625,9 +25090,9 @@ func (c *ClientWithResponses) OverrideRunGateWithBodyWithResponse(ctx context.Co
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /api/v1/runs/{runId}/gates/{gateName}/override (the `OverrideRunGate` operationId).
-func (c *ClientWithResponses) OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, gateName CatalogName, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
-	rsp, err := c.OverrideRunGate(ctx, runID, gateName, body, reqEditors...)
+// Corresponds with POST /api/v1/runs/{runId}/gate-overrides (the `OverrideRunGate` operationId).
+func (c *ClientWithResponses) OverrideRunGateWithResponse(ctx context.Context, runID openapi_types.UUID, body OverrideRunGateJSONRequestBody, reqEditors ...RequestEditorFn) (*OverrideRunGateResponse, error) {
+	rsp, err := c.OverrideRunGate(ctx, runID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -23095,6 +26560,963 @@ func ParseListCommitsResponse(rsp *http.Response) (*ListCommitsResponse, error) 
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetGlobalGateScopeResponse parses an HTTP response from a GetGlobalGateScopeWithResponse call
+func ParseGetGlobalGateScopeResponse(rsp *http.Response) (*GetGlobalGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetGlobalGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlockGlobalGateScopeResponse parses an HTTP response from a UnlockGlobalGateScopeWithResponse call
+func ParseUnlockGlobalGateScopeResponse(rsp *http.Response) (*UnlockGlobalGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlockGlobalGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLockGlobalGateScopeResponse parses an HTTP response from a LockGlobalGateScopeWithResponse call
+func ParseLockGlobalGateScopeResponse(rsp *http.Response) (*LockGlobalGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LockGlobalGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveGlobalGateWindowResponse parses an HTTP response from a RemoveGlobalGateWindowWithResponse call
+func ParseRemoveGlobalGateWindowResponse(rsp *http.Response) (*RemoveGlobalGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveGlobalGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetGlobalGateWindowResponse parses an HTTP response from a SetGlobalGateWindowWithResponse call
+func ParseSetGlobalGateWindowResponse(rsp *http.Response) (*SetGlobalGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetGlobalGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetStageGateScopeResponse parses an HTTP response from a GetStageGateScopeWithResponse call
+func ParseGetStageGateScopeResponse(rsp *http.Response) (*GetStageGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetStageGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlockStageGateScopeResponse parses an HTTP response from a UnlockStageGateScopeWithResponse call
+func ParseUnlockStageGateScopeResponse(rsp *http.Response) (*UnlockStageGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlockStageGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLockStageGateScopeResponse parses an HTTP response from a LockStageGateScopeWithResponse call
+func ParseLockStageGateScopeResponse(rsp *http.Response) (*LockStageGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LockStageGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveStageGateWindowResponse parses an HTTP response from a RemoveStageGateWindowWithResponse call
+func ParseRemoveStageGateWindowResponse(rsp *http.Response) (*RemoveStageGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveStageGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetStageGateWindowResponse parses an HTTP response from a SetStageGateWindowWithResponse call
+func ParseSetStageGateWindowResponse(rsp *http.Response) (*SetStageGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetStageGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTargetGateScopeResponse parses an HTTP response from a GetTargetGateScopeWithResponse call
+func ParseGetTargetGateScopeResponse(rsp *http.Response) (*GetTargetGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTargetGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlockTargetGateScopeResponse parses an HTTP response from a UnlockTargetGateScopeWithResponse call
+func ParseUnlockTargetGateScopeResponse(rsp *http.Response) (*UnlockTargetGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlockTargetGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLockTargetGateScopeResponse parses an HTTP response from a LockTargetGateScopeWithResponse call
+func ParseLockTargetGateScopeResponse(rsp *http.Response) (*LockTargetGateScopeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LockTargetGateScopeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveTargetGateWindowResponse parses an HTTP response from a RemoveTargetGateWindowWithResponse call
+func ParseRemoveTargetGateWindowResponse(rsp *http.Response) (*RemoveTargetGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveTargetGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTargetGateWindowResponse parses an HTTP response from a SetTargetGateWindowWithResponse call
+func ParseSetTargetGateWindowResponse(rsp *http.Response) (*SetTargetGateWindowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTargetGateWindowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServerGateScope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -24889,6 +29311,67 @@ func ParseDecidePromotionResponse(rsp *http.Response) (*DecidePromotionResponse,
 	return response, nil
 }
 
+// ParseListPromotionGateOverridesResponse parses an HTTP response from a ListPromotionGateOverridesWithResponse call
+func ParseListPromotionGateOverridesResponse(rsp *http.Response) (*ListPromotionGateOverridesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPromotionGateOverridesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GateOverrideCollection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseOverridePromotionGateResponse parses an HTTP response from a OverridePromotionGateWithResponse call
 func ParseOverridePromotionGateResponse(rsp *http.Response) (*OverridePromotionGateResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24903,8 +29386,12 @@ func ParseOverridePromotionGateResponse(rsp *http.Response) (*OverridePromotionG
 	}
 
 	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GateRequirement
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
@@ -25303,6 +29790,13 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -25934,6 +30428,67 @@ func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 	return response, nil
 }
 
+// ParseListRunGateOverridesResponse parses an HTTP response from a ListRunGateOverridesWithResponse call
+func ParseListRunGateOverridesResponse(rsp *http.Response) (*ListRunGateOverridesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRunGateOverridesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GateOverrideCollection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseOverrideRunGateResponse parses an HTTP response from a OverrideRunGateWithResponse call
 func ParseOverrideRunGateResponse(rsp *http.Response) (*OverrideRunGateResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -25948,8 +30503,12 @@ func ParseOverrideRunGateResponse(rsp *http.Response) (*OverrideRunGateResponse,
 	}
 
 	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GateRequirement
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
@@ -26408,6 +30967,13 @@ func ParseGetTargetResponse(rsp *http.Response) (*GetTargetResponse, error) {
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -26475,6 +31041,13 @@ func ParseExplainTargetActionResponse(rsp *http.Response) (*ExplainTargetActionR
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -27468,6 +32041,51 @@ type ServerInterface interface {
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, params ListCommitsParams)
+	// GetGlobalGateScope Inspect the global Gate scope
+	// (GET /api/v1/gate-scopes/global)
+	GetGlobalGateScope(w http.ResponseWriter, r *http.Request)
+	// UnlockGlobalGateScope Unlock the global Gate scope
+	// (DELETE /api/v1/gate-scopes/global/lock)
+	UnlockGlobalGateScope(w http.ResponseWriter, r *http.Request)
+	// LockGlobalGateScope Lock the global Gate scope
+	// (PUT /api/v1/gate-scopes/global/lock)
+	LockGlobalGateScope(w http.ResponseWriter, r *http.Request)
+	// RemoveGlobalGateWindow Remove the weekly window for the global Gate scope
+	// (DELETE /api/v1/gate-scopes/global/window)
+	RemoveGlobalGateWindow(w http.ResponseWriter, r *http.Request)
+	// SetGlobalGateWindow Set the weekly window for the global Gate scope
+	// (PUT /api/v1/gate-scopes/global/window)
+	SetGlobalGateWindow(w http.ResponseWriter, r *http.Request)
+	// GetStageGateScope Inspect the Stage Gate scope
+	// (GET /api/v1/gate-scopes/stages/{stageId})
+	GetStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// UnlockStageGateScope Unlock the Stage Gate scope
+	// (DELETE /api/v1/gate-scopes/stages/{stageId}/lock)
+	UnlockStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// LockStageGateScope Lock the Stage Gate scope
+	// (PUT /api/v1/gate-scopes/stages/{stageId}/lock)
+	LockStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// RemoveStageGateWindow Remove the weekly window for the Stage Gate scope
+	// (DELETE /api/v1/gate-scopes/stages/{stageId}/window)
+	RemoveStageGateWindow(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// SetStageGateWindow Set the weekly window for the Stage Gate scope
+	// (PUT /api/v1/gate-scopes/stages/{stageId}/window)
+	SetStageGateWindow(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// GetTargetGateScope Inspect the Target Gate scope
+	// (GET /api/v1/gate-scopes/targets/{targetId})
+	GetTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
+	// UnlockTargetGateScope Unlock the Target Gate scope
+	// (DELETE /api/v1/gate-scopes/targets/{targetId}/lock)
+	UnlockTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
+	// LockTargetGateScope Lock the Target Gate scope
+	// (PUT /api/v1/gate-scopes/targets/{targetId}/lock)
+	LockTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
+	// RemoveTargetGateWindow Remove the weekly window for the Target Gate scope
+	// (DELETE /api/v1/gate-scopes/targets/{targetId}/window)
+	RemoveTargetGateWindow(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
+	// SetTargetGateWindow Set the weekly window for the Target Gate scope
+	// (PUT /api/v1/gate-scopes/targets/{targetId}/window)
+	SetTargetGateWindow(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
 	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
 	// (GET /api/v1/git-trigger-deliveries/failed)
 	ListFailedGitTriggerDeliveries(w http.ResponseWriter, r *http.Request, params ListFailedGitTriggerDeliveriesParams)
@@ -27552,9 +32170,12 @@ type ServerInterface interface {
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
+	// ListPromotionGateOverrides Inspect eligible Gates and override history for a Promotion
+	// (GET /api/v1/promotions/{promotionId}/gate-overrides)
+	ListPromotionGateOverrides(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
 	// OverridePromotionGate Override one Gate for a waiting Promotion
-	// (PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override)
-	OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID, gateName CatalogName)
+	// (POST /api/v1/promotions/{promotionId}/gate-overrides)
+	OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
 	ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams)
@@ -27597,9 +32218,12 @@ type ServerInterface interface {
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// ListRunGateOverrides Inspect eligible Gates and override history for a Run
+	// (GET /api/v1/runs/{runId}/gate-overrides)
+	ListRunGateOverrides(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// OverrideRunGate Override one Gate for a waiting Run
-	// (PUT /api/v1/runs/{runId}/gates/{gateName}/override)
-	OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, gateName CatalogName)
+	// (POST /api/v1/runs/{runId}/gate-overrides)
+	OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
@@ -28195,6 +32819,336 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCommits(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGlobalGateScope operation middleware
+func (siw *ServerInterfaceWrapper) GetGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGlobalGateScope(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlockGlobalGateScope operation middleware
+func (siw *ServerInterfaceWrapper) UnlockGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlockGlobalGateScope(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LockGlobalGateScope operation middleware
+func (siw *ServerInterfaceWrapper) LockGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LockGlobalGateScope(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveGlobalGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) RemoveGlobalGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveGlobalGateWindow(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetGlobalGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) SetGlobalGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetGlobalGateWindow(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStageGateScope operation middleware
+func (siw *ServerInterfaceWrapper) GetStageGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStageGateScope(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlockStageGateScope operation middleware
+func (siw *ServerInterfaceWrapper) UnlockStageGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlockStageGateScope(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LockStageGateScope operation middleware
+func (siw *ServerInterfaceWrapper) LockStageGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LockStageGateScope(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveStageGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) RemoveStageGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveStageGateWindow(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetStageGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) SetStageGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetStageGateWindow(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTargetGateScope operation middleware
+func (siw *ServerInterfaceWrapper) GetTargetGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTargetGateScope(w, r, targetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlockTargetGateScope operation middleware
+func (siw *ServerInterfaceWrapper) UnlockTargetGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlockTargetGateScope(w, r, targetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LockTargetGateScope operation middleware
+func (siw *ServerInterfaceWrapper) LockTargetGateScope(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LockTargetGateScope(w, r, targetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveTargetGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) RemoveTargetGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveTargetGateWindow(w, r, targetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTargetGateWindow operation middleware
+func (siw *ServerInterfaceWrapper) SetTargetGateWindow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTargetGateWindow(w, r, targetID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -29697,6 +34651,32 @@ func (siw *ServerInterfaceWrapper) DecidePromotion(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListPromotionGateOverrides operation middleware
+func (siw *ServerInterfaceWrapper) ListPromotionGateOverrides(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "promotionId" -------------
+	var promotionID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "promotionId", r.PathValue("promotionId"), &promotionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "promotionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPromotionGateOverrides(w, r, promotionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // OverridePromotionGate operation middleware
 func (siw *ServerInterfaceWrapper) OverridePromotionGate(w http.ResponseWriter, r *http.Request) {
 
@@ -29712,17 +34692,8 @@ func (siw *ServerInterfaceWrapper) OverridePromotionGate(w http.ResponseWriter, 
 		return
 	}
 
-	// ------------- Path parameter "gateName" -------------
-	var gateName CatalogName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "gateName", r.PathValue("gateName"), &gateName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateName", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.OverridePromotionGate(w, r, promotionID, gateName)
+		siw.Handler.OverridePromotionGate(w, r, promotionID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30334,6 +35305,32 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListRunGateOverrides operation middleware
+func (siw *ServerInterfaceWrapper) ListRunGateOverrides(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRunGateOverrides(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // OverrideRunGate operation middleware
 func (siw *ServerInterfaceWrapper) OverrideRunGate(w http.ResponseWriter, r *http.Request) {
 
@@ -30349,17 +35346,8 @@ func (siw *ServerInterfaceWrapper) OverrideRunGate(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// ------------- Path parameter "gateName" -------------
-	var gateName CatalogName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "gateName", r.PathValue("gateName"), &gateName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateName", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.OverrideRunGate(w, r, runID, gateName)
+		siw.Handler.OverrideRunGate(w, r, runID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -31242,6 +36230,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/commits/{commitSha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}/actions/{actionName}/explanation", wrapper.ExplainTargetAction)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/gate-scopes/global", wrapper.GetGlobalGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/global/lock", wrapper.UnlockGlobalGateScope)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/global/lock", wrapper.LockGlobalGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/global/window", wrapper.RemoveGlobalGateWindow)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/global/window", wrapper.SetGlobalGateWindow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/gate-scopes/targets/{targetId}", wrapper.GetTargetGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/targets/{targetId}/lock", wrapper.UnlockTargetGateScope)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/targets/{targetId}/lock", wrapper.LockTargetGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/targets/{targetId}/window", wrapper.RemoveTargetGateWindow)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/targets/{targetId}/window", wrapper.SetTargetGateWindow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/gate-scopes/stages/{stageId}", wrapper.GetStageGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/stages/{stageId}/lock", wrapper.UnlockStageGateScope)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/stages/{stageId}/lock", wrapper.LockStageGateScope)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/gate-scopes/stages/{stageId}/window", wrapper.RemoveStageGateWindow)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/gate-scopes/stages/{stageId}/window", wrapper.SetStageGateWindow)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}", wrapper.GetTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
@@ -31264,7 +36267,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/runs/{runId}/gates/{gateName}/override", wrapper.OverrideRunGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/gate-overrides", wrapper.ListRunGateOverrides)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/gate-overrides", wrapper.OverrideRunGate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/review", wrapper.DecideRunReview)
@@ -31293,7 +36297,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kargo/{integration}/promotions", wrapper.SubmitKargoPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions", wrapper.ListPromotions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/gates/{gateName}/override", wrapper.OverridePromotionGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/gate-overrides", wrapper.ListPromotionGateOverrides)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/gate-overrides", wrapper.OverridePromotionGate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/cancel", wrapper.CancelPromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
@@ -32666,6 +37671,1483 @@ func (response ListCommits405ApplicationProblemPlusJSONResponse) VisitListCommit
 type ListCommits500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListCommits500ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGlobalGateScopeRequestObject struct {
+}
+
+type GetGlobalGateScopeResponseObject interface {
+	VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error
+}
+
+type GetGlobalGateScope200JSONResponse ServerGateScope
+
+func (response GetGlobalGateScope200JSONResponse) VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGlobalGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGlobalGateScope401ApplicationProblemPlusJSONResponse) VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGlobalGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGlobalGateScope403ApplicationProblemPlusJSONResponse) VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGlobalGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGlobalGateScope404ApplicationProblemPlusJSONResponse) VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGlobalGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGlobalGateScope500ApplicationProblemPlusJSONResponse) VisitGetGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockGlobalGateScopeRequestObject struct {
+}
+
+type UnlockGlobalGateScopeResponseObject interface {
+	VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error
+}
+
+type UnlockGlobalGateScope200JSONResponse ServerGateScope
+
+func (response UnlockGlobalGateScope200JSONResponse) VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockGlobalGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockGlobalGateScope401ApplicationProblemPlusJSONResponse) VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockGlobalGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockGlobalGateScope403ApplicationProblemPlusJSONResponse) VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockGlobalGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockGlobalGateScope404ApplicationProblemPlusJSONResponse) VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockGlobalGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockGlobalGateScope500ApplicationProblemPlusJSONResponse) VisitUnlockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScopeRequestObject struct {
+	Body *LockGlobalGateScopeJSONRequestBody
+}
+
+type LockGlobalGateScopeResponseObject interface {
+	VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error
+}
+
+type LockGlobalGateScope200JSONResponse ServerGateScope
+
+func (response LockGlobalGateScope200JSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope400ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope401ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope403ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope404ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope409ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope409ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response LockGlobalGateScope413ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockGlobalGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response LockGlobalGateScope500ApplicationProblemPlusJSONResponse) VisitLockGlobalGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveGlobalGateWindowRequestObject struct {
+}
+
+type RemoveGlobalGateWindowResponseObject interface {
+	VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error
+}
+
+type RemoveGlobalGateWindow200JSONResponse ServerGateScope
+
+func (response RemoveGlobalGateWindow200JSONResponse) VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveGlobalGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveGlobalGateWindow401ApplicationProblemPlusJSONResponse) VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveGlobalGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveGlobalGateWindow403ApplicationProblemPlusJSONResponse) VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveGlobalGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveGlobalGateWindow404ApplicationProblemPlusJSONResponse) VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveGlobalGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveGlobalGateWindow500ApplicationProblemPlusJSONResponse) VisitRemoveGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindowRequestObject struct {
+	Body *SetGlobalGateWindowJSONRequestBody
+}
+
+type SetGlobalGateWindowResponseObject interface {
+	VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error
+}
+
+type SetGlobalGateWindow200JSONResponse ServerGateScope
+
+func (response SetGlobalGateWindow200JSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow400ApplicationProblemPlusJSONResponse Problem
+
+func (response SetGlobalGateWindow400ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetGlobalGateWindow401ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetGlobalGateWindow403ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetGlobalGateWindow404ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response SetGlobalGateWindow413ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetGlobalGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response SetGlobalGateWindow500ApplicationProblemPlusJSONResponse) VisitSetGlobalGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScopeRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+}
+
+type GetStageGateScopeResponseObject interface {
+	VisitGetStageGateScopeResponse(w http.ResponseWriter) error
+}
+
+type GetStageGateScope200JSONResponse ServerGateScope
+
+func (response GetStageGateScope200JSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response GetStageGateScope400ApplicationProblemPlusJSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetStageGateScope401ApplicationProblemPlusJSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetStageGateScope403ApplicationProblemPlusJSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetStageGateScope404ApplicationProblemPlusJSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStageGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetStageGateScope500ApplicationProblemPlusJSONResponse) VisitGetStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScopeRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+}
+
+type UnlockStageGateScopeResponseObject interface {
+	VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error
+}
+
+type UnlockStageGateScope200JSONResponse ServerGateScope
+
+func (response UnlockStageGateScope200JSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockStageGateScope400ApplicationProblemPlusJSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockStageGateScope401ApplicationProblemPlusJSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockStageGateScope403ApplicationProblemPlusJSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockStageGateScope404ApplicationProblemPlusJSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockStageGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockStageGateScope500ApplicationProblemPlusJSONResponse) VisitUnlockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScopeRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+	Body    *LockStageGateScopeJSONRequestBody
+}
+
+type LockStageGateScopeResponseObject interface {
+	VisitLockStageGateScopeResponse(w http.ResponseWriter) error
+}
+
+type LockStageGateScope200JSONResponse ServerGateScope
+
+func (response LockStageGateScope200JSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope400ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope401ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope403ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope404ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope409ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope409ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response LockStageGateScope413ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockStageGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response LockStageGateScope500ApplicationProblemPlusJSONResponse) VisitLockStageGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindowRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+}
+
+type RemoveStageGateWindowResponseObject interface {
+	VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error
+}
+
+type RemoveStageGateWindow200JSONResponse ServerGateScope
+
+func (response RemoveStageGateWindow200JSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindow400ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveStageGateWindow400ApplicationProblemPlusJSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveStageGateWindow401ApplicationProblemPlusJSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveStageGateWindow403ApplicationProblemPlusJSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveStageGateWindow404ApplicationProblemPlusJSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveStageGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveStageGateWindow500ApplicationProblemPlusJSONResponse) VisitRemoveStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindowRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+	Body    *SetStageGateWindowJSONRequestBody
+}
+
+type SetStageGateWindowResponseObject interface {
+	VisitSetStageGateWindowResponse(w http.ResponseWriter) error
+}
+
+type SetStageGateWindow200JSONResponse ServerGateScope
+
+func (response SetStageGateWindow200JSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow400ApplicationProblemPlusJSONResponse Problem
+
+func (response SetStageGateWindow400ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetStageGateWindow401ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetStageGateWindow403ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetStageGateWindow404ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response SetStageGateWindow413ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetStageGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response SetStageGateWindow500ApplicationProblemPlusJSONResponse) VisitSetStageGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScopeRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+}
+
+type GetTargetGateScopeResponseObject interface {
+	VisitGetTargetGateScopeResponse(w http.ResponseWriter) error
+}
+
+type GetTargetGateScope200JSONResponse ServerGateScope
+
+func (response GetTargetGateScope200JSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTargetGateScope400ApplicationProblemPlusJSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTargetGateScope401ApplicationProblemPlusJSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTargetGateScope403ApplicationProblemPlusJSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTargetGateScope404ApplicationProblemPlusJSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTargetGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTargetGateScope500ApplicationProblemPlusJSONResponse) VisitGetTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScopeRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+}
+
+type UnlockTargetGateScopeResponseObject interface {
+	VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error
+}
+
+type UnlockTargetGateScope200JSONResponse ServerGateScope
+
+func (response UnlockTargetGateScope200JSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockTargetGateScope400ApplicationProblemPlusJSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockTargetGateScope401ApplicationProblemPlusJSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockTargetGateScope403ApplicationProblemPlusJSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockTargetGateScope404ApplicationProblemPlusJSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlockTargetGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlockTargetGateScope500ApplicationProblemPlusJSONResponse) VisitUnlockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScopeRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+	Body     *LockTargetGateScopeJSONRequestBody
+}
+
+type LockTargetGateScopeResponseObject interface {
+	VisitLockTargetGateScopeResponse(w http.ResponseWriter) error
+}
+
+type LockTargetGateScope200JSONResponse ServerGateScope
+
+func (response LockTargetGateScope200JSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope400ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope400ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope401ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope401ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope403ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope403ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope404ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope404ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope409ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope409ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response LockTargetGateScope413ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LockTargetGateScope500ApplicationProblemPlusJSONResponse Problem
+
+func (response LockTargetGateScope500ApplicationProblemPlusJSONResponse) VisitLockTargetGateScopeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindowRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+}
+
+type RemoveTargetGateWindowResponseObject interface {
+	VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error
+}
+
+type RemoveTargetGateWindow200JSONResponse ServerGateScope
+
+func (response RemoveTargetGateWindow200JSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindow400ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveTargetGateWindow400ApplicationProblemPlusJSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveTargetGateWindow401ApplicationProblemPlusJSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveTargetGateWindow403ApplicationProblemPlusJSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveTargetGateWindow404ApplicationProblemPlusJSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTargetGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveTargetGateWindow500ApplicationProblemPlusJSONResponse) VisitRemoveTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindowRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+	Body     *SetTargetGateWindowJSONRequestBody
+}
+
+type SetTargetGateWindowResponseObject interface {
+	VisitSetTargetGateWindowResponse(w http.ResponseWriter) error
+}
+
+type SetTargetGateWindow200JSONResponse ServerGateScope
+
+func (response SetTargetGateWindow200JSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow400ApplicationProblemPlusJSONResponse Problem
+
+func (response SetTargetGateWindow400ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetTargetGateWindow401ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetTargetGateWindow403ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetTargetGateWindow404ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response SetTargetGateWindow413ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTargetGateWindow500ApplicationProblemPlusJSONResponse Problem
+
+func (response SetTargetGateWindow500ApplicationProblemPlusJSONResponse) VisitSetTargetGateWindowResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -35538,9 +42020,100 @@ func (response DecidePromotion500ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
+type ListPromotionGateOverridesRequestObject struct {
+	PromotionID openapi_types.UUID `json:"promotionId"`
+}
+
+type ListPromotionGateOverridesResponseObject interface {
+	VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error
+}
+
+type ListPromotionGateOverrides200JSONResponse GateOverrideCollection
+
+func (response ListPromotionGateOverrides200JSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionGateOverrides400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPromotionGateOverrides400ApplicationProblemPlusJSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionGateOverrides401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPromotionGateOverrides401ApplicationProblemPlusJSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionGateOverrides403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPromotionGateOverrides403ApplicationProblemPlusJSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionGateOverrides404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPromotionGateOverrides404ApplicationProblemPlusJSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPromotionGateOverrides500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPromotionGateOverrides500ApplicationProblemPlusJSONResponse) VisitListPromotionGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type OverridePromotionGateRequestObject struct {
 	PromotionID openapi_types.UUID `json:"promotionId"`
-	GateName    CatalogName        `json:"gateName"`
 	Body        *OverridePromotionGateJSONRequestBody
 }
 
@@ -35548,12 +42121,18 @@ type OverridePromotionGateResponseObject interface {
 	VisitOverridePromotionGateResponse(w http.ResponseWriter) error
 }
 
-type OverridePromotionGate204Response struct {
-}
+type OverridePromotionGate200JSONResponse GateRequirement
 
-func (response OverridePromotionGate204Response) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
+func (response OverridePromotionGate200JSONResponse) VisitOverridePromotionGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type OverridePromotionGate400ApplicationProblemPlusJSONResponse Problem
@@ -36191,6 +42770,20 @@ func (response GetRepositoryCatalog405ApplicationProblemPlusJSONResponse) VisitG
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog409ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -37166,22 +43759,119 @@ func (response CancelRun500ApplicationProblemPlusJSONResponse) VisitCancelRunRes
 	return err
 }
 
+type ListRunGateOverridesRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type ListRunGateOverridesResponseObject interface {
+	VisitListRunGateOverridesResponse(w http.ResponseWriter) error
+}
+
+type ListRunGateOverrides200JSONResponse GateOverrideCollection
+
+func (response ListRunGateOverrides200JSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunGateOverrides400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunGateOverrides400ApplicationProblemPlusJSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunGateOverrides401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunGateOverrides401ApplicationProblemPlusJSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunGateOverrides403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunGateOverrides403ApplicationProblemPlusJSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunGateOverrides404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunGateOverrides404ApplicationProblemPlusJSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunGateOverrides500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunGateOverrides500ApplicationProblemPlusJSONResponse) VisitListRunGateOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type OverrideRunGateRequestObject struct {
-	RunID    openapi_types.UUID `json:"runId"`
-	GateName CatalogName        `json:"gateName"`
-	Body     *OverrideRunGateJSONRequestBody
+	RunID openapi_types.UUID `json:"runId"`
+	Body  *OverrideRunGateJSONRequestBody
 }
 
 type OverrideRunGateResponseObject interface {
 	VisitOverrideRunGateResponse(w http.ResponseWriter) error
 }
 
-type OverrideRunGate204Response struct {
-}
+type OverrideRunGate200JSONResponse GateRequirement
 
-func (response OverrideRunGate204Response) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
+func (response OverrideRunGate200JSONResponse) VisitOverrideRunGateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type OverrideRunGate400ApplicationProblemPlusJSONResponse Problem
@@ -37973,6 +44663,20 @@ func (response GetTarget405ApplicationProblemPlusJSONResponse) VisitGetTargetRes
 	return err
 }
 
+type GetTarget409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget409ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetTarget500ApplicationProblemPlusJSONResponse Problem
 
 func (response GetTarget500ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
@@ -38076,6 +44780,20 @@ func (response ExplainTargetAction405ApplicationProblemPlusJSONResponse) VisitEx
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction409ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction409ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -39617,6 +46335,51 @@ type StrictServerInterface interface {
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
+	// GetGlobalGateScope Inspect the global Gate scope
+	// (GET /api/v1/gate-scopes/global)
+	GetGlobalGateScope(ctx context.Context, request GetGlobalGateScopeRequestObject) (GetGlobalGateScopeResponseObject, error)
+	// UnlockGlobalGateScope Unlock the global Gate scope
+	// (DELETE /api/v1/gate-scopes/global/lock)
+	UnlockGlobalGateScope(ctx context.Context, request UnlockGlobalGateScopeRequestObject) (UnlockGlobalGateScopeResponseObject, error)
+	// LockGlobalGateScope Lock the global Gate scope
+	// (PUT /api/v1/gate-scopes/global/lock)
+	LockGlobalGateScope(ctx context.Context, request LockGlobalGateScopeRequestObject) (LockGlobalGateScopeResponseObject, error)
+	// RemoveGlobalGateWindow Remove the weekly window for the global Gate scope
+	// (DELETE /api/v1/gate-scopes/global/window)
+	RemoveGlobalGateWindow(ctx context.Context, request RemoveGlobalGateWindowRequestObject) (RemoveGlobalGateWindowResponseObject, error)
+	// SetGlobalGateWindow Set the weekly window for the global Gate scope
+	// (PUT /api/v1/gate-scopes/global/window)
+	SetGlobalGateWindow(ctx context.Context, request SetGlobalGateWindowRequestObject) (SetGlobalGateWindowResponseObject, error)
+	// GetStageGateScope Inspect the Stage Gate scope
+	// (GET /api/v1/gate-scopes/stages/{stageId})
+	GetStageGateScope(ctx context.Context, request GetStageGateScopeRequestObject) (GetStageGateScopeResponseObject, error)
+	// UnlockStageGateScope Unlock the Stage Gate scope
+	// (DELETE /api/v1/gate-scopes/stages/{stageId}/lock)
+	UnlockStageGateScope(ctx context.Context, request UnlockStageGateScopeRequestObject) (UnlockStageGateScopeResponseObject, error)
+	// LockStageGateScope Lock the Stage Gate scope
+	// (PUT /api/v1/gate-scopes/stages/{stageId}/lock)
+	LockStageGateScope(ctx context.Context, request LockStageGateScopeRequestObject) (LockStageGateScopeResponseObject, error)
+	// RemoveStageGateWindow Remove the weekly window for the Stage Gate scope
+	// (DELETE /api/v1/gate-scopes/stages/{stageId}/window)
+	RemoveStageGateWindow(ctx context.Context, request RemoveStageGateWindowRequestObject) (RemoveStageGateWindowResponseObject, error)
+	// SetStageGateWindow Set the weekly window for the Stage Gate scope
+	// (PUT /api/v1/gate-scopes/stages/{stageId}/window)
+	SetStageGateWindow(ctx context.Context, request SetStageGateWindowRequestObject) (SetStageGateWindowResponseObject, error)
+	// GetTargetGateScope Inspect the Target Gate scope
+	// (GET /api/v1/gate-scopes/targets/{targetId})
+	GetTargetGateScope(ctx context.Context, request GetTargetGateScopeRequestObject) (GetTargetGateScopeResponseObject, error)
+	// UnlockTargetGateScope Unlock the Target Gate scope
+	// (DELETE /api/v1/gate-scopes/targets/{targetId}/lock)
+	UnlockTargetGateScope(ctx context.Context, request UnlockTargetGateScopeRequestObject) (UnlockTargetGateScopeResponseObject, error)
+	// LockTargetGateScope Lock the Target Gate scope
+	// (PUT /api/v1/gate-scopes/targets/{targetId}/lock)
+	LockTargetGateScope(ctx context.Context, request LockTargetGateScopeRequestObject) (LockTargetGateScopeResponseObject, error)
+	// RemoveTargetGateWindow Remove the weekly window for the Target Gate scope
+	// (DELETE /api/v1/gate-scopes/targets/{targetId}/window)
+	RemoveTargetGateWindow(ctx context.Context, request RemoveTargetGateWindowRequestObject) (RemoveTargetGateWindowResponseObject, error)
+	// SetTargetGateWindow Set the weekly window for the Target Gate scope
+	// (PUT /api/v1/gate-scopes/targets/{targetId}/window)
+	SetTargetGateWindow(ctx context.Context, request SetTargetGateWindowRequestObject) (SetTargetGateWindowResponseObject, error)
 	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
 	// (GET /api/v1/git-trigger-deliveries/failed)
 	ListFailedGitTriggerDeliveries(ctx context.Context, request ListFailedGitTriggerDeliveriesRequestObject) (ListFailedGitTriggerDeliveriesResponseObject, error)
@@ -39701,8 +46464,11 @@ type StrictServerInterface interface {
 	// DecidePromotion Approve or reject a pending Promotion
 	// (PUT /api/v1/promotions/{promotionId}/decision)
 	DecidePromotion(ctx context.Context, request DecidePromotionRequestObject) (DecidePromotionResponseObject, error)
+	// ListPromotionGateOverrides Inspect eligible Gates and override history for a Promotion
+	// (GET /api/v1/promotions/{promotionId}/gate-overrides)
+	ListPromotionGateOverrides(ctx context.Context, request ListPromotionGateOverridesRequestObject) (ListPromotionGateOverridesResponseObject, error)
 	// OverridePromotionGate Override one Gate for a waiting Promotion
-	// (PUT /api/v1/promotions/{promotionId}/gates/{gateName}/override)
+	// (POST /api/v1/promotions/{promotionId}/gate-overrides)
 	OverridePromotionGate(ctx context.Context, request OverridePromotionGateRequestObject) (OverridePromotionGateResponseObject, error)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
@@ -39746,8 +46512,11 @@ type StrictServerInterface interface {
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// ListRunGateOverrides Inspect eligible Gates and override history for a Run
+	// (GET /api/v1/runs/{runId}/gate-overrides)
+	ListRunGateOverrides(ctx context.Context, request ListRunGateOverridesRequestObject) (ListRunGateOverridesResponseObject, error)
 	// OverrideRunGate Override one Gate for a waiting Run
-	// (PUT /api/v1/runs/{runId}/gates/{gateName}/override)
+	// (POST /api/v1/runs/{runId}/gate-overrides)
 	OverrideRunGate(ctx context.Context, request OverrideRunGateRequestObject) (OverrideRunGateResponseObject, error)
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
@@ -40243,6 +47012,428 @@ func (sh *strictHandler) ListCommits(w http.ResponseWriter, r *http.Request, par
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListCommitsResponseObject); ok {
 		if err := validResponse.VisitListCommitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGlobalGateScope operation middleware
+func (sh *strictHandler) GetGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+	var request GetGlobalGateScopeRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGlobalGateScope(ctx, request.(GetGlobalGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGlobalGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGlobalGateScopeResponseObject); ok {
+		if err := validResponse.VisitGetGlobalGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlockGlobalGateScope operation middleware
+func (sh *strictHandler) UnlockGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+	var request UnlockGlobalGateScopeRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlockGlobalGateScope(ctx, request.(UnlockGlobalGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlockGlobalGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlockGlobalGateScopeResponseObject); ok {
+		if err := validResponse.VisitUnlockGlobalGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LockGlobalGateScope operation middleware
+func (sh *strictHandler) LockGlobalGateScope(w http.ResponseWriter, r *http.Request) {
+	var request LockGlobalGateScopeRequestObject
+
+	var body LockGlobalGateScopeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LockGlobalGateScope(ctx, request.(LockGlobalGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LockGlobalGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LockGlobalGateScopeResponseObject); ok {
+		if err := validResponse.VisitLockGlobalGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveGlobalGateWindow operation middleware
+func (sh *strictHandler) RemoveGlobalGateWindow(w http.ResponseWriter, r *http.Request) {
+	var request RemoveGlobalGateWindowRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveGlobalGateWindow(ctx, request.(RemoveGlobalGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveGlobalGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveGlobalGateWindowResponseObject); ok {
+		if err := validResponse.VisitRemoveGlobalGateWindowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetGlobalGateWindow operation middleware
+func (sh *strictHandler) SetGlobalGateWindow(w http.ResponseWriter, r *http.Request) {
+	var request SetGlobalGateWindowRequestObject
+
+	var body SetGlobalGateWindowJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetGlobalGateWindow(ctx, request.(SetGlobalGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetGlobalGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetGlobalGateWindowResponseObject); ok {
+		if err := validResponse.VisitSetGlobalGateWindowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStageGateScope operation middleware
+func (sh *strictHandler) GetStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request GetStageGateScopeRequestObject
+
+	request.StageID = stageID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStageGateScope(ctx, request.(GetStageGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStageGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStageGateScopeResponseObject); ok {
+		if err := validResponse.VisitGetStageGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlockStageGateScope operation middleware
+func (sh *strictHandler) UnlockStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request UnlockStageGateScopeRequestObject
+
+	request.StageID = stageID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlockStageGateScope(ctx, request.(UnlockStageGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlockStageGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlockStageGateScopeResponseObject); ok {
+		if err := validResponse.VisitUnlockStageGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LockStageGateScope operation middleware
+func (sh *strictHandler) LockStageGateScope(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request LockStageGateScopeRequestObject
+
+	request.StageID = stageID
+
+	var body LockStageGateScopeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LockStageGateScope(ctx, request.(LockStageGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LockStageGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LockStageGateScopeResponseObject); ok {
+		if err := validResponse.VisitLockStageGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveStageGateWindow operation middleware
+func (sh *strictHandler) RemoveStageGateWindow(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request RemoveStageGateWindowRequestObject
+
+	request.StageID = stageID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveStageGateWindow(ctx, request.(RemoveStageGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveStageGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveStageGateWindowResponseObject); ok {
+		if err := validResponse.VisitRemoveStageGateWindowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetStageGateWindow operation middleware
+func (sh *strictHandler) SetStageGateWindow(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request SetStageGateWindowRequestObject
+
+	request.StageID = stageID
+
+	var body SetStageGateWindowJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetStageGateWindow(ctx, request.(SetStageGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetStageGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetStageGateWindowResponseObject); ok {
+		if err := validResponse.VisitSetStageGateWindowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTargetGateScope operation middleware
+func (sh *strictHandler) GetTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request GetTargetGateScopeRequestObject
+
+	request.TargetID = targetID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTargetGateScope(ctx, request.(GetTargetGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTargetGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTargetGateScopeResponseObject); ok {
+		if err := validResponse.VisitGetTargetGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlockTargetGateScope operation middleware
+func (sh *strictHandler) UnlockTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request UnlockTargetGateScopeRequestObject
+
+	request.TargetID = targetID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlockTargetGateScope(ctx, request.(UnlockTargetGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlockTargetGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlockTargetGateScopeResponseObject); ok {
+		if err := validResponse.VisitUnlockTargetGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LockTargetGateScope operation middleware
+func (sh *strictHandler) LockTargetGateScope(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request LockTargetGateScopeRequestObject
+
+	request.TargetID = targetID
+
+	var body LockTargetGateScopeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LockTargetGateScope(ctx, request.(LockTargetGateScopeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LockTargetGateScope")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LockTargetGateScopeResponseObject); ok {
+		if err := validResponse.VisitLockTargetGateScopeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveTargetGateWindow operation middleware
+func (sh *strictHandler) RemoveTargetGateWindow(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request RemoveTargetGateWindowRequestObject
+
+	request.TargetID = targetID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveTargetGateWindow(ctx, request.(RemoveTargetGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveTargetGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveTargetGateWindowResponseObject); ok {
+		if err := validResponse.VisitRemoveTargetGateWindowResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetTargetGateWindow operation middleware
+func (sh *strictHandler) SetTargetGateWindow(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request SetTargetGateWindowRequestObject
+
+	request.TargetID = targetID
+
+	var body SetTargetGateWindowJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetTargetGateWindow(ctx, request.(SetTargetGateWindowRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetTargetGateWindow")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetTargetGateWindowResponseObject); ok {
+		if err := validResponse.VisitSetTargetGateWindowResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -41027,12 +48218,37 @@ func (sh *strictHandler) DecidePromotion(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ListPromotionGateOverrides operation middleware
+func (sh *strictHandler) ListPromotionGateOverrides(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID) {
+	var request ListPromotionGateOverridesRequestObject
+
+	request.PromotionID = promotionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPromotionGateOverrides(ctx, request.(ListPromotionGateOverridesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPromotionGateOverrides")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPromotionGateOverridesResponseObject); ok {
+		if err := validResponse.VisitListPromotionGateOverridesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // OverridePromotionGate operation middleware
-func (sh *strictHandler) OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID, gateName CatalogName) {
+func (sh *strictHandler) OverridePromotionGate(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID) {
 	var request OverridePromotionGateRequestObject
 
 	request.PromotionID = promotionID
-	request.GateName = gateName
 
 	var body OverridePromotionGateJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -41451,12 +48667,37 @@ func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, runID
 	}
 }
 
+// ListRunGateOverrides operation middleware
+func (sh *strictHandler) ListRunGateOverrides(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request ListRunGateOverridesRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRunGateOverrides(ctx, request.(ListRunGateOverridesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRunGateOverrides")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRunGateOverridesResponseObject); ok {
+		if err := validResponse.VisitListRunGateOverridesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // OverrideRunGate operation middleware
-func (sh *strictHandler) OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, gateName CatalogName) {
+func (sh *strictHandler) OverrideRunGate(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
 	var request OverrideRunGateRequestObject
 
 	request.RunID = runID
-	request.GateName = gateName
 
 	var body OverrideRunGateJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

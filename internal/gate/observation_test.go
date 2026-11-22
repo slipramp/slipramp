@@ -23,11 +23,11 @@ func TestObservationValidation(t *testing.T) {
 	}{
 		{
 			name:        "passing",
-			observation: gate.Observation{State: gate.ObservationPassing, Value: &value},
+			observation: gate.Observation{State: gate.ObservationPassing, Evidence: gate.PrometheusSample(value)},
 		},
 		{
 			name:        "blocking",
-			observation: gate.Observation{State: gate.ObservationBlocking, Value: &value},
+			observation: gate.Observation{State: gate.ObservationBlocking, Evidence: gate.PrometheusSample(value)},
 		},
 		{
 			name: "unavailable",
@@ -44,8 +44,8 @@ func TestObservationValidation(t *testing.T) {
 		{
 			name: "non-finite numeric value",
 			observation: gate.Observation{
-				State: gate.ObservationBlocking,
-				Value: &infiniteValue,
+				State:    gate.ObservationBlocking,
+				Evidence: gate.PrometheusSample(infiniteValue),
 			},
 			wantError: true,
 		},
@@ -53,7 +53,7 @@ func TestObservationValidation(t *testing.T) {
 			name: "numeric diagnostic",
 			observation: gate.Observation{
 				State:      gate.ObservationPassing,
-				Value:      &value,
+				Evidence:   gate.PrometheusSample(value),
 				Diagnostic: "unexpected",
 			},
 			wantError: true,
@@ -62,7 +62,7 @@ func TestObservationValidation(t *testing.T) {
 			name: "unavailable value",
 			observation: gate.Observation{
 				State:      gate.ObservationUnavailable,
-				Value:      &value,
+				Evidence:   gate.PrometheusSample(value),
 				Diagnostic: "unexpected",
 			},
 			wantError: true,
@@ -110,7 +110,7 @@ func TestCurrentObservationValidation(t *testing.T) {
 		CatalogRevisionID:  uuid.New(),
 		DefinitionDigest:   strings.Repeat("a", 64),
 		EvaluatorProcessID: uuid.New(),
-		Observation:        gate.Observation{State: gate.ObservationPassing, Value: &value},
+		Observation:        gate.Observation{State: gate.ObservationPassing, Evidence: gate.PrometheusSample(value)},
 		EvaluatedAt:        evaluatedAt,
 		ValidUntil:         evaluatedAt.Add(45 * time.Second),
 	}

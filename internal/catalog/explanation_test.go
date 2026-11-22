@@ -364,7 +364,8 @@ kind: Gate
 metadata:
   name: network-idle
 spec:
-  prometheus:
+  evaluator:
+    type: prometheus
     source: homelab
     query: max_over_time(network_active_changes[1m])
     condition: {operator: equal, value: 0}

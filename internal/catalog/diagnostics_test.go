@@ -55,6 +55,11 @@ spec:
 		t.Errorf("image diagnostic location = %#v", image.Location)
 	}
 
+	intent := findDiagnostic(t, result.Diagnostics, "catalog.intent.invalid")
+	if intent.Severity != catalog.SeverityError || intent.Location.FieldPath != "spec.actions.apply.intent" {
+		t.Errorf("missing Action intent diagnostic = %#v", intent)
+	}
+
 	artifact := findDiagnostic(t, result.Diagnostics, "catalog.artifact.source-action-missing")
 	if artifact.Location.Path != ".slipramp/target.yaml" ||
 		artifact.Location.Line != 15 ||
@@ -91,6 +96,7 @@ spec:
   placement: future-placement
   actions:
     inspect:
+      intent: preview
       command: [inspect]
 `)},
 	}

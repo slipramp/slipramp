@@ -86,7 +86,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database, cfg.Placements, cfg.GateSources)
-	gateEvaluations, err := gate.NewCoordinator(
+	gateEvaluations, err := gate.NewEvaluationCoordinator(
 		persistence.database,
 		cfg.GateSources,
 		gateEvaluatorProcessID,
@@ -339,7 +339,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		metrics.Handler(),
 		logger.With("component", "server_metrics"),
 	)
+	windowCoordinator := gate.NewWindowCoordinator(persistence.database, logger)
 	workers := []serverWorker{
+		newServerWorker("Gate windows", windowCoordinator.Run),
 		newServerWorker("repository refresh", repositoryRefresher.Run),
 		newServerWorker("commit-history indexing", commitHistoryIndexer.Run),
 		newServerWorker("git-trigger dispatch", gitTriggerDispatcher.Run),
@@ -376,6 +378,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Notifications:            notificationService,
 			Runs:                     runs,
 			GateSources:              cfg.GateSources,
+			GateScopes:               persistence.database,
+			WindowWake:               windowCoordinator,
 			GateOverrides:            persistence.database,
 			GateEvaluatorProcessID:   gateEvaluatorProcessID,
 			Artifacts:                artifacts,

@@ -5,89 +5,115 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
-func (d *Database) ReleasePromotionGates(
-	ctx context.Context,
-	promotionID uuid.UUID,
-	evaluatorProcessID uuid.UUID,
-	releasedAt time.Time,
-) (bool, error) {
-	if promotionID == uuid.Nil || evaluatorProcessID == uuid.Nil || releasedAt.IsZero() {
-		return false, fmt.Errorf("%w: Promotion Gate release context is incomplete", promotion.ErrInvalid)
-	}
+func (d *Database) ReleasePromotion(
+	ctx context.Context, id, process uuid.UUID,
+) (promotion.KargoResponseStatus, error) {
+	return d.releasePromotion(ctx, id, process, (*storedb.Queries).ServerGateCheckTime)
+}
 
-	transaction, err := d.pool.Begin(ctx)
+func (d *Database) releasePromotion(
+	ctx context.Context, id, process uuid.UUID, checkTime gateCheckClock,
+) (promotion.KargoResponseStatus, error) {
+	if id == uuid.Nil || process == uuid.Nil {
+		return "", fmt.Errorf("%w: Promotion release context is incomplete", promotion.ErrInvalid)
+	}
+	tx, err := d.pool.Begin(ctx)
 	if err != nil {
-		return false, fmt.Errorf("begin Promotion Gate release: %w", err)
+		return "", fmt.Errorf("begin Promotion release: %w", err)
 	}
-	defer func() {
-		_ = transaction.Rollback(context.WithoutCancel(ctx))
-	}()
-	queries := d.queries.WithTx(transaction)
-
-	row, err := queries.LockPromotion(ctx, databaseUUID(promotionID))
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	q := d.queries.WithTx(tx)
+	row, err := q.LockPromotion(ctx, databaseUUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, promotion.ErrPromotionNotFound
+		return "", promotion.ErrPromotionNotFound
 	}
 	if err != nil {
-		return false, fmt.Errorf("lock Promotion for Gate release: %w", err)
+		return "", fmt.Errorf("lock Promotion for release: %w", err)
+	}
+	if row.CancellationRequestedAt.Valid {
+		return promotion.KargoResponseStatusCanceling, nil
+	}
+	if row.Status != string(promotion.LifecycleApproved) {
+		return "", promotion.ErrTransitionConflict
+	}
+	approved := promotion.KargoResponseStatus(promotion.LifecycleApproved)
+	if row.CallbackReleased {
+		return approved, nil
+	}
+	// The first automatic creation claim is the release, including for historical deliveries.
+	if row.Source == string(promotion.SourceSlipramp) && !row.ReviewRequired {
+		if row.DispatchAttemptCount > 0 {
+			return approved, nil
+		}
+		return promotion.KargoResponseStatusGated, nil
+	}
+	if row.KargoOutcomePhase != nil || row.DispatchFailedAt.Valid {
+		return "", promotion.ErrTransitionConflict
 	}
 	record, err := promotionFromRow(row)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	if record.Cancellation.RequestedAt != nil {
-		return false, nil
+	evidence, _, err := releasePromotionEvidence(ctx, q, record, process, checkTime)
+	if err != nil {
+		return "", err
 	}
-	if record.Lifecycle.State != promotion.LifecycleApproved {
-		return false, promotion.ErrTransitionConflict
+	if evidence == nil {
+		return promotion.KargoResponseStatusGated, nil
 	}
-
-	released, err := tryReleasePromotionGates(ctx, queries, promotionID, evaluatorProcessID, releasedAt)
-	if err != nil || !released {
-		return false, err
+	if err := q.MarkPromotionCallbackReleased(ctx, storedb.MarkPromotionCallbackReleasedParams{ID: row.ID, ReleaseEvidence: evidence}); err != nil {
+		return "", fmt.Errorf("record Promotion callback release: %w", err)
 	}
-	if err := transaction.Commit(ctx); err != nil {
-		return false, fmt.Errorf("commit Promotion Gate release: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit Promotion release: %w", err)
 	}
-
-	return true, nil
+	return approved, nil
 }
 
-// The caller holds the Promotion lock and rolls back if any requirement remains unreleased.
-func tryReleasePromotionGates(
-	ctx context.Context,
-	queries *storedb.Queries,
-	promotionID, evaluatorProcessID uuid.UUID,
-	releasedAt time.Time,
-) (bool, error) {
-	if _, err := queries.LockPromotionGateRepositories(ctx, databaseUUID(promotionID)); err != nil {
-		return false, fmt.Errorf("lock Promotion Gate repositories: %w", err)
-	}
-	if _, err := queries.ReleasePromotionGates(
-		ctx,
-		storedb.ReleasePromotionGatesParams{
-			PromotionID:        databaseUUID(promotionID),
-			EvaluatorProcessID: databaseUUID(evaluatorProcessID),
-			ReleasedAt:         databaseTime(releasedAt),
-		},
-	); err != nil {
-		return false, fmt.Errorf("release Promotion Gates: %w", err)
-	}
-
-	unreleased, err := queries.CountUnreleasedPromotionGates(ctx, databaseUUID(promotionID))
+// Both release paths hold the Promotion row. A blocked check rolls back the transaction,
+// including any repository requirements updated before a missing pass was detected.
+func releasePromotionEvidence(
+	ctx context.Context, q *storedb.Queries, record promotion.Promotion, process uuid.UUID, checkTime gateCheckClock,
+) ([]byte, pgtype.Timestamptz, error) {
+	var at pgtype.Timestamptz
+	id := databaseUUID(record.ID)
+	scopes, err := q.SharePromotionGateScopes(ctx, databaseUUID(record.StageID))
 	if err != nil {
-		return false, fmt.Errorf("count unreleased Promotion Gates: %w", err)
+		return nil, at, fmt.Errorf("lock Promotion Gate scopes: %w", err)
 	}
-	return unreleased == 0, nil
+	if len(record.StageSnapshot.Gates) > 0 {
+		if _, err := q.LockPromotionGateRepositories(ctx, id); err != nil {
+			return nil, at, fmt.Errorf("lock Promotion Gate repositories: %w", err)
+		}
+	}
+	at, err = checkTime(q, ctx)
+	if err != nil {
+		return nil, at, fmt.Errorf("read Promotion release time: %w", err)
+	}
+	evidence, err := freezeServerGates(ctx, q, gate.PromotionSubject, record.ID, scopes, at.Time.UTC())
+	if err != nil || evidence == nil {
+		return nil, at, err
+	}
+	released, err := q.ReleasePromotionGates(ctx, storedb.ReleasePromotionGatesParams{
+		PromotionID: id, EvaluatorProcessID: databaseUUID(process), ReleasedAt: at,
+	})
+	if err != nil {
+		return nil, at, fmt.Errorf("release Promotion repository Gates: %w", err)
+	}
+	if released != int64(len(record.StageSnapshot.Gates)) {
+		return nil, at, nil
+	}
+	return evidence, at, nil
 }
 
 func resolvePromotionGateRepository(

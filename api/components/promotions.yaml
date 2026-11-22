@@ -13,8 +13,8 @@ KargoPromotionStatus:
   type: string
   description: >-
     Effective status returned to the polling Kargo PromotionTask. Gated means
-    the durable Promotion is approved but its repository-defined Gates have not
-    released execution. Canceling keeps the callback waiting for the Kargo abort.
+    the durable Promotion is approved and is waiting for its applicable global,
+    Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
   enum:
     - creating
     - preparing

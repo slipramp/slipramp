@@ -242,7 +242,7 @@ func metricViews() []sdkmetric.View {
 	}
 	gateEvaluationAttributes := func(value attribute.KeyValue) bool {
 		switch value.Key {
-		case attribute.Key("source_type"), attribute.Key("result"):
+		case attribute.Key("source_type"), attribute.Key("result"), attribute.Key("failure_class"):
 			return true
 		default:
 			return false

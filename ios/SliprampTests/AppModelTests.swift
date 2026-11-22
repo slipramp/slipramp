@@ -76,7 +76,7 @@ final class AppModelTests: XCTestCase {
         )
         incompatibleDefaults.set("https://saved.example", forKey: serverURLKey)
         AppModelURLProtocol.requestHandler = { request in
-            self.compatibilityResponse(for: request, contract: 3)
+            self.compatibilityResponse(for: request, contract: ClientCompatibilityPolicy.productAPIContract + 1)
         }
 
         await incompatibleModel.restore()
@@ -403,7 +403,7 @@ final class AppModelTests: XCTestCase {
 
     private func compatibilityResponse(
         for request: URLRequest,
-        contract: Int = 2,
+        contract: Int = ClientCompatibilityPolicy.productAPIContract,
         supportsOIDC: Bool = false,
         version: String = "test-version"
     ) -> (HTTPURLResponse, Data) {

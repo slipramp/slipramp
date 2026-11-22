@@ -46,8 +46,8 @@ ClientCompatibility:
       maxLength: 128
     productApiContract:
       type: integer
-      minimum: 2
-      maximum: 2
+      minimum: 6
+      maximum: 6
     authenticationMethods:
       type: array
       minItems: 1

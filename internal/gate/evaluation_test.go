@@ -33,7 +33,7 @@ func TestCoordinatorReconcilesDemandAtDefinitionCadence(t *testing.T) {
 	}
 	store := &recordingEvaluationStore{targets: []EvaluationDemand{first, second}}
 	evaluator := &recordingDefinitionEvaluator{
-		observation: Observation{State: ObservationPassing, Value: new(float64)},
+		observation: Observation{State: ObservationPassing, Evidence: PrometheusSample(0)},
 	}
 	coordinator := testCoordinator(t, store, testEvaluationSources(), evaluator)
 	processID := coordinator.processID
@@ -131,14 +131,21 @@ func TestCoordinatorKeepsPollingHealthySourceWhileAnotherIsBusy(t *testing.T) {
 		}
 		slow := healthy
 		slow.GateName = "slow"
-		slow.Definition.Prometheus.Source = "slow"
+		slow.Definition = testEvaluationDefinition("slow")
+		slow.Definition.Evaluator.(*PrometheusDefinition).Source = "slow"
 		removed := healthy
 		removed.GateName = "removed"
-		removed.Definition.Prometheus.Source = "removed"
-		store := &recordingEvaluationStore{targets: []EvaluationDemand{healthy, slow, removed}}
+		removed.Definition = testEvaluationDefinition("removed")
+		removed.Definition.Evaluator.(*PrometheusDefinition).Source = "removed"
+		mismatched := healthy
+		mismatched.GateName = "mismatched"
+		mismatched.Definition = Definition{
+			Evaluator: &WebhookDefinition{Source: "homelab", Input: map[string]any{}},
+		}
+		store := &recordingEvaluationStore{targets: []EvaluationDemand{healthy, slow, removed, mismatched}}
 
 		healthyEvaluator := &recordingDefinitionEvaluator{
-			observation: Observation{State: ObservationPassing, Value: new(0.0)},
+			observation: Observation{State: ObservationPassing, Evidence: PrometheusSample(0.0)},
 		}
 		slowEvaluator := &blockingDefinitionEvaluator{
 			started: make(chan struct{}, 1),
@@ -176,7 +183,7 @@ func TestCoordinatorKeepsPollingHealthySourceWhileAnotherIsBusy(t *testing.T) {
 		}
 		assertHealthyObservations(1)
 
-		time.Sleep(sources["homelab"].Prometheus.EvaluationInterval)
+		time.Sleep(sources["homelab"].(PrometheusSource).EvaluationInterval)
 		synctest.Wait()
 		assertHealthyObservations(2)
 		if len(slowEvaluator.started) != 0 {
@@ -206,8 +213,8 @@ func TestCoordinatorBoundsEvaluationConcurrencyPerSource(t *testing.T) {
 		release: make(chan struct{}),
 	}
 	sources := testEvaluationSources()
-	source := sources["homelab"]
-	source.Prometheus.MaximumConcurrency = 2
+	source := sources["homelab"].(PrometheusSource)
+	source.MaximumConcurrency = 2
 	sources["homelab"] = source
 	coordinator := testCoordinator(t, store, sources, evaluator)
 	var clockSeconds atomic.Int64
@@ -260,11 +267,10 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 		Definition:        testEvaluationDefinition("network_active_changes"),
 	}
 	store := &recordingEvaluationStore{targets: []EvaluationDemand{target}}
-	zero := float64(0)
 	evaluator := &sequenceDefinitionEvaluator{observations: []Observation{
 		{State: ObservationUnavailable, Diagnostic: "Prometheus request timed out."},
-		{State: ObservationUnavailable, Diagnostic: "Prometheus request timed out."},
-		{State: ObservationPassing, Value: &zero},
+		{State: ObservationPassing, Evidence: &Evidence{Payload: &WebhookEvidence{Code: "ok", Message: "Ready"}}},
+		{State: ObservationPassing, Evidence: PrometheusSample(0)},
 	}}
 	coordinator := testCoordinator(t, store, testEvaluationSources(), evaluator)
 	coordinator.now = func() time.Time { return now }
@@ -285,6 +291,9 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	if state.failures != 2 || !state.next.Equal(now.Add(30*time.Second)) {
 		t.Fatalf("second unavailable state = %#v", state)
 	}
+	if got := store.observations[1].Observation; got.State != ObservationUnavailable || got.Evidence != nil {
+		t.Fatalf("Prometheus returned webhook evidence; stored observation = %#v", got)
+	}
 
 	now = now.Add(29 * time.Second)
 	if err := reconcileTestSource(t.Context(), coordinator); err != nil {
@@ -304,9 +313,9 @@ func TestCoordinatorBacksOffUnavailableEvaluationsAndRecovers(t *testing.T) {
 	}
 }
 
-func testCoordinator(t *testing.T, store EvaluationStore, sources SourceSet, evaluator definitionEvaluator) *Coordinator {
+func testCoordinator(t *testing.T, store EvaluationStore, sources SourceSet, evaluator Evaluator) *EvaluationCoordinator {
 	t.Helper()
-	coordinator, err := NewCoordinator(store, sources, uuid.New(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	coordinator, err := NewEvaluationCoordinator(store, sources, uuid.New(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,14 +324,14 @@ func testCoordinator(t *testing.T, store EvaluationStore, sources SourceSet, eva
 	return coordinator
 }
 
-func reconcileTestSource(ctx context.Context, coordinator *Coordinator) error {
+func reconcileTestSource(ctx context.Context, coordinator *EvaluationCoordinator) error {
 	coordinator.refreshDemand(ctx)
 	source := coordinator.sources["homelab"]
 	return coordinator.reconcileSource(ctx, source, <-source.demand)
 }
 
 func testEvaluationDefinition(query string) Definition {
-	return Definition{Prometheus: PrometheusDefinition{
+	return Definition{Evaluator: &PrometheusDefinition{
 		Source: "homelab",
 		Query:  query,
 		Condition: Condition{
@@ -333,15 +342,15 @@ func testEvaluationDefinition(query string) Definition {
 }
 
 func testEvaluationSources() SourceSet {
-	return SourceSet{"homelab": {Prometheus: PrometheusSource{
+	return SourceSet{"homelab": PrometheusSource{
 		URL:                "https://prometheus.example.com",
 		EvaluationInterval: 15 * time.Second,
 		Timeout:            5 * time.Second,
 		MaximumConcurrency: 1,
-	}}}
+	}}
 }
 
-func onlyEvaluationState(t *testing.T, coordinator *Coordinator) evaluationState {
+func onlyEvaluationState(t *testing.T, coordinator *EvaluationCoordinator) evaluationState {
 	t.Helper()
 	if len(coordinator.sources["homelab"].states) != 1 {
 		t.Fatalf("evaluation states = %d, want 1", len(coordinator.sources["homelab"].states))
@@ -397,9 +406,11 @@ type blockingDefinitionEvaluator struct {
 	maximumActive int
 }
 
+func (*blockingDefinitionEvaluator) Close() {}
+
 func (e *blockingDefinitionEvaluator) Evaluate(
 	ctx context.Context,
-	_ Definition,
+	_ EvaluationDemand,
 	_ time.Time,
 ) Observation {
 	e.mu.Lock()
@@ -420,7 +431,7 @@ func (e *blockingDefinitionEvaluator) Evaluate(
 
 	value := float64(0)
 
-	return Observation{State: ObservationPassing, Value: &value}
+	return Observation{State: ObservationPassing, Evidence: PrometheusSample(value)}
 }
 
 type sequenceDefinitionEvaluator struct {
@@ -428,9 +439,11 @@ type sequenceDefinitionEvaluator struct {
 	calls        int
 }
 
+func (*sequenceDefinitionEvaluator) Close() {}
+
 func (e *sequenceDefinitionEvaluator) Evaluate(
 	_ context.Context,
-	_ Definition,
+	_ EvaluationDemand,
 	_ time.Time,
 ) Observation {
 	observation := e.observations[e.calls]
@@ -439,15 +452,17 @@ func (e *sequenceDefinitionEvaluator) Evaluate(
 	return observation
 }
 
+func (*recordingDefinitionEvaluator) Close() {}
+
 func (e *recordingDefinitionEvaluator) Evaluate(
 	_ context.Context,
-	definition Definition,
+	demand EvaluationDemand,
 	_ time.Time,
 ) Observation {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	e.calls = append(e.calls, definition)
+	e.calls = append(e.calls, demand.Definition)
 
 	return e.observation
 }

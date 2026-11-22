@@ -8,7 +8,7 @@ test("renderYamlDefinition emits readable YAML and omits undefined fields", () =
     apiVersion: "slipramp.com/v1alpha1",
     kind: "Target",
     metadata: { name: "infrastructure", title: undefined },
-    spec: { actions: { plan: { command: ["terraform", "plan"] } } },
+    spec: { actions: { plan: { intent: "preview", command: ["terraform", "plan"] } } },
   });
 
   assert.equal(
@@ -20,6 +20,7 @@ metadata:
 spec:
   actions:
     plan:
+      intent: preview
       command:
         - terraform
         - plan

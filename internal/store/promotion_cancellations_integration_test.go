@@ -25,7 +25,7 @@ func TestCancelUndispatchedPromotionIntegration(t *testing.T) {
 			t.Fatalf("unexpected canceled Promotion: %#v", got)
 		}
 	}
-	_, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
+	_, err := fixture.database.claimPromotionCreationAt(fixture.ctx, promotion.CreationDispatchClaim{
 		ClusterName:            fixture.stage.ClusterName,
 		GateEvaluatorProcessID: fixture.principal.ID,
 		ClaimedAt:              at.Add(time.Hour),
@@ -75,7 +75,7 @@ func TestCancelPromotionWithUnreportedCreationIntegration(t *testing.T) {
 	ctx, database := fixture.ctx, fixture.database
 	record := createDispatchablePromotion(t, fixture, now.Add(2*time.Minute))
 	at := record.CreatedAt.Add(time.Second)
-	_, err := database.ClaimPromotionCreation(ctx, promotion.CreationDispatchClaim{
+	_, err := database.claimPromotionCreationAt(ctx, promotion.CreationDispatchClaim{
 		ClusterName:            fixture.stage.ClusterName,
 		GateEvaluatorProcessID: fixture.principal.ID,
 		ClaimedAt:              at,

@@ -23,6 +23,7 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 	}
 	target.Spec.Actions["preview"] = preview
 	target.Spec.Actions["sync"] = catalog.Action{
+		Intent:  "reconcile",
 		Command: []string{"terraform", "apply"},
 		Inputs: map[string]catalog.Input{
 			"plan": {
@@ -73,6 +74,7 @@ func TestCreateRunRejectsIncompatibleArtifactInput(t *testing.T) {
 	service, runs := testService(t)
 	revision := testRevision()
 	revision.Catalog.Targets[0].Spec.Actions["apply"] = catalog.Action{
+		Intent:  "reconcile",
 		Command: []string{"terraform", "apply"},
 		Inputs: map[string]catalog.Input{
 			"plan": {

@@ -121,6 +121,7 @@ func (h *Handler) SubmitKargoPromotion(
 				NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
 			}, nil
 		case errors.Is(err, promotion.ErrIdentityConflict),
+			errors.Is(err, promotion.ErrTransitionConflict),
 			errors.Is(err, promotion.ErrStageArchived),
 			errors.Is(err, promotion.ErrStageStale),
 			errors.Is(err, promotion.ErrReviewContextUnavailable),

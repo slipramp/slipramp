@@ -279,7 +279,58 @@ run:
               $ref: ../components/common.yaml#/Problem
 
 overrideRunGate:
-  put:
+  get:
+    operationId: listRunGateOverrides
+    summary: Inspect eligible Gates and override history for a Run
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Runs]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: Current override choices and durable decision history for the subject.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/gates.yaml#/GateOverrideCollection
+      "400":
+        description: Invalid subject identifier.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Read permission is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The subject does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Server could not load the overrides.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
     operationId: overrideRunGate
     summary: Override one Gate for a waiting Run
     security:
@@ -293,11 +344,6 @@ overrideRunGate:
         schema:
           type: string
           format: uuid
-      - name: gateName
-        in: path
-        required: true
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
     requestBody:
       required: true
       content:
@@ -305,8 +351,12 @@ overrideRunGate:
           schema:
             $ref: ../components/gates.yaml#/GateOverrideRequest
     responses:
-      "204":
-        description: The override decision has been recorded.
+      "200":
+        description: The affected Gate, including its recorded override history.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/gates.yaml#/GateRequirement
       "413":
         $ref: ../components/common.yaml#/RequestTooLargeResponse
       "400":
@@ -328,7 +378,7 @@ overrideRunGate:
             schema:
               $ref: ../components/common.yaml#/Problem
       "404":
-        description: The requested Gate attachment does not exist.
+        description: The requested subject does not exist.
         content:
           application/problem+json:
             schema:

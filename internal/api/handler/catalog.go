@@ -54,6 +54,10 @@ func (h *Handler) ExplainTargetAction(
 
 		return api.ExplainTargetAction404ApplicationProblemPlusJSONResponse(problem), nil
 	}
+	if errors.Is(err, catalog.ErrInvalidActionIntent) {
+		problem := NewProblem(http.StatusConflict, err.Error())
+		return api.ExplainTargetAction409ApplicationProblemPlusJSONResponse(problem), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +200,10 @@ func (h *Handler) GetTarget(
 		record.LastAttemptedSync,
 		record.LastSuccessfulSync,
 	)
+	if errors.Is(err, catalog.ErrInvalidActionIntent) {
+		problem := NewProblem(http.StatusConflict, err.Error())
+		return api.GetTarget409ApplicationProblemPlusJSONResponse(problem), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +263,10 @@ func (h *Handler) GetRepositoryCatalog(
 	}
 
 	body, err := activeCatalogResponse(request.RepositoryID, active, commits)
+	if errors.Is(err, catalog.ErrInvalidActionIntent) {
+		problem := NewProblem(http.StatusConflict, err.Error())
+		return api.GetRepositoryCatalog409ApplicationProblemPlusJSONResponse(problem), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -474,6 +486,9 @@ func targetSyncCheckpointResponse(
 func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.Action, error) {
 	result := make(map[string]api.Action, len(actions))
 	for name, action := range actions {
+		if err := action.Intent.Validate(name); err != nil {
+			return nil, err
+		}
 		triggers, err := catalogTriggersResponse(action.Triggers)
 		if err != nil {
 			return nil, fmt.Errorf("convert action %q triggers: %w", name, err)
@@ -483,7 +498,7 @@ func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.A
 			Title:            optionalString(action.Title),
 			Description:      optionalString(action.Description),
 			DocumentationURL: optionalString(action.DocumentationURL),
-			Intent:           optionalString(action.Intent),
+			Intent:           api.ActionIntent(action.Intent),
 			Command:          append([]string(nil), action.Command...),
 			Runtime:          optionalString(action.Runtime),
 			Placement:        optionalString(action.Placement),

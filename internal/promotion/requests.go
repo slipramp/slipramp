@@ -67,7 +67,7 @@ type KargoSubmission struct {
 
 type PromotionRequestStore interface {
 	AcceptPromotionRequest(context.Context, PromotionAcceptance) (Promotion, error)
-	ReleasePromotionGates(context.Context, uuid.UUID, uuid.UUID, time.Time) (bool, error)
+	ReleasePromotion(context.Context, uuid.UUID, uuid.UUID) (KargoResponseStatus, error)
 }
 
 type RequestService struct {
@@ -254,18 +254,10 @@ func (s *RequestService) SubmitKargoPromotion(
 		return KargoSubmission{Promotion: record, Status: KargoResponseStatusCanceling}, nil
 	}
 	status := KargoResponseStatus(record.Lifecycle.State)
-	if record.Lifecycle.State == LifecycleApproved && len(record.StageSnapshot.Gates) > 0 {
-		released, releaseErr := s.requests.ReleasePromotionGates(
-			ctx,
-			record.ID,
-			s.gateEvaluatorProcessID,
-			acceptedAt,
-		)
-		if releaseErr != nil {
-			return KargoSubmission{}, releaseErr
-		}
-		if !released {
-			status = KargoResponseStatusGated
+	if record.Lifecycle.State == LifecycleApproved {
+		status, err = s.requests.ReleasePromotion(ctx, record.ID, s.gateEvaluatorProcessID)
+		if err != nil {
+			return KargoSubmission{}, err
 		}
 	}
 

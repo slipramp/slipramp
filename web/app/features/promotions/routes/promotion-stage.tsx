@@ -23,6 +23,8 @@ import { Link, useSearchParams } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getPromotionStage,
+  getGlobalGateScope,
+  getStageGateScope,
   listPromotionBranchDrift,
   listPromotions,
   type Promotion,
@@ -85,8 +87,10 @@ export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [result, principal, activePromotionsByStatus] = await Promise.all([
+  const [result, globalGates, stageGates, principal, activePromotionsByStatus] = await Promise.all([
     getPromotionStage({ client, path: { stageId: params.stageId } }),
+    getGlobalGateScope({ client }),
+    getStageGateScope({ client, path: { stageId: params.stageId } }),
     getProductPrincipal(context),
     Promise.all(
       activePromotionStatuses.map(async (status) => {
@@ -162,6 +166,19 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     activePromotions,
     activePromotionsAvailable,
+    gateScopes: [
+      { label: "Global", policy: globalGates.data },
+      { label: "Stage", policy: stageGates.data },
+    ].map(({ label, policy }) => ({
+      label,
+      available: Boolean(policy),
+      lock: policy?.lock,
+      window: policy?.window && {
+        state: policy.window.state,
+        timeZone: policy.window.definition.timeZone,
+        nextTransition: policy.window.observation.nextTransition,
+      },
+    })),
     branchDrift,
     branchDriftError,
     detail: result.data,
@@ -368,10 +385,60 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
             <ObservationDetails stage={stage} />
             <Stack gap="sm">
               <SectionHeader title="Promotion gates" />
+              {loaderData.gateScopes.map(({ label, available, lock, window }) => (
+                <Stack key={label} gap={2}>
+                  <Text fw={600} size="sm">
+                    {label} policy
+                  </Text>
+                  {!available && (
+                    <Text c="dimmed" size="sm">
+                      Policy unavailable.
+                    </Text>
+                  )}
+                  {available && !lock && !window && (
+                    <Text c="dimmed" size="sm">
+                      No active lock or weekly window.
+                    </Text>
+                  )}
+                  {lock && (
+                    <Text size="sm">
+                      Locked by {lock.actor.displayName}. {lock.reason}
+                      {lock.expiresAt && (
+                        <>
+                          {" "}
+                          · Expires <RelativeTime value={lock.expiresAt} />
+                        </>
+                      )}
+                    </Text>
+                  )}
+                  {window && (
+                    <Text size="sm">
+                      Weekly window{" "}
+                      {window.state === "passing"
+                        ? "open"
+                        : window.state === "blocking"
+                          ? "closed"
+                          : "unavailable"}{" "}
+                      · {window.timeZone}
+                      {window.nextTransition && (
+                        <>
+                          {" "}
+                          · Next transition <RelativeTime value={window.nextTransition} />
+                        </>
+                      )}
+                    </Text>
+                  )}
+                </Stack>
+              ))}
+              <Text fw={600} size="sm">
+                Repository Gates
+              </Text>
               {stage.gates.length > 0 ? (
                 <Code block>{stage.gates.join("\n")}</Code>
               ) : (
-                <Text c="dimmed">No gates configured for this Stage.</Text>
+                <Text c="dimmed" size="sm">
+                  No attachments.
+                </Text>
               )}
             </Stack>
             <CapabilityDetails stage={stage} />

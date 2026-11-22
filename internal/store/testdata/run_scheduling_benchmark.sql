@@ -14,7 +14,7 @@ INSERT INTO runs (
 SELECT md5(n::text)::uuid, phase, CASE WHEN phase = 'finished' THEN 'succeeded' END,
        targets.repository_id, targets.id, targets.name, targets.catalog_revision_id, targets.desired_commit_sha,
        'preview', '{}', 'placement-' || placement, 'cluster-' || (placement % 2), '{"type":"manual"}',
-       repeat('a', 64), '{}', 'not-required', samples.created_at,
+       repeat('a', 64), '{"action":{"Intent":"preview"}}', 'not-required', samples.created_at,
        CASE WHEN phase <> 'queued' THEN samples.created_at END,
        CASE WHEN phase = 'finished' THEN samples.created_at END
 FROM samples

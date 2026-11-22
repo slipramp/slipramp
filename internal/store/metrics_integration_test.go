@@ -60,7 +60,7 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, active, nil); err != nil {
 		t.Fatalf("create active candidate Run: %v", err)
 	}
-	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, now.Add(-9*time.Minute)); err != nil {
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, now.Add(-9*time.Minute)); err != nil {
 		t.Fatalf("claim active Run: %v", err)
 	}
 	if _, err := database.CancelRun(ctx, active.ID, now.Add(-8*time.Minute-30*time.Second), nil); err != nil {
@@ -223,12 +223,12 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 		CatalogRevisionID:  revisionID,
 		DefinitionDigest:   digest,
 		EvaluatorProcessID: processID,
-		Observation:        gate.Observation{State: gate.ObservationPassing, Value: new(0.0)},
+		Observation:        gate.Observation{State: gate.ObservationPassing, Evidence: gate.PrometheusSample(0.0)},
 		EvaluatedAt:        now,
 		ValidUntil:         now.Add(time.Minute),
 	}
 	blocking := passing
-	blocking.Observation = gate.Observation{State: gate.ObservationBlocking, Value: new(1.0)}
+	blocking.Observation = gate.Observation{State: gate.ObservationBlocking, Evidence: gate.PrometheusSample(1.0)}
 	stale := passing
 	stale.EvaluatedAt, stale.ValidUntil = now.Add(-time.Minute), now
 	future := passing
@@ -259,7 +259,7 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 			}
 		})
 	}
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), processID, now)
+	claimed, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), processID, now)
 	if err != nil || claimed.ID != olderGated.ID {
 		t.Fatalf("dispatch picked Run %s, want %s, error = %v", claimed.ID, olderGated.ID, err)
 	}

@@ -24,7 +24,7 @@ final class APIClientTests: XCTestCase {
                 """
                 {
                   "serverVersion": "test-version",
-                  "productApiContract": 2,
+                  "productApiContract": 6,
                   "authenticationMethods": ["api-key"],
                   "kargoEnabled": false
                 }
@@ -38,15 +38,15 @@ final class APIClientTests: XCTestCase {
         XCTAssertNoThrow(try ClientCompatibilityPolicy.validate(compatibility))
 
         let incompatible = ServerCompatibility(
-            serverVersion: "future-version",
-            productApiContract: 3,
+            serverVersion: "older-version",
+            productApiContract: 5,
             authenticationMethods: ["api-key"],
             kargoEnabled: false
         )
         XCTAssertThrowsError(try ClientCompatibilityPolicy.validate(incompatible)) { error in
             XCTAssertEqual(
                 error as? SliprampAPIError,
-                .incompatibleProductAPIContract(server: 3)
+                .incompatibleProductAPIContract(server: 5)
             )
         }
     }

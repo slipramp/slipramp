@@ -32,7 +32,7 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 			APIVersion: catalog.APIVersion,
 			Kind:       catalog.GateKind,
 			Metadata:   catalog.Metadata{Name: "network-idle"},
-			Spec: gate.Definition{Prometheus: gate.PrometheusDefinition{
+			Spec: gate.Definition{Evaluator: &gate.PrometheusDefinition{
 				Source: "homelab",
 				Query:  "max_over_time(network_active_changes[1m])",
 				Condition: gate.Condition{
@@ -67,6 +67,7 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 				Watch:     []string{"infrastructure/network/**"},
 				Actions: map[string]catalog.Action{
 					"preview": {
+						Intent:  "preview",
 						Command: []string{"terraform", "plan"},
 						Gates:   []string{"network-idle"},
 					},

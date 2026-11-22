@@ -21,6 +21,13 @@ The Server never receives Kubernetes or Kargo credentials. The Controller for
 the configured Cluster performs the small set of required Kargo API operations
 through the existing outbound command protocol.
 
+Slipramp checks active global and destination Stage locks, weekly windows,
+and attached repository Gates at the first automatic creation dispatch or
+approved PromotionTask callback. Review-required creation can proceed so
+Kargo can prepare a candidate. The callback waits for all release requirements
+after approval, independently of the intent of the preparation Action. Kargo
+continues to enforce its native promotion windows. [Release Gates](./gates.md)
+
 ## Integration configuration and inventory
 
 Named integrations are strict versioned Server startup configuration. Each

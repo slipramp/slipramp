@@ -52,14 +52,16 @@ func TestRunArtifactConsumersUsesFrozenDirectlyRunnableActions(t *testing.T) {
 
 	snapshot := run.Snapshot{
 		Action: catalog.EffectiveAction{
-			Name: "preview",
+			Intent: "preview",
+			Name:   "preview",
 			Artifacts: map[string]catalog.Artifact{
 				"plan": {Path: "/artifacts/plan.tfplan"},
 			},
 		},
 		Target: catalog.Target{Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
 			"apply": {
-				Title: "Apply approved plan",
+				Intent: "reconcile",
+				Title:  "Apply approved plan",
 				Inputs: map[string]catalog.Input{
 					"plan": {Artifact: catalog.ArtifactReference{FromAction: "preview"}},
 				},
@@ -107,12 +109,14 @@ func TestRunInputResponseUsesFrozenProducerDescription(t *testing.T) {
 	artifactID := uuid.New()
 	snapshot := run.Snapshot{
 		Action: catalog.EffectiveAction{
+			Intent: "reconcile",
 			Inputs: map[string]catalog.Input{
 				"plan": {Artifact: catalog.ArtifactReference{FromAction: "preview"}},
 			},
 		},
 		Target: catalog.Target{Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
 			"preview": {
+				Intent: "preview",
 				Artifacts: map[string]catalog.Artifact{
 					"plan": {Description: "Binary execution plan."},
 				},

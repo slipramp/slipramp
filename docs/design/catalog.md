@@ -111,6 +111,12 @@ and therefore retain exact Git provenance.
 
 ## Action resolution and parameters
 
+Each Action declares its own `intent`. Use `preview` to inspect infrastructure
+or produce a plan, `reconcile` to converge infrastructure on the repository's
+desired state, and `operation` for other changes such as a restart or upgrade.
+The Action name and command are independent of intent. A preview may still
+declare Artifacts and repository Gates.
+
 Target defaults supply Runtime, Placement, timeout, credentials, and resources.
 `maximumActiveRuns` is a positive Target scheduling limit and defaults to one;
 it applies across all Actions and execution Clusters for the durable Target

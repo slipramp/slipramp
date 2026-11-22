@@ -8,18 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type ActivePassingGateEvidence struct {
-	RepositoryID       pgtype.UUID
-	GateName           string
-	CatalogRevisionID  pgtype.UUID
-	DefinitionDigest   string
-	Spec               []byte
-	EvaluatorProcessID pgtype.UUID
-	Value              *float64
-	EvaluatedAt        pgtype.Timestamptz
-	ValidUntil         pgtype.Timestamptz
-}
-
 type ApiKey struct {
 	ID                   pgtype.UUID
 	PrincipalID          pgtype.UUID
@@ -81,6 +69,7 @@ type CatalogGate struct {
 	SourceDocument    int32
 	Definition        []byte
 	DefinitionDigest  string
+	SubjectScoped     bool
 }
 
 type CatalogRevision struct {
@@ -125,6 +114,21 @@ type ControllerCredential struct {
 	EnrolledAt  pgtype.Timestamptz
 }
 
+type GateCurrentObservation struct {
+	SubjectType        string
+	SubjectID          pgtype.UUID
+	RepositoryID       pgtype.UUID
+	GateName           string
+	CatalogRevisionID  pgtype.UUID
+	DefinitionDigest   string
+	EvaluatorProcessID pgtype.UUID
+	State              string
+	Evidence           []byte
+	Diagnostic         *string
+	EvaluatedAt        pgtype.Timestamptz
+	ValidUntil         pgtype.Timestamptz
+}
+
 type GateEvaluationDemand struct {
 	RepositoryID      pgtype.UUID
 	GateName          string
@@ -142,7 +146,7 @@ type GateObservation struct {
 	DefinitionDigest   string
 	EvaluatorProcessID pgtype.UUID
 	State              string
-	Value              *float64
+	Evidence           []byte
 	Diagnostic         *string
 	EvaluatedAt        pgtype.Timestamptz
 	ValidUntil         pgtype.Timestamptz
@@ -302,6 +306,8 @@ type Promotion struct {
 	CancellationRequestedBySnapshot []byte
 	CancellationConfirmedAt         pgtype.Timestamptz
 	NextCancelAttemptAt             pgtype.Timestamptz
+	CallbackReleased                bool
+	ServerGateReleaseEvidence       []byte
 }
 
 type PromotionCandidateBranchCleanup struct {
@@ -334,10 +340,18 @@ type PromotionGate struct {
 	ReleaseDefinition         []byte
 	ReleaseDefinitionDigest   *string
 	ReleaseEvaluatorProcessID pgtype.UUID
-	ReleaseObservedValue      *float64
+	ReleaseEvidence           []byte
 	ReleaseEvaluatedAt        pgtype.Timestamptz
 	ReleaseValidUntil         pgtype.Timestamptz
 	Overrides                 []byte
+	CurrentCatalogRevisionID  pgtype.UUID
+	CurrentDefinitionDigest   *string
+	CurrentEvaluatorProcessID pgtype.UUID
+	CurrentState              *string
+	CurrentEvidence           []byte
+	CurrentDiagnostic         *string
+	CurrentEvaluatedAt        pgtype.Timestamptz
+	CurrentValidUntil         pgtype.Timestamptz
 }
 
 type PromotionStage struct {
@@ -477,6 +491,7 @@ type Run struct {
 	ActionImageID              *string
 	CheckoutImageID            *string
 	HarnessImageID             *string
+	ServerGateReleaseEvidence  []byte
 }
 
 type RunArtifactInput struct {
@@ -495,10 +510,82 @@ type RunGate struct {
 	ReleaseDefinition         []byte
 	ReleaseDefinitionDigest   *string
 	ReleaseEvaluatorProcessID pgtype.UUID
-	ReleaseObservedValue      *float64
+	ReleaseEvidence           []byte
 	ReleaseEvaluatedAt        pgtype.Timestamptz
 	ReleaseValidUntil         pgtype.Timestamptz
 	Overrides                 []byte
+	CurrentCatalogRevisionID  pgtype.UUID
+	CurrentDefinitionDigest   *string
+	CurrentEvaluatorProcessID pgtype.UUID
+	CurrentState              *string
+	CurrentEvidence           []byte
+	CurrentDiagnostic         *string
+	CurrentEvaluatedAt        pgtype.Timestamptz
+	CurrentValidUntil         pgtype.Timestamptz
+}
+
+type ServerGateOverride struct {
+	SubjectType       string
+	SubjectID         pgtype.UUID
+	RunID             pgtype.UUID
+	PromotionID       pgtype.UUID
+	ScopeID           pgtype.UUID
+	GateType          string
+	Version           int64
+	ActorID           pgtype.UUID
+	Actor             []byte
+	Reason            string
+	RecordedAt        pgtype.Timestamptz
+	ObservedState     string
+	WindowObservation []byte
+}
+
+type ServerGateScope struct {
+	ID                   pgtype.UUID
+	Kind                 string
+	TargetID             pgtype.UUID
+	StageID              pgtype.UUID
+	LockVersion          int64
+	LockReason           *string
+	LockActorID          pgtype.UUID
+	LockActor            []byte
+	LockedAt             pgtype.Timestamptz
+	LockExpiresAt        pgtype.Timestamptz
+	WindowVersion        int64
+	WindowDefinition     []byte
+	WindowDigest         *string
+	WindowState          *string
+	WindowEvaluatedAt    pgtype.Timestamptz
+	WindowValidUntil     pgtype.Timestamptz
+	WindowIntervalStart  pgtype.Timestamptz
+	WindowNextTransition pgtype.Timestamptz
+}
+
+type ServerGateScopeEvent struct {
+	ScopeID          pgtype.UUID
+	Version          int64
+	Action           string
+	ActorID          pgtype.UUID
+	Actor            []byte
+	Reason           *string
+	RecordedAt       pgtype.Timestamptz
+	ExpiresAt        pgtype.Timestamptz
+	GateType         string
+	WindowDefinition []byte
+	WindowDigest     *string
+}
+
+type SubjectGateEvaluationDemand struct {
+	SubjectType       string
+	SubjectID         pgtype.UUID
+	RepositoryID      pgtype.UUID
+	GateName          string
+	RequestedAt       interface{}
+	RepositoryName    string
+	CatalogRevisionID pgtype.UUID
+	CommitSha         string
+	Spec              interface{}
+	DefinitionDigest  string
 }
 
 type SubjectGateEvidence struct {
@@ -510,7 +597,7 @@ type SubjectGateEvidence struct {
 	Spec               interface{}
 	Overridden         interface{}
 	EvaluatorProcessID pgtype.UUID
-	Value              *float64
+	Evidence           []byte
 	EvaluatedAt        pgtype.Timestamptz
 	ValidUntil         pgtype.Timestamptz
 }
@@ -535,6 +622,11 @@ type WaitingGateRequirement struct {
 	RepositoryID pgtype.UUID
 	GateName     string
 	RequestedAt  interface{}
+}
+
+type WaitingPromotionGateSubject struct {
+	ID      pgtype.UUID
+	StageID pgtype.UUID
 }
 
 type WebSession struct {

@@ -19,6 +19,7 @@ func TestCreateRunUsesPromotionSourceAndRequestingActor(t *testing.T) {
 	service, _ := testService(t)
 	revision := testRevision()
 	revision.Catalog.Targets[0].Spec.Actions["sync"] = catalog.Action{
+		Intent:  "preview",
 		Command: []string{"slipramp-kargo-tools", "prepare"},
 	}
 	service.catalogs = &recordingCatalogs{revision: revision}

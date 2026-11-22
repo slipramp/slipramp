@@ -13,35 +13,35 @@ data:
       {{- if .Values.server.gates.sources }}
       {{- range $name, $source := .Values.server.gates.sources }}
       {{ $name }}:
-        prometheus:
-          url: {{ $source.prometheus.url | quote }}
-          {{- with $source.prometheus.publicUrl }}
-          publicUrl: {{ . | quote }}
+        type: {{ $source.type | quote }}
+        url: {{ $source.url | quote }}
+        {{- with $source.publicUrl }}
+        publicUrl: {{ . | quote }}
+        {{- end }}
+        {{- with $source.evaluationInterval }}
+        evaluationInterval: {{ . | quote }}
+        {{- end }}
+        {{- with $source.timeout }}
+        timeout: {{ . | quote }}
+        {{- end }}
+        {{- with $source.maximumConcurrency }}
+        maximumConcurrency: {{ . }}
+        {{- end }}
+        {{- with $source.credentials }}
+        {{- with .bearerTokenKey }}
+        bearerTokenFile: /var/run/slipramp/gate-sources/{{ $name }}/bearer-token
+        {{- end }}
+        {{- if or .caKey .clientCertificateKey }}
+        tls:
+          {{- with .caKey }}
+          caFile: /var/run/slipramp/gate-sources/{{ $name }}/ca.crt
           {{- end }}
-          {{- with $source.prometheus.evaluationInterval }}
-          evaluationInterval: {{ . | quote }}
+          {{- with .clientCertificateKey }}
+          clientCertificateFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.crt
+          clientKeyFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.key
           {{- end }}
-          {{- with $source.prometheus.timeout }}
-          timeout: {{ . | quote }}
-          {{- end }}
-          {{- with $source.prometheus.maximumConcurrency }}
-          maximumConcurrency: {{ . }}
-          {{- end }}
-          {{- with $source.prometheus.credentials }}
-          {{- with .bearerTokenKey }}
-          bearerTokenFile: /var/run/slipramp/gate-sources/{{ $name }}/bearer-token
-          {{- end }}
-          {{- if or .caKey .clientCertificateKey }}
-          tls:
-            {{- with .caKey }}
-            caFile: /var/run/slipramp/gate-sources/{{ $name }}/ca.crt
-            {{- end }}
-            {{- with .clientCertificateKey }}
-            clientCertificateFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.crt
-            clientKeyFile: /var/run/slipramp/gate-sources/{{ $name }}/tls.key
-            {{- end }}
-          {{- end }}
-          {{- end }}
+        {{- end }}
+        {{- end }}
       {{- end }}
       {{- else }} {}
       {{- end }}

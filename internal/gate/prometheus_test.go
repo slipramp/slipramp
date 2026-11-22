@@ -119,16 +119,16 @@ func TestPrometheusEvaluator(t *testing.T) {
 			defer server.Close()
 
 			evaluator := newTestPrometheusEvaluator(t, server.URL)
-			observation := evaluator.Evaluate(context.Background(), validDefinition(), evaluationTime)
+			observation := evaluator.Evaluate(context.Background(), gate.EvaluationDemand{Definition: validDefinition()}, evaluationTime)
 			if observation.State != test.wantState {
 				t.Errorf("State = %q, want %q", observation.State, test.wantState)
 			}
 			if test.wantValue == nil {
-				if observation.Value != nil {
-					t.Errorf("Value = %v, want nil", *observation.Value)
+				if observation.Evidence.PrometheusValue() != nil {
+					t.Errorf("Value = %v, want nil", *observation.Evidence.PrometheusValue())
 				}
-			} else if observation.Value == nil || *observation.Value != *test.wantValue {
-				t.Errorf("Value = %v, want %v", observation.Value, *test.wantValue)
+			} else if observation.Evidence.PrometheusValue() == nil || *observation.Evidence.PrometheusValue() != *test.wantValue {
+				t.Errorf("Value = %v, want %v", observation.Evidence.PrometheusValue(), *test.wantValue)
 			}
 			if !strings.Contains(observation.Diagnostic, test.wantDiagnostic) {
 				t.Errorf("Diagnostic = %q, want phrase %q", observation.Diagnostic, test.wantDiagnostic)
@@ -168,7 +168,7 @@ func TestPrometheusEvaluatorUsesConfiguredPathAndBearerToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPrometheusEvaluator() error = %v", err)
 	}
-	observation := evaluator.Evaluate(context.Background(), validDefinition(), time.Now())
+	observation := evaluator.Evaluate(context.Background(), gate.EvaluationDemand{Definition: validDefinition()}, time.Now())
 	if observation.State != gate.ObservationPassing {
 		t.Errorf("observation = %#v", observation)
 	}
@@ -214,36 +214,37 @@ func TestPrometheusQueryURL(t *testing.T) {
 	t.Parallel()
 
 	sources := gate.SourceSet{
-		"prod": {Prometheus: gate.PrometheusSource{
+		"prod": gate.PrometheusSource{
 			URL: "http://internal:9090", PublicURL: "https://metrics.example.com/tenant/prod/",
-		}},
-		"internal": {Prometheus: gate.PrometheusSource{URL: "http://internal:9090"}},
+		},
+		"internal": gate.PrometheusSource{URL: "http://internal:9090"},
 	}
 	const expr = `sum(rate(http_requests_total{job=~"api|web",route="/a&b"}[5m])) + 1`
 	def := &gate.PrometheusDefinition{Source: "prod", Query: expr}
 	at := time.Date(2026, 11, 20, 10, 30, 12, 345678000, time.FixedZone("MST", -7*60*60))
 	const utc = "2026-11-20T17:30:12.345Z"
+	ref := gate.Reference{Key: "repository/idle", Version: "release"}
 	override := gate.Requirement{
-		State: gate.RequirementReleased, Prometheus: def, DefinitionDigest: "release",
-		Overrides: []gate.Override{{DefinitionDigest: "release", EvaluatedAt: &at}},
+		State: gate.RequirementReleased, Policy: def, Reference: ref,
+		Overrides: []gate.Override{{Reference: ref, EvaluatedAt: &at}},
 	}
 	otherDigest := override
-	otherDigest.DefinitionDigest = "other"
+	otherDigest.Version = "other"
 	for _, tc := range []struct {
 		name       string
 		req        gate.Requirement
 		wantMoment string
 		wantLink   bool
 	}{
-		{"observation", gate.Requirement{State: gate.RequirementBlocking, Prometheus: def, EvaluatedAt: &at}, utc, true},
-		{"waiting for observation", gate.Requirement{State: gate.RequirementUnevaluated, Prometheus: def}, "", true},
-		{"released", gate.Requirement{State: gate.RequirementReleased, Prometheus: def, EvaluatedAt: &at}, utc, true},
+		{"observation", gate.Requirement{State: gate.RequirementBlocking, Policy: def, EvaluatedAt: &at}, utc, true},
+		{"waiting for observation", gate.Requirement{State: gate.RequirementUnevaluated, Policy: def}, "", true},
+		{"released", gate.Requirement{State: gate.RequirementReleased, Policy: def, EvaluatedAt: &at}, utc, true},
 		{"release by override", override, utc, true},
 		{"different override", otherDigest, "", true},
-		{"stopped", gate.Requirement{State: gate.RequirementStopped, Prometheus: def}, "", false},
+		{"stopped", gate.Requirement{State: gate.RequirementStopped, Policy: def}, "", false},
 		{"missing definition", gate.Requirement{}, "", false},
-		{"missing source", gate.Requirement{Prometheus: &gate.PrometheusDefinition{Source: "removed", Query: expr}}, "", false},
-		{"private source", gate.Requirement{Prometheus: &gate.PrometheusDefinition{Source: "internal", Query: expr}}, "", false},
+		{"missing source", gate.Requirement{Policy: &gate.PrometheusDefinition{Source: "removed", Query: expr}}, "", false},
+		{"private source", gate.Requirement{Policy: &gate.PrometheusDefinition{Source: "internal", Query: expr}}, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			link := sources.QueryURL(tc.req)

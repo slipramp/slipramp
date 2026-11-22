@@ -17,9 +17,7 @@ func (s *ReviewService) GateSummaries(
 ) (map[uuid.UUID]gate.Summary, error) {
 	ids := make([]uuid.UUID, 0, len(records))
 	for _, record := range records {
-		if len(record.StageSnapshot.Gates) > 0 {
-			ids = append(ids, record.ID)
-		}
+		ids = append(ids, record.ID)
 	}
 	if len(ids) == 0 {
 		return nil, nil

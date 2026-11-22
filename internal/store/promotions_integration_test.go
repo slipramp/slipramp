@@ -524,7 +524,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	}
 
 	automatic := createOperatorPromotion(createdAt.Add(150 * time.Second))
-	claimed, err := fixture.database.ClaimPromotionCreation(
+	claimed, err := fixture.database.claimPromotionCreationAt(
 		fixture.ctx,
 		promotion.CreationDispatchClaim{
 			ClusterName:      fixture.stage.ClusterName,

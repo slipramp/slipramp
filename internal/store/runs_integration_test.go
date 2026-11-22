@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
@@ -81,7 +82,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 				Branch:   "main",
 			},
 			Target:  refresh.Revision.Catalog.Targets[0],
-			Action:  catalog.EffectiveAction{Name: "preview"},
+			Action:  catalog.EffectiveAction{Name: "preview", Intent: "preview"},
 			Runtime: refresh.Revision.Catalog.Runtimes[0],
 			Placement: run.PlacementSnapshot{
 				Name:         "infrastructure",
@@ -100,8 +101,17 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		created.CatalogRevisionID != revisionID ||
 		created.CommitSHA != refresh.Commit.SHA ||
 		created.Parameters["refresh"] != true ||
+		created.Snapshot.Action.Intent != catalog.ActionIntentPreview ||
 		created.Snapshot.Repository.CloneURL != record.Snapshot.Repository.CloneURL {
 		t.Errorf("created Run = %#v", created)
+	}
+
+	for _, invalid := range []string{`{}`, `{"action":{"Intent":null}}`, `{"action":{"Intent":"unknown"}}`} {
+		_, err := database.pool.Exec(ctx, "UPDATE runs SET snapshot = $1 WHERE id = $2", invalid, runID)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.ConstraintName != "runs_assignable_action_intent" {
+			t.Fatalf("queued Run accepted invalid intent or failed another constraint: %v", err)
+		}
 	}
 
 	retry := record
@@ -210,7 +220,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	claimedAt := second.CreatedAt.Add(time.Minute)
-	claimed, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
+	claimed, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
 	if err != nil {
 		t.Fatalf("ClaimQueuedRun() error = %v", err)
 	}
@@ -298,7 +308,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Fatalf("wrong-cluster observation error = %v, want Run not found", err)
 	}
 
-	_, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
+	_, err = database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, claimedAt)
 	if !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Errorf("second ClaimQueuedRun() error = %v, want no work", err)
 	}
@@ -387,7 +397,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("stored execution images = %#v", stored.Images)
 	}
 
-	claimed, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), uuid.Nil, completedAt.Add(time.Minute))
+	claimed, err = database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, completedAt.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("claim unblocked Run: %v", err)
 	}
@@ -479,7 +489,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 				Branch:   "main",
 			},
 			Target:  refresh.Revision.Catalog.Targets[0],
-			Action:  catalog.EffectiveAction{Name: "preview"},
+			Action:  catalog.EffectiveAction{Name: "preview", Intent: "preview"},
 			Runtime: refresh.Revision.Catalog.Runtimes[0],
 			Placement: run.PlacementSnapshot{
 				Name:         "infrastructure",

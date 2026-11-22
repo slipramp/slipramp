@@ -175,6 +175,9 @@ func (r Result) ExplainWithOptions(
 			ErrActionNotFound,
 		)
 	}
+	if err := action.Intent.Validate(actionName); err != nil {
+		return Explanation{}, err
+	}
 	var runtime Runtime
 	for _, candidate := range r.Catalog.Runtimes {
 		if candidate.Metadata.Name == action.Runtime {
@@ -292,7 +295,7 @@ func (b explanationBuilder) explain(r Result, parameters ResolvedParameters, cfg
 		ActionTitle:            explained(b.action.Title, b.actionOrigin(".title")),
 		ActionDescription:      explained(b.action.Description, b.actionOrigin(".description")),
 		ActionDocumentationURL: explained(b.action.DocumentationURL, b.actionOrigin(".documentationUrl")),
-		Intent:                 explained(b.action.Intent, b.actionOrigin(".intent")),
+		Intent:                 explained(string(b.action.Intent), b.actionOrigin(".intent")),
 		Runtime: RuntimeExplanation{
 			Name: runtimeName, Image: explained(b.runtime.Spec.Image, b.runtimeOrigin("image")),
 			WorkingDirectory: explained(mount, mountOrigin), Environment: environment,
