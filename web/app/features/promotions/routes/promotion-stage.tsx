@@ -15,6 +15,7 @@ import {
   IconGitBranch,
   IconInfoCircle,
   IconListDetails,
+  IconLock,
   IconPackage,
 } from "@tabler/icons-react";
 import { useEffect, type ReactNode } from "react";
@@ -23,8 +24,6 @@ import { Link, useSearchParams } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getPromotionStage,
-  getGlobalGateScope,
-  getStageGateScope,
   listPromotionBranchDrift,
   listPromotions,
   type Promotion,
@@ -34,6 +33,9 @@ import {
   type PromotionStageCapability,
   type PromotionStatus,
 } from "~/api/generated";
+import { canManageGatePolicy, gateRefreshInterval } from "~/features/gates/gate-policy";
+import { GatePolicyPanel, GlobalGateSummary } from "~/features/gates/gate-policy-panel";
+import { loadLocalGatePolicies, submitGatePolicy } from "~/features/gates/gate-policy.server";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
 import {
@@ -58,6 +60,7 @@ import {
   promotionStageFreightPage,
   promotionStageFreightPageSize,
   selectedPromotionStageView,
+  shouldRevalidatePromotionStage,
   updatePromotionStageView,
   type PromotionStageView,
 } from "~/features/promotions/promotion-stage";
@@ -67,7 +70,6 @@ import { problemDetail } from "~/shared/form-data";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
 import { pageTitle } from "~/shared/page-title";
-import { skipPresentationSearchParamRevalidation } from "~/shared/search-params";
 
 import type { Route } from "./+types/promotion-stage";
 
@@ -83,14 +85,15 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.detail?.stage.name ?? "Stage") }];
 }
 
-export const shouldRevalidate = skipPresentationSearchParamRevalidation;
+export const shouldRevalidate = shouldRevalidatePromotionStage;
 
-export async function loader({ context, params, request }: Route.LoaderArgs) {
+export async function loader({ context, params, request, url }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [result, globalGates, stageGates, principal, activePromotionsByStatus] = await Promise.all([
+  const [result, gatePolicies, principal, activePromotionsByStatus] = await Promise.all([
     getPromotionStage({ client, path: { stageId: params.stageId } }),
-    getGlobalGateScope({ client }),
-    getStageGateScope({ client, path: { stageId: params.stageId } }),
+    selectedPromotionStageView(url.searchParams) === "gates"
+      ? loadLocalGatePolicies({ context, request }, { kind: "stage", stageId: params.stageId })
+      : undefined,
     getProductPrincipal(context),
     Promise.all(
       activePromotionStatuses.map(async (status) => {
@@ -166,19 +169,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     activePromotions,
     activePromotionsAvailable,
-    gateScopes: [
-      { label: "Global", policy: globalGates.data },
-      { label: "Stage", policy: stageGates.data },
-    ].map(({ label, policy }) => ({
-      label,
-      available: Boolean(policy),
-      lock: policy?.lock,
-      window: policy?.window && {
-        state: policy.window.state,
-        timeZone: policy.window.definition.timeZone,
-        nextTransition: policy.window.observation.nextTransition,
-      },
-    })),
+    gatePolicies,
     branchDrift,
     branchDriftError,
     detail: result.data,
@@ -189,17 +180,30 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ context, request }: Route.ActionArgs) {
-  return submitPromotionProjectAction(request, context);
+export async function action(args: Route.ActionArgs) {
+  const { context, request, params } = args;
+  const form = await request.formData();
+  if (form.has("gateAction"))
+    return submitGatePolicy(args, { kind: "stage", stageId: params.stageId }, form);
+  return submitPromotionProjectAction(request, context, form);
 }
 
 export default function PromotionStage({ actionData, loaderData }: Route.ComponentProps) {
-  useActivityRefresh(true, loaderData.activePromotions.length > 0 ? 3_000 : 30_000);
-
   const [searchParams, setSearchParams] = useSearchParams();
   const detail = loaderData.detail;
   const freightRows = detail ? buildStageFreightDetailRows(detail.stage) : [];
   const activeView = selectedPromotionStageView(searchParams);
+  const scopeRefresh =
+    activeView === "gates"
+      ? gateRefreshInterval(
+          loaderData.gatePolicies?.global.scope,
+          loaderData.gatePolicies?.policy.scope,
+        )
+      : 30_000;
+  useActivityRefresh(
+    true,
+    loaderData.activePromotions.length > 0 ? Math.min(3_000, scopeRefresh) : scopeRefresh,
+  );
   const freightPage = promotionStageFreightPage(searchParams, freightRows.length);
   const canonicalSearchParams = detail
     ? canonicalPromotionStageSearchParams(searchParams, freightRows.length)
@@ -334,6 +338,13 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
             </Group>
           </Tabs.Tab>
           <Tabs.Tab
+            leftSection={<IconLock aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            value="gates"
+          >
+            Gates
+          </Tabs.Tab>
+          <Tabs.Tab
             leftSection={<IconInfoCircle aria-hidden size={16} />}
             style={{ flexShrink: 0 }}
             value="details"
@@ -380,67 +391,37 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
           />
         </Tabs.Panel>
 
+        <Tabs.Panel pt="lg" value="gates">
+          {loaderData.gatePolicies && (
+            <Stack gap="lg">
+              <GlobalGateSummary policy={loaderData.gatePolicies.global} />
+              <SectionHeader
+                title="Stage policy"
+                description="Applies to Promotions released through Slipramp for this Stage."
+              />
+              <GatePolicyPanel
+                policy={loaderData.gatePolicies.policy}
+                canManage={canManageGatePolicy(loaderData.principal?.role, "stage")}
+                subjectName={stage.name}
+              />
+              <Stack gap="sm">
+                <Text fw={600} size="sm">
+                  Repository Gates
+                </Text>
+                {stage.gates.length > 0 ? (
+                  <Code block>{stage.gates.join("\n")}</Code>
+                ) : (
+                  <Text c="dimmed" size="sm">
+                    No attachments.
+                  </Text>
+                )}
+              </Stack>
+            </Stack>
+          )}
+        </Tabs.Panel>
         <Tabs.Panel pt="lg" value="details">
           <Stack gap="lg">
             <ObservationDetails stage={stage} />
-            <Stack gap="sm">
-              <SectionHeader title="Promotion gates" />
-              {loaderData.gateScopes.map(({ label, available, lock, window }) => (
-                <Stack key={label} gap={2}>
-                  <Text fw={600} size="sm">
-                    {label} policy
-                  </Text>
-                  {!available && (
-                    <Text c="dimmed" size="sm">
-                      Policy unavailable.
-                    </Text>
-                  )}
-                  {available && !lock && !window && (
-                    <Text c="dimmed" size="sm">
-                      No active lock or weekly window.
-                    </Text>
-                  )}
-                  {lock && (
-                    <Text size="sm">
-                      Locked by {lock.actor.displayName}. {lock.reason}
-                      {lock.expiresAt && (
-                        <>
-                          {" "}
-                          · Expires <RelativeTime value={lock.expiresAt} />
-                        </>
-                      )}
-                    </Text>
-                  )}
-                  {window && (
-                    <Text size="sm">
-                      Weekly window{" "}
-                      {window.state === "passing"
-                        ? "open"
-                        : window.state === "blocking"
-                          ? "closed"
-                          : "unavailable"}{" "}
-                      · {window.timeZone}
-                      {window.nextTransition && (
-                        <>
-                          {" "}
-                          · Next transition <RelativeTime value={window.nextTransition} />
-                        </>
-                      )}
-                    </Text>
-                  )}
-                </Stack>
-              ))}
-              <Text fw={600} size="sm">
-                Repository Gates
-              </Text>
-              {stage.gates.length > 0 ? (
-                <Code block>{stage.gates.join("\n")}</Code>
-              ) : (
-                <Text c="dimmed" size="sm">
-                  No attachments.
-                </Text>
-              )}
-            </Stack>
             <CapabilityDetails stage={stage} />
           </Stack>
         </Tabs.Panel>

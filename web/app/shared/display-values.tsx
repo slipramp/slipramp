@@ -7,9 +7,13 @@ type TimeDisplayProps = TextProps & {
   value: string;
 };
 
-export function Timestamp({ value, ...props }: Readonly<TimeDisplayProps>) {
+export function Timestamp({
+  value,
+  showSeconds,
+  ...props
+}: Readonly<TimeDisplayProps & { showSeconds?: boolean }>) {
   const { timeZone } = useTimeZone();
-  const formatted = formatTimestamp(value, timeZone);
+  const formatted = formatTimestamp(value, timeZone, showSeconds);
 
   return (
     <Tooltip label={formatted} openDelay={350}>

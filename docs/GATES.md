@@ -17,6 +17,22 @@ destination Stage policies together with any repository Gates on the Stage.
 | Target | `/api/v1/gate-scopes/targets/{targetId}` | Operator |
 | Kargo Stage | `/api/v1/gate-scopes/stages/{stageId}` | Operator |
 
+In the web app, open **Administer → Global Gates** for installation-wide
+policy, or open a Target or Stage and select **Gates**. The local tabs also
+show the global policy that applies to the same work. Viewers can inspect
+current policy and history on all three pages.
+
+While a global lock is active, a warning appears on every signed-in product
+page. It shows the reason, who created the lock, and its expiry or
+**Until released**. The warning checks for changes while the page is visible
+and when you return to the tab. Follow **View global Gates** to inspect the
+policy and its history.
+
+Choose **Create lock**, enter the maintenance reason, and optionally enter an
+expiry in UTC. **Release lock** clears the hold for everyone waiting on that
+scope. To let one Run or Promotion through, use its **Override gate** action.
+**Policy history** records who created or released the hold and when.
+
 Use `GET` on the scope resource to read its current lock, lock version, and
 20 most recent changes, newest first. Inspect the global and local scopes
 separately. A scoped API key needs `slipramp:read` to inspect a scope and
@@ -37,6 +53,15 @@ lock succeeds without adding an event. Re-locking creates a new version.
 Target and Stage locks survive archival and reactivation.
 
 ## Manage weekly windows
+
+On the same page, choose **Set weekly window**. Enter the IANA time zone,
+select weekdays, and enter the local start and end times. Use **Add interval**
+for another range. The saved window shows its schedule, effective state,
+observation validity, and the next transition when one is known.
+
+**Edit weekly window** loads the saved intervals. Saving a new version
+invalidates waivers for the previous version. **Remove window** clears the
+schedule for that scope. Both changes appear in **Policy history**.
 
 Send `PUT` to the scope's `/window` child. For example, this body opens a
 Denver window on Mondays and Tuesdays from 09:00 up to 17:00 local time.
@@ -61,6 +86,25 @@ expiry, and next transition when one exists. Every accepted `PUT` advances
 `DELETE` to remove the schedule. The scope retains the last 20 window changes
 in `windowEvents`. Window and lock versions advance independently.
 
+## Read Gate evidence
+
+Open **Details** on a Run or Promotion. Each Gate shows its scope, policy
+version, release condition, and the observation used to evaluate it.
+
+| Gate | Evidence shown when available |
+| --- | --- |
+| Prometheus | Numeric sample, comparison threshold, evaluation time, and validity. **Open in Prometheus** opens the recorded query when a viewer is configured. |
+| Webhook | Decision code, message, evaluation time, and validity. |
+| Weekly window | Observed open or closed state, time zone, schedule digest, observation validity, and known interval boundaries. |
+| Lock | Reason, actor, creation time, expiry, and when Slipramp checked the lock. |
+
+While work waits, an expired window observation can show **Open** alongside
+an **Unavailable** Gate state. Check **Valid until** and the diagnostic to
+understand the hold. After release, **Evidence at release**
+preserves the observation and release time. An override shows the exact
+policy version, decision time, actor, reason, and evidence available when the
+operator recorded it.
+
 ## Inspect a waiting Run
 
 Open the Run details to see the locks, windows, and repository Gates that apply.
@@ -84,7 +128,7 @@ while a lock is active. After approval, the Kargo PromotionTask receives
 A Kargo-originated Promotion checks the same policies on its approved callback.
 
 Open the Promotion details to see global and Stage locks, global and Stage
-windows, then repository Gates. The Stage details show the current policies.
+windows, then repository Gates. The Stage’s **Gates** tab shows current policies.
 A waiver belongs to one Promotion and one exact policy version. Once released,
 the Promotion keeps the evidence from that instant across callbacks and
 delivery retries. Migration 080 preserves earlier releases and begins checking

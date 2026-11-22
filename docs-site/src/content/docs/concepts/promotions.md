@@ -32,9 +32,16 @@ global and destination Stage locks and weekly windows together with any
 repository Gates attached to the Stage. Review-required Promotions can reach
 Kargo for preparation and check those Gates on the approved callback.
 Kargo-originated Promotions that call Slipramp use the same callback check.
-Promotion details show what is holding release and preserve the evidence used
-when it proceeds.
+Open **Details** on the Promotion to see the scope, policy version, and
+observation for each Gate. After release you can inspect the frozen evidence
+and any override used, including who recorded it and why.
 Promotions that run entirely in Kargo bypass Slipramp Gates.
+
+Open a Stage’s **Gates** tab to see its repository Gate attachments and the
+global and Stage release policies. Operators can create or release a Stage lock
+and edit the weekly schedule there. Administrators manage installation-wide
+policy under **Administer → Global Gates**. An active global lock also appears
+across signed-in pages with its reason, actor, and expiry.
 
 `review-required` can be selected only when the Stage has complete review
 context. If a Stage later loses that context, Slipramp preserves the configured

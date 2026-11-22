@@ -7,8 +7,12 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", {
   numeric: "auto",
 });
 
-export function formatTimestamp(value: string | Date, timeZone = defaultTimeZone) {
-  return timestampFormatter(timeZone).format(asDate(value));
+export function formatTimestamp(
+  value: string | Date,
+  timeZone = defaultTimeZone,
+  showSeconds = false,
+) {
+  return timestampFormatter(timeZone, showSeconds).format(asDate(value));
 }
 
 export function formatDatestamp(value: string | Date, timeZone = defaultTimeZone) {
@@ -112,21 +116,23 @@ function asDate(value: string | Date) {
   return value instanceof Date ? value : new Date(value);
 }
 
-function timestampFormatter(timeZone: string) {
+function timestampFormatter(timeZone: string, showSeconds: boolean) {
   const normalizedTimeZone = normalizeTimeZone(timeZone);
-  const existing = timestampFormatters.get(normalizedTimeZone);
+  const key = normalizedTimeZone + (showSeconds ? ":seconds" : "");
+  const existing = timestampFormatters.get(key);
   if (existing) return existing;
 
   const formatter = new Intl.DateTimeFormat("en", {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    second: showSeconds ? "2-digit" : undefined,
     month: "short",
     timeZone: normalizedTimeZone,
     timeZoneName: "short",
     year: "numeric",
   });
-  timestampFormatters.set(normalizedTimeZone, formatter);
+  timestampFormatters.set(key, formatter);
   return formatter;
 }
 

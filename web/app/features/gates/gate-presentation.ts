@@ -32,12 +32,58 @@ const operatorLabels = {
   "greater-than-or-equal": "Greater than or equal to",
 } satisfies Record<GateOperator, string>;
 
-export function gateEvidenceLabel(evidence: GateEvidence) {
-  if ("webhook" in evidence) return `${evidence.webhook.code} · ${evidence.webhook.message}`;
-  if ("window" in evidence)
-    return `${evidence.window.observation.state} · ${evidence.window.timeZone}`;
-  if ("lock" in evidence) return `${evidence.lock.reason} · ${evidence.lock.actor.displayName}`;
-  return String(evidence.prometheus.value);
+type EvidenceField = { label: string; value: string; format?: "time" | "code" };
+
+export function gateEvidenceFields(
+  evidence: GateEvidence | undefined,
+  evaluatedAt?: string,
+  validUntil?: string,
+): EvidenceField[] {
+  const fields: EvidenceField[] = [];
+  if (evidence && "window" in evidence) {
+    const { timeZone, digest, observation } = evidence.window;
+    fields.push(
+      { label: "Observed window", value: observation.state === "passing" ? "Open" : "Closed" },
+      { label: "Time zone", value: timeZone },
+    );
+    if (observation.intervalStart)
+      fields.push({ label: "Interval start", value: observation.intervalStart, format: "time" });
+    if (observation.nextTransition)
+      fields.push({ label: "Next transition", value: observation.nextTransition, format: "time" });
+    fields.push({ label: "Schedule digest", value: digest, format: "code" });
+    evaluatedAt = observation.evaluatedAt;
+    validUntil = observation.validUntil;
+  } else if (evidence && "lock" in evidence) {
+    const lock = evidence.lock;
+    fields.push(
+      { label: "Locked by", value: lock.actor.displayName },
+      { label: "Lock reason", value: lock.reason },
+      { label: "Created", value: lock.createdAt, format: "time" },
+      lock.expiresAt
+        ? { label: "Expires", value: lock.expiresAt, format: "time" }
+        : { label: "Expiry", value: "Until released" },
+    );
+    if (evaluatedAt) fields.push({ label: "Checked", value: evaluatedAt, format: "time" });
+    return fields;
+  } else if (evidence && "webhook" in evidence) {
+    fields.push(
+      { label: "Decision code", value: evidence.webhook.code, format: "code" },
+      { label: "Message", value: evidence.webhook.message },
+    );
+  } else if (evidence) {
+    fields.push({ label: "Sample", value: String(evidence.prometheus.value), format: "code" });
+  }
+  if (evaluatedAt) fields.push({ label: "Evaluated", value: evaluatedAt, format: "time" });
+  if (validUntil) fields.push({ label: "Valid until", value: validUntil, format: "time" });
+  return fields;
+}
+
+export function gateScopeDescription(requirement: GateRequirement) {
+  const scope = { repository: "Repository", global: "Global", target: "Target", stage: "Stage" }[
+    requirement.scope.kind
+  ];
+  const type = requirement.type === "prometheus" ? "Prometheus" : requirement.type;
+  return type ? `${scope} · ${type}` : scope;
 }
 
 export function gateConditionLabel(

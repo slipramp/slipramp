@@ -36,6 +36,11 @@ test("formats timestamps and datestamps in an explicit timezone", () => {
   const value = "2026-01-15T18:00:00Z";
 
   assert.equal(formatTimestamp(value, "UTC"), "Jan 15, 2026, 6:00 PM UTC");
+  assert.equal(
+    formatTimestamp("2026-01-15T18:00:14Z", "UTC", true),
+    "Jan 15, 2026, 6:00:14 PM UTC",
+  );
+  assert.equal(formatTimestamp(value, "UTC"), "Jan 15, 2026, 6:00 PM UTC");
   assert.equal(formatTimestamp(value, "America/Denver"), "Jan 15, 2026, 11:00 AM MST");
   assert.equal(formatDatestamp("2026-01-15T01:00:00Z", "America/Denver"), "Jan 14, 2026");
 });

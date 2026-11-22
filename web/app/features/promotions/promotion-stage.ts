@@ -1,8 +1,12 @@
-import { pageFromSearchParam } from "../../shared/search-params.ts";
+import type { ShouldRevalidateFunctionArgs } from "react-router";
+import {
+  pageFromSearchParam,
+  skipPresentationSearchParamRevalidation,
+} from "../../shared/search-params.ts";
 
 export const promotionStageFreightPageSize = 10;
 
-export type PromotionStageView = "freight" | "details" | "branch-drift";
+export type PromotionStageView = "gates" | "freight" | "details" | "branch-drift";
 
 export function promotionStagePath(stageId: string) {
   return `/promotion-stages/${encodeURIComponent(stageId)}`;
@@ -10,7 +14,18 @@ export function promotionStagePath(stageId: string) {
 
 export function selectedPromotionStageView(searchParams: URLSearchParams): PromotionStageView {
   const requested = searchParams.get("view");
-  return requested === "details" || requested === "branch-drift" ? requested : "freight";
+  return requested === "gates" || requested === "details" || requested === "branch-drift"
+    ? requested
+    : "freight";
+}
+
+export function shouldRevalidatePromotionStage(args: ShouldRevalidateFunctionArgs) {
+  if (
+    selectedPromotionStageView(args.currentUrl.searchParams) !== "gates" &&
+    selectedPromotionStageView(args.nextUrl.searchParams) === "gates"
+  )
+    return true;
+  return skipPresentationSearchParamRevalidation(args);
 }
 
 export function promotionStageFreightPage(searchParams: URLSearchParams, total: number) {
@@ -27,6 +42,7 @@ export function updatePromotionStageView(current: URLSearchParams, view: Promoti
   if (view === "freight") next.delete("view");
   else next.set("view", view);
   next.delete("freightPage");
+  if (view !== "gates") next.delete("editGate");
   return next;
 }
 
@@ -37,6 +53,7 @@ export function canonicalPromotionStageSearchParams(
   const next = new URLSearchParams(current);
   const view = selectedPromotionStageView(current);
 
+  if (view !== "gates") next.delete("editGate");
   if (view === "freight") {
     next.delete("view");
     const page = promotionStageFreightPage(current, freightTotal);

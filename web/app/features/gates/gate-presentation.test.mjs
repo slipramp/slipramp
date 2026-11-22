@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   gateConditionLabel,
-  gateEvidenceLabel,
+  gateEvidenceFields,
+  gateScopeDescription,
   gateCanBeOverridden,
   hasMatchingOverride,
 } from "./gate-presentation.ts";
@@ -29,13 +30,76 @@ test("only a waiting, resolved Gate without a matching override offers a decisio
   assert.equal(gateCanBeOverridden({ ...gate, overrides, version: "changed" }), true);
 });
 
-test("displays typed webhook and Prometheus evidence", () => {
+test("shows repository payloads and observation validity, including a zero sample", () => {
   assert.equal(gateConditionLabel({ type: "webhook" }), "Passing webhook decision");
-  assert.equal(
-    gateEvidenceLabel({ webhook: { code: "hold", message: "Change pending" } }),
-    "hold · Change pending",
+  assert.deepEqual(
+    gateEvidenceFields({ webhook: { code: "hold", message: "Change pending" } }).map(
+      (f) => f.value,
+    ),
+    ["hold", "Change pending"],
   );
-  assert.equal(gateEvidenceLabel({ prometheus: { value: 0 } }), "0");
+  assert.deepEqual(
+    gateEvidenceFields({ prometheus: { value: 0 } }, "t1", "t2").map((f) => [f.label, f.value]),
+    [
+      ["Sample", "0"],
+      ["Evaluated", "t1"],
+      ["Valid until", "t2"],
+    ],
+  );
+  assert.deepEqual(gateEvidenceFields(undefined), []);
+  assert.deepEqual(
+    gateEvidenceFields(undefined, "t1", "t2").map((f) => f.format),
+    ["time", "time"],
+  );
+});
+
+test("shows the recorded window observation and bounds even for a stale or historical schedule", () => {
+  const window = {
+    digest: "original-digest",
+    timeZone: "America/Denver",
+    observation: {
+      state: "passing",
+      evaluatedAt: "t1",
+      validUntil: "t3",
+      intervalStart: "t0",
+      nextTransition: "t2",
+    },
+  };
+  assert.deepEqual(
+    gateEvidenceFields({ window }).map((f) => f.value),
+    ["Open", "America/Denver", "t0", "t2", "original-digest", "t1", "t3"],
+  );
+  assert.deepEqual(
+    gateEvidenceFields({
+      window: {
+        ...window,
+        observation: { state: "blocking", evaluatedAt: "t1", validUntil: "t3" },
+      },
+    }).map((f) => f.value),
+    ["Closed", "America/Denver", "original-digest", "t1", "t3"],
+  );
+});
+
+test("lock evidence preserves the actor, reason and optional expiry at observation time", () => {
+  const lock = { actor: { displayName: "Operator" }, reason: "Maintenance", createdAt: "t0" };
+  assert.deepEqual(
+    gateEvidenceFields({ lock }, "t1").map((f) => f.value),
+    ["Operator", "Maintenance", "t0", "Until released", "t1"],
+  );
+  assert.deepEqual(
+    gateEvidenceFields({ lock: { ...lock, expiresAt: "t2" } }, "t1", "t2").map((f) => f.value),
+    ["Operator", "Maintenance", "t0", "t2", "t1"],
+  );
+  assert.equal(
+    gateScopeDescription({ scope: { kind: "repository" }, type: "prometheus" }),
+    "Repository · Prometheus",
+  );
+  assert.equal(
+    gateScopeDescription({ scope: { kind: "target" }, type: "window" }),
+    "Target · window",
+  );
+  assert.equal(gateScopeDescription({ scope: { kind: "stage" }, type: "lock" }), "Stage · lock");
+  assert.equal(gateScopeDescription({ scope: { kind: "repository" } }), "Repository");
 });
 
 test("describes the release condition for Server policies", () => {

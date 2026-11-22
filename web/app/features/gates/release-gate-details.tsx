@@ -1,19 +1,32 @@
-import { Anchor, Badge, Button, Code, Group, Stack, Table, Text, Textarea } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Box,
+  Button,
+  Code,
+  Divider,
+  Group,
+  Stack,
+  Text,
+  Textarea,
+  Title,
+} from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
 import { Fragment } from "react";
 import { Form, useNavigation } from "react-router";
 
-import type { GateRequirement, GateSummary } from "~/api/generated";
+import type { GateOverride, GateRequirement, GateSummary } from "~/api/generated";
 import {
   gateCanBeOverridden,
   hasMatchingOverride,
   gateConditionLabel,
-  gateEvidenceLabel,
+  gateEvidenceFields,
   gateRequirementBadges,
+  gateScopeDescription,
   gateSummaryBadges,
 } from "~/features/gates/gate-presentation";
 import { SectionHeader } from "~/shared/page";
-import { RelativeTime } from "~/shared/display-values";
+import { Timestamp } from "~/shared/display-values";
 
 type GateSubject = "Promotion" | "Run";
 
@@ -29,93 +42,99 @@ export function ReleaseGateDetails({
   canOverride: boolean;
 }>) {
   if (gates.state === "not-required") return null;
-
-  const badge = gateSummaryBadges[gates.state];
-  const description = gateSummaryDescription(gates.state, subject);
-  const showLastEvaluated = gates.state === "waiting";
-  const showEvidence = gates.state !== "stopped";
-
+  const summaryBadge = gateSummaryBadges[gates.state];
   return (
-    <Stack gap="md">
+    <Stack component="section" gap="md">
       <SectionHeader
+        title={subject === "Promotion" ? "Promotion gates" : "Release gates"}
+        description={gateSummaryDescription(gates.state, subject)}
         actions={
-          <Badge color={badge.color} variant="light">
-            {badge.label}
+          <Badge color={summaryBadge.color} variant="light">
+            {summaryBadge.label}
           </Badge>
         }
-        description={description}
-        title={subject === "Promotion" ? "Promotion gates" : "Release gates"}
       />
-      <Table.ScrollContainer
-        minWidth={showLastEvaluated ? 600 : showEvidence ? 480 : 260}
-        type="native"
-      >
-        <Table aria-label="Gate evaluations" verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Gate</Table.Th>
-              <Table.Th>Status</Table.Th>
-              {showEvidence && (
+      {gates.requirements.map((gate, index) => {
+        const matched = hasMatchingOverride(gate);
+        const badge =
+          matched && gate.state !== "stopped"
+            ? {
+                label: gate.releasedAt ? "Released by override" : "Override recorded",
+                color: "orange",
+              }
+            : gateRequirementBadges[gate.state];
+        return (
+          <Fragment key={gate.key}>
+            {index > 0 && <Divider />}
+            <Stack component="section" gap="xs" style={{ overflowWrap: "anywhere" }}>
+              <Group justify="space-between">
+                <Title order={3} size="h5">
+                  {gate.title ?? gate.name}
+                </Title>
+                <Badge color={badge.color} variant="light">
+                  {badge.label}
+                </Badge>
+              </Group>
+              <Text size="sm" c="dimmed">
+                {gateScopeDescription(gate)}
+                {gate.title && gate.origin === "repository" && <> · {gate.name}</>}
+              </Text>
+              {gate.version && (
+                <Text size="xs">
+                  Policy version <Code>{gate.version}</Code>
+                </Text>
+              )}
+              {gate.state !== "stopped" && (
                 <>
-                  <Table.Th>{gates.state === "released" ? "Value at release" : "Current"}</Table.Th>
-                  <Table.Th>Expected</Table.Th>
+                  <Text size="sm">Release condition · {gateConditionLabel(gate)}</Text>
+                  <Text size="sm" fw={600}>
+                    {gate.releasedAt ? "Evidence at release" : "Latest observation"}
+                  </Text>
+                  {!gate.evidence && !gate.evaluatedAt && (
+                    <Text size="sm" c="dimmed">
+                      {gate.releasedAt && matched
+                        ? "Released with an operator override."
+                        : "No observation available."}
+                    </Text>
+                  )}
+                  <EvidenceFields
+                    fields={gateEvidenceFields(gate.evidence, gate.evaluatedAt, gate.validUntil)}
+                  />
+                  {gate.releasedAt && (
+                    <Text size="sm">
+                      Released <Timestamp value={gate.releasedAt} showSeconds />
+                    </Text>
+                  )}
+                  {gate.diagnostic && <Text size="sm">{gate.diagnostic}</Text>}
+                  {gate.queryUrl && (
+                    <Anchor
+                      href={gate.queryUrl}
+                      rel="noreferrer"
+                      size="sm"
+                      target="_blank"
+                      aria-label={`Open in Prometheus for ${gate.title ?? gate.name}`}
+                    >
+                      <Group component="span" gap={4}>
+                        Open in Prometheus <IconExternalLink aria-hidden size={13} />
+                      </Group>
+                    </Anchor>
+                  )}
                 </>
               )}
-              {showLastEvaluated ? <Table.Th>Last evaluated</Table.Th> : null}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {gates.requirements.map((requirement) => (
-              <Fragment key={requirement.key}>
-                <GateRequirementRow
-                  requirement={requirement}
-                  showLastEvaluated={showLastEvaluated}
+              {gate.overrides?.map((decision) => (
+                <OverrideDecision
+                  key={decision.recordedAt + decision.version}
+                  decision={decision}
+                  earlierVersion={Boolean(gate.version && decision.version !== gate.version)}
                 />
-                {requirement.overrides?.map((decision) => (
-                  <Table.Tr key={`${decision.recordedAt}-${decision.version}`}>
-                    <Table.Td colSpan={showLastEvaluated ? 5 : showEvidence ? 4 : 2}>
-                      <Text size="sm">
-                        {decision.actor.displayName} recorded an override
-                        {requirement.origin === "server"
-                          ? ` for version ${decision.version}`
-                          : requirement.version && decision.version !== requirement.version
-                            ? " for an earlier policy version"
-                            : ""}{" "}
-                        <RelativeTime size="sm" value={decision.recordedAt} />. {decision.reason}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {gateRequirementBadges[decision.observedState].label} at decision time
-                        {decision.observedEvidence
-                          ? ` (${gateEvidenceLabel(decision.observedEvidence)})`
-                          : ""}
-                        {decision.diagnostic ? ` · ${decision.diagnostic}` : ""}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-                {canOverride && gates.state === "waiting" && gateCanBeOverridden(requirement) ? (
-                  <Table.Tr key={requirement.version}>
-                    <Table.Td colSpan={5}>
-                      <GateOverrideForm
-                        requirement={requirement}
-                        subject={subject}
-                        subjectId={subjectId}
-                      />
-                    </Table.Td>
-                  </Table.Tr>
-                ) : null}
-                {requirement.diagnostic ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={showLastEvaluated ? 5 : 4}>
-                      <Text size="sm">{requirement.diagnostic}</Text>
-                    </Table.Td>
-                  </Table.Tr>
-                ) : null}
-              </Fragment>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+              ))}
+              {canOverride && gates.state === "waiting" && gateCanBeOverridden(gate) && (
+                <GateOverrideForm requirement={gate} subject={subject} subjectId={subjectId} />
+              )}
+            </Stack>
+          </Fragment>
+        );
+      })}
     </Stack>
   );
 }
@@ -128,109 +147,60 @@ function gateSummaryDescription(state: GateSummary["state"], subject: GateSubjec
   return undefined;
 }
 
-function GateRequirementRow({
-  requirement,
-  showLastEvaluated,
-}: Readonly<{ requirement: GateRequirement; showLastEvaluated: boolean }>) {
-  const badge = hasMatchingOverride(requirement)
-    ? {
-        label: requirement.releasedAt ? "Released by override" : "Override recorded",
-        color: "orange",
-      }
-    : gateRequirementBadges[requirement.state];
-
+function EvidenceFields({ fields }: Readonly<{ fields: ReturnType<typeof gateEvidenceFields> }>) {
+  if (!fields.length) return null;
   return (
-    <Table.Tr>
-      <Table.Td>
-        <Text fw={600} size="sm" style={{ overflowWrap: "anywhere" }}>
-          {requirement.title ?? requirement.name}
-        </Text>
-        {requirement.title ? (
-          <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
-            {requirement.origin === "server"
-              ? `Policy version ${requirement.version}`
-              : requirement.name}
+    <Box
+      component="dl"
+      m={0}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(6rem,max-content) minmax(0,1fr)",
+        columnGap: "var(--mantine-spacing-md)",
+        rowGap: 2,
+      }}
+    >
+      {fields.map(({ label, value, format }) => (
+        <Fragment key={label}>
+          <Text component="dt" size="sm" c="dimmed">
+            {label}
           </Text>
-        ) : null}
-        {requirement.queryUrl ? (
-          <Anchor
-            href={requirement.queryUrl}
-            rel="noreferrer"
-            size="xs"
-            target="_blank"
-            aria-label={`Open in Prometheus for ${requirement.title ?? requirement.name}`}
-          >
-            <Group component="span" gap={4} wrap="nowrap">
-              Open in Prometheus
-              <IconExternalLink aria-hidden size={13} />
-            </Group>
-          </Anchor>
-        ) : null}
-      </Table.Td>
-      <Table.Td>
-        <Stack align="flex-start" gap={2}>
-          <Badge color={badge.color} variant="light">
-            {badge.label}
-          </Badge>
-          {requirement.releasedAt ? (
-            <RelativeTime c="dimmed" size="xs" value={requirement.releasedAt} />
-          ) : null}
-        </Stack>
-      </Table.Td>
-      {requirement.state !== "stopped" && (
-        <>
-          <Table.Td>
-            {requirement.evidence === undefined ? (
-              <Text c="dimmed" size="sm">
-                {requirement.releasedAt && hasMatchingOverride(requirement)
-                  ? "Operator override"
-                  : "No observation"}
-              </Text>
+          <Text component="dd" m={0} size="sm">
+            {format === "time" ? (
+              <Timestamp value={value} showSeconds />
+            ) : format === "code" ? (
+              <Code>{value}</Code>
             ) : (
-              <Stack gap={2} align="flex-start">
-                <Code>{gateEvidenceLabel(requirement.evidence)}</Code>
-                {"lock" in requirement.evidence ? (
-                  <Text size="xs" c="dimmed">
-                    Locked <RelativeTime value={requirement.evidence.lock.createdAt} />
-                  </Text>
-                ) : null}
-                {"lock" in requirement.evidence && requirement.evidence.lock.expiresAt ? (
-                  <Text size="xs" c="dimmed">
-                    Lock expiry <RelativeTime value={requirement.evidence.lock.expiresAt} />
-                  </Text>
-                ) : null}
-                {"window" in requirement.evidence &&
-                requirement.evidence.window.observation.intervalStart ? (
-                  <Text size="xs" c="dimmed">
-                    Interval start{" "}
-                    <RelativeTime value={requirement.evidence.window.observation.intervalStart} />
-                  </Text>
-                ) : null}
-                {"window" in requirement.evidence &&
-                requirement.evidence.window.observation.nextTransition ? (
-                  <Text size="xs" c="dimmed">
-                    Next transition{" "}
-                    <RelativeTime value={requirement.evidence.window.observation.nextTransition} />
-                  </Text>
-                ) : null}
-              </Stack>
+              value
             )}
-          </Table.Td>
-          <Table.Td>{gateConditionLabel(requirement)}</Table.Td>
-        </>
-      )}
-      {showLastEvaluated ? (
-        <Table.Td>
-          {requirement.evaluatedAt ? (
-            <RelativeTime size="sm" value={requirement.evaluatedAt} />
-          ) : (
-            <Text c="dimmed" size="sm">
-              Not evaluated
-            </Text>
-          )}
-        </Table.Td>
-      ) : null}
-    </Table.Tr>
+          </Text>
+        </Fragment>
+      ))}
+    </Box>
+  );
+}
+
+function OverrideDecision({
+  decision,
+  earlierVersion,
+}: Readonly<{ decision: GateOverride; earlierVersion: boolean }>) {
+  return (
+    <Stack gap={2}>
+      <Text size="sm" fw={600}>
+        Override by {decision.actor.displayName} ·{" "}
+        <Timestamp value={decision.recordedAt} showSeconds />
+      </Text>
+      <Text size="sm">{decision.reason}</Text>
+      <Text size="xs">
+        {earlierVersion ? "Earlier policy version" : "Policy version"}{" "}
+        <Code>{decision.version}</Code>
+      </Text>
+      <Text size="sm">{gateRequirementBadges[decision.observedState].label} at decision time</Text>
+      <EvidenceFields
+        fields={gateEvidenceFields(decision.observedEvidence, decision.evaluatedAt)}
+      />
+      {decision.diagnostic && <Text size="sm">{decision.diagnostic}</Text>}
+    </Stack>
   );
 }
 

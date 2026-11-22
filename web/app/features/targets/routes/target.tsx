@@ -1,5 +1,10 @@
 import { Alert, Anchor, Badge, Code, Stack, Tabs } from "@mantine/core";
-import { IconAdjustmentsHorizontal, IconFileCode, IconListDetails } from "@tabler/icons-react";
+import {
+  IconAdjustmentsHorizontal,
+  IconFileCode,
+  IconListDetails,
+  IconLock,
+} from "@tabler/icons-react";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -109,6 +114,14 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
             value="overview"
           >
             Overview
+          </Tabs.Tab>
+          <Tabs.Tab
+            leftSection={<IconLock aria-hidden size={16} />}
+            renderRoot={(props) => <Link {...props} to={`${targetPath}/gates`} />}
+            style={{ flexShrink: 0 }}
+            value="gates"
+          >
+            Gates
           </Tabs.Tab>
           <Tabs.Tab
             leftSection={<IconAdjustmentsHorizontal aria-hidden size={16} />}

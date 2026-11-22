@@ -9,8 +9,8 @@ import { formValue, problemDetail } from "~/shared/form-data";
 export async function submitPromotionCreation(
   request: Request,
   context: Pick<RouterContextProvider, "get">,
+  formData: FormData,
 ): Promise<Response | PromotionCreationActionResult> {
-  const formData = await request.formData();
   const targetStageId = formValue(formData, "targetStageId");
   const sourceStageId = formValue(formData, "sourceStageId");
   const freightName = formValue(formData, "freightName");

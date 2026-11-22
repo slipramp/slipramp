@@ -6,6 +6,7 @@ import {
   promotionStageFreightPage,
   promotionStagePath,
   selectedPromotionStageView,
+  shouldRevalidatePromotionStage,
   updatePromotionStageView,
 } from "./promotion-stage.ts";
 
@@ -61,8 +62,40 @@ test("Stage Freight pagination validates and clamps the requested page", () => {
   );
 });
 
-test("an unsupported Gates view uses the default Stage tab", () => {
-  const requested = new URLSearchParams("view=gates&policy=stage-1");
-  assert.equal(selectedPromotionStageView(requested), "freight");
-  assert.equal(canonicalPromotionStageSearchParams(requested, 0).toString(), "policy=stage-1");
+test("Stage Gate editors stay on the Gates tab and close when navigating away", () => {
+  const requested = new URLSearchParams(
+    "view=gates&policy=stage-1&editGate=set-window&freightPage=3",
+  );
+  assert.equal(selectedPromotionStageView(requested), "gates");
+  assert.equal(
+    canonicalPromotionStageSearchParams(requested, 0).toString(),
+    "view=gates&policy=stage-1&editGate=set-window",
+  );
+  assert.equal(
+    updatePromotionStageView(requested, "details").toString(),
+    "view=details&policy=stage-1",
+  );
+  assert.equal(
+    canonicalPromotionStageSearchParams(
+      new URLSearchParams("view=unknown&editGate=lock&filter=x"),
+      0,
+    ).toString(),
+    "filter=x",
+  );
+});
+
+test("Stage policy history loads on entering Gates and refreshes after mutations", () => {
+  const stage = "https://slipramp.test/promotion-stages/stage-1";
+  const reload = (from, to, formMethod) =>
+    shouldRevalidatePromotionStage({
+      currentUrl: new URL(stage + from),
+      nextUrl: new URL(stage + to),
+      defaultShouldRevalidate: true,
+      formMethod,
+    });
+  assert.equal(reload("?view=details", "?view=gates"), true);
+  assert.equal(reload("?view=gates", "?view=gates&editGate=lock"), false);
+  assert.equal(reload("?view=gates&editGate=lock", "?view=gates", "POST"), true);
+  assert.equal(reload("?view=gates", "?view=details"), false);
+  assert.equal(reload("?view=gates", "?view=gates"), true);
 });

@@ -9,6 +9,8 @@ export default [
   route("api/v1/auth/login", "features/auth/routes/auth-login.ts"),
   route("api/v1/auth/callback", "features/auth/routes/auth-callback.ts"),
   route("logout", "features/auth/routes/logout.ts"),
+  route("gates", "features/gates/routes/global-gates.tsx"),
+  route("gates/lock-status", "features/gates/routes/global-lock-status.ts"),
   route("access", "features/access/routes/access.tsx"),
   route("principals", "features/access/routes/principals.tsx"),
   route("principals/:principalId", "features/access/routes/principal.tsx"),
@@ -35,6 +37,7 @@ export default [
   ]),
   route("targets/:targetId", "features/targets/routes/target.tsx", [
     index("features/targets/routes/target-overview.tsx"),
+    route("gates", "features/targets/routes/target-gates.tsx"),
     route("defaults", "features/targets/routes/target-defaults.tsx"),
     route("definition", "features/targets/routes/target-definition.tsx"),
   ]),

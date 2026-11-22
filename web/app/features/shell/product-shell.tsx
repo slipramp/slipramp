@@ -31,6 +31,7 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconListDetails,
+  IconLock,
   IconLogout,
   IconMapPin,
   IconMoon,
@@ -212,6 +213,7 @@ function ProductShellLayout({
                 closeMobile={() => setMobileOpened(false)}
                 group={{
                   items: [
+                    { icon: IconLock, label: "Global Gates", to: "/gates" },
                     { icon: IconKey, label: "Personal API keys", to: "/access" },
                     ...(principal.role === "admin"
                       ? [

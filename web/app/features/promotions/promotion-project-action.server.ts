@@ -8,9 +8,10 @@ import { formValue, optionalFormValue, problemDetail } from "~/shared/form-data"
 export async function submitPromotionProjectAction(
   request: Request,
   context: Pick<RouterContextProvider, "get">,
+  submittedForm?: FormData,
 ) {
-  const formData = await request.clone().formData();
-  if (formData.has("mode")) return submitPromotionCreation(request, context);
+  const formData = submittedForm ?? (await request.formData());
+  if (formData.has("mode")) return submitPromotionCreation(request, context, formData);
 
   const stageId = formValue(formData, "stageId");
   const mode = formValue(formData, "policyMode") as PromotionPolicyMode;

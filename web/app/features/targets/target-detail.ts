@@ -1,4 +1,5 @@
 export function targetDetailTab(pathname: string, targetPath: string) {
+  if (pathname === `${targetPath}/gates`) return "gates";
   if (pathname === `${targetPath}/defaults`) return "defaults";
   if (pathname === `${targetPath}/definition`) return "definition";
   return "overview";

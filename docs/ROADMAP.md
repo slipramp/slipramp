@@ -9,7 +9,8 @@ strict priority order.
 
 ## Release Gates
 
-- [ ] Add global, Target, and Stage policy management to the operator views.
+- [ ] Finish Gate list-state labels, troubleshooting, and operational
+      telemetry and fixtures.
 
 [Gate expansion implementation plan](./design/gate-expansion-plan.md)
 

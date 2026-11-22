@@ -3,8 +3,9 @@
 Phases 1 through 6 are complete. Run assignment enforces global and Target
 policy. Promotion creation dispatch and callback approval enforce global and
 destination Stage policy. Both record the lock, window, repository evidence,
-and waivers used at release. Phase 7 covers policy management and operational
-polish.
+and waivers used at release. The web app supports policy management, typed
+Gate evidence on both subjects, and an installation-wide lock warning.
+Operational polish remains in progress.
 
 This plan expands Gate into the common release-policy concept for Runs and
 Kargo Promotions. Prometheus and webhook Gates obtain observations from
@@ -772,10 +773,15 @@ Acceptance:
 
 ## Phase 7: Product management and operational polish
 
-- Add global, Target, and Stage Gate management views.
-- Add typed Gate evidence to Run and Promotion details.
-- Add list-state labels, warning banners, window countdowns, lock history, and
-  source-appropriate troubleshooting affordances.
+- [x] Manage global locks and weekly windows under Administer. Manage local
+  policy on each Target and Stage Gates tab, alongside the applicable global
+  policy. Readers can inspect policy and its history.
+- [x] Show lock and window changes, window state and next transition on scope
+  views. Keep the selected editor in the URL and refresh at policy boundaries.
+- [x] Show typed observations, policy versions, and override evidence in Run
+  and Promotion details, including the evidence frozen at release.
+- [x] Show the active global lock and its expiry across signed-in product views.
+- Complete list-state labels and source-appropriate troubleshooting affordances.
 - Complete metrics, logs, user documentation, configuration examples, local
   development fixtures, and upgrade notes.
 
