@@ -4,47 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/gate"
 )
-
-func serverGateScopeResponse(state gate.ScopeState) api.ServerGateScope {
-	result := api.ServerGateScope{
-		ID: state.ID, Kind: api.ServerGateScopeKind(state.Owner.Kind), CheckedAt: state.CheckedAt,
-		LockVersion: strconv.FormatInt(state.LockVersion, 10),
-		Window:      state.Window, WindowVersion: strconv.FormatInt(state.WindowVersion, 10),
-		WindowEvents: make([]api.ServerWindowEvent, 0, len(state.WindowEvents)),
-		Events:       make([]api.ServerGateLockEvent, 0, len(state.Events)),
-	}
-	switch state.Owner.Kind {
-	case gate.TargetScope:
-		result.TargetID = &state.Owner.ID
-	case gate.StageScope:
-		result.StageID = &state.Owner.ID
-	}
-	if lock := state.Lock; lock != nil {
-		result.Lock = &api.ServerGateLock{
-			Actor: *apiActorSnapshot(&lock.Actor), Reason: lock.Reason, CreatedAt: lock.CreatedAt, ExpiresAt: lock.ExpiresAt,
-		}
-	}
-	for _, event := range state.Events {
-		result.Events = append(result.Events, api.ServerGateLockEvent{
-			Action: api.ServerGateLockEventAction(event.Action), Actor: *apiActorSnapshot(&event.Actor),
-			Reason: event.Reason, RecordedAt: event.RecordedAt, ExpiresAt: event.ExpiresAt,
-			PriorVersion: strconv.FormatInt(event.Version-1, 10), Version: strconv.FormatInt(event.Version, 10),
-		})
-	}
-	for _, event := range state.WindowEvents {
-		result.WindowEvents = append(result.WindowEvents, api.ServerWindowEvent{
-			Action: api.ServerWindowEventAction(event.Action), Version: strconv.FormatInt(event.Version, 10),
-			PriorVersion: strconv.FormatInt(event.Version-1, 10), Actor: *apiActorSnapshot(&event.Actor),
-			RecordedAt: event.RecordedAt, Definition: event.Definition, Digest: event.Digest,
-		})
-	}
-	return result
-}
 
 func (h *Handler) changeServerGateLock(
 	ctx context.Context,
@@ -77,7 +40,7 @@ func (h *Handler) GetGlobalGateScope(
 	state, err := h.gateScopes.Inspect(ctx, owner)
 	switch {
 	case err == nil:
-		return api.GetGlobalGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.GetGlobalGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.GetGlobalGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -95,7 +58,7 @@ func (h *Handler) LockGlobalGateScope(
 	state, err := h.putServerGateLock(ctx, owner, request.Body)
 	switch {
 	case err == nil:
-		return api.LockGlobalGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.LockGlobalGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.LockGlobalGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -125,7 +88,7 @@ func (h *Handler) UnlockGlobalGateScope(
 	state, err := h.changeServerGateLock(ctx, owner, nil)
 	switch {
 	case err == nil:
-		return api.UnlockGlobalGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.UnlockGlobalGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.UnlockGlobalGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -147,7 +110,7 @@ func (h *Handler) GetTargetGateScope(
 	state, err := h.gateScopes.Inspect(ctx, owner)
 	switch {
 	case err == nil:
-		return api.GetTargetGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.GetTargetGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.GetTargetGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -165,7 +128,7 @@ func (h *Handler) LockTargetGateScope(
 	state, err := h.putServerGateLock(ctx, owner, request.Body)
 	switch {
 	case err == nil:
-		return api.LockTargetGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.LockTargetGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.LockTargetGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -195,7 +158,7 @@ func (h *Handler) UnlockTargetGateScope(
 	state, err := h.changeServerGateLock(ctx, owner, nil)
 	switch {
 	case err == nil:
-		return api.UnlockTargetGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.UnlockTargetGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.UnlockTargetGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -217,7 +180,7 @@ func (h *Handler) GetStageGateScope(
 	state, err := h.gateScopes.Inspect(ctx, owner)
 	switch {
 	case err == nil:
-		return api.GetStageGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.GetStageGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.GetStageGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -235,7 +198,7 @@ func (h *Handler) LockStageGateScope(
 	state, err := h.putServerGateLock(ctx, owner, request.Body)
 	switch {
 	case err == nil:
-		return api.LockStageGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.LockStageGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.LockStageGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),
@@ -265,7 +228,7 @@ func (h *Handler) UnlockStageGateScope(
 	state, err := h.changeServerGateLock(ctx, owner, nil)
 	switch {
 	case err == nil:
-		return api.UnlockStageGateScope200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.UnlockStageGateScope200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.UnlockStageGateScope404ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusNotFound, err.Error()),

@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -66,4 +67,9 @@ type Decision struct {
 type OverrideCollection struct {
 	Eligible  []Requirement
 	Decisions []Override
+}
+
+type OverrideStore interface {
+	ListGateOverrides(context.Context, SubjectType, uuid.UUID, uuid.UUID) (OverrideCollection, error)
+	RecordGateOverride(context.Context, OverrideRequest) (Requirement, error)
 }

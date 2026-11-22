@@ -11,7 +11,10 @@
   "defaultDefaultClientScopes": ["basic"],
   "defaultOptionalClientScopes": [
     "slipramp:read",
-    "slipramp:runs:write"
+    "slipramp:runs:write",
+    "slipramp:gates:manage",
+    "slipramp:runs:override-gates",
+    "slipramp:promotions:override-gates"
   ],
   "clientScopes": [
     {
@@ -132,11 +135,11 @@
     },
     {
       "name": "slipramp:read",
-      "description": "Read Slipramp Targets, Runs, logs, and Artifacts through MCP",
+      "description": "Read Slipramp Targets, Runs, Artifacts, Stages, Promotions, and Gates through MCP",
       "protocol": "openid-connect",
       "attributes": {
         "display.on.consent.screen": "true",
-        "consent.screen.text": "Read Slipramp Targets, Runs, logs, and Artifacts",
+        "consent.screen.text": "Read Slipramp Targets, Runs, Artifacts, Stages, Promotions, and Gates",
         "include.in.token.scope": "true"
       },
       "protocolMappers": [
@@ -161,6 +164,78 @@
       "attributes": {
         "display.on.consent.screen": "true",
         "consent.screen.text": "Create and cancel Slipramp Runs",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "Slipramp MCP audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "http://localhost:8080/mcp",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "slipramp:gates:manage",
+      "description": "Manage Slipramp Gate locks and weekly windows through MCP",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Manage Slipramp Gate locks and weekly windows",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "Slipramp MCP audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "http://localhost:8080/mcp",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "slipramp:runs:override-gates",
+      "description": "Override Gates on Slipramp Runs through MCP",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Override Gates on Slipramp Runs",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "Slipramp MCP audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "http://localhost:8080/mcp",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "slipramp:promotions:override-gates",
+      "description": "Override Gates on Slipramp Promotions through MCP",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Override Gates on Slipramp Promotions",
         "include.in.token.scope": "true"
       },
       "protocolMappers": [

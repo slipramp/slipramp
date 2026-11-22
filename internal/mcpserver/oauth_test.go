@@ -46,6 +46,9 @@ func TestOAuthAccessTokenVerifier(t *testing.T) {
 		!slices.Equal(verified.Credential.Scopes, []productidentity.Scope{
 			productidentity.ScopeRead,
 			productidentity.ScopeRunsWrite,
+			productidentity.ScopeGatesManage,
+			productidentity.ScopeRunsOverrideGates,
+			productidentity.ScopePromotionsOverrideGates,
 		}) || !verified.Expiration.Equal(issuer.expiry) {
 		t.Errorf("verified token = %#v", verified)
 	}
@@ -151,7 +154,7 @@ func newTestOAuthIssuer(t *testing.T) *testOAuthIssuer {
 		issuer:      "https://identity.example.com/realms/slipramp",
 		resource:    resource,
 		audience:    resource,
-		tokenScopes: "openid slipramp:read slipramp:runs:write unknown",
+		tokenScopes: "openid slipramp:read slipramp:runs:write slipramp:gates:manage slipramp:runs:override-gates slipramp:promotions:override-gates unknown",
 		expiry:      time.Now().Add(time.Hour).Truncate(time.Second),
 		key:         key,
 	}

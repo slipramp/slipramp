@@ -404,12 +404,18 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	)
 	mcpHandler, err := mcpserver.NewHTTP(
 		mcpserver.Dependencies{
-			Authentication:    productAuthenticationService,
-			Catalogs:          catalogs,
-			Runs:              runs,
-			Artifacts:         artifacts,
-			OAuthAccessTokens: oauthTokenVerifier,
-			ToolCallObserver:  metrics,
+			Stages:                 promotionProjects,
+			Promotions:             promotionReviews,
+			Gates:                  persistence.database,
+			GateSources:            cfg.GateSources,
+			GateEvaluatorProcessID: gateEvaluatorProcessID,
+			WindowWake:             windowCoordinator,
+			Authentication:         productAuthenticationService,
+			Catalogs:               catalogs,
+			Runs:                   runs,
+			Artifacts:              artifacts,
+			OAuthAccessTokens:      oauthTokenVerifier,
+			ToolCallObserver:       metrics,
 		},
 		mcpserver.Options{
 			ServiceVersion: serviceVersion,

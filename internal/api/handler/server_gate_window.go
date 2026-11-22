@@ -24,7 +24,7 @@ func (h *Handler) SetGlobalGateWindow(ctx context.Context, request api.SetGlobal
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.GlobalScope}, request.Body)
 	switch {
 	case err == nil:
-		return api.SetGlobalGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.SetGlobalGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.SetGlobalGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):
@@ -40,7 +40,7 @@ func (h *Handler) RemoveGlobalGateWindow(ctx context.Context, request api.Remove
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.GlobalScope}, nil)
 	switch {
 	case err == nil:
-		return api.RemoveGlobalGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.RemoveGlobalGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.RemoveGlobalGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):
@@ -57,7 +57,7 @@ func (h *Handler) SetTargetGateWindow(ctx context.Context, request api.SetTarget
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.TargetScope, ID: request.TargetID}, request.Body)
 	switch {
 	case err == nil:
-		return api.SetTargetGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.SetTargetGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.SetTargetGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):
@@ -73,7 +73,7 @@ func (h *Handler) RemoveTargetGateWindow(ctx context.Context, request api.Remove
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.TargetScope, ID: request.TargetID}, nil)
 	switch {
 	case err == nil:
-		return api.RemoveTargetGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.RemoveTargetGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.RemoveTargetGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):
@@ -90,7 +90,7 @@ func (h *Handler) SetStageGateWindow(ctx context.Context, request api.SetStageGa
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.StageScope, ID: request.StageID}, request.Body)
 	switch {
 	case err == nil:
-		return api.SetStageGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.SetStageGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.SetStageGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):
@@ -106,7 +106,7 @@ func (h *Handler) RemoveStageGateWindow(ctx context.Context, request api.RemoveS
 	state, err := h.changeGateWindow(ctx, gate.Scope{Kind: gate.StageScope, ID: request.StageID}, nil)
 	switch {
 	case err == nil:
-		return api.RemoveStageGateWindow200JSONResponse(serverGateScopeResponse(state)), nil
+		return api.RemoveStageGateWindow200JSONResponse(api.NewServerGateScope(state)), nil
 	case errors.Is(err, gate.ErrScopeNotFound):
 		return api.RemoveStageGateWindow404ApplicationProblemPlusJSONResponse(NewProblem(http.StatusNotFound, err.Error())), nil
 	case errors.Is(err, gate.ErrScopeForbidden):

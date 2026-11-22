@@ -41,6 +41,16 @@ func (d *Database) ChangeServerGateLock(ctx context.Context, owner gate.Scope, a
 	})
 }
 
+func (d *Database) UnlockServerGateVersion(ctx context.Context, owner gate.Scope, actor productidentity.ActorSnapshot,
+	version int64) (gate.ScopeState, error) {
+	return d.changeServerGateScope(ctx, owner, func(q *storedb.Queries, row storedb.ServerGateScope, at time.Time) (storedb.ServerGateScope, error) {
+		if serverGateLockActive(row, at) && row.LockVersion != version {
+			return row, gate.ErrLockVersion
+		}
+		return changeScopeLock(ctx, q, row, actor, nil, at)
+	})
+}
+
 type scopePolicyChange func(*storedb.Queries, storedb.ServerGateScope, time.Time) (storedb.ServerGateScope, error)
 
 func (d *Database) changeServerGateScope(ctx context.Context, owner gate.Scope, change scopePolicyChange) (gate.ScopeState, error) {

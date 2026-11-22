@@ -14,64 +14,13 @@ import (
 func (h *Handler) gateSummaryResponse(summary gate.Summary) api.GateSummary {
 	requirements := make([]api.GateRequirement, 0, len(summary))
 	for _, requirement := range summary {
-		requirements = append(requirements, h.gateRequirementResponse(requirement))
+		requirements = append(requirements, api.NewGateRequirement(requirement, h.gateSources))
 	}
 
 	return api.GateSummary{
 		State:        api.GateSummaryState(summary.State()),
 		Requirements: requirements,
 	}
-}
-
-func (h *Handler) gateRequirementResponse(requirement gate.Requirement) api.GateRequirement {
-	var operator *api.GateOperator
-	var threshold *float64
-	if definition, ok := requirement.Policy.(*gate.PrometheusDefinition); ok {
-		operator = new(api.GateOperator(definition.Condition.Operator))
-		threshold = &definition.Condition.Value
-	}
-	return api.GateRequirement{
-		Name:        api.CatalogName(requirement.Name),
-		Key:         string(requirement.Key),
-		Version:     optionalString(string(requirement.Version)),
-		Type:        optionalString(requirement.Type),
-		Origin:      api.GateRequirementOrigin(requirement.Origin),
-		Scope:       api.GateScope{Kind: api.GateScopeKind(requirement.Scope.Kind), ID: requirement.Scope.ID},
-		Overrides:   optionalSlice(gateOverrideResponses(requirement.Overrides)),
-		QueryURL:    h.gateSources.QueryURL(requirement),
-		Title:       optionalString(requirement.Title),
-		State:       api.GateRequirementState(requirement.State),
-		Evidence:    requirement.Evidence,
-		Operator:    operator,
-		Threshold:   threshold,
-		EvaluatedAt: requirement.EvaluatedAt,
-		ValidUntil:  requirement.ValidUntil,
-		ReleasedAt:  requirement.ReleasedAt,
-		Diagnostic:  optionalString(requirement.Diagnostic),
-	}
-}
-
-func gateOverrideResponses(decisions []gate.Override) []api.GateOverride {
-	result := make([]api.GateOverride, 0, len(decisions))
-	for _, decision := range decisions {
-		result = append(result, api.GateOverride{
-			Key:              string(decision.Key),
-			Version:          string(decision.Version),
-			Actor:            *apiActorSnapshot(&decision.Actor),
-			Reason:           decision.Reason,
-			RecordedAt:       decision.RecordedAt,
-			ObservedState:    api.GateRequirementState(decision.ObservedState),
-			EvaluatedAt:      decision.EvaluatedAt,
-			ObservedEvidence: decision.ObservedEvidence,
-			Diagnostic:       optionalString(decision.Diagnostic),
-		})
-	}
-	return result
-}
-
-type GateOverrideStore interface {
-	ListGateOverrides(context.Context, gate.SubjectType, uuid.UUID, uuid.UUID) (gate.OverrideCollection, error)
-	RecordGateOverride(context.Context, gate.OverrideRequest) (gate.Requirement, error)
 }
 
 func (h *Handler) overrideGate(ctx context.Context, subject gate.SubjectType, id uuid.UUID,
@@ -106,7 +55,7 @@ func (h *Handler) OverrideRunGate(
 	requirement, err := h.overrideGate(ctx, gate.RunSubject, request.RunID, request.Body)
 	switch {
 	case err == nil:
-		return api.OverrideRunGate200JSONResponse(h.gateRequirementResponse(requirement)), nil
+		return api.OverrideRunGate200JSONResponse(api.NewGateRequirement(requirement, h.gateSources)), nil
 	case errors.Is(err, gate.ErrOverrideConflict):
 		return api.OverrideRunGate409ApplicationProblemPlusJSONResponse(NewProblem(http.StatusConflict, err.Error())), nil
 	case errors.Is(err, gate.ErrSubjectNotFound):
@@ -125,7 +74,7 @@ func (h *Handler) OverridePromotionGate(
 	requirement, err := h.overrideGate(ctx, gate.PromotionSubject, request.PromotionID, request.Body)
 	switch {
 	case err == nil:
-		return api.OverridePromotionGate200JSONResponse(h.gateRequirementResponse(requirement)), nil
+		return api.OverridePromotionGate200JSONResponse(api.NewGateRequirement(requirement, h.gateSources)), nil
 	case errors.Is(err, gate.ErrOverrideConflict):
 		return api.OverridePromotionGate409ApplicationProblemPlusJSONResponse(NewProblem(http.StatusConflict, err.Error())), nil
 	case errors.Is(err, gate.ErrSubjectNotFound):
@@ -144,11 +93,7 @@ func (h *Handler) gateOverrideCollection(
 	if err != nil {
 		return api.GateOverrideCollection{}, err
 	}
-	eligible := make([]api.GateRequirement, 0, len(list.Eligible))
-	for _, check := range list.Eligible {
-		eligible = append(eligible, h.gateRequirementResponse(check))
-	}
-	return api.GateOverrideCollection{Eligible: eligible, Decisions: gateOverrideResponses(list.Decisions)}, nil
+	return api.NewGateOverrideCollection(list, h.gateSources), nil
 }
 
 func (h *Handler) ListRunGateOverrides(

@@ -9,17 +9,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/slipramp/slipramp/internal/gate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
 var errInternalToolCall = errors.New("Slipramp could not complete the request") //nolint:staticcheck // Product name.
 
 type toolHandler struct {
-	catalogs  CatalogService
-	runs      RunService
-	artifacts ArtifactService
-	logger    *slog.Logger
-	observer  ToolCallObserver
+	stages                 StageInventory
+	promotions             PromotionInventory
+	gateScopes             gate.ScopeService
+	gateOverrides          gate.OverrideStore
+	gateSources            gate.SourceSet
+	gateEvaluatorProcessID uuid.UUID
+	catalogs               CatalogService
+	runs                   RunService
+	artifacts              ArtifactService
+	logger                 *slog.Logger
+	observer               ToolCallObserver
 }
 
 func (s *toolHandler) register(server *mcp.Server) {
@@ -94,6 +101,19 @@ func (s *toolHandler) register(server *mcp.Server) {
 			IdempotentHint:  true,
 		},
 	}, s.cancelRun, runToolCallAttributes)
+	addObservedTool(s, server, &mcp.Tool{
+		Name: "list_promotion_stages", Title: "List Kargo Stages",
+		Description: "Find a Stage by integration, cluster, and project. Use its ID for Stage Gate policy or to list Promotions.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, s.listPromotionStages, nil)
+	addObservedTool(s, server, &mcp.Tool{
+		Name: "list_promotions", Title: "List Slipramp Promotions",
+		Description: "Find recent Promotions, optionally for one destination Stage. Use the Promotion ID to inspect eligible Gate overrides.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, s.listPromotions, func(input listPromotionsInput, _ promotionInventoryPage[promotionOutput]) []any {
+		return appendUUIDToolCallAttribute(nil, "stage_id", input.StageID)
+	})
+	s.registerGateTools(server)
 }
 
 func appendUUIDToolCallAttribute(attributes []any, name, value string) []any {

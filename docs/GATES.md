@@ -4,6 +4,9 @@ Repository-defined Gates delay a Run or Kargo Promotion until a Prometheus query
 subject-specific webhook passes, or an operator records an override. Actions
 and Stages opt in by attaching Gate names.
 
+MCP clients can manage scope policy and waive eligible Gates on individual
+Runs and Promotions. [MCP Gate tools](./MCP.md#working-with-gates)
+
 ## Manage Server locks
 
 Run assignment checks the global and Target locks and weekly windows for every

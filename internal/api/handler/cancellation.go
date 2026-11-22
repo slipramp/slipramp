@@ -17,9 +17,5 @@ func apiActorSnapshot(value *productidentity.ActorSnapshot) *api.ActorSnapshot {
 		return nil
 	}
 
-	return &api.ActorSnapshot{
-		PrincipalID: value.PrincipalID,
-		Kind:        api.ActorSnapshotKind(value.Kind),
-		DisplayName: value.DisplayName,
-	}
+	return new(api.NewActorSnapshot(*value))
 }

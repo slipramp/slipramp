@@ -105,8 +105,8 @@ existing OIDC enrollment map. Configuration and domain authentication reject a
 different issuer so both login methods share one Principal and disabled state.
 
 MCP tools invoke the same domain services and role checks as product requests.
-Read and Run-write scopes remain distinct, and sensitive Artifact access retains
-the product role requirement. See [MCP.md](../MCP.md) for client setup and tool
+Gate management, Run overrides, and Promotion overrides use their respective
+product scopes and role requirements. See [MCP.md](../MCP.md) for client setup and tool
 contracts.
 
 ## HTTP protections

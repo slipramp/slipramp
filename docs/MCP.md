@@ -3,12 +3,11 @@
 Slipramp exposes a remote Model Context Protocol endpoint at `/mcp`. It uses
 stateless Streamable HTTP and accepts either a scoped Slipramp API key or a JWT
 OAuth access token as a Bearer credential. The adapter reuses the same
-Principals, authorization rules, catalog, Run, and Artifact services as the
+Principals, authorization rules, catalog, Run, Artifact, and Gate services as the
 product API.
 
 OAuth is optional. When configured, the Server publishes RFC 9728 metadata at
-`/.well-known/oauth-protected-resource/mcp`, advertises `slipramp:read` and
-`slipramp:runs:write`, and directs clients to the configured external
+`/.well-known/oauth-protected-resource/mcp`, advertises the credential scopes described below, and directs clients to the configured external
 authorization server. It validates the token signature, issuer, exact `/mcp`
 resource audience, lifetime, subject, and scopes. The authorization-server
 issuer must exactly match `SLIPRAMP_OIDC_ISSUER`, and the subject must be enrolled
@@ -28,12 +27,25 @@ browser OIDC login.
 | `list_run_artifacts`    | List Artifact metadata and report summaries     | Read                |
 | `read_artifact`         | Read a bounded retained Artifact content page   | Read                |
 | `cancel_run`            | Request cancellation of a queued or active Run | Run write           |
+| `list_promotion_stages` | Find Stage IDs by integration, Cluster, and Project | Read |
+| `list_promotions` | Find Promotion IDs, optionally for a destination Stage | Read |
+| `get_gate_scope` | Inspect one scope’s current policies, versions, and history | Read |
+| `lock_gate_scope` | Place a hold with a reason and optional expiry | Manage Gates |
+| `unlock_gate_scope` | Release the observed lock | Manage Gates |
+| `set_gate_window` | Create or replace a weekly window | Manage Gates |
+| `remove_gate_window` | Clear a weekly window | Manage Gates |
+| `list_gate_overrides` | Read eligible Gates, exact versions, evidence, and decision history for one Run or Promotion | Read |
+| `override_gate` | Waive one exact Gate version on one waiting Run or Promotion | Override Gates for that subject |
 
-Permissions intersect the Principal's role and credential scopes. A fully
-capable API key or OAuth token therefore needs an `operator` or `admin`
-Principal and both
-`slipramp:read` and `slipramp:runs:write`. A read-only connection needs a
-`viewer`, `operator`, or `admin` Principal and `slipramp:read`.
+A Principal's role and credential scopes both apply. Read tools require
+`slipramp:read` and Viewer or higher. Run writes require
+`slipramp:runs:write` and Operator or higher. Locks and windows require
+`slipramp:gates:manage` with Administrator for global policy and Operator or
+higher for Target and Stage policy. Overrides require Operator or higher and
+`slipramp:runs:override-gates` or `slipramp:promotions:override-gates`,
+according to the subject.
+
+## Runs and Artifacts
 
 `create_run` requires an `idempotencyKey` of at most 128 characters. Generate a
 new key for each logical Run and reuse it only when retrying the identical
@@ -69,13 +81,55 @@ the credential still uses the ordinary `slipramp:read` scope, matching the
 product API authorization contract. Expired or deleted contents remain visible
 as metadata but cannot be read.
 
+## Working with Gates
+
+For global policy, pass `{"scope":"global"}`. For Target or Stage policy, pass
+`scope` as `target` or `stage` and the Target or Stage UUID as `ownerId`.
+Resolve Target and Run IDs with `list_targets` and `list_runs`. Use `list_promotion_stages` to find a Stage by integration, Cluster,
+and Project, then pass its ID as `stageId` to `list_promotions` to find
+Promotions for that Stage.
+
+To start a maintenance hold, call `lock_gate_scope` with the scope, a
+`reason`, and optionally an RFC 3339 `expiresAt`. To release it, pass the
+same scope and the string `lockVersion` returned by that call or by
+`get_gate_scope`. A newer active lock returns a conflict. An already inactive
+lock succeeds without another audit event.
+
+For example, these `set_gate_window` arguments open the global window on
+Saturdays from 09:00 to 12:00 Denver time.
+
+```json
+{
+  "scope": "global",
+  "window": {
+    "timeZone": "America/Denver",
+    "weekly": [{ "days": ["saturday"], "start": "09:00", "end": "12:00" }]
+  }
+}
+```
+
+Each accepted set advances the window version and invalidates earlier waivers,
+including when the hours match. After an uncertain response, inspect the
+scope before repeating a set. To clear the schedule, call `remove_gate_window`
+with the same scope.
+
+For an exception, call `list_gate_overrides` with `subject` set to `run` or
+`promotion` and its UUID in `subjectId`. Inspect the eligible Gate and its
+evidence. Call `override_gate` with the same subject fields, its exact `key`
+and `version`, and a `reason`. A conflict means eligibility or policy may have
+changed. Read the collection again before making another decision. The waiver
+applies to that subject and version. The Server records the authenticated
+Principal, reason, and evidence in the same history visible in the web app.
+[Release Gates](./GATES.md)
+
 ## Operational telemetry
 
 Every decoded tool invocation emits one structured `MCP tool call` log after
 completion. The event records the fixed tool name, `succeeded`, `rejected`, or
 `failed` result, duration, Principal and credential identifiers, authentication
 method, MCP client name and version, protocol version, and applicable Target,
-Run, Action, or Artifact identifiers. A rejected result is a caller-visible
+Run, Action, Artifact, Stage, or Promotion identifiers. Scope policy tools also
+record the scope kind. A rejected result is a caller-visible
 authorization, validation, conflict, or not-found outcome; a failed result is
 an internal service failure.
 
@@ -100,7 +154,11 @@ auth = "oauth"
 scopes = ["slipramp:read", "slipramp:runs:write"]
 ```
 
-Then start the authorization-code flow:
+For Gate operations, add the corresponding Gate scopes from the permissions
+section to the client configuration and enable them at your authorization
+server. After changing requested scopes, sign in again.
+
+Start the authorization-code flow with the following command.
 
 ```console
 codex mcp login slipramp

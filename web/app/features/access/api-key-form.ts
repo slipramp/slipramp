@@ -4,7 +4,7 @@ export const apiKeyScopeOptions = [
   { label: "Read product state", value: "slipramp:read" },
   { label: "Create and cancel Runs", value: "slipramp:runs:write" },
   { label: "Decide Run reviews", value: "slipramp:runs:review" },
-  { label: "Manage Server gate locks", value: "slipramp:gates:manage" },
+  { label: "Manage Server gate locks and windows", value: "slipramp:gates:manage" },
   { label: "Override Run gates", value: "slipramp:runs:override-gates" },
   { label: "Override Promotion gates", value: "slipramp:promotions:override-gates" },
   { label: "Acknowledge Inbox problems", value: "slipramp:inbox:write" },

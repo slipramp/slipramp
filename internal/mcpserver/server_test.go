@@ -65,16 +65,9 @@ func TestHTTPOAuth(t *testing.T) {
 		},
 		Expiration: time.Now().Add(time.Hour),
 	}}
-	handler, err := NewHTTP(
-		Dependencies{
-			Authentication:    staticAuthenticator{authentication: testAuthentication()},
-			Catalogs:          &recordingCatalogs{},
-			Runs:              &recordingRuns{},
-			Artifacts:         &recordingArtifacts{},
-			OAuthAccessTokens: oauthVerifier,
-		},
-		Options{ServiceVersion: "test", OAuth: oauthConfig},
-	)
+	deps := testDependencies(testAuthentication())
+	deps.OAuthAccessTokens = oauthVerifier
+	handler, err := NewHTTP(deps, Options{ServiceVersion: "test", OAuth: oauthConfig})
 	if err != nil {
 		t.Fatalf("NewHTTP() error = %v", err)
 	}
@@ -236,12 +229,21 @@ func TestHTTPTools(t *testing.T) {
 		"cancel_run",
 		"create_run",
 		"explain_target_action",
+		"get_gate_scope",
 		"get_run",
+		"list_gate_overrides",
+		"list_promotion_stages",
+		"list_promotions",
 		"list_run_artifacts",
 		"list_runs",
 		"list_targets",
+		"lock_gate_scope",
+		"override_gate",
 		"read_artifact",
 		"read_run_log",
+		"remove_gate_window",
+		"set_gate_window",
+		"unlock_gate_scope",
 	}
 	if !slices.Equal(toolNames, wantTools) {
 		t.Fatalf("tools = %v, want %v", toolNames, wantTools)
@@ -518,19 +520,13 @@ func TestHTTPRecordsToolCallTelemetry(t *testing.T) {
 	}}
 	observer := &recordingToolCallObserver{}
 	var logs bytes.Buffer
-	handler, err := NewHTTP(
-		Dependencies{
-			Authentication:   staticAuthenticator{authentication: authentication},
-			Catalogs:         &recordingCatalogs{},
-			Runs:             runs,
-			Artifacts:        &recordingArtifacts{},
-			ToolCallObserver: observer,
-		},
-		Options{
-			ServiceVersion: "test",
-			Logger:         slog.New(slog.NewJSONHandler(&logs, nil)),
-		},
-	)
+	deps := testDependencies(authentication)
+	deps.Runs = runs
+	deps.ToolCallObserver = observer
+	handler, err := NewHTTP(deps, Options{
+		ServiceVersion: "test",
+		Logger:         slog.New(slog.NewJSONHandler(&logs, nil)),
+	})
 	if err != nil {
 		t.Fatalf("NewHTTP() error = %v", err)
 	}
@@ -645,6 +641,16 @@ func TestSDKLoggerLevel(t *testing.T) {
 	}
 }
 
+func testDependencies(authentication productidentity.Authentication) Dependencies {
+	inventory := &recordingPromotionInventory{}
+	return Dependencies{
+		Authentication: staticAuthenticator{authentication: authentication},
+		Catalogs:       &recordingCatalogs{}, Runs: &recordingRuns{}, Artifacts: &recordingArtifacts{},
+		Stages: inventory, Promotions: inventory,
+		Gates: &recordingGates{}, GateEvaluatorProcessID: uuid.New(),
+	}
+}
+
 func testHTTPHandler(
 	t *testing.T,
 	authentication productidentity.Authentication,
@@ -654,24 +660,17 @@ func testHTTPHandler(
 ) http.Handler {
 	t.Helper()
 
-	if catalogs == nil {
-		catalogs = &recordingCatalogs{}
+	deps := testDependencies(authentication)
+	if catalogs != nil {
+		deps.Catalogs = catalogs
 	}
-	if runs == nil {
-		runs = &recordingRuns{}
+	if runs != nil {
+		deps.Runs = runs
 	}
-	if artifacts == nil {
-		artifacts = &recordingArtifacts{}
+	if artifacts != nil {
+		deps.Artifacts = artifacts
 	}
-	handler, err := NewHTTP(
-		Dependencies{
-			Authentication: staticAuthenticator{authentication: authentication},
-			Catalogs:       catalogs,
-			Runs:           runs,
-			Artifacts:      artifacts,
-		},
-		Options{ServiceVersion: "test"},
-	)
+	handler, err := NewHTTP(deps, Options{ServiceVersion: "test"})
 	if err != nil {
 		t.Fatalf("NewHTTP() error = %v", err)
 	}

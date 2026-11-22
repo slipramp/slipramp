@@ -22,6 +22,9 @@ import (
 var oauthScopes = [...]productidentity.Scope{
 	productidentity.ScopeRead,
 	productidentity.ScopeRunsWrite,
+	productidentity.ScopeGatesManage,
+	productidentity.ScopeRunsOverrideGates,
+	productidentity.ScopePromotionsOverrideGates,
 }
 
 type Config struct {

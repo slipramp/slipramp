@@ -88,6 +88,19 @@ func TestServerGateLockChangesIntegration(t *testing.T) {
 	if err != nil || again.LockVersion != 3 || len(again.Events) != 3 || again.ID != locked.ID {
 		t.Fatalf("re-lock = %#v, %v", again, err)
 	}
+	if _, err := db.UnlockServerGateVersion(ctx, global, otherActor, locked.LockVersion); !errors.Is(err, gate.ErrLockVersion) {
+		t.Fatalf("stale unlock = %v", err)
+	}
+	current, err := db.GetServerGateScope(ctx, global)
+	if err != nil || current.Lock == nil || current.LockVersion != again.LockVersion || len(current.Events) != len(again.Events) {
+		t.Fatalf("scope after stale unlock = %#v, %v", current, err)
+	}
+	for range 2 {
+		cleared, err := db.UnlockServerGateVersion(ctx, global, otherActor, again.LockVersion)
+		if err != nil || cleared.Lock != nil || cleared.LockVersion != again.LockVersion+1 || len(cleared.Events) != len(again.Events)+1 {
+			t.Fatalf("versioned unlock = %#v, %v", cleared, err)
+		}
+	}
 	local, err = db.GetServerGateScope(ctx, target)
 	if err != nil || local.Lock == nil || local.LockVersion != 1 {
 		t.Fatalf("Target after global changes = %#v, %v", local, err)

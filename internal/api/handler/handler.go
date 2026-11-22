@@ -43,7 +43,7 @@ type Handler struct {
 	runs                     RunService
 	gateSources              gate.SourceSet
 	gateScopes               gate.ScopeService
-	gateOverrides            GateOverrideStore
+	gateOverrides            gate.OverrideStore
 	gateEvaluatorProcessID   uuid.UUID
 	artifacts                ArtifactService
 	promotionRequests        PromotionRequestService
@@ -98,7 +98,7 @@ type Dependencies struct {
 	GateSources              gate.SourceSet
 	GateScopes               gate.ScopeStore
 	WindowWake               gate.EvaluationNotifier
-	GateOverrides            GateOverrideStore
+	GateOverrides            gate.OverrideStore
 	GateEvaluatorProcessID   uuid.UUID
 	Artifacts                ArtifactService
 	PromotionRequests        PromotionRequestService

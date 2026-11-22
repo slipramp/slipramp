@@ -39,6 +39,10 @@ func (s *recordingGateScopeStore) ChangeServerGateLock(
 	return state, s.err
 }
 
+func (*recordingGateScopeStore) UnlockServerGateVersion(context.Context, gate.Scope, productidentity.ActorSnapshot, int64) (gate.ScopeState, error) {
+	panic("unexpected versioned unlock through the product API")
+}
+
 func (s *recordingGateScopeStore) ChangeServerGateWindow(_ context.Context, owner gate.Scope, actor productidentity.ActorSnapshot, w *gate.WeeklyWindow) (gate.ScopeState, error) {
 	now := time.Now().UTC()
 	state := gate.ScopeState{ID: uuid.New(), Owner: owner, WindowVersion: 1, CheckedAt: now}

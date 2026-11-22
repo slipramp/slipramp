@@ -113,7 +113,7 @@ client secret are only for local development. Keycloak runs in development mode
 and imports the versioned `slipramp-local` realm when its container is created.
 The realm also enables the experimental Keycloak resource-indicator feature and
 permits consented dynamic registration of loopback public clients for local MCP
-OAuth testing. Its `slipramp:read` and `slipramp:runs:write` scopes add the exact
+OAuth testing. Its optional read, Run-write, Gate-management, and Gate-override scopes add the exact
 `http://localhost:8080/mcp` audience to access tokens. The versioned `basic`
 client scope supplies the `sub` claim that maps those tokens to the enrolled
 Slipramp Principal.

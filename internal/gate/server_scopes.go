@@ -26,6 +26,7 @@ var (
 	ErrLockReason     = errors.New("a lock requires a reason of 1 to 1024 characters")
 	ErrLockExpiry     = errors.New("lock expiry must be in the future")
 	ErrLockConflict   = errors.New("a different lock is active at this scope")
+	ErrLockVersion    = errors.New("the active lock version has changed")
 )
 
 type LockRequest struct {
@@ -91,6 +92,7 @@ type ScopeState struct {
 type ScopeStore interface {
 	GetServerGateScope(context.Context, Scope) (ScopeState, error)
 	ChangeServerGateLock(context.Context, Scope, productidentity.ActorSnapshot, *LockRequest) (ScopeState, error)
+	UnlockServerGateVersion(context.Context, Scope, productidentity.ActorSnapshot, int64) (ScopeState, error)
 	ChangeServerGateWindow(context.Context, Scope, productidentity.ActorSnapshot, *WeeklyWindow) (ScopeState, error)
 }
 
@@ -137,6 +139,15 @@ func scopePolicyActor(scope Scope, auth productidentity.Authentication) (product
 		return productidentity.ActorSnapshot{}, ErrScopeForbidden
 	}
 	return auth.Principal.ActorSnapshot()
+}
+
+func (s ScopeService) UnlockVersion(ctx context.Context, scope Scope, auth productidentity.Authentication,
+	version int64) (ScopeState, error) {
+	actor, err := scopePolicyActor(scope, auth)
+	if err != nil {
+		return ScopeState{}, err
+	}
+	return s.store.UnlockServerGateVersion(ctx, scope, actor, version)
 }
 
 func (s ScopeService) ChangeWindow(ctx context.Context, scope Scope, auth productidentity.Authentication,
