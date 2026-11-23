@@ -123,6 +123,7 @@ func actionAlreadyTerminated(pods []corev1.Pod) bool {
 }
 
 type Observation struct {
+	// Phase is empty while the Job has neither a Pod nor a terminal condition.
 	Phase    api.RunObservationPhase
 	Outcome  *api.RunObservationOutcome
 	JobUID   *string
@@ -363,6 +364,10 @@ func (r *Manager) Observe(ctx context.Context, handle Handle) (Observation, erro
 	}
 	if terminal != nil {
 		return canceledIfAcknowledged(*terminal, cancellationRequested, cancellationAcknowledged), nil
+	}
+	if len(pods) == 0 {
+		// The first Pod may be pending creation, or an evicted Pod may already be gone.
+		return Observation{JobUID: uid}, nil
 	}
 
 	return Observation{

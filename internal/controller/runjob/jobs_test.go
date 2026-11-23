@@ -325,9 +325,17 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 		wantImages         api.ExecutionImages
 	}{
 		{
-			name:      "active Job with pending action",
-			status:    batchv1.JobStatus{Active: 1},
+			name:   "active Job with pending action",
+			status: batchv1.JobStatus{Active: 1},
+			podStatus: &corev1.ContainerStatus{
+				Name:  actionContainerName,
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}},
+			},
 			wantPhase: api.RunObservationPhasePreparing,
+		},
+		{
+			name:   "active Job without a visible Pod",
+			status: batchv1.JobStatus{Active: 1},
 		},
 		{
 			name: "running",

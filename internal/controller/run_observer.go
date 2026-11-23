@@ -17,6 +17,7 @@ type runObservationSession struct {
 	cancellation *api.CancelRunCommand
 	logStream    *logSession
 	completedLog *logStreamResult
+	lastObserved runjob.Observation
 	reported     *runjob.Observation
 	reportedAt   time.Time
 }
@@ -124,6 +125,14 @@ func (s *runObservationSession) observe(ctx context.Context) bool {
 	}
 
 	s.discardCompletedLog()
+	if observation.Phase == "" {
+		// A recovered worker may have no phase to report until Kubernetes publishes one.
+		if s.lastObserved.Phase == "" {
+			return false
+		}
+		return s.report(ctx, s.lastObserved)
+	}
+	s.lastObserved = observation
 	if s.startLog(ctx, observation) {
 		return true
 	}

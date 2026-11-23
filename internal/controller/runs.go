@@ -30,13 +30,13 @@ func (c *Controller) handleAssignment(ctx context.Context, assignment api.RunAss
 	return nil
 }
 
-func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssignment) (runjob.Handle, bool) {
+func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssignment) (runjob.Ensured, bool) {
 	ensured, err := c.jobs.Ensure(ctx, assignment)
 	if err != nil {
 		if errors.Is(err, runjob.ErrRunJobIdentityMismatch) {
 			c.runWorkerError(assignment.ID, "stop materialization after Job identity mismatch", err)
 
-			return runjob.Handle{}, false
+			return runjob.Ensured{}, false
 		}
 		c.logger.Warn(
 			"materialize Run",
@@ -44,13 +44,13 @@ func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssig
 			"error", err,
 		)
 		if !runjob.IsPermanentMaterializationError(err) {
-			return runjob.Handle{}, false
+			return runjob.Ensured{}, false
 		}
 
 		if sealErr := c.sealLog(ctx, assignment.ID, emptyLogSummary()); sealErr != nil {
 			c.runWorkerError(assignment.ID, "seal materialization failure log", sealErr)
 
-			return runjob.Handle{}, false
+			return runjob.Ensured{}, false
 		}
 
 		reason := "MaterializationFailed"
@@ -63,7 +63,7 @@ func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssig
 			Message: &message,
 		})
 
-		return runjob.Handle{}, false
+		return runjob.Ensured{}, false
 	}
 
 	c.logger.Info(
@@ -71,7 +71,7 @@ func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssig
 		"run_id", assignment.ID,
 		"job_created", ensured.Created,
 	)
-	return ensured.Handle, true
+	return ensured, true
 }
 
 func (c *Controller) handleCancellation(ctx context.Context, command api.CancelRunCommand) error {
@@ -136,13 +136,13 @@ func (c *Controller) executeRun(
 		c.runWorkers.Done()
 	}()
 
+	session := newRunObservationSession(c, handle, observer)
 	if assignment != nil {
 		if c.runSlots != nil {
 			select {
 			case c.runSlots <- struct{}{}:
 				defer func() { <-c.runSlots }()
 			case command := <-observer.cancellations:
-				session := newRunObservationSession(c, handle, observer)
 				session.cancellation = &command
 				session.run(ctx)
 
@@ -154,7 +154,6 @@ func (c *Controller) executeRun(
 
 		select {
 		case command := <-observer.cancellations:
-			session := newRunObservationSession(c, handle, observer)
 			session.cancellation = &command
 			session.run(ctx)
 
@@ -162,14 +161,19 @@ func (c *Controller) executeRun(
 		default:
 		}
 
-		var materialized bool
-		handle, materialized = c.materializeRun(ctx, *assignment)
+		ensured, materialized := c.materializeRun(ctx, *assignment)
 		if !materialized {
 			return
 		}
+		session.handle = ensured.Handle
+		if ensured.Created {
+			session.lastObserved = runjob.Observation{
+				Phase: api.RunObservationPhasePreparing, JobUID: new(ensured.Handle.UID),
+			}
+		}
 	}
 
-	newRunObservationSession(c, handle, observer).run(ctx)
+	session.run(ctx)
 }
 
 func (c *Controller) reapRunWorkers() {
