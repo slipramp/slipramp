@@ -1,0 +1,48 @@
+.message {
+  container-type: inline-size;
+}
+
+.content {
+  display: grid;
+  grid-template-areas: "heading detail expiry link";
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 2px var(--mantine-spacing-sm);
+}
+
+.heading {
+  grid-area: heading;
+}
+
+.heading svg {
+  flex-shrink: 0;
+  color: var(--alert-color);
+}
+
+.detail {
+  grid-area: detail;
+}
+
+.expiry {
+  grid-area: expiry;
+}
+
+.link {
+  grid-area: link;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 4px;
+}
+
+@container (max-width: 36rem) {
+  .content {
+    grid-template-areas: "heading link" "detail expiry";
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--mantine-spacing-xs);
+  }
+
+  .expiry {
+    justify-self: end;
+  }
+}

@@ -10,7 +10,7 @@ export default [
   route("api/v1/auth/callback", "features/auth/routes/auth-callback.ts"),
   route("logout", "features/auth/routes/logout.ts"),
   route("gates", "features/gates/routes/global-gates.tsx"),
-  route("gates/lock-status", "features/gates/routes/global-lock-status.ts"),
+  route("gates/lock-status/:kind?/:ownerId?", "features/gates/routes/lock-status.ts"),
   route("access", "features/access/routes/access.tsx"),
   route("principals", "features/access/routes/principals.tsx"),
   route("principals/:principalId", "features/access/routes/principal.tsx"),

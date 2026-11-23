@@ -50,7 +50,7 @@ func (input gateScopeInput) attributes() []any {
 
 type lockGateScopeInput struct {
 	gateScopeInput
-	Reason    string     `json:"reason" jsonschema:"Reason for the hold (1 to 1024 characters)."`
+	Reason    string     `json:"reason,omitempty" jsonschema:"Optional reason for the hold (up to 1024 characters)."`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty" jsonschema:"Optional future RFC 3339 timestamp. Omit to hold until released."`
 }
 

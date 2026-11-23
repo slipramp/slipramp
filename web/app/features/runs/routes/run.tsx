@@ -69,7 +69,7 @@ import { CommitDetails, CommitReference } from "~/features/commits/git-commit";
 import { Identity } from "~/shared/identity";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
-import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { AnsiblePlaybookReportView } from "~/features/runs/ansible-playbook-report-view";
 import { RunLogViewer } from "~/features/runs/run-log-viewer";
 import { PyinfraDeployReportView } from "~/features/runs/pyinfra-deploy-report-view";
@@ -88,10 +88,14 @@ import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import { firstBlockingGate } from "~/features/gates/gate-presentation";
-import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
+import { loadLockStatus } from "~/features/gates/gate-policy.server";
+import { LockWarning } from "~/features/gates/lock-warning";
+import { ReleaseGateDialog, ReleaseGateTable } from "~/features/gates/release-gate-details";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { reportDetailRequestState, type ReportLoad } from "~/features/runs/run-reports";
 import {
+  defaultRunOutput,
+  reportOutputValue,
   runDetailSearchParamNames,
   selectedRunDetailValue,
   updateRunDetailSearchParams,
@@ -114,14 +118,16 @@ export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [runResult, artifactResult, principal] = await Promise.all([
-    getRun({ client, path: { runId: params.runId } }),
+  const runResult = await getRun({ client, path: { runId: params.runId } });
+  // Read outputs after the phase so the final refresh includes reports published before completion.
+  const [artifactResult, principal] = await Promise.all([
     listRunArtifacts({ client, path: { runId: params.runId } }),
     getProductPrincipal(context),
   ]);
+  const run = runResult.data;
   const artifacts = artifactResult.data?.items ?? [];
   const lineageArtifacts = artifacts.filter((artifact) => artifact.kind === "output");
-  const [lineageResults, reportLoads, targetResult] = await Promise.all([
+  const [lineageResults, reportLoads, targetResult, lockStatus] = await Promise.all([
     Promise.all(
       lineageArtifacts.map(async (artifact) => ({
         artifactId: artifact.id,
@@ -158,7 +164,10 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
           return { artifactId: artifact.id, state: "error" };
         }),
     ),
-    runResult.data ? getTarget({ client, path: { targetId: runResult.data.targetId } }) : undefined,
+    run ? getTarget({ client, path: { targetId: run.targetId } }) : undefined,
+    run
+      ? loadLockStatus({ context, request }, { kind: "target", targetId: run.targetId })
+      : undefined,
   ]);
   const activeTarget = targetResult?.data?.archivedAt ? undefined : targetResult?.data?.definition;
 
@@ -170,12 +179,13 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       lineageResults.map(({ artifactId, result }) => [artifactId, result.data !== undefined]),
     ),
     artifacts,
-    otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
+    lockStatus,
+    otherActions: otherTargetActions(activeTarget?.spec.actions, run?.action ?? ""),
     principal,
     reportLoads,
     repositoryName: targetResult?.data?.repositoryName,
     rerunKey: crypto.randomUUID(),
-    run: runResult.data,
+    run,
     runId: params.runId,
   };
 }
@@ -189,7 +199,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       body: {
         key: formValue(formData, "gateKey"),
         version: formValue(formData, "version"),
-        reason: formValue(formData, "reason"),
+        reason: optionalFormValue(formData, "reason"),
       },
     });
     if (result.data) return { message: "Gate override recorded." };
@@ -338,6 +348,14 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     actionData !== undefined && "conflict" in actionData && actionData.conflict === true;
   return (
     <Stack gap="lg">
+      {loaderData.lockStatus && (
+        <LockWarning
+          key={run.targetId}
+          initial={loaderData.lockStatus}
+          owner={{ kind: "target", targetId: run.targetId }}
+          gatesPath={`/targets/${encodeURIComponent(run.targetId)}/gates`}
+        />
+      )}
       <PageHeader
         actions={
           run.phase === "finished" ? (
@@ -448,16 +466,11 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
         details={
           <PageHeaderFacts>
-            {run.actionTitle ? (
-              <PageHeaderFact label="Action">
-                <Code>{run.action}</Code>
-              </PageHeaderFact>
-            ) : null}
-            <PageHeaderFact label="Run">
+            <PageHeaderFact label="Run ID">
               <Code>{run.id.slice(0, 8)}</Code>
             </PageHeaderFact>
-            <PageHeaderFact label="Created">
-              <RelativeTime value={run.createdAt} />
+            <PageHeaderFact label="Revision">
+              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
             </PageHeaderFact>
             <PageHeaderFact label="Source">
               {scheduledSource ? (
@@ -473,8 +486,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
             <PageHeaderFact label="Created by">
               <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
             </PageHeaderFact>
-            <PageHeaderFact label="Revision">
-              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
+            <PageHeaderFact label="Created">
+              <RelativeTime value={run.createdAt} />
             </PageHeaderFact>
           </PageHeaderFacts>
         }
@@ -486,7 +499,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
             <Text c="dimmed" component="span" inherit>
               {" / "}
             </Text>
-            <Text component="span" inherit>
+            <Text component="span" inherit title={run.actionTitle ? run.action : undefined}>
               {run.actionTitle ?? run.action}
             </Text>
           </>
@@ -557,12 +570,11 @@ function RunWorkspace({
     () => [...reportArtifacts.map((artifact) => reportOutputValue(artifact.id)), "log", "details"],
     [reportArtifacts],
   );
-  const automaticOutput = defaultRunOutput(run, reportArtifacts, reportLoads, logArtifact);
   const selectedOutput = selectedRunDetailValue(
     searchParams,
     runDetailSearchParamNames.output,
     outputValues,
-    automaticOutput,
+    defaultRunOutput(run.phase, reportLoads),
   );
   const hasCancellation = run.cancellation.state !== "not-requested";
   const availableStages = hasCancellation ? stagesWithCancellation : lifecycleStages;
@@ -706,6 +718,15 @@ function RunWorkspace({
       <Paper className={styles.desktopLifecycle} p="md" withBorder>
         <RunLifecycle {...lifecycleProps} />
       </Paper>
+      <ReleaseGateDialog
+        gates={run.gates}
+        subject="Run"
+        subjectId={run.id}
+        localOwnerId={run.targetId}
+        canOverride={
+          run.phase === "queued" && run.cancellation.state === "not-requested" && canReview
+        }
+      />
     </Box>
   );
 }
@@ -782,18 +803,8 @@ function RunDetails({
 }>) {
   return (
     <Stack gap="lg">
-      <SectionHeader title="Run details" />
-      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} titleOrder={3} />
-      <ReleaseGateDetails
-        gates={run.gates}
-        subject="Run"
-        subjectId={run.id}
-        canOverride={
-          run.phase === "queued" &&
-          run.cancellation.state === "not-requested" &&
-          (principal?.role === "operator" || principal?.role === "admin")
-        }
-      />
+      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      <ReleaseGateTable gates={run.gates} subject="Run" />
       <ParameterTable parameters={run.parameters} />
       <RunOverview repositoryName={repositoryName} run={run} />
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
@@ -807,25 +818,6 @@ function RunDetails({
       />
     </Stack>
   );
-}
-
-function reportOutputValue(artifactId: string) {
-  return `report:${artifactId}`;
-}
-
-function defaultRunOutput(
-  run: Run,
-  reportArtifacts: Artifact[],
-  reportLoads: ReportLoad[],
-  logArtifact?: Artifact,
-) {
-  if (run.phase !== "finished") return "log";
-  const readableReport = reportArtifacts.find(
-    (artifact) =>
-      reportLoads.find((load) => load.artifactId === artifact.id)?.state === "available",
-  );
-  if (readableReport) return reportOutputValue(readableReport.id);
-  return logArtifact ? "log" : "details";
 }
 
 function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
@@ -873,31 +865,6 @@ function runQueueExplanation(run: Run): ReactNode {
     default:
       return "Slipramp has not recorded a current queue scheduling reason.";
   }
-}
-
-function QueueSnapshot({ run }: Readonly<{ run: Run }>) {
-  if (run.queueAgeSeconds === undefined || !run.schedulingSnapshotAt) return null;
-  return (
-    <>
-      <Group gap="xs" wrap="wrap">
-        <Text size="xs">
-          Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
-        </Text>
-        {run.eligiblePosition !== undefined ? (
-          <Text size="xs">· Eligible position {run.eligiblePosition}</Text>
-        ) : null}
-      </Group>
-      <Group gap={4} wrap="wrap">
-        <Text c="dimmed" size="xs">
-          Snapshot
-        </Text>
-        <Timestamp c="dimmed" size="xs" value={run.schedulingSnapshotAt} />
-        <Text c="dimmed" size="xs">
-          · Point-in-time state, not an ETA
-        </Text>
-      </Group>
-    </>
-  );
 }
 
 function RunReviewDetails({ canReview, run }: Readonly<{ canReview: boolean; run: Run }>) {
@@ -1143,6 +1110,7 @@ function RunLifecycle({
 }>) {
   const activeStep = lifecycleStages.indexOf(run.phase);
   const currentTime = useCurrentTime(run.phase !== "finished");
+  const queueTime = currentTime ?? run.schedulingSnapshotAt;
   const steps: Array<{
     detail: string;
     icon: TablerIcon;
@@ -1151,14 +1119,17 @@ function RunLifecycle({
     value?: string;
   }> = [
     {
-      detail: lifecycleDuration(
-        run.createdAt,
-        run.assignedAt,
-        activeStep === 0,
-        "Waiting for assignment",
-        "Waited",
-        currentTime,
-      ),
+      detail:
+        run.phase === "queued" && queueTime
+          ? `Queued for ${formatElapsedDuration(run.createdAt, queueTime)}`
+          : lifecycleDuration(
+              run.createdAt,
+              run.assignedAt,
+              activeStep === 0,
+              "Waiting for assignment",
+              "Waited",
+              currentTime,
+            ),
       icon: IconClock,
       label: "Queued",
       stage: "queued",
@@ -1197,7 +1168,7 @@ function RunLifecycle({
         run.startedAt,
         run.finishedAt,
         activeStep === 3,
-        "Action is executing",
+        undefined,
         "Executed for",
         currentTime,
       ),
@@ -1226,23 +1197,25 @@ function RunLifecycle({
 
   return (
     <Stack gap="md">
-      <Stack gap="xs">
-        {showHeading ? <Title order={2}>Lifecycle</Title> : null}
-        <Group gap="xs">
-          {summary.map((value) => (
-            <Badge key={value} size="sm" variant="light">
-              {value}
-            </Badge>
-          ))}
-        </Group>
-      </Stack>
-      <Group justify="center">
-        <KawaiiActivity
-          activity={runActivity(run) ?? runResultActivity(run)}
-          animationKey={run.id}
-          mascotOnly
-        />
-      </Group>
+      {(showHeading || summary.length > 0) && (
+        <Stack gap="xs">
+          {showHeading && <Title order={2}>Lifecycle</Title>}
+          {summary.length > 0 && (
+            <Group gap="xs">
+              {summary.map((value) => (
+                <Badge key={value} size="sm" variant="light">
+                  {value}
+                </Badge>
+              ))}
+            </Group>
+          )}
+        </Stack>
+      )}
+      <KawaiiActivity
+        activity={runActivity(run) ?? runResultActivity(run)}
+        animationKey={run.id}
+        mascotOnly
+      />
       <Stack className={styles.lifecycleSteps} gap={3}>
         {steps.map((step, index) => {
           const Icon = step.icon;
@@ -1329,9 +1302,11 @@ function LifecycleStageDetail({
             No recorded time
           </Text>
         )}
-        <Text c="dimmed" size="xs">
-          {detail}
-        </Text>
+        {detail && (
+          <Text c="dimmed" size="xs">
+            {detail}
+          </Text>
+        )}
         <LifecycleRelevantDetail canReview={canReview} run={run} stage={stage} />
         <LifecycleObservationDetail run={run} stage={stage} />
       </Stack>
@@ -1351,7 +1326,9 @@ function QueuedLifecycleDetails({ canReview, run }: Readonly<{ canReview: boolea
           {run.schedulingState === "awaiting-review" && showReview ? null : (
             <Text size="xs">{runQueueExplanation(run)}</Text>
           )}
-          <QueueSnapshot run={run} />
+          {run.eligiblePosition !== undefined && (
+            <Text size="xs">Eligible position {run.eligiblePosition}</Text>
+          )}
         </Stack>
       ) : null}
       {showReview ? <RunReviewDetails canReview={canReview} run={run} /> : null}
@@ -1434,15 +1411,17 @@ function lifecycleDuration(
   start: string | undefined,
   end: string | undefined,
   active: boolean,
-  activeLabel: string,
+  activeLabel: string | undefined,
   completeLabel: string,
   currentTime: Date | undefined,
 ) {
   if (!start) return "Not reached";
   if (end) return `${completeLabel} ${formatDuration(start, end)}`;
   if (active) {
-    const elapsed = currentTime ? ` · ${formatElapsedDuration(start, currentTime)} elapsed` : "";
-    return `${activeLabel}${elapsed}`;
+    const elapsed = currentTime
+      ? `${formatElapsedDuration(start, currentTime)} elapsed`
+      : undefined;
+    return [activeLabel, elapsed].filter(Boolean).join(" · ");
   }
   return "Transition timestamp unavailable";
 }

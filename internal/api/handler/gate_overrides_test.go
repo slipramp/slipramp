@@ -100,11 +100,17 @@ func TestGateOverrideEndpoints(t *testing.T) {
 				got.EvaluatorProcessID != process || got.Reason != "incident recovery" || got.RecordedAt.IsZero() {
 				t.Fatalf("override request = %#v", got)
 			}
+			withoutReason := `{"key":"repository/network-idle","version":"` + digest + `"}`
+			out = serveGateRequest(t, handler, http.MethodPost, path, withoutReason, http.StatusOK)
+			result = decodeGateResponse[api.GateRequirement](t, out)
+			if result.Overrides == nil || len(*result.Overrides) != 1 || (*result.Overrides)[0].Reason != "" {
+				t.Fatalf("override without a reason = %#v", result)
+			}
 			if tc.subject == gate.RunSubject {
 				for _, invalid := range []string{
 					`{"key":"lock/no-such-id","version":"1","reason":"invalid scope"}`,
 					`{"key":"repository/network-idle","reason":"missing version"}`,
-					`{"key":"repository/network-idle","version":"v1","reason":" "}`,
+					`{"key":"repository/network-idle","version":"v1","reason":"` + strings.Repeat("a", 1025) + `"}`,
 				} {
 					serveGateRequest(t, handler, http.MethodPost, path, invalid, http.StatusBadRequest)
 				}

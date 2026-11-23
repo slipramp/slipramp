@@ -77,7 +77,7 @@ func TestSubjectLockOverridesIntegration(t *testing.T) {
 	list(gate.RunSubject, previewID, repoKey)
 	list(gate.PromotionSubject, record.ID, globalKey, stageKey)
 	request := gate.OverrideRequest{Subject: gate.RunSubject, SubjectID: operation, Key: globalKey, Version: "1",
-		Reason: "recover this service", Actor: fixture.actor, RecordedAt: time.Now().UTC(), EvaluatorProcessID: process}
+		Actor: fixture.actor, RecordedAt: time.Now().UTC(), EvaluatorProcessID: process}
 	reject := func(r gate.OverrideRequest) {
 		t.Helper()
 		if _, err := db.RecordGateOverride(ctx, r); !errors.Is(err, gate.ErrOverrideConflict) {

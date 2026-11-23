@@ -324,11 +324,13 @@ export function RunLogViewer({
         searchQuery={searchQuery}
         wrapLines={wrapLines}
       />
-      <Text c="dimmed" size="xs">
-        The viewer keeps at most {formatBinarySize(LOG_TAIL_WINDOW_BYTES)} and{" "}
-        {LOG_TAIL_MAX_LINES.toLocaleString()} lines in memory. Raw download contains the complete
-        retained log.
-      </Text>
+      {buffer.windowStartBytes > 0 && (
+        <Text c="dimmed" size="xs">
+          The viewer keeps at most {formatBinarySize(LOG_TAIL_WINDOW_BYTES)} and{" "}
+          {LOG_TAIL_MAX_LINES.toLocaleString()} lines in memory. Raw download contains the complete
+          retained log.
+        </Text>
+      )}
     </Stack>
   );
 

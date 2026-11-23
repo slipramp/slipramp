@@ -37,7 +37,7 @@ export function RunHistoryTable({
     );
   }
 
-  const minWidth = 760 + (showRevision ? 180 : 0) + (showSource ? 180 : 0);
+  const minWidth = 820 + (showRevision ? 180 : 0) + (showSource ? 180 : 0);
 
   return (
     <Paper withBorder>
@@ -46,7 +46,7 @@ export function RunHistoryTable({
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{showTarget ? "Workload / run" : "Action / run"}</Table.Th>
-              <Table.Th miw={180} w={180}>
+              <Table.Th miw={240} w={240}>
                 Status
               </Table.Th>
               <Table.Th>Execution</Table.Th>
@@ -70,7 +70,7 @@ export function RunHistoryTable({
                     showTarget={showTarget}
                   />
                 </Table.Td>
-                <Table.Td miw={180} w={180}>
+                <Table.Td>
                   <RunStatus run={run} />
                 </Table.Td>
                 <Table.Td>
@@ -138,17 +138,17 @@ function RunSummary({
 
 function RunStatus({ run }: Readonly<{ run: Run }>) {
   return (
-    <Group gap="xs" justify="space-between" wrap="nowrap">
-      <Group gap="xs" wrap="nowrap">
+    <Group gap="xs" justify="space-between" miw="max-content" wrap="nowrap">
+      <Stack align="flex-start" gap={4}>
         <Badge color={runStatusColor(run)} variant="light">
           {runStatusLabel(run)}
         </Badge>
         {run.observationState === "unknown" ? (
           <Badge color="yellow" variant="outline">
-            Unknown
+            Controller updates unavailable
           </Badge>
         ) : null}
-      </Group>
+      </Stack>
       <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
     </Group>
   );

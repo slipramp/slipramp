@@ -1,22 +1,13 @@
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Button,
-  Divider,
-  Group,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Alert, Badge, Button, Divider, Group, Stack, Table, Text, Title } from "@mantine/core";
 import { useEffect, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router";
-import type { ServerGateScope, WeeklyWindow } from "~/api/generated";
+import { useLocation, useSearchParams } from "react-router";
+import type { ServerGateLockEvent, ServerGateScope, WeeklyWindow } from "~/api/generated";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
+import { Identity } from "~/shared/identity";
 import { GatePolicyEditor } from "./gate-policy-editor";
 import { gateEditorParams, selectedGateEditor, type GateChange } from "./gate-policy";
 import type { GatePolicyRead } from "./gate-policy.server";
+import { lockAlertColor, policyHistoryEntryId } from "./gate-presentation";
 
 export function GatePolicyPanel({
   policy,
@@ -60,19 +51,24 @@ export function GatePolicyPanel({
         }
       />
       {lock ? (
-        <Alert color="yellow" title="Active lock">
-          <Stack gap={2}>
-            <Text size="sm">{lock.reason}</Text>
-            <Text size="sm">
-              {lock.actor.displayName} · <Timestamp value={lock.createdAt} /> ·{" "}
-              {lock.expiresAt ? (
-                <>
-                  Expires <Timestamp value={lock.expiresAt} />
-                </>
-              ) : (
-                "Until released"
-              )}
-            </Text>
+        <Alert color={lockAlertColor(scope.kind)} title="Active lock">
+          <Stack gap="xs">
+            {lock.reason && <Text size="sm">{lock.reason}</Text>}
+            <Group gap="md">
+              <Identity avatarSize={24} name={lock.actor.displayName} />
+              <Text size="sm">
+                Created <RelativeTime inherit value={lock.createdAt} />
+              </Text>
+              <Text size="sm">
+                {lock.expiresAt ? (
+                  <>
+                    Expires <Timestamp inherit value={lock.expiresAt} />
+                  </>
+                ) : (
+                  "Until released"
+                )}
+              </Text>
+            </Group>
           </Stack>
         </Alert>
       ) : (
@@ -118,7 +114,9 @@ export function GatePolicyPanel({
         </Text>
       )}
       <Divider />
-      <Title order={3}>Policy history</Title>
+      <Title id="policy-history" order={3}>
+        Policy history
+      </Title>
       <PolicyHistory scope={scope} />
       {editor && (
         <GatePolicyEditor
@@ -178,10 +176,24 @@ function Schedule({ definition }: Readonly<{ definition: WeeklyWindow }>) {
 }
 
 function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
-  const events = [...scope.events, ...scope.windowEvents].toSorted(
-    (a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt),
-  );
-  if (!events.length)
+  const { hash } = useLocation();
+  const entries = [...scope.events, ...scope.windowEvents]
+    .toSorted((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt))
+    .map((event) => ({
+      id: policyHistoryEntryId(
+        event.action === "lock" || event.action === "unlock" ? "lock" : "window",
+        event.version,
+      ),
+      event,
+    }));
+  const selectedId = entries.find(({ id }) => `#${encodeURIComponent(id)}` === hash)?.id;
+  useEffect(() => {
+    // Older versions can fall outside the history returned for this scope.
+    if (hash.startsWith("#policy-history-") && !selectedId) {
+      document.getElementById("policy-history")?.scrollIntoView();
+    }
+  }, [hash, selectedId]);
+  if (!entries.length)
     return (
       <Text size="sm" c="dimmed">
         No policy changes recorded.
@@ -194,28 +206,24 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
     remove: "Window removed",
   };
   return (
-    <Table.ScrollContainer minWidth={520}>
-      <Table>
+    <Table.ScrollContainer minWidth={740} type="native">
+      <Table aria-label="Policy history">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Change</Table.Th>
+            <Table.Th>Version</Table.Th>
+            <Table.Th>Reason / expiration</Table.Th>
             <Table.Th>Actor</Table.Th>
             <Table.Th>Recorded</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {events.map((event) => (
-            <Table.Tr key={event.action + event.version}>
+          {entries.map(({ event, id }) => (
+            <Table.Tr key={id} id={id} aria-current={id === selectedId ? "true" : undefined}>
               <Table.Td>
                 <Text size="sm" fw={600}>
-                  {labels[event.action]} · v{event.version}
+                  {labels[event.action]}
                 </Text>
-                {"reason" in event && <Text size="sm">{event.reason}</Text>}
-                {"expiresAt" in event && event.expiresAt && (
-                  <Text size="sm">
-                    Expiry <Timestamp value={event.expiresAt} />
-                  </Text>
-                )}
                 {"definition" in event && event.definition && (
                   <>
                     <Text size="sm">{event.definition.timeZone}</Text>
@@ -223,9 +231,15 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
                   </>
                 )}
               </Table.Td>
-              <Table.Td>{event.actor.displayName}</Table.Td>
+              <Table.Td>v{event.version}</Table.Td>
+              <Table.Td style={{ overflowWrap: "anywhere" }}>
+                {"reason" in event ? <LockHistoryDetails event={event} /> : "—"}
+              </Table.Td>
               <Table.Td>
-                <Timestamp value={event.recordedAt} />
+                <Identity avatarSize={24} name={event.actor.displayName} />
+              </Table.Td>
+              <Table.Td>
+                <RelativeTime size="sm" value={event.recordedAt} />
               </Table.Td>
             </Table.Tr>
           ))}
@@ -235,34 +249,22 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
   );
 }
 
-export function GlobalGateSummary({
-  policy,
-}: Readonly<{
-  policy: { error?: string; scope?: Pick<ServerGateScope, "lock" | "window"> };
-}>) {
-  const scope = policy.scope;
+function LockHistoryDetails({ event }: Readonly<{ event: ServerGateLockEvent }>) {
+  const expiration = event.expiresAt ? (
+    <>
+      Expires <Timestamp inherit value={event.expiresAt} />
+    </>
+  ) : event.action === "lock" ? (
+    "No expiration"
+  ) : undefined;
+  if (!event.reason && !expiration) return "—";
   return (
-    <Stack gap="xs">
-      <Group justify="space-between">
-        <Title order={3}>Global policy</Title>
-        <Anchor component={Link} to="/gates" size="sm">
-          View global Gates
-        </Anchor>
-      </Group>
-      {!scope ? (
-        <Alert color="red" title="Global policy unavailable">
-          {policy.error}
-        </Alert>
-      ) : (
-        <>
-          {scope.lock && <Text size="sm">Global lock active</Text>}
-          {scope.window && <WindowStatus window={scope.window} />}
-          {!scope.lock && !scope.window && (
-            <Text size="sm" c="dimmed">
-              No global lock or weekly window.
-            </Text>
-          )}
-        </>
+    <Stack gap={2}>
+      {event.reason && <Text size="sm">{event.reason}</Text>}
+      {expiration && (
+        <Text size="xs" c="dimmed">
+          {expiration}
+        </Text>
       )}
     </Stack>
   );

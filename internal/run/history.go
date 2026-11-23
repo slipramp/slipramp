@@ -66,6 +66,11 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.Phase != "" && !validPhase(filter.Phase) {
 		return RunList{}, fmt.Errorf("%w: phase is invalid", ErrInvalidRequest)
 	}
+	switch filter.Activity {
+	case "", "queued", "starting", "running", "canceling":
+	default:
+		return RunList{}, fmt.Errorf("%w: activity is invalid", ErrInvalidRequest)
+	}
 	if filter.ReviewState != "" && !validReviewState(filter.ReviewState) {
 		return RunList{}, fmt.Errorf("%w: review state is invalid", ErrInvalidRequest)
 	}

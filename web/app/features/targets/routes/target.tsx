@@ -10,6 +10,8 @@ import { Link, Outlet, useLocation } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import { getTarget, type Target } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
+import { loadLockStatus } from "~/features/gates/gate-policy.server";
+import { LockWarning } from "~/features/gates/lock-warning";
 import { targetDetailTab } from "~/features/targets/target-detail";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
@@ -33,7 +35,10 @@ export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const result = await getTarget({ client, path: { targetId: params.targetId } });
+  const [result, lockStatus] = await Promise.all([
+    getTarget({ client, path: { targetId: params.targetId } }),
+    loadLockStatus({ context, request }, { kind: "target", targetId: params.targetId }),
+  ]);
 
   return {
     error: result.data
@@ -42,6 +47,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
         result.error?.title ??
         "The target definition could not be loaded."),
     target: result.data,
+    lockStatus,
   };
 }
 
@@ -65,6 +71,12 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   const activeTab = targetDetailTab(location.pathname, targetPath);
   return (
     <Stack gap="lg">
+      <LockWarning
+        key={record.id}
+        initial={loaderData.lockStatus}
+        owner={{ kind: "target", targetId: record.id }}
+        gatesPath={`${targetPath}/gates`}
+      />
       <PageHeader
         back={<PageBackLink label="Back to targets" to="/targets" />}
         badges={record.archivedAt ? <Badge color="gray">Archived</Badge> : null}

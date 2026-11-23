@@ -1,7 +1,7 @@
 import { Stack } from "@mantine/core";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { canManageGatePolicy, gateRefreshInterval } from "~/features/gates/gate-policy";
-import { loadGlobalGatePolicy, submitGatePolicy } from "~/features/gates/gate-policy.server";
+import { loadGatePolicy, submitGatePolicy } from "~/features/gates/gate-policy.server";
 import { GatePolicyPanel } from "~/features/gates/gate-policy-panel";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { PageHeader } from "~/shared/page";
@@ -16,7 +16,7 @@ export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const [policy, principal] = await Promise.all([
-    loadGlobalGatePolicy({ context, request }),
+    loadGatePolicy({ context, request }, { kind: "global" }),
     getProductPrincipal(context),
   ]);
   return { policy, canManage: canManageGatePolicy(principal?.role, "global") };

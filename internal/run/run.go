@@ -178,6 +178,7 @@ type RunListFilter struct {
 	ClusterName     string
 	PlacementName   string
 	Phase           Phase
+	Activity        string
 	ReviewState     ReviewState
 	Limit           int32
 	Offset          int32

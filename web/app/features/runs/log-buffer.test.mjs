@@ -31,8 +31,11 @@ test("retains only the bounded byte tail", () => {
 
 test("retains only the bounded line tail", () => {
   const buffer = new BoundedLogBuffer(0, 1_000, 3);
-  buffer.append(chunk(0, "one\ntwo\nthree\nfour\n"));
+  buffer.append(chunk(0, "one\ntwo\nthree\n"));
+  assert.equal(buffer.windowStartBytes, 0);
+  buffer.append(chunk(buffer.cursorBytes, "four\n"));
 
+  assert.equal(buffer.windowStartBytes, 4);
   assert.equal(buffer.lineCount, 3);
   assert.deepEqual(
     Array.from({ length: buffer.lineCount }, (_, index) => buffer.getLine(index).text),

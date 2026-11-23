@@ -25,6 +25,7 @@ import {
 } from "~/features/auth/product-authentication.server";
 import {
   canManageGatePolicy,
+  gateLockStatusPath,
   readGateChange,
   type GateOwner,
   type GateChange,
@@ -34,60 +35,49 @@ import { problemDetail } from "~/shared/form-data";
 export type GatePolicyRead = { scope?: ServerGateScope; error?: string };
 
 type GateRequest = Pick<ActionFunctionArgs, "context" | "request">;
-const globalScopeContext = createContext<ReturnType<typeof getGlobalGateScope> | null>(null);
+const scopeReadsContext = createContext<Map<string, ReturnType<typeof readScope>> | null>(null);
 
-function getGlobalScope({ context, request }: GateRequest) {
-  const existing = context.get(globalScopeContext);
+function readScope(client: Client, owner: GateOwner) {
+  switch (owner.kind) {
+    case "global":
+      return getGlobalGateScope({ client });
+    case "target":
+      return getTargetGateScope({ client, path: { targetId: owner.targetId } });
+    case "stage":
+      return getStageGateScope({ client, path: { stageId: owner.stageId } });
+  }
+}
+
+function getScope({ context, request }: GateRequest, owner: GateOwner) {
+  let reads = context.get(scopeReadsContext);
+  if (!reads) {
+    reads = new Map();
+    context.set(scopeReadsContext, reads);
+  }
+  const key = gateLockStatusPath(owner);
+  const existing = reads.get(key);
   if (existing) return existing;
-  const result = getGlobalGateScope({ client: createServerAPIClient(request, context) });
-  context.set(globalScopeContext, result);
+  const result = readScope(createServerAPIClient(request, context), owner);
+  reads.set(key, result);
   return result;
 }
 
-function gatePolicyRead(result: {
-  data?: ServerGateScope;
-  error?: { detail?: string; title?: string };
-}): GatePolicyRead {
+export async function loadGatePolicy(args: GateRequest, owner: GateOwner): Promise<GatePolicyRead> {
+  const result = await getScope(args, owner);
   return result.data
     ? { scope: result.data }
-    : {
-        error: problemDetail(result.error, "Gate policy could not be loaded."),
-      };
+    : { error: problemDetail(result.error, "Gate policy could not be loaded.") };
 }
 
-export async function loadGlobalGatePolicy(args: GateRequest) {
-  return gatePolicyRead(await getGlobalScope(args));
-}
-
-export async function loadGlobalLockStatus(args: GateRequest) {
+export async function loadLockStatus(args: GateRequest, owner: GateOwner) {
   const readAt = Date.now();
   const authentication = await getProductAuthentication(args.context);
   if (!authentication.principal)
     return { readAt, unavailable: authentication.authentication === "unavailable" };
-  const result = await getGlobalScope(args);
+  const result = await getScope(args, owner);
   if (result.data) return { readAt, checkedAt: result.data.checkedAt, lock: result.data.lock };
   const status = result.response?.status;
   return { readAt, unavailable: status !== 401 && status !== 403 };
-}
-
-export async function loadLocalGatePolicies(
-  args: GateRequest,
-  owner: Exclude<GateOwner, { kind: "global" }>,
-) {
-  const client = createServerAPIClient(args.request, args.context);
-  const [globalPolicy, policy] = await Promise.all([
-    loadGlobalGatePolicy(args),
-    (owner.kind === "target"
-      ? getTargetGateScope({ client, path: { targetId: owner.targetId } })
-      : getStageGateScope({ client, path: { stageId: owner.stageId } })
-    ).then(gatePolicyRead),
-  ]);
-  const scope = globalPolicy.scope;
-  const global = {
-    error: globalPolicy.error,
-    scope: scope && { checkedAt: scope.checkedAt, lock: scope.lock, window: scope.window },
-  };
-  return { global, policy };
 }
 
 export async function submitGatePolicy(

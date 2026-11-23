@@ -4,11 +4,24 @@ import type {
   ServerGateScope,
   WeeklyWindow,
 } from "~/api/generated";
+import { formValue } from "../../shared/form-data.ts";
 
 export type GateOwner =
   | { kind: "global" }
   | { kind: "target"; targetId: string }
   | { kind: "stage"; stageId: string };
+
+export function gateLockStatusPath(owner: GateOwner) {
+  const base = "/gates/lock-status";
+  switch (owner.kind) {
+    case "global":
+      return base;
+    case "target":
+      return `${base}/target/${encodeURIComponent(owner.targetId)}`;
+    case "stage":
+      return `${base}/stage/${encodeURIComponent(owner.stageId)}`;
+  }
+}
 
 export function canManageGatePolicy(
   role: ProductPrincipal["role"] | undefined,
@@ -56,15 +69,20 @@ export const weekdays = [
   "sunday",
 ] as const;
 
+export const lockExpiryHours = { "1 hour": 1, "1 day": 24, "1 week": 7 * 24 };
+
+export function lockExpiryUTC(hours: number, now = Date.now()) {
+  return new Date(now + hours * 3_600_000).toISOString().slice(0, 16);
+}
+
 export function readGateChange(form: FormData): GateChange | { error: string } {
   const action = form.get("gateAction");
   if (action === "unlock" || action === "remove-window") return { action };
   if (action === "lock") {
-    const reason = form.get("reason");
-    if (typeof reason !== "string" || !reason.trim())
-      return { error: "Enter a reason for the lock." };
+    const reason = formValue(form, "reason");
     const expiry = form.get("expiryUTC");
-    const body: ServerGateLockRequest = { reason: reason.trim() };
+    const body: ServerGateLockRequest = {};
+    if (reason) body.reason = reason;
     if (expiry) {
       if (typeof expiry !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expiry)) {
         return { error: "Enter a valid expiry in UTC." };

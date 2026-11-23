@@ -2988,7 +2988,7 @@ paths:
     get:
       operationId: listRuns
       summary: List recent Runs
-      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
       security:
         - ProductSession: []
         - ProductBearer: []
@@ -3065,6 +3065,11 @@ paths:
               - preparing
               - running
               - finished
+        - name: activity
+          in: query
+          description: Limit results to one In progress count from the Inbox. Starting covers assigned and preparing Runs. An active Run with a cancellation request counts only as canceling.
+          schema:
+            $ref: '#/components/schemas/RunActivityFilter'
         - name: reviewState
           in: query
           required: false
@@ -7756,7 +7761,6 @@ components:
       required:
         - key
         - version
-        - reason
       properties:
         key:
           $ref: '#/components/schemas/GateKey'
@@ -7764,7 +7768,6 @@ components:
           $ref: '#/components/schemas/GateVersion'
         reason:
           type: string
-          minLength: 1
           maxLength: 1024
     GateOperator:
       type: string
@@ -10514,12 +10517,9 @@ components:
         path: github.com/slipramp/slipramp/internal/gate
       type: object
       additionalProperties: false
-      required:
-        - reason
       properties:
         reason:
           type: string
-          minLength: 1
           maxLength: 1024
         expiresAt:
           type: string
@@ -11022,6 +11022,13 @@ components:
         - git
         - schedule
         - promotion
+    RunActivityFilter:
+      type: string
+      enum:
+        - queued
+        - starting
+        - running
+        - canceling
     RunReviewState:
       type: string
       enum:

@@ -98,6 +98,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		ClusterName:     clusterName,
 		PlacementName:   placementName,
 		Phase:           phase,
+		Activity:        nullableText(filter.Activity),
 		ReviewState:     reviewState,
 		ResultLimit:     filter.Limit,
 		ResultOffset:    filter.Offset,
@@ -120,6 +121,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		ClusterName:     clusterName,
 		PlacementName:   placementName,
 		Phase:           phase,
+		Activity:        query.Activity,
 		ReviewState:     reviewState,
 	})
 	if err != nil {

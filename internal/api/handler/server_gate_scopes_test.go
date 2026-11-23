@@ -92,7 +92,9 @@ func TestServerGateScopeEndpoints(t *testing.T) {
 		{"admin key cannot elevate operator", remove, global, "lock", operator, productidentity.ScopeAdmin, "", nil, http.StatusForbidden},
 		{"viewer cannot lock Stage", put, stage, "lock", viewer, manage, lockBody, nil, http.StatusForbidden},
 		{"override scope cannot manage", put, target, "lock", admin, productidentity.ScopeRunsOverrideGates, lockBody, nil, http.StatusForbidden},
-		{"blank reason", put, global, "lock", admin, manage, `{"reason":" "}`, nil, http.StatusBadRequest},
+		{"omitted reason", put, stage, "lock", operator, manage, `{}`, nil, http.StatusOK},
+		{"blank reason", put, global, "lock", admin, manage, `{"reason":" "}`, nil, http.StatusOK},
+		{"null lock", put, global, "lock", admin, manage, `null`, nil, http.StatusBadRequest},
 		{"oversized reason", put, target, "lock", operator, manage, `{"reason":"` + strings.Repeat("é", 1025) + `"}`, nil, http.StatusBadRequest},
 		{"misspelled expiry", put, global, "lock", admin, manage, `{"reason":"hold","expireAt":"2027-01-01T12:00:00Z"}`, nil, http.StatusBadRequest},
 		{"expired lock", put, stage, "lock", operator, manage, lockBody, gate.ErrLockExpiry, http.StatusBadRequest},
@@ -143,7 +145,11 @@ func TestServerGateScopeEndpoints(t *testing.T) {
 				if result.LockVersion != "1" || (tc.method == put) != (result.Lock != nil) {
 					t.Fatalf("lock response = %#v", result)
 				}
-				if result.Lock != nil && (result.Lock.Reason != "scheduled outage" || len(result.Events) != 1 ||
+				wantReason := ""
+				if tc.body == lockBody {
+					wantReason = "scheduled outage"
+				}
+				if result.Lock != nil && (result.Lock.Reason != wantReason || len(result.Events) != 1 || result.Events[0].Reason != wantReason ||
 					result.Events[0].Version != result.LockVersion || result.Events[0].PriorVersion != "0") {
 					t.Fatalf("lock response = %#v", result)
 				}

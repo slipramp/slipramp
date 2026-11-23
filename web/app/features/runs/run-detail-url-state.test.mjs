@@ -2,10 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultRunOutput,
   runDetailSearchParamNames,
   selectedRunDetailValue,
   updateRunDetailSearchParams,
 } from "./run-detail-url-state.ts";
+
+test("automatic output follows the Run phase and selects the first readable report at completion", () => {
+  const restricted = { artifactId: "private", state: "restricted" };
+  const reports = [
+    restricted,
+    { artifactId: "plan", state: "available" },
+    { artifactId: "steps", state: "available" },
+  ];
+  for (const phase of ["queued", "assigned", "preparing"]) {
+    assert.equal(defaultRunOutput(phase, reports), "details");
+  }
+  assert.equal(defaultRunOutput("running", reports), "log");
+  assert.equal(defaultRunOutput("finished", []), "log");
+  assert.equal(defaultRunOutput("finished", [restricted]), "log");
+  assert.equal(defaultRunOutput("finished", reports), "report:plan");
+});
 
 test("selects valid output and lifecycle values with a safe fallback", () => {
   const search = new URLSearchParams("output=report:artifact-a&stage=running");

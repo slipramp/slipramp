@@ -43,7 +43,7 @@ func (h *Handler) overrideGate(ctx context.Context, subject gate.SubjectType, id
 		Version:            gate.Version(body.Version),
 		Actor:              actor,
 		RecordedAt:         h.now().UTC(),
-		Reason:             body.Reason,
+		Reason:             valueOrEmptyString(body.Reason),
 		EvaluatorProcessID: h.gateEvaluatorProcessID,
 	})
 }

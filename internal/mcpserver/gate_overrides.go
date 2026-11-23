@@ -22,7 +22,7 @@ type overrideGateInput struct {
 	gateSubjectInput
 	Key     gate.Key     `json:"key" jsonschema:"Exact eligible Gate key from list_gate_overrides."`
 	Version gate.Version `json:"version" jsonschema:"Exact policy version returned with that key."`
-	Reason  string       `json:"reason" jsonschema:"Reason for waiving this Gate on this subject (1 to 1024 characters)."`
+	Reason  string       `json:"reason,omitempty" jsonschema:"Optional reason for waiving this Gate on this subject (up to 1024 characters)."`
 }
 
 func (input gateSubjectInput) id() (uuid.UUID, error) {

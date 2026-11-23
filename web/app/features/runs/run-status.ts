@@ -1,5 +1,24 @@
-import type { Run } from "~/api/generated";
+import type { Run, RunActivityFilter } from "~/api/generated";
 import { gateWaitLabel } from "../gates/gate-presentation.ts";
+
+export const runActivityOptions = [
+  { value: "queued", label: "Queued" },
+  { value: "starting", label: "Starting" },
+  { value: "running", label: "Running" },
+  { value: "canceling", label: "Canceling" },
+] satisfies { value: RunActivityFilter; label: string }[];
+
+export function readRunActivityFilter(url: URL) {
+  const values = url.searchParams.getAll("activity");
+  const activity = runActivityOptions.find((option) => option.value === values[0])?.value;
+  if (values.length === 0 || (values.length === 1 && activity)) return { activity };
+
+  const canonical = new URL(url);
+  if (activity) canonical.searchParams.set("activity", activity);
+  else canonical.searchParams.delete("activity");
+  canonical.searchParams.delete("page");
+  return { activity, redirectTo: canonical.pathname + canonical.search };
+}
 
 export function runStatusColor(run: Run) {
   if (

@@ -119,8 +119,8 @@ version:
 - a window Gate uses `window/<scope-id>` and the scope's window version;
 - a lock Gate uses `lock/<scope-id>` and the scope's lock version.
 
-An override request submits the Gate key, current version, and a nonblank
-reason. The decision records the actor, time, reason, current Gate state, and
+An override request submits the Gate key, current version, and an optional
+reason. The decision records the actor, time, any reason, current Gate state, and
 bounded current evidence. It is accepted only while the subject is waiting and
 the Gate is `blocking`, `unavailable`, or `unevaluated`.
 
@@ -294,7 +294,7 @@ broaden it:
 
 Store the current lock on its scope. The lock contains:
 
-- nonblank bounded reason;
+- optional reason of up to 1024 characters;
 - creating Principal UUID and actor snapshot;
 - creation time;
 - optional expiry time;
@@ -542,7 +542,7 @@ Each subject exposes an override collection at the following paths.
 - `/api/v1/promotions/{promotionId}/gate-overrides`
 
 A `GET` lists eligible Gates and the subject's prior decisions. A `POST`
-includes the logical Gate key, opaque current version, and reason.
+includes the logical Gate key, opaque current version, and an optional reason.
 A stale version, changed window, unlocked or expired scope, passing Gate,
 stopped subject, or Gate that is no longer applicable returns a conflict.
 Successful responses return the complete typed Gate projection and override

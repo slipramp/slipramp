@@ -1,15 +1,4 @@
-import {
-  Alert,
-  Badge,
-  Button,
-  Grid,
-  Group,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Text,
-  ThemeIcon,
-} from "@mantine/core";
+import { Alert, Badge, Button, Grid, Group, Paper, Stack, Text, ThemeIcon } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
   IconActivityHeartbeat,
@@ -17,11 +6,12 @@ import {
   IconArrowRight,
   IconCheck,
   IconChecklist,
-  IconCircleCheck,
   IconClock,
   IconArrowsDiff,
   IconGitBranch,
   IconGitPullRequest,
+  IconLoader,
+  IconPlayerStop,
   IconPackageImport,
   IconServerOff,
   IconTargetArrow,
@@ -48,6 +38,7 @@ import { problemDetail } from "~/shared/form-data";
 import { acknowledgementProblemIDs, inboxDestinationHref } from "~/features/inbox/inbox";
 import { pageTitle } from "~/shared/page-title";
 import { asReadinessResponse } from "~/features/inbox/readiness";
+import { runActivityOptions } from "~/features/runs/run-status";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 
 import type { Route } from "./+types/index";
@@ -123,36 +114,10 @@ export default function Inbox({ loaderData }: Route.ComponentProps) {
   useActivityRefresh(true, 30_000);
 
   const inbox = loaderData.inbox;
-  const attentionCount = inbox ? inbox.decisions.length + inbox.problems.length : undefined;
 
   return (
     <Stack gap="lg">
       <PageHeader
-        actions={
-          attentionCount === undefined ? (
-            <Badge
-              color="red"
-              leftSection={<IconAlertTriangle aria-hidden size={15} />}
-              size="lg"
-              variant="light"
-            >
-              Unavailable
-            </Badge>
-          ) : (
-            <Badge
-              color={attentionCount === 0 ? "green" : "yellow"}
-              leftSection={
-                attentionCount === 0 ? <IconCircleCheck aria-hidden size={15} /> : undefined
-              }
-              size="lg"
-              variant="light"
-            >
-              {attentionCount === 0
-                ? "All clear"
-                : `${attentionCount} ${attentionCount === 1 ? "item" : "items"}`}
-            </Badge>
-          )
-        }
         description="Decisions and operational conditions that need your attention."
         title="Inbox"
       />
@@ -364,35 +329,38 @@ function useAcknowledgementError(actionData: AcknowledgementActionResult | undef
   }, [actionData]);
 }
 
-function RunActivity({
-  activity,
-}: Readonly<{
-  activity?: { canceling: number; queued: number; running: number; starting: number };
-}>) {
-  const active = activity
-    ? activity.queued + activity.starting + activity.running + activity.canceling
-    : undefined;
+const runActivityStyles = {
+  queued: { color: "gray", icon: IconClock },
+  starting: { color: "cyan", icon: IconLoader },
+  running: { color: "blue", icon: IconActivityHeartbeat },
+  canceling: { color: "orange", icon: IconPlayerStop },
+};
 
+function RunActivity({ activity }: Readonly<{ activity?: InboxProjection["activity"] }>) {
   return (
     <Paper p="md" withBorder>
       <Stack gap="md">
-        <Group justify="space-between">
-          <Group gap="xs">
-            <ThemeIcon color="lilac" size="md" variant="light">
-              <IconActivityHeartbeat aria-hidden size={17} />
-            </ThemeIcon>
-            <Text fw={650}>In progress</Text>
-          </Group>
-          <Badge color="gray" variant="light">
-            {active ?? "—"}
-          </Badge>
+        <Group gap="xs">
+          <ThemeIcon color="lilac" size="md" variant="light">
+            <IconActivityHeartbeat aria-hidden size={17} />
+          </ThemeIcon>
+          <Text fw={650}>In progress</Text>
         </Group>
-        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
-          <ActivityCount label="Queued" value={activity?.queued} />
-          <ActivityCount label="Starting" value={activity?.starting} />
-          <ActivityCount label="Running" value={activity?.running} />
-          <ActivityCount label="Canceling" value={activity?.canceling} />
-        </SimpleGrid>
+        {activity ? (
+          <SummaryLinks
+            indicators={runActivityOptions.map(({ value, label }) => ({
+              ...runActivityStyles[value],
+              href: `/runs?activity=${value}`,
+              label,
+              value: activity[value],
+            }))}
+            emptyMessage="No runs in progress."
+          />
+        ) : (
+          <Text c="dimmed" size="sm">
+            Run activity is unavailable.
+          </Text>
+        )}
         <Button
           component={Link}
           fullWidth
@@ -428,52 +396,50 @@ function KargoStatus({
     unhealthy: number;
   };
 }>) {
-  const indicators = (
-    [
-      {
-        color: "orange",
-        href: "/promotion-stages?attention=unhealthy",
-        icon: IconAlertTriangle,
-        label: "Non-ready Stages",
-        value: summary?.unhealthy,
-      },
-      {
-        color: "orange",
-        href: "/promotion-stages?attention=stale",
-        icon: IconClock,
-        label: "Stale Stages",
-        value: summary?.stale,
-      },
-      {
-        color: "yellow",
-        href: "/promotion-stages?attention=pending-review",
-        icon: IconChecklist,
-        label: "Pending reviews",
-        value: summary?.pendingReviews,
-      },
-      {
-        color: "yellow",
-        href: "/promotion-pipelines?alignment=different",
-        icon: IconArrowsDiff,
-        label: "Freight differences",
-        value: summary?.freightDifferences,
-      },
-      {
-        color: "green",
-        href: "/promotion-stages?attention=newer-freight",
-        icon: IconPackageImport,
-        label: "Newer Freight available",
-        value: newerFreightTotal,
-      },
-      {
-        color: "orange",
-        href: "/promotion-branch-drift?status=drifted",
-        icon: IconGitBranch,
-        label: "Stage branches behind",
-        value: branchDriftTotal,
-      },
-    ] satisfies KargoStatusIndicator[]
-  ).filter((indicator) => indicator.value !== 0);
+  const indicators = [
+    {
+      color: "orange",
+      href: "/promotion-stages?attention=unhealthy",
+      icon: IconAlertTriangle,
+      label: "Non-ready Stages",
+      value: summary?.unhealthy,
+    },
+    {
+      color: "orange",
+      href: "/promotion-stages?attention=stale",
+      icon: IconClock,
+      label: "Stale Stages",
+      value: summary?.stale,
+    },
+    {
+      color: "yellow",
+      href: "/promotion-stages?attention=pending-review",
+      icon: IconChecklist,
+      label: "Pending reviews",
+      value: summary?.pendingReviews,
+    },
+    {
+      color: "yellow",
+      href: "/promotion-pipelines?alignment=different",
+      icon: IconArrowsDiff,
+      label: "Freight differences",
+      value: summary?.freightDifferences,
+    },
+    {
+      color: "green",
+      href: "/promotion-stages?attention=newer-freight",
+      icon: IconPackageImport,
+      label: "Newer Freight available",
+      value: newerFreightTotal,
+    },
+    {
+      color: "orange",
+      href: "/promotion-branch-drift?status=drifted",
+      icon: IconGitBranch,
+      label: "Stage branches behind",
+      value: branchDriftTotal,
+    },
+  ] satisfies SummaryIndicator[];
 
   return (
     <Paper p="md" withBorder>
@@ -484,17 +450,7 @@ function KargoStatus({
           </ThemeIcon>
           <Text fw={650}>Kargo Projects</Text>
         </Group>
-        {indicators.length > 0 ? (
-          <Stack gap="xs">
-            {indicators.map((indicator) => (
-              <KargoStatusLink indicator={indicator} key={indicator.label} />
-            ))}
-          </Stack>
-        ) : (
-          <Text c="dimmed" size="sm">
-            No Kargo conditions need attention.
-          </Text>
-        )}
+        <SummaryLinks indicators={indicators} emptyMessage="No Kargo conditions need attention." />
         {error ? (
           <Text c="red" size="xs">
             {error}
@@ -524,50 +480,49 @@ function KargoStatus({
   );
 }
 
-type KargoStatusIndicator = {
-  color: "green" | "orange" | "yellow";
+type SummaryIndicator = {
+  color: string;
   href: string;
   icon: TablerIcon;
   label: string;
   value?: number;
 };
 
-function KargoStatusLink({ indicator }: Readonly<{ indicator: KargoStatusIndicator }>) {
-  const StatusIcon = indicator.icon;
-
+function SummaryLinks({
+  indicators,
+  emptyMessage,
+}: Readonly<{ indicators: SummaryIndicator[]; emptyMessage: string }>) {
+  const visible = indicators.filter((indicator) => indicator.value !== 0);
+  if (!visible.length) {
+    return (
+      <Text c="dimmed" size="sm">
+        {emptyMessage}
+      </Text>
+    );
+  }
   return (
-    <Button
-      component={Link}
-      fz="sm"
-      fullWidth
-      justify="space-between"
-      leftSection={<StatusIcon aria-hidden size={16} />}
-      rightSection={
-        <Badge color={indicator.color} size="lg" variant="light">
-          {indicator.value ?? "—"}
-        </Badge>
-      }
-      size="md"
-      to={indicator.href}
-      variant="default"
-    >
-      {indicator.label}
-    </Button>
-  );
-}
-
-function ActivityCount({ label, value }: Readonly<{ label: string; value?: number }>) {
-  return (
-    <Paper className="inbox-stat" p="sm">
-      <Stack align="center" gap={2}>
-        <Text fw={700} size="xl">
-          {value ?? "—"}
-        </Text>
-        <Text c="dimmed" size="xs">
+    <Stack gap="xs">
+      {visible.map(({ color, href, icon: Icon, label, value }) => (
+        <Button
+          key={href}
+          component={Link}
+          fz="sm"
+          fullWidth
+          justify="space-between"
+          leftSection={<Icon aria-hidden size={16} />}
+          rightSection={
+            <Badge color={color} size="lg" variant="light">
+              {value ?? "—"}
+            </Badge>
+          }
+          size="md"
+          to={href}
+          variant="default"
+        >
           {label}
-        </Text>
-      </Stack>
-    </Paper>
+        </Button>
+      ))}
+    </Stack>
   );
 }
 

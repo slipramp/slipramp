@@ -30,7 +30,7 @@ browser OIDC login.
 | `list_promotion_stages` | Find Stage IDs by integration, Cluster, and Project | Read |
 | `list_promotions` | Find Promotion IDs, optionally for a destination Stage | Read |
 | `get_gate_scope` | Inspect one scope’s current policies, versions, and history | Read |
-| `lock_gate_scope` | Place a hold with a reason and optional expiry | Manage Gates |
+| `lock_gate_scope` | Place a hold with an optional reason and expiry | Manage Gates |
 | `unlock_gate_scope` | Release the observed lock | Manage Gates |
 | `set_gate_window` | Create or replace a weekly window | Manage Gates |
 | `remove_gate_window` | Clear a weekly window | Manage Gates |
@@ -89,8 +89,8 @@ Resolve Target and Run IDs with `list_targets` and `list_runs`. Use `list_promot
 and Project, then pass its ID as `stageId` to `list_promotions` to find
 Promotions for that Stage.
 
-To start a maintenance hold, call `lock_gate_scope` with the scope, a
-`reason`, and optionally an RFC 3339 `expiresAt`. To release it, pass the
+To start a maintenance hold, call `lock_gate_scope` with the scope. You can
+include a `reason` and an RFC 3339 `expiresAt`. To release it, pass the
 same scope and the string `lockVersion` returned by that call or by
 `get_gate_scope`. A newer active lock returns a conflict. An already inactive
 lock succeeds without another audit event.
@@ -116,10 +116,10 @@ with the same scope.
 For an exception, call `list_gate_overrides` with `subject` set to `run` or
 `promotion` and its UUID in `subjectId`. Inspect the eligible Gate and its
 evidence. Call `override_gate` with the same subject fields, its exact `key`
-and `version`, and a `reason`. A conflict means eligibility or policy may have
+and `version`, and an optional `reason`. A conflict means eligibility or policy may have
 changed. Read the collection again before making another decision. The waiver
 applies to that subject and version. The Server records the authenticated
-Principal, reason, and evidence in the same history visible in the web app.
+Principal, evidence, and any supplied reason in the history visible in the web app.
 [Release Gates](./GATES.md)
 
 ## Operational telemetry

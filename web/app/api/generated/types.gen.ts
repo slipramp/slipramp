@@ -1039,7 +1039,7 @@ export type GateOverride = {
 export type GateOverrideRequest = {
   key: GateKey;
   version: GateVersion;
-  reason: string;
+  reason?: string;
 };
 
 export type GateOperator =
@@ -2132,7 +2132,7 @@ export type ServerGateLockEvent = {
 };
 
 export type ServerGateLockRequest = {
-  reason: string;
+  reason?: string;
   /**
    * Exclusive end of the hold. Omit for an indefinite lock.
    */
@@ -2438,6 +2438,8 @@ export type LogSeal = {
 };
 
 export type RunSourceType = "manual" | "api" | "mcp" | "git" | "schedule" | "promotion";
+
+export type RunActivityFilter = "queued" | "starting" | "running" | "canceling";
 
 export type RunReviewState = "not-required" | "pending" | "approved" | "rejected";
 
@@ -5540,6 +5542,10 @@ export type ListRunsData = {
      * Limit results to one durable lifecycle phase.
      */
     phase?: "queued" | "assigned" | "preparing" | "running" | "finished";
+    /**
+     * Limit results to one In progress count from the Inbox. Starting covers assigned and preparing Runs. An active Run with a cancellation request counts only as canceling.
+     */
+    activity?: RunActivityFilter;
     /**
      * Limit results to one Run review state.
      */

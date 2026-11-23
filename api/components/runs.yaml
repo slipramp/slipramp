@@ -336,6 +336,10 @@ RunPhase:
     - running
     - finished
 
+RunActivityFilter:
+  type: string
+  enum: [queued, starting, running, canceling]
+
 RunOutcome:
   type: string
   enum:

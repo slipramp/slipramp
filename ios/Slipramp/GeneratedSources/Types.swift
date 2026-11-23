@@ -41,7 +41,7 @@ internal protocol APIProtocol: Sendable {
     func getTarget(_ input: Operations.GetTarget.Input) async throws -> Operations.GetTarget.Output
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -172,7 +172,7 @@ extension APIProtocol {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -4826,6 +4826,13 @@ internal enum Components {
             case schedule = "schedule"
             case promotion = "promotion"
         }
+        /// - Remark: Generated from `#/components/schemas/RunActivityFilter`.
+        internal enum RunActivityFilter: String, Codable, Hashable, Sendable, CaseIterable {
+            case queued = "queued"
+            case starting = "starting"
+            case running = "running"
+            case canceling = "canceling"
+        }
         /// - Remark: Generated from `#/components/schemas/RunReviewState`.
         internal enum RunReviewState: String, Codable, Hashable, Sendable, CaseIterable {
             case notRequired = "not-required"
@@ -8242,7 +8249,7 @@ internal enum Operations {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -8299,6 +8306,10 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/phase`.
                 internal var phase: Operations.ListRuns.Input.Query.PhasePayload?
+                /// Limit results to one In progress count from the Inbox. Starting covers assigned and preparing Runs. An active Run with a cancellation request counts only as canceling.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/activity`.
+                internal var activity: Components.Schemas.RunActivityFilter?
                 /// Limit results to one Run review state.
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/reviewState`.
@@ -8324,6 +8335,7 @@ internal enum Operations {
                 ///   - cluster: Limit results to Runs assigned to one execution cluster.
                 ///   - placement: Limit results to Runs assigned to one Placement.
                 ///   - phase: Limit results to one durable lifecycle phase.
+                ///   - activity: Limit results to one In progress count from the Inbox. Starting covers assigned and preparing Runs. An active Run with a cancellation request counts only as canceling.
                 ///   - reviewState: Limit results to one Run review state.
                 ///   - limit: Maximum number of recent Runs to return.
                 ///   - offset: Zero-based offset into the matching Runs.
@@ -8338,6 +8350,7 @@ internal enum Operations {
                     cluster: Components.Schemas.CatalogName? = nil,
                     placement: Components.Schemas.CatalogName? = nil,
                     phase: Operations.ListRuns.Input.Query.PhasePayload? = nil,
+                    activity: Components.Schemas.RunActivityFilter? = nil,
                     reviewState: Components.Schemas.RunReviewState? = nil,
                     limit: Swift.Int? = nil,
                     offset: Swift.Int32? = nil
@@ -8352,6 +8365,7 @@ internal enum Operations {
                     self.cluster = cluster
                     self.placement = placement
                     self.phase = phase
+                    self.activity = activity
                     self.reviewState = reviewState
                     self.limit = limit
                     self.offset = offset

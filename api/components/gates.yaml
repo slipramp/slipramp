@@ -186,7 +186,7 @@ GateScope:
 GateOverrideRequest:
   type: object
   additionalProperties: false
-  required: [key, version, reason]
+  required: [key, version]
   properties:
     key:
       $ref: "#/GateKey"
@@ -194,7 +194,6 @@ GateOverrideRequest:
       $ref: "#/GateVersion"
     reason:
       type: string
-      minLength: 1
       maxLength: 1024
 
 GateOverride:
@@ -274,11 +273,9 @@ ServerGateLockRequest:
     path: github.com/slipramp/slipramp/internal/gate
   type: object
   additionalProperties: false
-  required: [reason]
   properties:
     reason:
       type: string
-      minLength: 1
       maxLength: 1024
     expiresAt:
       type: string

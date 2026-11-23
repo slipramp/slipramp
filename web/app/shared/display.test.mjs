@@ -28,6 +28,11 @@ test("formats binary sizes across IEC units", () => {
 test("formats relative times around a stable reference", () => {
   const now = new Date("2026-10-22T18:00:00Z");
 
+  assert.equal(formatRelativeTime(now, now), "now");
+  assert.equal(formatRelativeTime("2026-10-22T17:59:57Z", now), "now");
+  assert.equal(formatRelativeTime("2026-10-22T17:59:45.001Z", now), "now");
+  assert.equal(formatRelativeTime("2026-10-22T17:59:45Z", now), "15 seconds ago");
+  assert.equal(formatRelativeTime("2026-10-22T18:00:03Z", now), "in 3 seconds");
   assert.equal(formatRelativeTime("2026-10-22T17:55:00Z", now), "5 minutes ago");
   assert.equal(formatRelativeTime("2026-10-23T18:00:00Z", now), "tomorrow");
 });

@@ -34,8 +34,13 @@ import {
   type PromotionStatus,
 } from "~/api/generated";
 import { canManageGatePolicy, gateRefreshInterval } from "~/features/gates/gate-policy";
-import { GatePolicyPanel, GlobalGateSummary } from "~/features/gates/gate-policy-panel";
-import { loadLocalGatePolicies, submitGatePolicy } from "~/features/gates/gate-policy.server";
+import { GatePolicyPanel } from "~/features/gates/gate-policy-panel";
+import {
+  loadGatePolicy,
+  loadLockStatus,
+  submitGatePolicy,
+} from "~/features/gates/gate-policy.server";
+import { LockWarning } from "~/features/gates/lock-warning";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { BranchDriftCommit } from "~/features/promotions/branch-drift-commit";
 import {
@@ -89,10 +94,12 @@ export const shouldRevalidate = shouldRevalidatePromotionStage;
 
 export async function loader({ context, params, request, url }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [result, gatePolicies, principal, activePromotionsByStatus] = await Promise.all([
+  const owner = { kind: "stage", stageId: params.stageId } as const;
+  const [result, lockStatus, gatePolicy, principal, activePromotionsByStatus] = await Promise.all([
     getPromotionStage({ client, path: { stageId: params.stageId } }),
+    loadLockStatus({ context, request }, owner),
     selectedPromotionStageView(url.searchParams) === "gates"
-      ? loadLocalGatePolicies({ context, request }, { kind: "stage", stageId: params.stageId })
+      ? loadGatePolicy({ context, request }, owner)
       : undefined,
     getProductPrincipal(context),
     Promise.all(
@@ -169,7 +176,8 @@ export async function loader({ context, params, request, url }: Route.LoaderArgs
   return {
     activePromotions,
     activePromotionsAvailable,
-    gatePolicies,
+    gatePolicy,
+    lockStatus,
     branchDrift,
     branchDriftError,
     detail: result.data,
@@ -194,12 +202,7 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
   const freightRows = detail ? buildStageFreightDetailRows(detail.stage) : [];
   const activeView = selectedPromotionStageView(searchParams);
   const scopeRefresh =
-    activeView === "gates"
-      ? gateRefreshInterval(
-          loaderData.gatePolicies?.global.scope,
-          loaderData.gatePolicies?.policy.scope,
-        )
-      : 30_000;
+    activeView === "gates" ? gateRefreshInterval(loaderData.gatePolicy?.scope) : 30_000;
   useActivityRefresh(
     true,
     loaderData.activePromotions.length > 0 ? Math.min(3_000, scopeRefresh) : scopeRefresh,
@@ -261,6 +264,12 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
 
   return (
     <Stack gap="lg">
+      <LockWarning
+        key={stage.id}
+        initial={loaderData.lockStatus}
+        owner={{ kind: "stage", stageId: stage.id }}
+        gatesPath={`?${updatePromotionStageView(searchParams, "gates")}`}
+      />
       <PageHeader
         actions={
           canWrite || stage.kargoUrl || stage.argoCdUrl ? (
@@ -392,32 +401,37 @@ export default function PromotionStage({ actionData, loaderData }: Route.Compone
         </Tabs.Panel>
 
         <Tabs.Panel pt="lg" value="gates">
-          {loaderData.gatePolicies && (
-            <Stack gap="lg">
-              <GlobalGateSummary policy={loaderData.gatePolicies.global} />
-              <SectionHeader
-                title="Stage policy"
-                description="Applies to Promotions released through Slipramp for this Stage."
-              />
-              <GatePolicyPanel
-                policy={loaderData.gatePolicies.policy}
-                canManage={canManageGatePolicy(loaderData.principal?.role, "stage")}
-                subjectName={stage.name}
-              />
-              <Stack gap="sm">
-                <Text fw={600} size="sm">
-                  Repository Gates
+          <Stack gap="lg">
+            <Stack component="section" gap="sm">
+              <SectionHeader title="Repository Gates" />
+              {stage.gates.length > 0 ? (
+                <Stack gap={2}>
+                  {stage.gates.map((name) => (
+                    <Text key={name} size="sm">
+                      {name}
+                    </Text>
+                  ))}
+                </Stack>
+              ) : (
+                <Text c="dimmed" size="sm">
+                  No repository Gates attached to this Stage.
                 </Text>
-                {stage.gates.length > 0 ? (
-                  <Code block>{stage.gates.join("\n")}</Code>
-                ) : (
-                  <Text c="dimmed" size="sm">
-                    No attachments.
-                  </Text>
-                )}
-              </Stack>
+              )}
             </Stack>
-          )}
+            {loaderData.gatePolicy && (
+              <Stack component="section" gap="sm">
+                <SectionHeader
+                  title="Stage policy"
+                  description="Applies to Promotions released through Slipramp for this Stage."
+                />
+                <GatePolicyPanel
+                  policy={loaderData.gatePolicy}
+                  canManage={canManageGatePolicy(loaderData.principal?.role, "stage")}
+                  subjectName={stage.name}
+                />
+              </Stack>
+            )}
+          </Stack>
         </Tabs.Panel>
         <Tabs.Panel pt="lg" value="details">
           <Stack gap="lg">

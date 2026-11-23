@@ -78,6 +78,34 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 13, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
 	observedAt := createdAt.Add(time.Minute)
+	checkActivity := func(want string) {
+		t.Helper()
+		for _, activity := range []string{"queued", "starting", "running", "canceling"} {
+			list, err := database.ListRuns(ctx, run.RunListFilter{Activity: activity, Limit: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if activity == want {
+				if list.Total != 1 || len(list.Items) != 1 || list.Items[0].ID != runID {
+					t.Fatalf("activity %q did not return Run %s: %#v", activity, runID, list)
+				}
+			} else if list.Total != 0 || len(list.Items) != 0 {
+				t.Fatalf("unexpected Runs for activity %q: %#v", activity, list)
+			}
+		}
+	}
+	checkActivity("queued")
+	for _, phase := range []string{"assigned", "preparing", "running"} {
+		if _, err := database.pool.Exec(ctx,
+			`UPDATE runs SET phase = $2, assigned_at = $3 WHERE id = $1`, runID, phase, observedAt); err != nil {
+			t.Fatal(err)
+		}
+		if phase == "running" {
+			checkActivity("running")
+		} else {
+			checkActivity("starting")
+		}
+	}
 	if _, err := database.pool.Exec(
 		ctx,
 		`UPDATE runs
@@ -88,6 +116,7 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatalf("set Run active: %v", err)
 	}
+	checkActivity("canceling")
 
 	active, err := database.ListInboxActiveRuns(ctx)
 	if err != nil {
@@ -108,6 +137,7 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatalf("finish Run: %v", err)
 	}
+	checkActivity("")
 	active, err = database.ListInboxActiveRuns(ctx)
 	if err != nil || len(active) != 0 {
 		t.Errorf("active Runs after finish = %#v, error = %v", active, err)

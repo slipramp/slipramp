@@ -16,12 +16,14 @@ import { Identity } from "~/shared/identity";
 export function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={880} type="native">
+      <Table.ScrollContainer minWidth={940} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Promotion / Stage</Table.Th>
-              <Table.Th>Status</Table.Th>
+              <Table.Th miw={240} w={240}>
+                Status
+              </Table.Th>
               <Table.Th>Application</Table.Th>
               <Table.Th>Requested</Table.Th>
               <Table.Th>Created</Table.Th>
@@ -67,7 +69,7 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Group gap="xs" justify="space-between" wrap="nowrap">
+        <Group gap="xs" justify="space-between" miw="max-content" wrap="nowrap">
           <PromotionStatusBadge status={status} />
           <KawaiiActivity
             activity={promotionActivity(promotion)}

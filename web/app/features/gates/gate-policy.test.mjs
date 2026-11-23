@@ -3,10 +3,25 @@ import test from "node:test";
 import {
   canManageGatePolicy,
   gateEditorParams,
+  gateLockStatusPath,
   gateRefreshInterval,
+  lockExpiryHours,
+  lockExpiryUTC,
   readGateChange,
   selectedGateEditor,
 } from "./gate-policy.ts";
+
+test("lock status reads use the selected scope and owner", () => {
+  assert.equal(gateLockStatusPath({ kind: "global" }), "/gates/lock-status");
+  assert.equal(
+    gateLockStatusPath({ kind: "target", targetId: "a/b" }),
+    "/gates/lock-status/target/a%2Fb",
+  );
+  assert.equal(
+    gateLockStatusPath({ kind: "stage", stageId: "a/b" }),
+    "/gates/lock-status/stage/a%2Fb",
+  );
+});
 
 test("administrators manage all scopes and operators manage local policies", () => {
   for (const kind of ["global", "target", "stage"]) {
@@ -43,8 +58,27 @@ test("locks support explicit UTC expiry and indefinite holds", () => {
   assert.equal(readGateChange(lock).body.expiresAt, "2027-03-14T02:30:00.000Z");
   lock.set("expiryUTC", "2027-02-30T12:00");
   assert.ok(readGateChange(lock).error);
-  assert.ok(readGateChange(form("lock")).error);
+  for (const fields of [[], [["reason", ""]], [["reason", "  "]]]) {
+    assert.deepEqual(readGateChange(form("lock", fields)), { action: "lock", body: {} });
+  }
   assert.deepEqual(readGateChange(form("unlock")), { action: "unlock" });
+});
+
+test("expiry shortcuts fill an editable UTC date across calendar boundaries", () => {
+  const now = Date.parse("2026-12-31T23:30:00Z");
+  const expected = {
+    "1 hour": "2027-01-01T00:30",
+    "1 day": "2027-01-01T23:30",
+    "1 week": "2027-01-07T23:30",
+  };
+  for (const [label, expiry] of Object.entries(expected)) {
+    const value = lockExpiryUTC(lockExpiryHours[label], now);
+    assert.equal(value, expiry);
+    assert.deepEqual(readGateChange(form("lock", [["expiryUTC", value]])), {
+      action: "lock",
+      body: { expiresAt: expiry + ":00.000Z" },
+    });
+  }
 });
 
 test("window forms preserve multiple weekdays, split overnight intervals, and independent row IDs", () => {

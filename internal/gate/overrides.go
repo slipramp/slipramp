@@ -3,9 +3,7 @@ package gate
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -13,7 +11,7 @@ import (
 )
 
 var (
-	ErrOverrideInvalid  = errors.New("a Gate override requires a valid Gate key, a policy version, and a reason of 1 to 1024 characters")
+	ErrOverrideInvalid  = errors.New("a Gate override requires a valid Gate key and policy version. An optional reason may contain up to 1024 characters")
 	ErrSubjectNotFound  = errors.New("the Gate subject does not exist")
 	ErrOverrideConflict = errors.New("the Gate is no longer eligible for this override or its version has changed")
 )
@@ -41,8 +39,7 @@ func (r OverrideRequest) Validate() error {
 		return ErrOverrideInvalid
 	}
 	_, _, server := r.Key.ServerScope()
-	if (!server && !r.Key.validRepositoryKey()) || !r.Version.valid() ||
-		strings.TrimSpace(r.Reason) == "" || strings.ContainsRune(r.Reason, 0) || utf8.RuneCountInString(r.Reason) > 1024 {
+	if (!server && !r.Key.validRepositoryKey()) || !r.Version.valid() || !validGateReason(r.Reason) {
 		return ErrOverrideInvalid
 	}
 	return nil

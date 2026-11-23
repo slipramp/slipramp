@@ -402,6 +402,15 @@ a {
     inset 0 1px 0 rgb(255 255 255 / 90%);
 }
 
+#policy-history,
+tr[id^="policy-history-"] {
+  scroll-margin-block-start: calc(var(--app-shell-header-offset, 0px) + var(--mantine-spacing-md));
+}
+
+tr[id^="policy-history-"][aria-current="true"] > td {
+  background-color: var(--mantine-primary-color-light);
+}
+
 .mantine-Table-th {
   color: var(--mantine-color-dimmed);
   font-size: var(--mantine-font-size-xs);
@@ -500,11 +509,6 @@ a {
 
 .inbox-item[data-tone="warning"]::before {
   background: var(--mantine-color-yellow-6);
-}
-
-.inbox-stat {
-  border: 1px solid var(--slipramp-border);
-  background: var(--slipramp-inset);
 }
 
 .run-log {

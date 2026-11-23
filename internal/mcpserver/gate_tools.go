@@ -36,7 +36,7 @@ func (s *toolHandler) registerGateTools(server *mcp.Server) {
 	}, s.getGateScope, gateToolAttributes)
 	addObservedTool(s, server, &mcp.Tool{
 		Name: "lock_gate_scope", Title: "Lock a Gate scope",
-		Description: "Hold gated work at this scope for the given reason, optionally until a specified time.",
+		Description: "Hold gated work at this scope, optionally until a specified time.",
 		Annotations: write, OutputSchema: scope,
 	}, s.lockGateScope, gateToolAttributes)
 	addObservedTool(s, server, &mcp.Tool{
@@ -61,7 +61,7 @@ func (s *toolHandler) registerGateTools(server *mcp.Server) {
 	}, s.listGateOverrides, gateToolAttributes)
 	addObservedTool(s, server, &mcp.Tool{
 		Name: "override_gate", Title: "Override a Gate for a Run or Promotion",
-		Description: "Waive one Gate on one waiting subject using the key and version from list_gate_overrides and a reason.",
+		Description: "Waive one Gate on one waiting subject using the key and version from list_gate_overrides, with an optional reason.",
 		Annotations: write, OutputSchema: gateToolSchema[api.GateRequirement](schemas),
 	}, s.overrideGate, gateToolAttributes)
 }

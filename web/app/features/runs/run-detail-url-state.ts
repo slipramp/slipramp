@@ -1,3 +1,6 @@
+import type { RunPhase } from "~/api/generated";
+import type { ReportLoad } from "./run-reports";
+
 export const runDetailSearchParamNames = {
   logQuery: "logQuery",
   output: "output",
@@ -6,6 +9,18 @@ export const runDetailSearchParamNames = {
 
 export type RunDetailSearchParam =
   (typeof runDetailSearchParamNames)[keyof typeof runDetailSearchParamNames];
+
+export function reportOutputValue(artifactId: string) {
+  return `report:${artifactId}`;
+}
+
+export function defaultRunOutput(phase: RunPhase, reports: readonly ReportLoad[]) {
+  if (phase === "finished") {
+    const report = reports.find((load) => load.state === "available");
+    return report ? reportOutputValue(report.artifactId) : "log";
+  }
+  return phase === "running" ? "log" : "details";
+}
 
 export function selectedRunDetailValue(
   searchParams: URLSearchParams,

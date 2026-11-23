@@ -1,5 +1,5 @@
 import { Alert, Stack } from "@mantine/core";
-import { redirect } from "react-router";
+import { redirect, replace } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -9,6 +9,7 @@ import {
   type Cluster,
   type Repository,
   type Run,
+  type RunActivityFilter,
   type RunSourceType,
 } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
@@ -16,6 +17,7 @@ import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { PageHeader } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
 import { RunHistoryTable } from "~/features/runs/run-history-table";
+import { readRunActivityFilter, runActivityOptions } from "~/features/runs/run-status";
 import { pageFromSearchParam } from "~/shared/search-params";
 
 import type { Route } from "./+types/runs";
@@ -36,6 +38,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const cluster = optionalSearchValue(url, "cluster");
   const placement = optionalSearchValue(url, "placement");
   const phase = optionalRunPhase(url.searchParams.get("phase"));
+  const { activity, redirectTo } = readRunActivityFilter(url);
+  if (redirectTo) return replace(redirectTo);
   const reviewState = optionalRunReviewState(url.searchParams.get("reviewState"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const offset = (requestedPage - 1) * pageSize;
@@ -45,6 +49,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       client,
       query: {
         action,
+        activity,
         cluster,
         placement,
         limit: pageSize,
@@ -65,6 +70,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     return {
       available: false,
       action,
+      activity,
       cluster,
       clusters: clustersResult.data?.items ?? [],
       error:
@@ -99,6 +105,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return {
     available: true,
     action,
+    activity,
     cluster,
     clusters: clustersResult.data?.items ?? [],
     error: undefined,
@@ -127,6 +134,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
 
       <HistoryFilters
         action={loaderData.action}
+        activity={loaderData.activity}
         cluster={loaderData.cluster}
         clusters={loaderData.clusters}
         phase={loaderData.phase}
@@ -169,6 +177,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
 
 function HistoryFilters({
   action,
+  activity,
   cluster,
   clusters,
   phase,
@@ -181,6 +190,7 @@ function HistoryFilters({
   triggerName,
 }: Readonly<{
   action?: string;
+  activity?: RunActivityFilter;
   cluster?: string;
   clusters: Cluster[];
   phase?: Run["phase"];
@@ -278,6 +288,14 @@ function HistoryFilters({
           name: "placement",
           placeholder: "Placement name",
           value: placement,
+        },
+        {
+          active: Boolean(activity),
+          data: [{ label: "Any activity", value: "" }, ...runActivityOptions],
+          kind: "select",
+          label: "In progress",
+          name: "activity",
+          value: activity,
         },
         {
           active: Boolean(phase),

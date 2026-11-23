@@ -684,7 +684,7 @@ internal struct Client: APIProtocol {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -771,6 +771,13 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "phase",
                     value: input.query.phase
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "activity",
+                    value: input.query.activity
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

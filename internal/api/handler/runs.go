@@ -231,6 +231,7 @@ func (h *Handler) ListRuns(
 			ClusterName:     clusterName,
 			PlacementName:   placementName,
 			Phase:           phase,
+			Activity:        valueOrEmptyString(request.Params.Activity),
 			ReviewState:     reviewState,
 			Limit:           limit,
 			Offset:          offset,

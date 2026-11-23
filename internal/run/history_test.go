@@ -154,6 +154,16 @@ func TestListRunsRejectsInvalidPhase(t *testing.T) {
 	}
 }
 
+func TestListRunsRejectsInvalidActivity(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(t.Context(), RunListFilter{Activity: "finished"})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
 func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 

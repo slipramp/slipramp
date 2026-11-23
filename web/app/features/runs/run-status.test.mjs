@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runStatusColor, runStatusLabel } from "./run-status.ts";
+import { readRunActivityFilter, runStatusColor, runStatusLabel } from "./run-status.ts";
+
+function readActivity(search) {
+  return readRunActivityFilter(new URL("/runs" + search, "http://localhost"));
+}
+
+test("run history accepts each Inbox activity and normalizes invalid or repeated filters", () => {
+  assert.deepEqual(readActivity("?page=2"), { activity: undefined });
+  for (const activity of ["queued", "starting", "running", "canceling"]) {
+    assert.deepEqual(readActivity(`?activity=${activity}&page=2`), { activity });
+  }
+  assert.equal(
+    readActivity("?activity=finished&page=2&cluster=lab").redirectTo,
+    "/runs?cluster=lab",
+  );
+  assert.equal(readActivity("?activity=").redirectTo, "/runs");
+  assert.equal(
+    readActivity("?activity=starting&activity=queued&page=2&source=git").redirectTo,
+    "/runs?activity=starting&source=git",
+  );
+});
 
 test("pending review takes precedence over the queued execution status", () => {
   const pending = { phase: "queued", review: { state: "pending" } };

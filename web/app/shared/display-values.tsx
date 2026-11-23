@@ -37,11 +37,15 @@ export function Datestamp({ value, ...props }: Readonly<TimeDisplayProps>) {
   );
 }
 
-export function RelativeTime({ value, ...props }: Readonly<TimeDisplayProps>) {
+export function RelativeTime({
+  value,
+  showSeconds,
+  ...props
+}: Readonly<TimeDisplayProps & { showSeconds?: boolean }>) {
   const { timeZone } = useTimeZone();
 
   return (
-    <Tooltip label={formatTimestamp(value, timeZone)} openDelay={350}>
+    <Tooltip label={formatTimestamp(value, timeZone, showSeconds)} openDelay={350}>
       <Text component="time" dateTime={value} suppressHydrationWarning {...props}>
         {formatRelativeTime(value)}
       </Text>

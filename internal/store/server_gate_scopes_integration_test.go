@@ -68,8 +68,9 @@ func TestServerGateLockChangesIntegration(t *testing.T) {
 		t.Fatalf("different actor retry = %v", err)
 	}
 
-	local, err := db.ChangeServerGateLock(ctx, target, otherActor, &gate.LockRequest{Reason: "Target maintenance"})
-	if err != nil || local.ID == locked.ID || local.Lock == nil || local.Lock.ExpiresAt != nil {
+	local, err := db.ChangeServerGateLock(ctx, target, otherActor, &gate.LockRequest{})
+	if err != nil || local.ID == locked.ID || local.Lock == nil || local.Lock.Reason != "" || local.Lock.ExpiresAt != nil ||
+		len(local.Events) != 1 || local.Events[0].Reason != "" {
 		t.Fatalf("local lock = %#v, %v", local, err)
 	}
 	unlocked, err := db.GetServerGateScope(ctx, stage)

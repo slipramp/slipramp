@@ -63,7 +63,9 @@ import {
 import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
 import { promotionStagePath } from "~/features/promotions/promotion-stage";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
-import { ReleaseGateDetails } from "~/features/gates/release-gate-details";
+import { loadLockStatus } from "~/features/gates/gate-policy.server";
+import { LockWarning } from "~/features/gates/lock-warning";
+import { ReleaseGateDialog, ReleaseGateTable } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
@@ -123,6 +125,9 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     getProductPrincipal(context),
   ]);
   const promotion = promotionResult.data;
+  const stageLockRequest = promotion
+    ? loadLockStatus({ context, request }, { kind: "stage", stageId: promotion.stageId })
+    : undefined;
 
   const repeatLabel =
     promotion && canWritePromotions(principal) ? promotionRepeatLabel(promotion) : undefined;
@@ -154,7 +159,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     argoDiff = { error };
   }
 
-  const stageResult = await repeatStageRequest;
+  const [stageResult, lockStatus] = await Promise.all([repeatStageRequest, stageLockRequest]);
   const repeatStage = stageResult?.data?.stage;
 
   return {
@@ -162,6 +167,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     argoResources,
     error: promotionResult.error?.detail ?? promotionResult.error?.title,
     gitDiff,
+    lockStatus,
     principal,
     promotion,
     repeatLabel,
@@ -190,7 +196,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       body: {
         key: formValue(formData, "gateKey"),
         version: formValue(formData, "version"),
-        reason: formValue(formData, "reason"),
+        reason: optionalFormValue(formData, "reason"),
       },
     });
     if (result.data) return { message: "Gate override recorded." };
@@ -253,17 +259,28 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   const promotion = loaderData.promotion;
   const canWrite = canWritePromotions(loaderData.principal);
-  const canCancel =
+  const canManageActivePromotion =
     canWrite && promotionIsActive(promotion) && promotion.cancellation.state === "not-requested";
   const overallStatus = promotionOverallStatus(promotion);
 
   return (
     <Stack gap="lg">
+      {loaderData.lockStatus && (
+        <LockWarning
+          key={promotion.stageId}
+          initial={loaderData.lockStatus}
+          owner={{ kind: "stage", stageId: promotion.stageId }}
+          gatesPath={`${promotionStagePath(promotion.stageId)}?view=gates`}
+        />
+      )}
       <PageHeader
         actions={
-          canCancel || loaderData.repeatLabel || promotion.kargoUrl || promotion.argoCdUrl ? (
+          canManageActivePromotion ||
+          loaderData.repeatLabel ||
+          promotion.kargoUrl ||
+          promotion.argoCdUrl ? (
             <>
-              {canCancel ? (
+              {canManageActivePromotion ? (
                 <Form method="post">
                   <Button
                     type="submit"
@@ -324,24 +341,24 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         badges={<PromotionStatusBadge status={overallStatus} />}
         details={
           <PageHeaderFacts>
-            <PageHeaderFact label="Promotion">
+            <PageHeaderFact label="Promotion ID">
               <Code>{promotion.id.slice(0, 8)}</Code>
             </PageHeaderFact>
             <PageHeaderFact label="Stage">
               <PromotionStageLink fw={400} stage={promotion.stageSnapshot} />
             </PageHeaderFact>
-            <PageHeaderFact label="Created">
-              <RelativeTime value={promotion.createdAt} />
-            </PageHeaderFact>
             <PageHeaderFact label="Source">
               {promotion.source === "kargo" ? "Kargo" : "Slipramp"}
             </PageHeaderFact>
-            <PageHeaderFact label="Requested by">
+            <PageHeaderFact label="Created by">
               <Identity
                 avatarSize={22}
                 name={promotion.requestedBy.displayName}
                 nameProps={{ fw: 500, size: "sm" }}
               />
+            </PageHeaderFact>
+            <PageHeaderFact label="Created">
+              <RelativeTime value={promotion.createdAt} />
             </PageHeaderFact>
           </PageHeaderFacts>
         }
@@ -374,6 +391,13 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         canWrite={canWrite}
         gitDiff={loaderData.gitDiff}
         promotion={promotion}
+      />
+      <ReleaseGateDialog
+        gates={promotion.gates}
+        subject="Promotion"
+        subjectId={promotion.id}
+        localOwnerId={promotion.stageId}
+        canOverride={canManageActivePromotion}
       />
     </Stack>
   );
@@ -782,10 +806,7 @@ function promotionLifecycleState(status: PromotionStatusPresentation): Promotion
   return "waiting";
 }
 
-function PromotionDetails({
-  promotion,
-  canWrite,
-}: Readonly<{ promotion: Promotion; canWrite: boolean }>) {
+function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
   const stage = promotion.stageSnapshot;
   const enrichment = stage.enrichment;
   const review = promotion.reviewContext;
@@ -813,16 +834,7 @@ function PromotionDetails({
           </DetailGrid>
         </Stack>
       )}
-      <ReleaseGateDetails
-        gates={promotion.gates}
-        subject="Promotion"
-        subjectId={promotion.id}
-        canOverride={
-          canWrite &&
-          promotionIsActive(promotion) &&
-          promotion.cancellation.state === "not-requested"
-        }
-      />
+      <ReleaseGateTable gates={promotion.gates} subject="Promotion" />
       {promotion.selectedFreight && <SelectedFreight freight={promotion.selectedFreight} />}
       <Stack component="section" gap="lg">
         <SectionHeader title="Promotion context" />
@@ -1057,7 +1069,7 @@ function PromotionWorkspace({
           </Tabs.Panel>
 
           <Tabs.Panel className={styles.reviewPanel} value="details">
-            <PromotionDetails promotion={promotion} canWrite={canWrite} />
+            <PromotionDetails promotion={promotion} />
           </Tabs.Panel>
         </Tabs>
       </Paper>

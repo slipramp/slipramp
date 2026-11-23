@@ -34,7 +34,7 @@ transaction as each new owner. Archival and reactivation preserve that row.
 A lock mutation acquires the global scope row first, followed by the local row
 when applicable. The Server samples time after acquiring both rows. Each
 change updates the current lock and appends an event with its version in one
-transaction. The event retains the actor, reason, time, and original expiry.
+transaction. The event retains the actor, time, and any supplied reason or expiry.
 Expiry makes the hold inactive at the specified instant. A new lock after
 expiry takes the next version. Reads return a consistent snapshot of current
 state and recent events. [Lock management API](../GATES.md#manage-server-locks)
@@ -48,8 +48,8 @@ still waive an explicitly attached repository Gate.
 A lock override serializes with changes to the subject and the applicable scopes.
 It checks expiry after acquiring the locks. Run and Promotion overrides of
 Server Gates share one decision table with foreign keys to their subject and
-the exact policy event. The history retains both actors, both reasons, the
-lock's original expiry, and the decision time after unlock, expiry, or re-lock.
+the exact policy event. The history retains both actors, any override reason, any
+lock reason or expiry, and the decision time after unlock, expiry, or re-lock.
 A retry by the same principal with the same reason returns the existing decision
 while the subject and lock remain eligible.
 
@@ -318,8 +318,8 @@ distinct even when they share an observation.
 
 Operators and administrators can override a blocking, unavailable, or unevaluated Gate on one
 waiting Run or Promotion. The submitted key and version must match the attachment and its active definition.
-A missing definition continues to block release. The decision records the actor, time, reason,
-and observed state. A decision with a sample stores the same typed evidence
+A missing definition continues to block release. The decision records the actor, time,
+observed state, and any supplied reason. A decision with a sample stores the same typed evidence
 under `observedEvidence`. The latest decision applies while its digest matches. A digest change
 requires a new decision and earlier decisions remain visible. Reruns and other subjects start
 with their own requirements.

@@ -2,10 +2,30 @@ import type {
   GateEvidence,
   GateOperator,
   GateRequirement,
+  GateSummary,
   GateSummaryState,
+  ServerGateScope,
 } from "~/api/generated";
+import { promotionStagePath } from "../promotions/promotion-stage.ts";
+
+export function selectedReleaseGate(params: URLSearchParams, gates: GateSummary) {
+  const key = params.get("gate");
+  if (!key || gates.state === "not-required") return undefined;
+  return gates.requirements.find((gate) => gate.key === key);
+}
+
+export function releaseGateSearchParams(current: URLSearchParams, key?: string) {
+  const next = new URLSearchParams(current);
+  if (key) next.set("gate", key);
+  else next.delete("gate");
+  return next;
+}
 
 type BadgePresentation = { label: string; color: string };
+
+export function lockAlertColor(kind: ServerGateScope["kind"]) {
+  return kind === "global" ? "orange" : "yellow";
+}
 
 export const gateSummaryBadges = {
   "not-required": { label: "Not required", color: "gray" },
@@ -32,16 +52,61 @@ const operatorLabels = {
   "greater-than-or-equal": "Greater than or equal to",
 } satisfies Record<GateOperator, string>;
 
-type EvidenceField = { label: string; value: string; format?: "time" | "code" };
+export type GateDetailField = { label: string; value: string } & (
+  | { format: "actor"; createdAt: string }
+  | { format?: "time" | "code" }
+);
+
+export function policyHistoryEntryId(type: "window" | "lock", version: string) {
+  return `policy-history-${type}-${version}`;
+}
+
+export function gatePolicyHistoryPath(
+  gate: GateRequirement,
+  localOwnerId: string,
+  version = gate.version,
+) {
+  if (gate.origin !== "server" || !version) return undefined;
+  const anchor =
+    gate.type === "window" || gate.type === "lock"
+      ? encodeURIComponent(policyHistoryEntryId(gate.type, version))
+      : "policy-history";
+  switch (gate.scope.kind) {
+    case "global":
+      return `/gates#${anchor}`;
+    case "target":
+      return `/targets/${encodeURIComponent(localOwnerId)}/gates#${anchor}`;
+    case "stage":
+      return `${promotionStagePath(localOwnerId)}?view=gates#${anchor}`;
+    default:
+      return undefined;
+  }
+}
+
+export function repositoryGateDetailFields(gate: GateRequirement): GateDetailField[] {
+  const fields: GateDetailField[] = [
+    { label: "Gate name", value: gate.name },
+    { label: "Source", value: "Repository" },
+  ];
+  if (gate.type) {
+    fields.push({
+      label: "Evaluator",
+      value: gate.type === "prometheus" ? "Prometheus" : gate.type,
+    });
+  }
+  if (gate.state !== "stopped") {
+    fields.push({ label: "Release condition", value: gateConditionLabel(gate) });
+  }
+  return fields;
+}
 
 export function gateEvidenceFields(
   evidence: GateEvidence | undefined,
   evaluatedAt?: string,
-  validUntil?: string,
-): EvidenceField[] {
-  const fields: EvidenceField[] = [];
+): GateDetailField[] {
+  const fields: GateDetailField[] = [];
   if (evidence && "window" in evidence) {
-    const { timeZone, digest, observation } = evidence.window;
+    const { timeZone, observation } = evidence.window;
     fields.push(
       { label: "Observed window", value: observation.state === "passing" ? "Open" : "Closed" },
       { label: "Time zone", value: timeZone },
@@ -50,15 +115,17 @@ export function gateEvidenceFields(
       fields.push({ label: "Interval start", value: observation.intervalStart, format: "time" });
     if (observation.nextTransition)
       fields.push({ label: "Next transition", value: observation.nextTransition, format: "time" });
-    fields.push({ label: "Schedule digest", value: digest, format: "code" });
     evaluatedAt = observation.evaluatedAt;
-    validUntil = observation.validUntil;
   } else if (evidence && "lock" in evidence) {
     const lock = evidence.lock;
+    fields.push({
+      label: "Locked by",
+      value: lock.actor.displayName,
+      format: "actor",
+      createdAt: lock.createdAt,
+    });
+    if (lock.reason) fields.push({ label: "Lock reason", value: lock.reason });
     fields.push(
-      { label: "Locked by", value: lock.actor.displayName },
-      { label: "Lock reason", value: lock.reason },
-      { label: "Created", value: lock.createdAt, format: "time" },
       lock.expiresAt
         ? { label: "Expires", value: lock.expiresAt, format: "time" }
         : { label: "Expiry", value: "Until released" },
@@ -74,23 +141,12 @@ export function gateEvidenceFields(
     fields.push({ label: "Sample", value: String(evidence.prometheus.value), format: "code" });
   }
   if (evaluatedAt) fields.push({ label: "Evaluated", value: evaluatedAt, format: "time" });
-  if (validUntil) fields.push({ label: "Valid until", value: validUntil, format: "time" });
   return fields;
-}
-
-export function gateScopeDescription(requirement: GateRequirement) {
-  const scope = { repository: "Repository", global: "Global", target: "Target", stage: "Stage" }[
-    requirement.scope.kind
-  ];
-  const type = requirement.type === "prometheus" ? "Prometheus" : requirement.type;
-  return type ? `${scope} · ${type}` : scope;
 }
 
 export function gateConditionLabel(
   requirement: Pick<GateRequirement, "operator" | "threshold" | "type">,
 ) {
-  if (requirement.type === "lock") return "Lock cleared, expired, or overridden";
-  if (requirement.type === "window") return "Open weekly window";
   if (requirement.type === "webhook") return "Passing webhook decision";
   if (requirement.operator === undefined || requirement.threshold === undefined) {
     return "Definition unavailable";

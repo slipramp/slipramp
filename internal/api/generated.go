@@ -1604,6 +1604,30 @@ func (e RunSchedulingState) Valid() bool {
 	}
 }
 
+// Defines values for RunActivityFilter.
+const (
+	RunActivityFilterCanceling RunActivityFilter = "canceling"
+	RunActivityFilterQueued    RunActivityFilter = "queued"
+	RunActivityFilterRunning   RunActivityFilter = "running"
+	RunActivityFilterStarting  RunActivityFilter = "starting"
+)
+
+// Valid indicates whether the value is a known member of the RunActivityFilter enum.
+func (e RunActivityFilter) Valid() bool {
+	switch e {
+	case RunActivityFilterCanceling:
+		return true
+	case RunActivityFilterQueued:
+		return true
+	case RunActivityFilterRunning:
+		return true
+	case RunActivityFilterStarting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunArtifactInputRetentionState.
 const (
 	RunArtifactInputRetentionStateDeleted  RunArtifactInputRetentionState = "deleted"
@@ -2943,7 +2967,7 @@ type GateOverrideCollection struct {
 type GateOverrideRequest struct {
 	// Key Stable logical key within the subject.
 	Key    GateKey `json:"key"`
-	Reason string  `json:"reason"`
+	Reason *string `json:"reason,omitempty"`
 
 	// Version Opaque exact version of the resolved policy. Submit the value from the subject's Gate detail.
 	Version GateVersion `json:"version"`
@@ -4733,6 +4757,9 @@ type RunObservationState string
 // RunSchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot. For awaiting-gates, the first blocking, unavailable, or unevaluated requirement without a matching override is the primary Gate blocker.
 type RunSchedulingState string
 
+// RunActivityFilter defines model for RunActivityFilter.
+type RunActivityFilter string
+
 // RunArtifactAccess defines model for RunArtifactAccess.
 type RunArtifactAccess struct {
 	// Token Run-scoped bearer credential for declared outputs and inputs.
@@ -5693,6 +5720,9 @@ type ListRunsParams struct {
 
 	// Phase Limit results to one durable lifecycle phase.
 	Phase *ListRunsParamsPhase `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Activity Limit results to one In progress count from the Inbox. Starting covers assigned and preparing Runs. An active Run with a cancellation request counts only as canceling.
+	Activity *RunActivityFilter `form:"activity,omitempty" json:"activity,omitempty"`
 
 	// ReviewState Limit results to one Run review state.
 	ReviewState *RunReviewState `form:"reviewState,omitempty" json:"reviewState,omitempty"`
@@ -7086,7 +7116,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8926,7 +8956,7 @@ func (c *Client) TestRepositoryConnection(ctx context.Context, body TestReposito
 
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -13500,6 +13530,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.Activity != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "activity", *params.Activity, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.ReviewState != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reviewState", *params.ReviewState, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -15650,7 +15692,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -24976,7 +25018,7 @@ func (c *ClientWithResponses) TestRepositoryConnectionWithResponse(ctx context.C
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, Placement, phase, activity, and review state filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -35132,6 +35174,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "phase"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "phase", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "activity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "activity", r.URL.Query(), &params.Activity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "activity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "activity", Err: err})
 		}
 		return
 	}

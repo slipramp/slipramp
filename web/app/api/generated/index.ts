@@ -736,6 +736,7 @@ export type {
   RevokePrincipalSessionsResponse,
   RevokePrincipalSessionsResponses,
   Run,
+  RunActivityFilter,
   RunArtifactAccess,
   RunArtifactConsumer,
   RunArtifactInput,

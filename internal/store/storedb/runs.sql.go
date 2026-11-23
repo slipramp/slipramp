@@ -110,7 +110,15 @@ AND (
 )
 AND (
     $11::text IS NULL
-    OR review_state = $11
+    OR (phase <> 'finished' AND CASE
+        WHEN cancellation_requested_at IS NOT NULL THEN 'canceling'
+        WHEN phase IN ('assigned', 'preparing') THEN 'starting'
+        ELSE phase
+    END = $11)
+)
+AND (
+    $12::text IS NULL
+    OR review_state = $12
 )
 `
 
@@ -125,6 +133,7 @@ type CountRunsParams struct {
 	ClusterName     *string
 	PlacementName   *string
 	Phase           *string
+	Activity        *string
 	ReviewState     *string
 }
 
@@ -140,6 +149,7 @@ func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, er
 		arg.ClusterName,
 		arg.PlacementName,
 		arg.Phase,
+		arg.Activity,
 		arg.ReviewState,
 	)
 	var count int64
@@ -1262,11 +1272,19 @@ AND (
 )
 AND (
     $11::text IS NULL
-    OR review_state = $11
+    OR (phase <> 'finished' AND CASE
+        WHEN cancellation_requested_at IS NOT NULL THEN 'canceling'
+        WHEN phase IN ('assigned', 'preparing') THEN 'starting'
+        ELSE phase
+    END = $11)
+)
+AND (
+    $12::text IS NULL
+    OR review_state = $12
 )
 ORDER BY created_at DESC, id DESC
-LIMIT $13
-OFFSET $12
+LIMIT $14
+OFFSET $13
 `
 
 type ListRunsParams struct {
@@ -1280,6 +1298,7 @@ type ListRunsParams struct {
 	ClusterName     *string
 	PlacementName   *string
 	Phase           *string
+	Activity        *string
 	ReviewState     *string
 	ResultOffset    int32
 	ResultLimit     int32
@@ -1297,6 +1316,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.ClusterName,
 		arg.PlacementName,
 		arg.Phase,
+		arg.Activity,
 		arg.ReviewState,
 		arg.ResultOffset,
 		arg.ResultLimit,

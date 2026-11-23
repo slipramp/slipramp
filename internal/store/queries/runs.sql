@@ -133,6 +133,14 @@ AND (
     OR phase = sqlc.narg(phase)
 )
 AND (
+    sqlc.narg(activity)::text IS NULL
+    OR (phase <> 'finished' AND CASE
+        WHEN cancellation_requested_at IS NOT NULL THEN 'canceling'
+        WHEN phase IN ('assigned', 'preparing') THEN 'starting'
+        ELSE phase
+    END = sqlc.narg(activity))
+)
+AND (
     sqlc.narg(review_state)::text IS NULL
     OR review_state = sqlc.narg(review_state)
 )
@@ -188,6 +196,14 @@ AND (
 AND (
     sqlc.narg(phase)::text IS NULL
     OR phase = sqlc.narg(phase)
+)
+AND (
+    sqlc.narg(activity)::text IS NULL
+    OR (phase <> 'finished' AND CASE
+        WHEN cancellation_requested_at IS NOT NULL THEN 'canceling'
+        WHEN phase IN ('assigned', 'preparing') THEN 'starting'
+        ELSE phase
+    END = sqlc.narg(activity))
 )
 AND (
     sqlc.narg(review_state)::text IS NULL

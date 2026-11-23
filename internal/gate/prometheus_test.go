@@ -231,10 +231,10 @@ func TestPrometheusQueryURL(t *testing.T) {
 	otherDigest := override
 	otherDigest.Version = "other"
 	for _, tc := range []struct {
-		name       string
-		req        gate.Requirement
-		wantMoment string
-		wantLink   bool
+		name     string
+		req      gate.Requirement
+		wantEnd  string
+		wantLink bool
 	}{
 		{"observation", gate.Requirement{State: gate.RequirementBlocking, Policy: def, EvaluatedAt: &at}, utc, true},
 		{"waiting for observation", gate.Requirement{State: gate.RequirementUnevaluated, Policy: def}, "", true},
@@ -265,8 +265,8 @@ func TestPrometheusQueryURL(t *testing.T) {
 				t.Errorf("viewer location = %v", viewer)
 			}
 			params := viewer.Query()
-			if params.Get("g0.expr") != expr || params.Get("g0.tab") != "table" ||
-				params.Get("g0.moment_input") != tc.wantMoment || params.Has("g0.moment_input") != (tc.wantMoment != "") {
+			if params.Get("g0.expr") != expr || params.Get("g0.tab") != "graph" ||
+				params.Get("g0.end_input") != tc.wantEnd || params.Has("g0.end_input") != (tc.wantEnd != "") {
 				t.Errorf("viewer parameters = %v", params)
 			}
 		})

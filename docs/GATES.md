@@ -21,19 +21,26 @@ destination Stage policies together with any repository Gates on the Stage.
 | Kargo Stage | `/api/v1/gate-scopes/stages/{stageId}` | Operator |
 
 In the web app, open **Administer → Global Gates** for installation-wide
-policy, or open a Target or Stage and select **Gates**. The local tabs also
-show the global policy that applies to the same work. Viewers can inspect
-current policy and history on all three pages.
+policy, or open a Target or Stage and select **Gates**. Each local tab lists
+its **Repository Gates** first, followed by its own lock, weekly window, and
+policy history. Target attachments are listed by Action.
 
 While a global lock is active, a warning appears on every signed-in product
-page. It shows the reason, who created the lock, and its expiry or
+page. It shows who created the lock, the reason if supplied, and its expiry or
 **Until released**. The warning checks for changes while the page is visible
-and when you return to the tab. Follow **View global Gates** to inspect the
-policy and its history.
+and when you return to the tab. Follow **Gates** in the warning to inspect the
+policy and its history. An active Target lock appears above the back link on the
+Target and its Run detail pages. An active Stage lock appears in the same place
+on the Stage and its Promotion detail pages. When both a global and a local
+lock are active, the global warning appears first. Each warning links to its
+own **Gates** view.
 
-Choose **Create lock**, enter the maintenance reason, and optionally enter an
-expiry in UTC. **Release lock** clears the hold for everyone waiting on that
-scope. To let one Run or Promotion through, use its **Override gate** action.
+Choose **Create lock** and add a reason if desired. Select **1 hour**, **1 day**,
+or **1 week** to fill the expiry in UTC. You can also enter a custom time or
+leave the expiry empty to hold until released.
+**Release lock** clears the hold for everyone waiting on that
+scope. To let one Run or Promotion through, open **Details** beside its Gate
+and use the **Override gate** form.
 **Policy history** records who created or released the hold and when.
 
 Use `GET` on the scope resource to read its current lock, lock version, and
@@ -41,7 +48,8 @@ Use `GET` on the scope resource to read its current lock, lock version, and
 separately. A scoped API key needs `slipramp:read` to inspect a scope and
 `slipramp:gates:manage` to change its lock.
 
-Send `PUT` to the resource's `/lock` child with a reason and optional expiry.
+Send `PUT` to the resource's `/lock` child with a JSON object. Both `reason`
+and `expiresAt` are optional.
 
 ```json
 {"reason":"Database maintenance","expiresAt":"2027-01-15T18:00:00Z"}
@@ -91,22 +99,24 @@ in `windowEvents`. Window and lock versions advance independently.
 
 ## Read Gate evidence
 
-Open **Details** on a Run or Promotion. Each Gate shows its scope, policy
-version, release condition, and the observation used to evaluate it.
+Open **Run details** or **Promotion details** to see the Gates table. Choose
+**Details** on a Gate’s row to see its observation and override history.
+Repository Gates show their evaluator and release condition. For locks and
+weekly windows, select the policy version to open the corresponding change in
+the global, Target, or Stage policy history. Older versions open the history
+section when the change is outside the retained list.
 
 | Gate | Evidence shown when available |
 | --- | --- |
-| Prometheus | Numeric sample, comparison threshold, evaluation time, and validity. **Open in Prometheus** opens the recorded query when a viewer is configured. |
-| Webhook | Decision code, message, evaluation time, and validity. |
-| Weekly window | Observed open or closed state, time zone, schedule digest, observation validity, and known interval boundaries. |
+| Prometheus | Numeric sample, comparison threshold, and evaluation time. **Open in Prometheus** graphs the recorded query when a viewer is configured. |
+| Webhook | Decision code, message, and evaluation time. |
+| Weekly window | Observed open or closed state, time zone, evaluation time, and known interval boundaries. |
 | Lock | Reason, actor, creation time, expiry, and when Slipramp checked the lock. |
 
 While work waits, an expired window observation can show **Open** alongside
-an **Unavailable** Gate state. Check **Valid until** and the diagnostic to
-understand the hold. After release, **Evidence at release**
-preserves the observation and release time. An override shows the exact
-policy version, decision time, actor, reason, and evidence available when the
-operator recorded it.
+an **Unavailable** Gate state. The diagnostic explains the hold. After release,
+**Evidence at release** preserves the observation and release time. Override
+history shows who recorded each decision, when, and their reason if supplied.
 
 ## Inspect a waiting Run
 
@@ -192,8 +202,8 @@ sources:
 
 Set the optional `publicUrl` to the base URL users visit for this Prometheus
 source, including any path prefix. **Open in Prometheus** on a Run or Promotion
-opens Table view using the user's own browser access. The link uses the Gate's
-observation time when available and opens a live query otherwise. A released
+opens Graph view using the user's own browser access. The graph ends at the
+Gate’s observation time when available and opens a live query otherwise. A released
 Gate uses the source and expression saved at release.
 
 For Prometheus, the Server evaluates one query per unique normalized definition, shares the
@@ -342,9 +352,9 @@ refreshes while the definition digest matches.
 
 ## Override a Gate
 
-For a Run or Promotion, open **Details**, find the Gate, and choose
-**Override gate**. Check the observation and condition, enter the reason, and
-select **Record override**. The decision applies only to this subject and Gate
+In the Run or Promotion’s Gates table, choose **Details** on the Gate’s row.
+Check the observation and condition, add a reason if desired, and select
+**Override Gate**. The decision applies only to this subject and Gate
 definition. Its history shows who recorded it, when, and what the evaluator saw.
 Review and all other requirements still apply.
 
@@ -355,7 +365,7 @@ the Gates available to waive. The `decisions` list shows prior waivers in
 chronological order, including waivers for holds that have ended.
 
 Operators and admins can send `POST` to the same URL. Copy the `key` and
-`version` from the eligible Gate and add a nonblank `reason`. A repository
+`version` from the eligible Gate. You may include a `reason` of up to 1024 characters. A repository
 Gate key looks like `repository/teamspeak-idle`. A Server lock key looks like
 `lock/<scope-uuid>`. A waiver applies to this subject and this hold alone.
 If the scope is locked again, the new hold needs its own waiver. A weekly window

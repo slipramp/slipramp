@@ -42,8 +42,8 @@ import {
   oidcLoginLeaseStorageKey,
 } from "~/features/auth/oidc-login-coordination";
 import { ProductShell } from "~/features/shell/product-shell";
-import { GlobalLockWarning } from "~/features/gates/global-lock-warning";
-import { loadGlobalLockStatus } from "~/features/gates/gate-policy.server";
+import { LockWarning } from "~/features/gates/lock-warning";
+import { loadLockStatus } from "~/features/gates/gate-policy.server";
 import { pageTitle } from "~/shared/page-title";
 import { serverPerformanceMiddleware } from "~/features/performance/performance.server";
 import { sliprampTheme } from "~/features/shell/theme";
@@ -74,7 +74,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const [authentication, compatibility, globalLock] = await Promise.all([
     getProductAuthentication(context),
     getClientCompatibility({ client: createServerAPIClient(request, context) }),
-    loadGlobalLockStatus({ context, request }),
+    loadLockStatus({ context, request }, { kind: "global" }),
   ]);
   return {
     ...authentication,
@@ -124,9 +124,11 @@ export default function App({ loaderData }: Route.ComponentProps) {
       <Modal.Stack>
         <ProductShell kargoEnabled={loaderData.kargoEnabled} principal={loaderData.principal}>
           {loaderData.principal && (
-            <GlobalLockWarning
+            <LockWarning
               key={loaderData.principal.principalId}
               initial={loaderData.globalLock}
+              owner={{ kind: "global" }}
+              gatesPath="/gates"
             />
           )}
           <Outlet />

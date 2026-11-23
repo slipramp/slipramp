@@ -79,7 +79,7 @@ func (s PrometheusSource) QueryURL(requirement Requirement) *string {
 	viewer := base.JoinPath("query")
 	params := viewer.Query()
 	params.Set("g0.expr", definition.Query)
-	params.Set("g0.tab", "table")
+	params.Set("g0.tab", "graph")
 
 	evaluatedAt := requirement.EvaluatedAt
 	if evaluatedAt == nil && requirement.State == RequirementReleased && len(requirement.Overrides) > 0 {
@@ -89,7 +89,7 @@ func (s PrometheusSource) QueryURL(requirement Requirement) *string {
 		}
 	}
 	if evaluatedAt != nil {
-		params.Set("g0.moment_input", evaluatedAt.UTC().Format("2006-01-02T15:04:05.000Z"))
+		params.Set("g0.end_input", evaluatedAt.UTC().Format("2006-01-02T15:04:05.000Z"))
 	}
 	viewer.RawQuery = params.Encode()
 	return new(viewer.String())

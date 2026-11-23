@@ -23,19 +23,22 @@ const (
 var (
 	ErrScopeNotFound  = errors.New("the Server Gate scope does not exist")
 	ErrScopeForbidden = errors.New("the principal cannot manage this Gate scope")
-	ErrLockReason     = errors.New("a lock requires a reason of 1 to 1024 characters")
+	ErrLockReason     = errors.New("lock reason must be valid text of at most 1024 characters")
 	ErrLockExpiry     = errors.New("lock expiry must be in the future")
 	ErrLockConflict   = errors.New("a different lock is active at this scope")
 	ErrLockVersion    = errors.New("the active lock version has changed")
 )
 
 type LockRequest struct {
-	Reason    string     `json:"reason"`
+	Reason    string     `json:"reason,omitempty"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }
 
 // Reject unknown fields so a misspelled expiry cannot create an indefinite hold.
 func (r *LockRequest) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return errors.New("lock request must be a JSON object")
+	}
 	type fields LockRequest
 	return decodePayload(data, (*fields)(r))
 }
@@ -53,7 +56,7 @@ func (lock *ScopeLock) Validate() error {
 	if lock == nil || lock.CreatedAt.IsZero() || lock.Actor.Validate() != nil {
 		return errors.New("invalid Gate lock evidence")
 	}
-	if !validLockReason(lock.Reason) {
+	if !validGateReason(lock.Reason) {
 		return ErrLockReason
 	}
 	if lock.ExpiresAt != nil && !lock.ExpiresAt.After(lock.CreatedAt) {
@@ -62,8 +65,8 @@ func (lock *ScopeLock) Validate() error {
 	return nil
 }
 
-func validLockReason(reason string) bool {
-	return strings.TrimSpace(reason) != "" && utf8.ValidString(reason) &&
+func validGateReason(reason string) bool {
+	return utf8.ValidString(reason) &&
 		!strings.ContainsRune(reason, 0) && utf8.RuneCountInString(reason) <= 1024
 }
 
@@ -118,7 +121,7 @@ func (s ScopeService) ChangeLock(ctx context.Context, scope Scope, auth producti
 	}
 	if request != nil {
 		reason := strings.TrimSpace(request.Reason)
-		if !validLockReason(reason) {
+		if !validGateReason(reason) {
 			return ScopeState{}, ErrLockReason
 		}
 		request = &LockRequest{Reason: reason, ExpiresAt: request.ExpiresAt}

@@ -748,7 +748,8 @@
 }
 
 :global(:root[data-slipramp-theme="kawaii"]) .activity[data-mascot-only] {
-  flex: 0 0 8rem;
+  flex: none;
+  align-self: center;
   width: 8rem;
   height: 7rem;
   padding: 0;

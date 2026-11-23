@@ -271,7 +271,7 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		t.Fatalf("promotionResponse() error = %v", err)
 	}
 	if len(body.Gates.Requirements) != 1 || body.Gates.Requirements[0].QueryURL == nil ||
-		*body.Gates.Requirements[0].QueryURL != "https://metrics.example.com/query?g0.expr=up&g0.tab=table" {
+		*body.Gates.Requirements[0].QueryURL != "https://metrics.example.com/query?g0.expr=up&g0.tab=graph" {
 		t.Errorf("Promotion Gate viewer = %#v", body.Gates)
 	}
 	if body.KargoURL != nil {

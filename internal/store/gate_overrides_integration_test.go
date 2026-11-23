@@ -34,9 +34,9 @@ func TestRunGateOverrideIntegration(t *testing.T) {
 		Actor:  productidentity.ActorSnapshot{Kind: productidentity.KindUser, DisplayName: "Operator", PrincipalID: uuid.New()},
 		Reason: "Incident recovery", RecordedAt: at, EvaluatorProcessID: process}
 	invalid := request
-	invalid.Reason = "  "
+	invalid.Reason = strings.Repeat("a", 1025)
 	if _, err := db.RecordGateOverride(ctx, invalid); !errors.Is(err, gate.ErrOverrideInvalid) {
-		t.Fatalf("blank reason = %v", err)
+		t.Fatalf("oversized reason = %v", err)
 	}
 	// Two identical submissions record one decision. A different actor cannot replace it.
 	results := make(chan error, 2)
@@ -68,6 +68,7 @@ func TestRunGateOverrideIntegration(t *testing.T) {
 		t.Fatalf("stale digest = %v", err)
 	}
 	request.Reference = read().Reference
+	request.Reason = ""
 	request.RecordedAt = at.Add(2 * time.Second)
 	observation := gate.CurrentObservation{RepositoryID: repo, CatalogRevisionID: refresh.Revision.ID, GateName: "network-idle",
 		DefinitionDigest: string(request.Version), EvaluatorProcessID: process, EvaluatedAt: at, ValidUntil: at.Add(time.Minute),
@@ -101,7 +102,8 @@ func TestRunGateOverrideIntegration(t *testing.T) {
 	}
 	got := read()
 	if got.ReleasedAt == nil || got.Evidence != nil || got.EvaluatedAt != nil || len(got.Overrides) != 2 ||
-		got.Overrides[1].ObservedState != gate.RequirementUnavailable || got.Overrides[1].Diagnostic != observation.Observation.Diagnostic {
+		got.Overrides[1].Reason != "" || got.Overrides[1].ObservedState != gate.RequirementUnavailable ||
+		got.Overrides[1].Diagnostic != observation.Observation.Diagnostic {
 		t.Fatalf("released evidence = %#v", got)
 	}
 	if _, err := db.RecordGateOverride(ctx, request); err != nil {

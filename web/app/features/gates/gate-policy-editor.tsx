@@ -15,7 +15,7 @@ import { useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import type { ServerGateScope, WeeklyWindow } from "~/api/generated";
-import { weekdays, type GateChange } from "./gate-policy";
+import { lockExpiryHours, lockExpiryUTC, weekdays, type GateChange } from "./gate-policy";
 import type { submitGatePolicy } from "./gate-policy.server";
 
 const actionLabels = {
@@ -59,28 +59,11 @@ export function GatePolicyEditor({
               {fetcher.data.error}
             </Alert>
           )}
-          {action === "lock" && (
-            <>
-              <Textarea
-                label="Reason"
-                name="reason"
-                required
-                maxLength={1024}
-                autosize
-                minRows={2}
-              />
-              <TextInput
-                label="Expiry in UTC"
-                description="Leave empty to hold until released."
-                name="expiryUTC"
-                type="datetime-local"
-              />
-            </>
-          )}
+          {action === "lock" && <LockFields />}
           {action === "unlock" && (
             <Text>
-              Release the current lock{scope.lock ? " for “" + scope.lock.reason + "”" : ""}?
-              Waiting work can proceed when its other Gates pass.
+              Release the current lock{scope.lock?.reason ? " for “" + scope.lock.reason + "”" : ""}
+              ? Waiting work can proceed when its other Gates pass.
             </Text>
           )}
           {action === "set-window" && <WindowFields definition={scope.window?.definition} />}
@@ -101,6 +84,39 @@ export function GatePolicyEditor({
         </Stack>
       </fetcher.Form>
     </Modal>
+  );
+}
+
+function LockFields() {
+  const [expiry, setExpiry] = useState("");
+  return (
+    <>
+      <Textarea label="Reason (optional)" name="reason" maxLength={1024} autosize minRows={2} />
+      <Stack gap="xs">
+        <TextInput
+          label="Expiry in UTC"
+          description="Leave empty to hold until released."
+          name="expiryUTC"
+          type="datetime-local"
+          value={expiry}
+          onChange={(event) => setExpiry(event.currentTarget.value)}
+        />
+        <Group gap="xs">
+          {Object.entries(lockExpiryHours).map(([label, hours]) => (
+            <Button
+              key={label}
+              type="button"
+              aria-label={`Set expiry to ${label} from now`}
+              size="compact-sm"
+              variant="light"
+              onClick={() => setExpiry(lockExpiryUTC(hours))}
+            >
+              {label}
+            </Button>
+          ))}
+        </Group>
+      </Stack>
+    </>
   );
 }
 

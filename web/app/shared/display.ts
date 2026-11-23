@@ -23,6 +23,9 @@ export function formatRelativeTime(value: string | Date, now = new Date()) {
   const differenceSeconds = (asDate(value).getTime() - now.getTime()) / 1000;
   const absoluteSeconds = Math.abs(differenceSeconds);
 
+  if (differenceSeconds <= 0 && differenceSeconds > -15) {
+    return relativeTimeFormatter.format(0, "second");
+  }
   if (absoluteSeconds < 45) {
     return relativeTimeFormatter.format(Math.round(differenceSeconds), "second");
   }

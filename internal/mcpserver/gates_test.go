@@ -154,7 +154,11 @@ func TestGatePolicyTools(t *testing.T) {
 	rejectedGateTool(t, client, "get_gate_scope", map[string]any{"scope": "global", "ownerId": owner}, "omit ownerId")
 	rejectedGateTool(t, client, "get_gate_scope", map[string]any{"scope": "target"}, "UUID")
 	rejectedGateTool(t, client, "get_gate_scope", map[string]any{"scope": "repository"}, "scope must be")
-	rejectedGateTool(t, client, "lock_gate_scope", map[string]any{"scope": "global", "reason": " "}, gate.ErrLockReason.Error())
+	callTool(t, client, "lock_gate_scope", map[string]any{"scope": "global"})
+	if store.state.Lock == nil || store.state.Lock.Reason != "" {
+		t.Fatalf("lock without a reason = %#v", store.state.Lock)
+	}
+	rejectedGateTool(t, client, "lock_gate_scope", map[string]any{"scope": "global", "reason": strings.Repeat("a", 1025)}, gate.ErrLockReason.Error())
 	rejectedGateTool(t, client, "unlock_gate_scope", map[string]any{"scope": "global", "lockVersion": "bad"}, "lockVersion")
 	set["window"] = gate.WeeklyWindow{TimeZone: "Local"}
 	rejectedGateTool(t, client, "set_gate_window", set, gate.ErrInvalidWindow.Error())
@@ -199,9 +203,14 @@ func TestGateOverrideTools(t *testing.T) {
 				result.Overrides == nil || len(*result.Overrides) != 1 || *(*result.Overrides)[0].ObservedEvidence.PrometheusValue() != 7 {
 				t.Fatalf("override request = %#v, result = %#v", r, result)
 			}
+			delete(args, "reason")
+			decodeStructuredContent(t, callTool(t, client, "override_gate", args), &result)
+			if store.request.Reason != "" {
+				t.Fatalf("override without a reason = %#v", store.request)
+			}
 			store.err = gate.ErrOverrideConflict
 			rejectedGateTool(t, client, "override_gate", args, gate.ErrOverrideConflict.Error())
-			args["reason"] = " "
+			args["reason"] = strings.Repeat("a", 1025)
 			rejectedGateTool(t, client, "override_gate", args, gate.ErrOverrideInvalid.Error())
 		})
 	}
