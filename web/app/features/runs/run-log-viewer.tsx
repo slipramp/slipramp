@@ -478,7 +478,7 @@ function VirtualizedLogOutput({
       style={{
         backgroundColor: ANSI_DEFAULT_BACKGROUND,
         color: ANSI_DEFAULT_FOREGROUND,
-        height: fullscreen ? "100%" : "clamp(32rem, 65svh, 36rem)",
+        height: fullscreen ? "100%" : 480,
         overflow: "auto",
         position: "relative",
         tabSize: 4,
