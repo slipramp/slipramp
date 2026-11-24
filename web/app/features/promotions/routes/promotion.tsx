@@ -1,5 +1,5 @@
 import { LifecycleStep } from "~/shared/lifecycle-step";
-import { CancellationDetail, CancellationStep } from "~/shared/cancellation-detail";
+import { CancelButton, CancellationDetail, CancellationStep } from "~/shared/cancellation-detail";
 import {
   Accordion,
   Alert,
@@ -65,7 +65,7 @@ import { promotionStagePath } from "~/features/promotions/promotion-stage";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
 import { loadLockStatus } from "~/features/gates/gate-policy.server";
 import { LockWarning } from "~/features/gates/lock-warning";
-import { ReleaseGateDialog, ReleaseGateTable } from "~/features/gates/release-gate-details";
+import { ReleaseGateDialog, ReleaseGateSection } from "~/features/gates/release-gate-details";
 import {
   promotionDeliveryStatus,
   promotionExecutionStatus,
@@ -78,7 +78,13 @@ import {
 import { PromotionStatusBadge } from "~/features/promotions/promotion-status-badge";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
-import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
+import {
+  CopyableIdFact,
+  DetailSection,
+  PageHeader,
+  PageHeaderFact,
+  PageHeaderFacts,
+} from "~/shared/page";
 import { formValue, optionalFormValue } from "~/shared/form-data";
 import {
   promotionDetailActivity,
@@ -234,7 +240,6 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 }
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
-  const navigation = useNavigation();
   useActionSuccessToast(actionData, "Promotion updated", actionData?.message);
 
   const canReadDiffs = canReadSensitiveArtifacts(loaderData.principal);
@@ -280,24 +285,6 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           promotion.kargoUrl ||
           promotion.argoCdUrl ? (
             <>
-              {canManageActivePromotion ? (
-                <Form method="post">
-                  <Button
-                    type="submit"
-                    name="intent"
-                    value="cancel"
-                    size="compact-md"
-                    color="red"
-                    variant="light"
-                    loading={
-                      navigation.state === "submitting" &&
-                      navigation.formData?.get("intent") === "cancel"
-                    }
-                  >
-                    Cancel promotion
-                  </Button>
-                </Form>
-              ) : null}
               {promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : null}
               {promotion.argoCdUrl ? (
                 <Button
@@ -334,6 +321,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
                     </span>
                   </Tooltip>
                 ))}
+              {canManageActivePromotion ? <CancelButton>Cancel promotion</CancelButton> : null}
             </>
           ) : undefined
         }
@@ -341,9 +329,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         badges={<PromotionStatusBadge status={overallStatus} />}
         details={
           <PageHeaderFacts>
-            <PageHeaderFact label="Promotion ID">
-              <Code>{promotion.id.slice(0, 8)}</Code>
-            </PageHeaderFact>
+            <CopyableIdFact label="Promotion ID" value={promotion.id} />
             <PageHeaderFact label="Stage">
               <PromotionStageLink fw={400} stage={promotion.stageSnapshot} />
             </PageHeaderFact>
@@ -405,8 +391,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
 function SelectedFreight({ freight }: Readonly<{ freight: PromotionFreightItem }>) {
   return (
-    <Stack component="section" gap="lg">
-      <SectionHeader title="Selected Freight" />
+    <DetailSection defaultExpanded title="Selected Freight">
       <DetailGrid>
         <DetailFact label="Freight ID">
           <FreightIdentifier freight={freight} />
@@ -418,7 +403,7 @@ function SelectedFreight({ freight }: Readonly<{ freight: PromotionFreightItem }
           </DetailFact>
         </Box>
       </DetailGrid>
-    </Stack>
+    </DetailSection>
   );
 }
 
@@ -812,10 +797,9 @@ function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
   const review = promotion.reviewContext;
   const git = review?.git;
   return (
-    <Stack gap="lg">
+    <>
       {review && git && (
-        <Stack component="section" gap="lg">
-          <SectionHeader title="Git revisions" />
+        <DetailSection defaultExpanded title="Git revisions">
           <DetailGrid>
             <CommitDetails
               label="Base revision"
@@ -832,70 +816,74 @@ function PromotionDetails({ promotion }: Readonly<{ promotion: Promotion }>) {
               titleOrder={3}
             />
           </DetailGrid>
-        </Stack>
+        </DetailSection>
       )}
-      <ReleaseGateTable gates={promotion.gates} subject="Promotion" />
+      <ReleaseGateSection gates={promotion.gates} title="Promotion gates" />
       {promotion.selectedFreight && <SelectedFreight freight={promotion.selectedFreight} />}
-      <Stack component="section" gap="lg">
-        <SectionHeader title="Promotion context" />
-        <DetailGrid>
-          <DetailFact label="Integration">
-            <Anchor
-              component={Link}
-              to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
-            >
-              {promotion.integration}
-            </Anchor>
-          </DetailFact>
-          <DetailFact label="Project">
-            <PromotionProjectLink fw={400} project={stage} />
-          </DetailFact>
-          <DetailFact label="Stage">
-            <PromotionStageLink fw={400} stage={stage} />
-          </DetailFact>
-          <DetailFact label="Policy snapshot">{promotion.policySnapshot.effectiveMode}</DetailFact>
-          {promotion.expiresAt && (
-            <DetailFact label="Review deadline">
-              <Timestamp value={promotion.expiresAt} />
-            </DetailFact>
-          )}
-          {enrichment?.application && (
-            <DetailFact label="Application">
+      <DetailSection title="Promotion context">
+        <Stack gap="lg">
+          <DetailGrid>
+            <DetailFact label="Integration">
               <Anchor
                 component={Link}
-                to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
+                to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
               >
-                {enrichment.application}
+                {promotion.integration}
               </Anchor>
             </DetailFact>
-          )}
-          {enrichment?.environment && (
-            <DetailFact label="Environment">{enrichment.environment}</DetailFact>
-          )}
-          {review && (
-            <>
-              <DetailFact label="Repository">
-                <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
-                  {review.repositorySnapshot.name}
+            <DetailFact label="Project">
+              <PromotionProjectLink fw={400} project={stage} />
+            </DetailFact>
+            <DetailFact label="Stage">
+              <PromotionStageLink fw={400} stage={stage} />
+            </DetailFact>
+            <DetailFact label="Policy snapshot">
+              {promotion.policySnapshot.effectiveMode}
+            </DetailFact>
+            {promotion.expiresAt && (
+              <DetailFact label="Review deadline">
+                <Timestamp value={promotion.expiresAt} />
+              </DetailFact>
+            )}
+            {enrichment?.application && (
+              <DetailFact label="Application">
+                <Anchor
+                  component={Link}
+                  to={`/promotions?application=${encodeURIComponent(enrichment.application)}`}
+                >
+                  {enrichment.application}
                 </Anchor>
               </DetailFact>
-              <DetailFact label="Target branch">{review.targetBranch}</DetailFact>
-              <DetailFact label="Candidate branch">
-                {git?.candidateBranch ??
-                  (promotionIsActive(promotion) && promotion.cancellation.state === "not-requested"
-                    ? "Waiting for Kargo"
-                    : "Not recorded")}
-              </DetailFact>
-            </>
+            )}
+            {enrichment?.environment && (
+              <DetailFact label="Environment">{enrichment.environment}</DetailFact>
+            )}
+            {review && (
+              <>
+                <DetailFact label="Repository">
+                  <Anchor component={Link} to={`/repositories/${review.repositoryId}`}>
+                    {review.repositorySnapshot.name}
+                  </Anchor>
+                </DetailFact>
+                <DetailFact label="Target branch">{review.targetBranch}</DetailFact>
+                <DetailFact label="Candidate branch">
+                  {git?.candidateBranch ??
+                    (promotionIsActive(promotion) &&
+                    promotion.cancellation.state === "not-requested"
+                      ? "Waiting for Kargo"
+                      : "Not recorded")}
+                </DetailFact>
+              </>
+            )}
+          </DetailGrid>
+          {!review && (
+            <Text size="sm" c="dimmed">
+              This Kargo-native Promotion uses the Stage and Freight directly.
+            </Text>
           )}
-        </DetailGrid>
-        {!review && (
-          <Text size="sm" c="dimmed">
-            This Kargo-native Promotion uses the Stage and Freight directly.
-          </Text>
-        )}
-      </Stack>
-    </Stack>
+        </Stack>
+      </DetailSection>
+    </>
   );
 }
 
@@ -1013,22 +1001,7 @@ function PromotionWorkspace({
           </Tabs.List>
 
           <Tabs.Panel className={styles.reviewPanel} value="git">
-            <SectionHeader
-              actions={
-                promotion.gitDiffArtifactId ? (
-                  <Button
-                    component="a"
-                    href={`/api/v1/artifacts/${promotion.gitDiffArtifactId}/download`}
-                    leftSection={<IconDownload aria-hidden size={16} />}
-                    size="compact-md"
-                    variant="light"
-                  >
-                    Download diff
-                  </Button>
-                ) : undefined
-              }
-              title="Git diff"
-            />
+            <DiffDownloadButton artifactId={promotion.gitDiffArtifactId} />
             <ArtifactError error={gitDiff.error} />
             {gitDiff.contents !== undefined ? (
               gitDiff.contents.length === 0 ? (
@@ -1044,22 +1017,7 @@ function PromotionWorkspace({
           </Tabs.Panel>
 
           <Tabs.Panel className={styles.reviewPanel} value="argo">
-            <SectionHeader
-              actions={
-                promotion.argoDiffArtifactId ? (
-                  <Button
-                    component="a"
-                    href={`/api/v1/artifacts/${promotion.argoDiffArtifactId}/download`}
-                    leftSection={<IconDownload aria-hidden size={16} />}
-                    size="compact-md"
-                    variant="light"
-                  >
-                    Download diff
-                  </Button>
-                ) : undefined
-              }
-              title="Argo CD resources"
-            />
+            <DiffDownloadButton artifactId={promotion.argoDiffArtifactId} />
             <ArtifactError error={argoDiff.error} />
             {argoResources ? (
               <ArgoDiff resources={argoResources} />
@@ -1068,8 +1026,8 @@ function PromotionWorkspace({
             ) : null}
           </Tabs.Panel>
 
-          <Tabs.Panel className={styles.reviewPanel} value="details">
-            <PromotionDetails promotion={promotion} />
+          <Tabs.Panel value="details">
+            <PromotionDetails key={promotion.id} promotion={promotion} />
           </Tabs.Panel>
         </Tabs>
       </Paper>
@@ -1081,6 +1039,22 @@ function PromotionWorkspace({
         <DecisionPanel canWrite={canWrite} promotion={promotion} />
       </Stack>
     </Box>
+  );
+}
+
+function DiffDownloadButton({ artifactId }: Readonly<{ artifactId?: string }>) {
+  if (!artifactId) return null;
+  return (
+    <Button
+      component="a"
+      href={`/api/v1/artifacts/${artifactId}/download`}
+      leftSection={<IconDownload aria-hidden size={16} />}
+      ml="auto"
+      size="compact-md"
+      variant="light"
+    >
+      Download diff
+    </Button>
   );
 }
 

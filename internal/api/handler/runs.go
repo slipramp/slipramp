@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -450,6 +451,7 @@ func runResponse(
 		Runtime:                api.CatalogName(record.Snapshot.Runtime.Metadata.Name),
 		Placement:              api.CatalogName(record.PlacementName),
 		Cluster:                api.CatalogName(record.ClusterName),
+		Timeout:                optionalString(cmp.Or(record.Snapshot.Action.Timeout, record.Snapshot.Placement.Timeout)),
 		Source:                 apiRunSource(record.Source),
 		RerunOfRunID:           record.RerunOfRunID,
 		RerunMode:              apiRerunMode(record.RerunMode),

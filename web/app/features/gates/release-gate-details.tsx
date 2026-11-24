@@ -35,76 +35,87 @@ import {
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { RelativeTime } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
+import { DetailSection } from "~/shared/page";
 
 type GateSubject = "Promotion" | "Run";
 
-export function ReleaseGateTable({
+export function ReleaseGateSection({
   gates,
-  subject,
-}: Readonly<{ gates: GateSummary; subject: GateSubject }>) {
-  const [params] = useSearchParams();
+  title,
+}: Readonly<{ gates: GateSummary; title: string }>) {
   if (gates.state === "not-required") return null;
-  const title = subject === "Promotion" ? "Promotion gates" : "Release gates";
+  const released = gates.state === "released";
   const summary = gateSummaryBadges[gates.state];
   return (
-    <Stack component="section" gap="xs">
-      <Group gap="xs" justify="space-between" wrap="nowrap">
-        <Title order={2}>{title}</Title>
-        <Badge color={summary.color} variant="light">
-          {summary.label}
-        </Badge>
-      </Group>
-      {gates.requirements.length > 0 && (
-        <Table aria-label={title} horizontalSpacing={6} verticalSpacing={4}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th scope="col">Gate</Table.Th>
-              <Table.Th scope="col">Status</Table.Th>
-              <Table.Th scope="col">
-                <VisuallyHidden>Details</VisuallyHidden>
-              </Table.Th>
+    <DetailSection
+      key={released ? "released" : "unreleased"}
+      defaultExpanded={!released}
+      title={
+        <Group component="span" gap="xs" justify="space-between" pe="xs" wrap="nowrap">
+          {title}
+          <Badge color={summary.color} component="span" variant="light">
+            {summary.label}
+          </Badge>
+        </Group>
+      }
+    >
+      <GateRequirementsTable gates={gates} label={title} />
+    </DetailSection>
+  );
+}
+
+function GateRequirementsTable({ gates, label }: Readonly<{ gates: GateSummary; label: string }>) {
+  const [params] = useSearchParams();
+  if (gates.requirements.length === 0) return null;
+  return (
+    <Table aria-label={label}>
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th scope="col">Gate</Table.Th>
+          <Table.Th scope="col">Status</Table.Th>
+          <Table.Th scope="col">
+            <VisuallyHidden>Details</VisuallyHidden>
+          </Table.Th>
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {gates.requirements.map((gate) => {
+          const name = gate.title ?? gate.name;
+          return (
+            <Table.Tr key={gate.key}>
+              <Table.Td w="100%" maw={0}>
+                <Text inherit truncate title={name}>
+                  {name}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <GateStatusBadge gate={gate} />
+              </Table.Td>
+              <Table.Td ta="right">
+                <Button
+                  component={Link}
+                  to={{ search: releaseGateSearchParams(params, gate.key).toString() }}
+                  preventScrollReset
+                  aria-haspopup="dialog"
+                  aria-label={`View details for ${name}`}
+                  variant="subtle"
+                  size="compact-xs"
+                >
+                  Details
+                </Button>
+              </Table.Td>
             </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {gates.requirements.map((gate) => {
-              const name = gate.title ?? gate.name;
-              return (
-                <Table.Tr key={gate.key}>
-                  <Table.Td w="100%" maw={0}>
-                    <Text inherit truncate title={name}>
-                      {name}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <GateStatusBadge gate={gate} />
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    <Button
-                      component={Link}
-                      to={{ search: releaseGateSearchParams(params, gate.key).toString() }}
-                      preventScrollReset
-                      aria-haspopup="dialog"
-                      aria-label={`View details for ${name}`}
-                      variant="subtle"
-                      size="compact-xs"
-                    >
-                      Details
-                    </Button>
-                  </Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
-      )}
-    </Stack>
+          );
+        })}
+      </Table.Tbody>
+    </Table>
   );
 }
 
 function GateStatusBadge({ gate }: Readonly<{ gate: GateRequirement }>) {
   const badge =
     hasMatchingOverride(gate) && gate.state !== "stopped"
-      ? { label: gate.releasedAt ? "Released by override" : "Override recorded", color: "orange" }
+      ? { label: gate.releasedAt ? "Released by override" : "Overridden", color: "orange" }
       : gateRequirementBadges[gate.state];
   return (
     <Badge color={badge.color} size="sm" variant="light" miw="max-content">

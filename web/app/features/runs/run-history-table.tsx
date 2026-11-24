@@ -5,8 +5,10 @@ import type { Run } from "~/api/generated";
 import { CommitReference } from "~/features/commits/git-commit";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { runActivity } from "~/features/mascot/execution-activity";
+import { runActionHistoryPath } from "~/features/runs/run-history-filters";
 import { runSourceLabel } from "~/features/runs/run-source";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
+import { targetFilterPath } from "~/features/targets/target-filter";
 import { formatDuration, formatTimestamp, shortIdentifier } from "~/shared/display";
 import { RelativeTime } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
@@ -14,6 +16,7 @@ import { useTimeZone } from "~/shared/time-zone-preference";
 
 export function RunHistoryTable({
   emptyMessage,
+  historyFilters,
   repositoryNames,
   runs,
   showRevision = false,
@@ -21,6 +24,7 @@ export function RunHistoryTable({
   showTarget = true,
 }: Readonly<{
   emptyMessage: string;
+  historyFilters?: URLSearchParams;
   repositoryNames?: ReadonlyMap<string, string>;
   runs: Run[];
   showRevision?: boolean;
@@ -60,12 +64,7 @@ export function RunHistoryTable({
               <Table.Tr key={run.id}>
                 <Table.Td>
                   <RunSummary
-                    repositoryName={
-                      repositoryNames
-                        ? (repositoryNames.get(run.repositoryId) ??
-                          shortIdentifier(run.repositoryId))
-                        : undefined
-                    }
+                    actionFilterTo={historyFilters && runActionHistoryPath(historyFilters, run)}
                     run={run}
                     showTarget={showTarget}
                   />
@@ -78,7 +77,10 @@ export function RunHistoryTable({
                 </Table.Td>
                 {showRevision ? (
                   <Table.Td>
-                    <RunRevision run={run} />
+                    <RunRevision
+                      repositoryName={repositoryNames?.get(run.repositoryId)}
+                      run={run}
+                    />
                   </Table.Td>
                 ) : null}
                 {showSource ? (
@@ -99,39 +101,38 @@ export function RunHistoryTable({
 }
 
 function RunSummary({
-  repositoryName,
+  actionFilterTo,
   run,
   showTarget,
-}: Readonly<{ repositoryName?: string; run: Run; showTarget: boolean }>) {
+}: Readonly<{ actionFilterTo?: string; run: Run; showTarget: boolean }>) {
   return (
-    <Stack gap={0}>
-      {showTarget ? (
-        <Anchor component={Link} fw={600} size="sm" to={`/targets/${run.targetId}`}>
-          {run.target}
-        </Anchor>
-      ) : null}
-      <Text
-        c={showTarget ? "dimmed" : undefined}
-        fw={showTarget ? undefined : 600}
-        size={showTarget ? "xs" : "sm"}
-      >
-        {run.action}
-      </Text>
-      <Group gap="xs" wrap="wrap">
-        <Anchor c="dimmed" component={Link} size="xs" to={`/runs/${run.id}`}>
-          Run {shortIdentifier(run.id)}
-        </Anchor>
-        {repositoryName ? (
+    <Stack align="flex-start" gap={0}>
+      <Anchor component={Link} fw={600} size="sm" to={`/runs/${run.id}`}>
+        Run {shortIdentifier(run.id)}
+      </Anchor>
+      <Text c="dimmed" size="xs" style={{ whiteSpace: "nowrap" }}>
+        {showTarget ? (
           <>
-            <Text c="dimmed" size="xs">
-              ·
-            </Text>
-            <Anchor c="dimmed" component={Link} size="xs" to={`/repositories/${run.repositoryId}`}>
-              {repositoryName}
+            <Anchor c="inherit" component={Link} size="xs" to={`/targets/${run.targetId}`}>
+              {run.target}
             </Anchor>
+            {" / "}
           </>
         ) : null}
-      </Group>
+        {actionFilterTo ? (
+          <Anchor
+            aria-label={`Filter runs by ${run.target} / ${run.action}`}
+            c="inherit"
+            component={Link}
+            size="xs"
+            to={actionFilterTo}
+          >
+            {run.action}
+          </Anchor>
+        ) : (
+          run.action
+        )}
+      </Text>
     </Stack>
   );
 }
@@ -157,8 +158,8 @@ function RunStatus({ run }: Readonly<{ run: Run }>) {
 function RunExecution({ run }: Readonly<{ run: Run }>) {
   return (
     <Stack gap={0}>
-      <Anchor component={Link} size="sm" to={`/clusters/${encodeURIComponent(run.cluster)}`}>
-        {run.cluster}
+      <Anchor component={Link} size="sm" to={targetFilterPath("runtime", run.runtime)}>
+        {run.runtime}
       </Anchor>
       <Anchor
         c="dimmed"
@@ -172,13 +173,13 @@ function RunExecution({ run }: Readonly<{ run: Run }>) {
   );
 }
 
-function RunRevision({ run }: Readonly<{ run: Run }>) {
+function RunRevision({ repositoryName, run }: Readonly<{ repositoryName?: string; run: Run }>) {
   return (
-    <Stack gap={0}>
+    <Stack align="flex-start" gap={0}>
       <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
-      <Text c="dimmed" size="xs">
-        Catalog {shortIdentifier(run.catalogRevisionId)}
-      </Text>
+      <Anchor c="dimmed" component={Link} size="xs" to={`/repositories/${run.repositoryId}`}>
+        {repositoryName ?? shortIdentifier(run.repositoryId)}
+      </Anchor>
     </Stack>
   );
 }

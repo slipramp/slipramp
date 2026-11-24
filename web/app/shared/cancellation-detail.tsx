@@ -1,5 +1,6 @@
-import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconBan } from "@tabler/icons-react";
+import { Badge, Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { IconBan, IconOctagonFilled } from "@tabler/icons-react";
+import { Form, useNavigation } from "react-router";
 import type { Cancellation } from "~/api/generated";
 import { Timestamp } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
@@ -10,6 +11,27 @@ const cancellationLabels = {
   completed: "Completed",
   overtaken: "Overtaken",
 } as const;
+
+export function CancelButton({ children }: Readonly<{ children: string }>) {
+  const navigation = useNavigation();
+  return (
+    <Form method="post">
+      <input name="intent" type="hidden" value="cancel" />
+      <Button
+        color="red"
+        leftSection={<IconOctagonFilled aria-hidden size={16} />}
+        loading={
+          navigation.state === "submitting" && navigation.formData?.get("intent") === "cancel"
+        }
+        size="compact-md"
+        type="submit"
+        variant="filled"
+      >
+        {children}
+      </Button>
+    </Form>
+  );
+}
 
 export function CancellationStep({
   cancellation,

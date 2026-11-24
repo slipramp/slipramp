@@ -1256,6 +1256,10 @@ internal enum Components {
             internal var placement: Components.Schemas.CatalogName
             /// - Remark: Generated from `#/components/schemas/Run/cluster`.
             internal var cluster: Components.Schemas.CatalogName
+            /// Effective execution timeout frozen at Run creation. Omitted when no timeout is configured.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Run/timeout`.
+            internal var timeout: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Run/source`.
             internal var source: Components.Schemas.RunSource
             /// Immediate parent Run when this Run was created by a rerun operation.
@@ -1370,6 +1374,7 @@ internal enum Components {
             ///   - runtime:
             ///   - placement:
             ///   - cluster:
+            ///   - timeout: Effective execution timeout frozen at Run creation. Omitted when no timeout is configured.
             ///   - source:
             ///   - rerunOfRunId: Immediate parent Run when this Run was created by a rerun operation.
             ///   - rerunMode: Resolution mode used to rerun the parent Run.
@@ -1414,6 +1419,7 @@ internal enum Components {
                 runtime: Components.Schemas.CatalogName,
                 placement: Components.Schemas.CatalogName,
                 cluster: Components.Schemas.CatalogName,
+                timeout: Swift.String? = nil,
                 source: Components.Schemas.RunSource,
                 rerunOfRunId: Swift.String? = nil,
                 rerunMode: Components.Schemas.RunRerunMode? = nil,
@@ -1458,6 +1464,7 @@ internal enum Components {
                 self.runtime = runtime
                 self.placement = placement
                 self.cluster = cluster
+                self.timeout = timeout
                 self.source = source
                 self.rerunOfRunId = rerunOfRunId
                 self.rerunMode = rerunMode
@@ -1503,6 +1510,7 @@ internal enum Components {
                 case runtime
                 case placement
                 case cluster
+                case timeout
                 case source
                 case rerunOfRunId
                 case rerunMode

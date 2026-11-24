@@ -261,6 +261,10 @@ Run:
       $ref: "#/CatalogName"
     cluster:
       $ref: "#/CatalogName"
+    timeout:
+      type: string
+      minLength: 1
+      description: Effective execution timeout frozen at Run creation. Omitted when no timeout is configured.
     source:
       $ref: "#/RunSource"
     rerunOfRunId:

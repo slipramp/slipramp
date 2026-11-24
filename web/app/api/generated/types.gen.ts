@@ -835,6 +835,10 @@ export type Run = {
   runtime: CatalogName;
   placement: CatalogName;
   cluster: CatalogName;
+  /**
+   * Effective execution timeout frozen at Run creation. Omitted when no timeout is configured.
+   */
+  timeout?: string;
   source: RunSource;
   /**
    * Immediate parent Run when this Run was created by a rerun operation.

@@ -10,6 +10,41 @@ import (
 	"github.com/slipramp/slipramp/internal/run"
 )
 
+func TestRunResponseTimeout(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		action    string
+		placement string
+		want      string
+	}{
+		{name: "action overrides placement", action: "15m", placement: "1h", want: "15m"},
+		{name: "placement default", placement: "1h", want: "1h"},
+		{name: "no timeout"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := runResponse(run.Run{
+				Phase: run.PhaseQueued,
+				Snapshot: run.Snapshot{
+					Action:    catalog.EffectiveAction{Timeout: tc.action},
+					Placement: run.PlacementSnapshot{Timeout: tc.placement},
+				},
+			}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.Timeout == nil {
+				if tc.want != "" {
+					t.Errorf("timeout is missing, want %q", tc.want)
+				}
+			} else if tc.want == "" || *response.Timeout != tc.want {
+				t.Errorf("unexpected timeout %q for %s", *response.Timeout, tc.name)
+			}
+		})
+	}
+}
+
 func TestAPIRunSourceIncludesPromotionBacklink(t *testing.T) {
 	t.Parallel()
 

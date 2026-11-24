@@ -159,9 +159,9 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Target</Table.Th>
-                        <Table.Th>Runtime / placement</Table.Th>
+                        <Table.Th>Execution</Table.Th>
                         <Table.Th>Last changed</Table.Th>
-                        <Table.Th>Sync reconciliation</Table.Th>
+                        <Table.Th>Sync Status</Table.Th>
                         <Table.Th>Actions</Table.Th>
                       </Table.Tr>
                     </Table.Thead>

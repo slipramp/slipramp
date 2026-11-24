@@ -1,5 +1,18 @@
-import { Group, Paper, Stack, Text, Title } from "@mantine/core";
+import {
+  Accordion,
+  Code,
+  CopyButton,
+  Group,
+  Paper,
+  Stack,
+  Text,
+  Title,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
+import { IconCheck, IconCopy } from "@tabler/icons-react";
 import type { ReactNode } from "react";
+import { shortIdentifier } from "~/shared/display";
 
 type PageHeaderProps = {
   actions?: ReactNode;
@@ -66,6 +79,30 @@ export function PageHeaderFact({
   );
 }
 
+export function CopyableIdFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <CopyButton key={value} timeout={2_000} value={value}>
+      {({ copy, copied }) => (
+        <Tooltip label={copied ? "Copied" : `Copy full ${label}`} withArrow>
+          <UnstyledButton
+            aria-label={copied ? `${label} copied` : `Copy full ${label}`}
+            onClick={copy}
+            type="button"
+          >
+            <Text c="dimmed" component="span" display="block" size="xs" tt="uppercase">
+              {label}
+            </Text>
+            <Group component="span" gap={4} wrap="nowrap">
+              <Code>{shortIdentifier(value)}</Code>
+              {copied ? <IconCheck aria-hidden size={14} /> : <IconCopy aria-hidden size={14} />}
+            </Group>
+          </UnstyledButton>
+        </Tooltip>
+      )}
+    </CopyButton>
+  );
+}
+
 export function SectionHeader({
   actions,
   description,
@@ -97,5 +134,25 @@ export function EmptyState({
         {action}
       </Stack>
     </Paper>
+  );
+}
+
+export function DetailSection({
+  children,
+  defaultExpanded = false,
+  title,
+}: Readonly<{ children: ReactNode; defaultExpanded?: boolean; title: ReactNode }>) {
+  return (
+    <Accordion
+      classNames={{ item: "detail-section-item" }}
+      defaultValue={defaultExpanded ? "section" : null}
+      order={2}
+      styles={{ label: { fontWeight: 700 } }}
+    >
+      <Accordion.Item value="section">
+        <Accordion.Control>{title}</Accordion.Control>
+        <Accordion.Panel>{children}</Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
   );
 }

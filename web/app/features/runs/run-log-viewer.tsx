@@ -10,7 +10,6 @@ import {
   Stack,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import {
   IconAdjustments,
@@ -169,7 +168,7 @@ export function RunLogViewer({
     buffer.windowStartBytes === 0
       ? `${formatBinarySize(buffer.sizeBytes)} visible`
       : `${formatBinarySize(buffer.sizeBytes)} tail from byte ${buffer.windowStartBytes.toLocaleString()}`;
-  const controls = (
+  const renderControls = (onOpenFullscreen?: () => void) => (
     <>
       <Group gap="xs" justify="space-between" wrap="wrap">
         <Group gap="xs" wrap="wrap">
@@ -242,6 +241,17 @@ export function RunLogViewer({
               )}
             </Menu.Dropdown>
           </Menu>
+          {onOpenFullscreen ? (
+            <Button
+              aria-haspopup="dialog"
+              leftSection={<IconMaximize aria-hidden size={15} />}
+              onClick={onOpenFullscreen}
+              size="compact-sm"
+              variant="subtle"
+            >
+              Full screen
+            </Button>
+          ) : null}
         </Group>
       </Group>
       <Group align="center" gap="xs" wrap="wrap">
@@ -290,18 +300,7 @@ export function RunLogViewer({
 
   const inlineViewer = (
     <Stack gap="sm">
-      <Group justify="space-between">
-        <Title order={2}>Run log</Title>
-        <Button
-          leftSection={<IconMaximize aria-hidden size={15} />}
-          onClick={() => setFullscreenOpened(true)}
-          size="compact-sm"
-          variant="subtle"
-        >
-          Full screen
-        </Button>
-      </Group>
-      {controls}
+      {renderControls(() => setFullscreenOpened(true))}
       {!artifact && runFinished ? (
         <Alert color="orange" title="Run log unavailable">
           This Run finished without a retained log Artifact. Lifecycle and outcome details remain
@@ -352,7 +351,7 @@ export function RunLogViewer({
         title="Run logs"
       >
         <Stack className="run-log-fullscreen-layout" gap="sm">
-          {controls}
+          {renderControls()}
           {diagnostic ? (
             <Alert
               color={status === "Incomplete" || status === "Reconnecting" ? "yellow" : "red"}
@@ -479,7 +478,7 @@ function VirtualizedLogOutput({
       style={{
         backgroundColor: ANSI_DEFAULT_BACKGROUND,
         color: ANSI_DEFAULT_FOREGROUND,
-        height: fullscreen ? "100%" : 480,
+        height: fullscreen ? "100%" : "clamp(32rem, 65svh, 36rem)",
         overflow: "auto",
         position: "relative",
         tabSize: 4,

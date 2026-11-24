@@ -411,6 +411,38 @@ tr[id^="policy-history-"][aria-current="true"] > td {
   background-color: var(--mantine-primary-color-light);
 }
 
+.detail-section-item {
+  border-top: 1px solid var(--slipramp-border);
+  border-bottom: 0;
+}
+
+.mantine-Tabs-panel > :first-child > .detail-section-item {
+  border-top: 0;
+}
+
+.detail-section-item > .mantine-Accordion-itemTitle {
+  background-color: color-mix(in srgb, var(--mantine-primary-color-light) 20%, transparent);
+}
+
+.detail-section-item[data-active] > .mantine-Accordion-itemTitle {
+  border-bottom: 1px solid var(--slipramp-border);
+}
+
+.detail-section-item .mantine-Accordion-content {
+  padding-top: var(--mantine-spacing-md);
+}
+
+.detail-section-item
+  .mantine-Accordion-content:has(
+    > :is(table, .mantine-TableScrollContainer-scrollContainer):only-child
+  ) {
+  padding: 0;
+
+  & :is(th, td) {
+    padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  }
+}
+
 .mantine-Table-th {
   color: var(--mantine-color-dimmed);
   font-size: var(--mantine-font-size-xs);

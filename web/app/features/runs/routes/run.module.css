@@ -33,17 +33,6 @@
   position: relative;
 }
 
-.artifactLineage {
-  max-width: 22rem;
-}
-
-.artifactLineage summary {
-  color: var(--mantine-primary-color-filled);
-  font-size: var(--mantine-font-size-xs);
-  font-weight: 650;
-  cursor: pointer;
-}
-
 @media (max-width: 62em) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);

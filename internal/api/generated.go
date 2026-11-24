@@ -4749,6 +4749,9 @@ type Run struct {
 
 	// TargetRelevanceCommit Target desired relevance commit frozen when the Run was created. This is independent of the checkout commit. It is absent for historical Runs whose relevance marker is not trustworthy.
 	TargetRelevanceCommit *GitCommit `json:"targetRelevanceCommit,omitempty"`
+
+	// Timeout Effective execution timeout frozen at Run creation. Omitted when no timeout is configured.
+	Timeout *string `json:"timeout,omitempty"`
 }
 
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.

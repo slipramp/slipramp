@@ -1,5 +1,5 @@
 import { Alert, Stack } from "@mantine/core";
-import { redirect, replace } from "react-router";
+import { redirect, replace, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -124,6 +124,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function RunHistory({ loaderData }: Route.ComponentProps) {
+  const [searchParams] = useSearchParams();
   useActivityRefresh(loaderData.runs.some((run) => run.phase !== "finished"));
   const repositoryNames = new Map(
     loaderData.repositories.map((repository) => [repository.id, repository.name]),
@@ -155,6 +156,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
         <>
           <RunHistoryTable
             emptyMessage="No Runs match these filters."
+            historyFilters={searchParams}
             repositoryNames={repositoryNames}
             runs={loaderData.runs}
             showRevision

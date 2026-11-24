@@ -3,7 +3,6 @@ import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { listPlacements, type Placement } from "~/api/generated";
-import { RelativeTime } from "~/shared/display-values";
 import { ListPagination } from "~/shared/list-controls";
 import { EmptyState, PageHeader } from "~/shared/page";
 import { pageTitle } from "~/shared/page-title";
@@ -47,7 +46,7 @@ export default function Placements({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="lg">
       <PageHeader
-        description="Sanitized execution configuration and Controller connectivity currently loaded by the Server."
+        description="A Placement selects the Kubernetes cluster, namespace, and resources for a Run."
         title="Placements"
       />
 
@@ -120,21 +119,12 @@ function PlacementRow({ placement }: Readonly<{ placement: Placement }>) {
         )}
       </Table.Td>
       <Table.Td>
-        <Stack align="flex-start" gap={2}>
-          <Badge
-            color={placement.controllerConnectionState === "connected" ? "green" : "red"}
-            variant="light"
-          >
-            {placement.controllerConnectionState}
-          </Badge>
-          {placement.controllerLastSeenAt ? (
-            <RelativeTime c="dimmed" size="xs" value={placement.controllerLastSeenAt} />
-          ) : (
-            <Text c="dimmed" size="xs">
-              Never checked in
-            </Text>
-          )}
-        </Stack>
+        <Badge
+          color={placement.controllerConnectionState === "connected" ? "green" : "red"}
+          variant="light"
+        >
+          {placement.controllerConnectionState}
+        </Badge>
       </Table.Td>
       <Table.Td>
         {placement.targetCount > 0 ? (
