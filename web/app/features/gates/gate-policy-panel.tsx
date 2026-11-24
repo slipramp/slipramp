@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Divider, Group, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Button, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
 import { useEffect, type ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import type { ServerGateLockEvent, ServerGateScope, WeeklyWindow } from "~/api/generated";
@@ -76,7 +76,6 @@ export function GatePolicyPanel({
           No active lock.
         </Text>
       )}
-      <Divider />
       <PolicyHeading
         title="Weekly window"
         controls={
@@ -103,21 +102,18 @@ export function GatePolicyPanel({
               Release waits for a fresh window observation or a matching waiver.
             </Text>
           )}
-          <Text c="dimmed" size="sm">
-            Observed <Timestamp value={window.observation.evaluatedAt} /> · Valid until{" "}
-            <Timestamp value={window.observation.validUntil} />
-          </Text>
         </Stack>
       ) : (
         <Text size="sm" c="dimmed">
           No weekly window configured.
         </Text>
       )}
-      <Divider />
       <Title id="policy-history" order={3}>
         Policy history
       </Title>
-      <PolicyHistory scope={scope} />
+      <Paper withBorder>
+        <PolicyHistory scope={scope} />
+      </Paper>
       {editor && (
         <GatePolicyEditor
           key={scope.id + editor}
@@ -195,7 +191,7 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
   }, [hash, selectedId]);
   if (!entries.length)
     return (
-      <Text size="sm" c="dimmed">
+      <Text size="sm" c="dimmed" p="md">
         No policy changes recorded.
       </Text>
     );
@@ -207,7 +203,7 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
   };
   return (
     <Table.ScrollContainer minWidth={740} type="native">
-      <Table aria-label="Policy history">
+      <Table aria-label="Policy history" verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Change</Table.Th>
@@ -221,14 +217,18 @@ function PolicyHistory({ scope }: Readonly<{ scope: ServerGateScope }>) {
           {entries.map(({ event, id }) => (
             <Table.Tr key={id} id={id} aria-current={id === selectedId ? "true" : undefined}>
               <Table.Td>
-                <Text size="sm" fw={600}>
-                  {labels[event.action]}
-                </Text>
-                {"definition" in event && event.definition && (
-                  <>
+                {"definition" in event && event.definition ? (
+                  <details>
+                    <Text component="summary" size="sm" fw={600} style={{ cursor: "pointer" }}>
+                      {labels[event.action]}
+                    </Text>
                     <Text size="sm">{event.definition.timeZone}</Text>
                     <Schedule definition={event.definition} />
-                  </>
+                  </details>
+                ) : (
+                  <Text size="sm" fw={600}>
+                    {labels[event.action]}
+                  </Text>
                 )}
               </Table.Td>
               <Table.Td>v{event.version}</Table.Td>
