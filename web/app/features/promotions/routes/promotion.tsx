@@ -25,6 +25,7 @@ import {
   IconGitCompare,
   IconInfoCircle,
   IconChecklist,
+  IconClock,
   IconLoader2,
   IconPlayerPlay,
   IconRefresh,
@@ -71,6 +72,7 @@ import {
   promotionExecutionStatus,
   promotionIsActive,
   promotionOverallStatus,
+  promotionQueueStatus,
   promotionReviewStatus,
   promotionRepeatLabel,
   type PromotionStatusPresentation,
@@ -145,7 +147,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   let gitDiff: ArtifactText = {};
   let argoDiff: ArtifactText = {};
   let argoResources: ArgoDiffResource[] | undefined;
-  if (promotion && canReadSensitiveArtifacts(principal)) {
+  if (promotion?.reviewRequired && canReadSensitiveArtifacts(principal)) {
     [gitDiff, argoDiff] = await Promise.all([
       loadArtifactText(promotion.gitDiffArtifactId, request),
       loadArtifactText(promotion.argoDiffArtifactId, request),
@@ -159,7 +161,10 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
         };
       }
     }
-  } else if (promotion?.gitDiffArtifactId || promotion?.argoDiffArtifactId) {
+  } else if (
+    promotion?.reviewRequired &&
+    (promotion.gitDiffArtifactId || promotion.argoDiffArtifactId)
+  ) {
     const error = "Operator permission is required to read sensitive Promotion diffs.";
     gitDiff = { error };
     argoDiff = { error };
@@ -244,6 +249,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   const canReadDiffs = canReadSensitiveArtifacts(loaderData.principal);
   const preparedDiffsLoaded =
+    !loaderData.promotion?.reviewRequired ||
     !canReadDiffs ||
     (loaderData.gitDiff.contents !== undefined && loaderData.argoResources !== undefined);
   useActivityRefresh(
@@ -540,6 +546,17 @@ function PromotionLifecycle({
 }
 
 function promotionLifecycleSteps(promotion: Promotion): PromotionLifecycleStep[] {
+  const queue = promotionQueueStatus(promotion);
+  const approvedAt = promotion.status === "approved" ? promotion.decidedAt : undefined;
+  const queued: PromotionLifecycleStep = {
+    detail: queue.description,
+    icon: IconClock,
+    label: "Queued",
+    stage: "queued",
+    state: promotionLifecycleState(queue),
+    status: queue,
+    value: promotion.reviewRequired ? approvedAt : promotion.createdAt,
+  };
   const delivery = promotionDeliveryStatus(promotion);
   const steps: PromotionLifecycleStep[] = [
     {
@@ -561,15 +578,21 @@ function promotionLifecycleSteps(promotion: Promotion): PromotionLifecycleStep[]
       (promotion.status === "creating" ||
         promotion.status === "preparing" ||
         preparation.state === "error");
-    steps.push(preparation, {
-      detail: review.description,
-      icon: IconChecklist,
-      label: "Review",
-      stage: "review",
-      state: waiting ? "waiting" : promotionLifecycleState(review),
-      status: review,
-      value: review.recordedAt ?? promotion.preparationCompletedAt,
-    });
+    steps.push(
+      preparation,
+      {
+        detail: review.description,
+        icon: IconChecklist,
+        label: "Review",
+        stage: "review",
+        state: waiting ? "waiting" : promotionLifecycleState(review),
+        status: review,
+        value: review.recordedAt ?? promotion.preparationCompletedAt,
+      },
+      queued,
+    );
+  } else {
+    steps.unshift(queued);
   }
 
   const execution = promotionExecutionStatus(promotion);
@@ -619,9 +642,11 @@ function PromotionLifecycleStageDetail({
           <Text fw={700} size="sm">
             {promotionLifecycleStageLabel(stage)}
           </Text>
-          <Badge color={status.color} variant="light">
-            {status.label}
-          </Badge>
+          {stage !== "queued" && (
+            <Badge color={status.color} variant="light">
+              {status.label}
+            </Badge>
+          )}
         </Group>
         {value ? (
           <Timestamp c="dimmed" size="xs" value={value} />
@@ -699,6 +724,8 @@ function PromotionLifecycleRelevantDetail({
 
 function promotionLifecycleStageLabel(stage: PromotionLifecycleStage) {
   switch (stage) {
+    case "queued":
+      return "Queued";
     case "preparation":
       return "Review preparation";
     case "review":
@@ -781,7 +808,7 @@ function promotionPreparationStep(promotion: Promotion): PromotionLifecycleStep 
 
 function promotionLifecycleState(status: PromotionStatusPresentation): PromotionLifecycleState {
   if (status.color === "red") return "error";
-  if (["Expired", "Stopped", "Closed", "Aborted", "Skipped"].includes(status.label))
+  if (["Expired", "Stopped", "Closed", "Aborted", "Skipped", "Not released"].includes(status.label))
     return "terminal";
   if (status.label === "Not required") return "complete";
   if (status.color === "green") return "complete";
@@ -901,11 +928,8 @@ function PromotionWorkspace({
   promotion: Promotion;
 }>) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const automaticView = defaultPromotionDetailView(
-    promotion.gitDiffArtifactId,
-    promotion.argoDiffArtifactId,
-  );
-  const activeView = selectedPromotionDetailView(searchParams, automaticView);
+  const automaticView = defaultPromotionDetailView(promotion);
+  const activeView = selectedPromotionDetailView(searchParams, promotion);
   const requestedView = searchParams.get(promotionDetailSearchParamNames.view);
   const lifecycleSteps = promotionLifecycleSteps(promotion);
   const activeLifecycleStage =
@@ -923,23 +947,24 @@ function PromotionWorkspace({
   );
 
   useEffect(() => {
-    if (requestedView === null || requestedView === activeView) return;
-
-    setSearchParams(updatePromotionDetailSearchParams(searchParams, activeView, automaticView), {
-      preventScrollReset: true,
-      replace: true,
-    });
-  }, [activeView, automaticView, requestedView, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (requestedLifecycleStage === null || requestedLifecycleStage === selectedLifecycleStage) {
-      return;
-    }
-    setSearchParams(updatePromotionLifecycleSearchParams(searchParams), {
-      preventScrollReset: true,
-      replace: true,
-    });
-  }, [requestedLifecycleStage, searchParams, selectedLifecycleStage, setSearchParams]);
+    const invalidView =
+      requestedView !== null && (requestedView !== activeView || !promotion.reviewRequired);
+    const invalidStage =
+      requestedLifecycleStage !== null && requestedLifecycleStage !== selectedLifecycleStage;
+    if (!invalidView && !invalidStage) return;
+    const next = new URLSearchParams(searchParams);
+    if (invalidView) next.delete(promotionDetailSearchParamNames.view);
+    if (invalidStage) next.delete(promotionDetailSearchParamNames.stage);
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }, [
+    activeView,
+    promotion.reviewRequired,
+    requestedView,
+    requestedLifecycleStage,
+    searchParams,
+    selectedLifecycleStage,
+    setSearchParams,
+  ]);
 
   function changeView(value: string | null) {
     if (!value) return;
@@ -989,42 +1014,50 @@ function PromotionWorkspace({
       <Paper className={styles.reviewCard} withBorder>
         <Tabs keepMounted={false} onChange={changeView} value={activeView}>
           <Tabs.List aria-label="Promotion views" className={styles.reviewTabs}>
-            <Tabs.Tab leftSection={<IconGitCompare aria-hidden size={16} />} value="git">
-              Git diff
-            </Tabs.Tab>
-            <Tabs.Tab leftSection={<IconStack2 aria-hidden size={16} />} value="argo">
-              Argo CD
-            </Tabs.Tab>
+            {promotion.reviewRequired && (
+              <>
+                <Tabs.Tab leftSection={<IconGitCompare aria-hidden size={16} />} value="git">
+                  Git diff
+                </Tabs.Tab>
+                <Tabs.Tab leftSection={<IconStack2 aria-hidden size={16} />} value="argo">
+                  Argo CD
+                </Tabs.Tab>
+              </>
+            )}
             <Tabs.Tab leftSection={<IconInfoCircle aria-hidden size={16} />} value="details">
               Promotion details
             </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel className={styles.reviewPanel} value="git">
-            <DiffDownloadButton artifactId={promotion.gitDiffArtifactId} />
-            <ArtifactError error={gitDiff.error} />
-            {gitDiff.contents !== undefined ? (
-              gitDiff.contents.length === 0 ? (
-                <Text c="dimmed">No Git changes.</Text>
-              ) : (
-                <Code block className={styles.gitDiff}>
-                  {gitDiff.contents}
-                </Code>
-              )
-            ) : !gitDiff.error ? (
-              <DiffPending kind="Git" promotion={promotion} />
-            ) : null}
-          </Tabs.Panel>
+          {promotion.reviewRequired && (
+            <>
+              <Tabs.Panel className={styles.reviewPanel} value="git">
+                <DiffDownloadButton artifactId={promotion.gitDiffArtifactId} />
+                <ArtifactError error={gitDiff.error} />
+                {gitDiff.contents !== undefined ? (
+                  gitDiff.contents.length === 0 ? (
+                    <Text c="dimmed">No Git changes.</Text>
+                  ) : (
+                    <Code block className={styles.gitDiff}>
+                      {gitDiff.contents}
+                    </Code>
+                  )
+                ) : !gitDiff.error ? (
+                  <DiffPending kind="Git" promotion={promotion} />
+                ) : null}
+              </Tabs.Panel>
 
-          <Tabs.Panel className={styles.reviewPanel} value="argo">
-            <DiffDownloadButton artifactId={promotion.argoDiffArtifactId} />
-            <ArtifactError error={argoDiff.error} />
-            {argoResources ? (
-              <ArgoDiff resources={argoResources} />
-            ) : !argoDiff.error ? (
-              <DiffPending kind="Argo CD" promotion={promotion} />
-            ) : null}
-          </Tabs.Panel>
+              <Tabs.Panel className={styles.reviewPanel} value="argo">
+                <DiffDownloadButton artifactId={promotion.argoDiffArtifactId} />
+                <ArtifactError error={argoDiff.error} />
+                {argoResources ? (
+                  <ArgoDiff resources={argoResources} />
+                ) : !argoDiff.error ? (
+                  <DiffPending kind="Argo CD" promotion={promotion} />
+                ) : null}
+              </Tabs.Panel>
+            </>
+          )}
 
           <Tabs.Panel value="details">
             <PromotionDetails key={promotion.id} promotion={promotion} />

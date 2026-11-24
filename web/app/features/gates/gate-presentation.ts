@@ -191,3 +191,22 @@ export function gateWaitLabel(requirements: readonly GateRequirement[]) {
     return `${title} ${gate.state === "blocking" ? "closed" : "unavailable"}`;
   return `Waiting for ${title}`;
 }
+
+export function gateWaitExplanation(
+  requirements: readonly GateRequirement[],
+  subject: "Run" | "Promotion",
+) {
+  const gate = firstBlockingGate(requirements);
+  if (!gate) {
+    const next = subject === "Run" ? "assignment" : "release";
+    return `Each Gate needs a fresh pass or an override before ${next}.`;
+  }
+  const name = gate.title ?? gate.name;
+  if (gate.evidence && "lock" in gate.evidence)
+    return `${name} is holding this ${subject}. ${gate.evidence.lock.reason}`;
+  if (gate.type === "window" && gate.state === "blocking")
+    return `${name} is closed. This ${subject} can proceed when the window opens or an operator overrides it.`;
+  if (gate.state === "unavailable")
+    return `${name} is unavailable. ${gate.diagnostic ?? ""}`.trim();
+  return `This ${subject} is waiting for ${name} to pass or receive an override.`;
+}

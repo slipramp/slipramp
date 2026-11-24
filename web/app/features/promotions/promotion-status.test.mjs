@@ -6,6 +6,7 @@ import {
   promotionExecutionStatus,
   promotionIsActive,
   promotionOverallStatus,
+  promotionQueueStatus,
   promotionRepeatLabel,
   promotionReviewStatus,
 } from "./promotion-status.ts";
@@ -133,13 +134,18 @@ test("waiting Gates take precedence over active delivery and execution presentat
     [promotionOverallStatus(waiting).label, promotionOverallStatus(waiting).color],
     ["Waiting for network-idle", "yellow"],
   );
-  assert.equal(promotionDeliveryStatus(waiting).label, "Waiting for network-idle");
+  assert.equal(
+    promotionQueueStatus(waiting).description,
+    "This Promotion is waiting for network-idle to pass or receive an override.",
+  );
+  assert.equal(promotionQueueStatus(waiting).label, "Awaiting gates");
+  assert.equal(promotionDeliveryStatus(waiting).label, "Not started");
   assert.equal(
     promotionExecutionStatus({
       ...waiting,
       creationDispatch: { attemptCount: 1, phase: "delivered" },
     }).label,
-    "Waiting for network-idle",
+    "Not started",
   );
 
   const succeeded = {
@@ -148,6 +154,21 @@ test("waiting Gates take precedence over active delivery and execution presentat
     kargoOutcome: { observedAt: "2026-11-11T12:00:00Z", phase: "Succeeded" },
   };
   assert.equal(promotionOverallStatus(succeeded).label, "Succeeded");
+  assert.equal(promotionQueueStatus(succeeded).label, "Not released");
+});
+
+test("the queue reflects review approval, gate release, and cancellation", () => {
+  assert.equal(promotionQueueStatus(base).label, "Not required");
+  const reviewed = { ...base, reviewRequired: true, gates: { state: "waiting", requirements: [] } };
+  for (const status of ["creating", "preparing", "pending", "rejected", "expired", "error"]) {
+    assert.equal(promotionQueueStatus({ ...reviewed, status }).label, "Not started");
+  }
+  assert.equal(promotionQueueStatus(reviewed).label, "Awaiting gates");
+  assert.equal(
+    promotionQueueStatus({ ...reviewed, gates: { state: "released" } }).label,
+    "Released",
+  );
+  assert.equal(promotionQueueStatus({ ...reviewed, gates: { state: "stopped" } }).label, "Stopped");
 });
 
 test("repeat actions follow terminal outcomes and wait for cancellation to finish", () => {
@@ -191,6 +212,9 @@ test("Promotion release names the first unwaived scope policy after review", () 
   const waiting = { ...base, gates: { state: "waiting", requirements: [global, stage] } };
   assert.equal(promotionOverallStatus(waiting).label, "Global lock active");
   global.overrides = [{ key: global.key, version: "1" }];
-  assert.equal(promotionDeliveryStatus(waiting).label, "Stage window closed");
+  assert.equal(
+    promotionQueueStatus(waiting).description,
+    "Stage window is closed. This Promotion can proceed when the window opens or an operator overrides it.",
+  );
   assert.equal(promotionOverallStatus({ ...waiting, status: "pending" }).label, "Awaiting review");
 });

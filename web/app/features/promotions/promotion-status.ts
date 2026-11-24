@@ -1,4 +1,4 @@
-import { gateWaitLabel } from "../gates/gate-presentation.ts";
+import { gateWaitExplanation, gateWaitLabel } from "../gates/gate-presentation.ts";
 import type { Promotion } from "~/api/generated";
 
 type PromotionState = Pick<
@@ -212,6 +212,45 @@ export function promotionReviewStatus(promotion: PromotionState): PromotionStatu
   }
 }
 
+export function promotionQueueStatus(promotion: PromotionState): PromotionStatusPresentation {
+  const gates = promotion.gates;
+  if (gates.state === "stopped")
+    return { color: "gray", label: "Stopped", description: "Cancellation ended the gate wait." };
+  if (promotion.reviewRequired && promotion.status !== "approved")
+    return {
+      color: "gray",
+      label: "Not started",
+      description: "Gate release follows review approval.",
+    };
+
+  switch (gates.state) {
+    case "not-required":
+      return {
+        color: "gray",
+        label: "Not required",
+        description: "No gates apply to this Promotion.",
+      };
+    case "released":
+      return {
+        color: "green",
+        label: "Released",
+        description: "The Promotion passed its gate checks or received matching overrides.",
+      };
+    case "waiting":
+      if (!promotionIsActive(promotion))
+        return {
+          color: "gray",
+          label: "Not released",
+          description: "The Promotion ended before gate release.",
+        };
+      return {
+        color: "yellow",
+        label: "Awaiting gates",
+        description: gateWaitExplanation(gates.requirements, "Promotion"),
+      };
+  }
+}
+
 export function promotionDeliveryStatus(promotion: PromotionState): PromotionStatusPresentation {
   const dispatch = promotion.creationDispatch;
   if (promotion.source === "kargo" || dispatch.phase === "not-applicable") {
@@ -249,9 +288,9 @@ export function promotionDeliveryStatus(promotion: PromotionState): PromotionSta
     dispatch.phase === "awaiting-delivery"
   ) {
     return {
-      color: "yellow",
+      color: "gray",
       description: "Kargo delivery starts after Gate release",
-      label: gateWaitLabel(promotion.gates.requirements),
+      label: "Not started",
     };
   }
   if (promotion.status === "creating" || promotion.status === "approved") {
@@ -291,9 +330,9 @@ export function promotionExecutionStatus(promotion: PromotionState): PromotionSt
     };
   if (promotion.status === "approved" && promotion.gates.state === "waiting") {
     return {
-      color: "yellow",
+      color: "gray",
       description: "Kargo execution starts after Gate release",
-      label: gateWaitLabel(promotion.gates.requirements),
+      label: "Not started",
     };
   }
   if (

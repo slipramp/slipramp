@@ -1,3 +1,5 @@
+import type { Promotion } from "~/api/generated";
+
 export const promotionDetailSearchParamNames = {
   stage: "stage",
   view: "view",
@@ -6,26 +8,30 @@ export const promotionDetailSearchParamNames = {
 export const promotionDetailViews = ["git", "argo", "details"] as const;
 
 export type PromotionDetailView = (typeof promotionDetailViews)[number];
-export type PromotionPhaseStage = "delivery" | "preparation" | "review" | "execution";
+export type PromotionPhaseStage = "queued" | "delivery" | "preparation" | "review" | "execution";
 export type PromotionLifecycleStage = PromotionPhaseStage | "cancellation";
 
-export function defaultPromotionDetailView(
-  gitDiffArtifactId?: string,
-  argoDiffArtifactId?: string,
-): PromotionDetailView {
-  if (gitDiffArtifactId) return "git";
-  if (argoDiffArtifactId) return "argo";
+type PromotionReviewViews = Pick<
+  Promotion,
+  "reviewRequired" | "gitDiffArtifactId" | "argoDiffArtifactId"
+>;
+
+export function defaultPromotionDetailView(promotion: PromotionReviewViews): PromotionDetailView {
+  if (!promotion.reviewRequired) return "details";
+  if (promotion.gitDiffArtifactId) return "git";
+  if (promotion.argoDiffArtifactId) return "argo";
   return "details";
 }
 
 export function selectedPromotionDetailView(
   searchParams: URLSearchParams,
-  fallback: PromotionDetailView,
+  promotion: PromotionReviewViews,
 ): PromotionDetailView {
+  if (!promotion.reviewRequired) return "details";
   const requested = searchParams.get(promotionDetailSearchParamNames.view);
-  return promotionDetailViews.includes(requested as PromotionDetailView)
-    ? (requested as PromotionDetailView)
-    : fallback;
+  return (
+    promotionDetailViews.find((view) => view === requested) ?? defaultPromotionDetailView(promotion)
+  );
 }
 
 export function updatePromotionDetailSearchParams(

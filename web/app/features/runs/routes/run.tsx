@@ -93,7 +93,7 @@ import { pageTitle } from "~/shared/page-title";
 import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
-import { firstBlockingGate } from "~/features/gates/gate-presentation";
+import { gateWaitExplanation } from "~/features/gates/gate-presentation";
 import { loadLockStatus } from "~/features/gates/gate-policy.server";
 import { LockWarning } from "~/features/gates/lock-warning";
 import { ReleaseGateDialog, ReleaseGateSection } from "~/features/gates/release-gate-details";
@@ -836,18 +836,8 @@ function runQueueExplanation(run: Run): ReactNode {
   switch (run.schedulingState) {
     case "awaiting-review":
       return "This Run must be approved before it can enter the eligible FIFO queue.";
-    case "awaiting-gates": {
-      const gate = firstBlockingGate(run.gates.requirements);
-      if (!gate) return "Each Gate needs a fresh pass or an override before assignment.";
-      const name = gate.title ?? gate.name;
-      if (gate.evidence && "lock" in gate.evidence)
-        return `${name} is holding this Run. ${gate.evidence.lock.reason}`;
-      if (gate.type === "window" && gate.state === "blocking")
-        return `${name} is closed. This Run can proceed when the window opens or an operator overrides it.`;
-      if (gate.state === "unavailable")
-        return `${name} is unavailable. ${gate.diagnostic ?? ""}`.trim();
-      return `This Run is waiting for ${name} to pass or receive an override.`;
-    }
+    case "awaiting-gates":
+      return gateWaitExplanation(run.gates.requirements, "Run");
     case "target-busy":
       return run.blockingRunId ? (
         <>
