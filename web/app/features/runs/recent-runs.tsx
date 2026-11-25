@@ -13,6 +13,7 @@ export function RecentRuns({
   available,
   description,
   emptyMessage,
+  hasActiveRuns,
   plainEmpty = false,
   runs,
   showSource = false,
@@ -23,6 +24,7 @@ export function RecentRuns({
   available: boolean;
   description?: string;
   emptyMessage: string;
+  hasActiveRuns?: boolean;
   plainEmpty?: boolean;
   runs: Run[];
   showSource?: boolean;
@@ -30,7 +32,7 @@ export function RecentRuns({
   title?: string;
   viewAllTo: string;
 }>) {
-  useActivityRefresh(runs.some((run) => run.phase !== "finished"));
+  useActivityRefresh(hasActiveRuns ?? runs.some((run) => run.phase !== "finished"));
 
   return (
     <Stack gap="md">

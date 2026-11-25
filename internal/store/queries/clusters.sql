@@ -37,6 +37,15 @@ SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters
 ORDER BY name;
 
+-- name: ListClusterPlacementRunCounts :many
+SELECT coalesce(r.placement_name, '')::text AS placement_name,
+       count(*) FILTER (WHERE r.phase IN ('assigned', 'preparing', 'running')) AS active_runs,
+       count(*) FILTER (WHERE r.phase = 'queued') AS queued_runs
+FROM clusters c
+LEFT JOIN runs r ON r.cluster_name = c.name AND r.phase IN ('queued', 'assigned', 'preparing', 'running')
+WHERE c.name = sqlc.arg(cluster_name)
+GROUP BY r.placement_name;
+
 -- name: GetControllerMetrics :one
 SELECT
     count(*) FILTER (WHERE last_seen_at >= sqlc.arg(connected_after))::bigint AS connected_count,

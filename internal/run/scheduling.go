@@ -10,6 +10,7 @@ import (
 )
 
 type SchedulingStore interface {
+	ListClusterPlacementRunCounts(ctx context.Context, clusterName string) (map[string]RunCounts, error)
 	GetRunSchedulingSnapshots(
 		context.Context,
 		[]uuid.UUID,
@@ -18,6 +19,49 @@ type SchedulingStore interface {
 		[]byte,
 		[]byte,
 	) ([]SchedulingSnapshot, error)
+}
+
+type RunCounts struct {
+	Active int64
+	Queued int64
+}
+
+type ClusterScheduling struct {
+	RunCounts
+	MaximumActiveRuns int32
+	Placements        []PlacementScheduling
+}
+
+type PlacementScheduling struct {
+	RunCounts
+	Name              string
+	Namespace         string
+	MaximumActiveRuns int32
+}
+
+func (s *Service) ClusterScheduling(ctx context.Context, clusterName string) (ClusterScheduling, error) {
+	counts, err := s.scheduling.ListClusterPlacementRunCounts(ctx, clusterName)
+	if err != nil {
+		return ClusterScheduling{}, err
+	}
+	result := ClusterScheduling{MaximumActiveRuns: s.clusterMaximumActiveRuns(clusterName)}
+	for _, usage := range counts {
+		result.Active += usage.Active
+		result.Queued += usage.Queued
+	}
+	for _, name := range s.placements.Names() {
+		cfg, _ := s.placements.Lookup(name)
+		if cfg.ClusterName == clusterName {
+			result.Placements = append(result.Placements, PlacementScheduling{
+				RunCounts:         counts[name],
+				Name:              name,
+				Namespace:         cfg.JobNamespace,
+				MaximumActiveRuns: cfg.MaximumActiveRuns,
+			})
+		}
+	}
+
+	return result, nil
 }
 
 func (s *Service) Scheduling(
@@ -41,12 +85,7 @@ func (s *Service) Scheduling(
 		}
 
 		queued = append(queued, record)
-		maximum, configured := s.placements.ClusterMaximumActiveRuns(record.ClusterName)
-		if !configured {
-			maximum = DefaultMaximumActiveRuns
-		}
-		clusterLimits[record.ClusterName] = maximum
-
+		clusterLimits[record.ClusterName] = s.clusterMaximumActiveRuns(record.ClusterName)
 	}
 	if len(queued) == 0 {
 		return map[uuid.UUID]Scheduling{}, nil
@@ -122,11 +161,6 @@ func (s *Service) Scheduling(
 }
 
 func (s *Service) AssignmentCapacity(clusterName string) SchedulingCapacity {
-	clusterMaximum, configured := s.placements.ClusterMaximumActiveRuns(clusterName)
-	if !configured {
-		clusterMaximum = DefaultMaximumActiveRuns
-	}
-
 	placementMaximums := make(map[string]int32)
 	for _, name := range s.placements.Names() {
 		configured, _ := s.placements.Lookup(name)
@@ -136,7 +170,14 @@ func (s *Service) AssignmentCapacity(clusterName string) SchedulingCapacity {
 	}
 
 	return SchedulingCapacity{
-		ClusterMaximumActiveRuns:   clusterMaximum,
+		ClusterMaximumActiveRuns:   s.clusterMaximumActiveRuns(clusterName),
 		PlacementMaximumActiveRuns: placementMaximums,
 	}
+}
+
+func (s *Service) clusterMaximumActiveRuns(clusterName string) int32 {
+	if maximum, configured := s.placements.ClusterMaximumActiveRuns(clusterName); configured {
+		return maximum
+	}
+	return DefaultMaximumActiveRuns
 }

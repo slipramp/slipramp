@@ -2143,6 +2143,36 @@ export type ServerGateLockRequest = {
   expiresAt?: string;
 };
 
+export type ClusterPlacementScheduling = {
+  name: CatalogName;
+  namespace: CatalogName;
+  /**
+   * Optional Placement limit within the shared Cluster limit.
+   */
+  maximumActiveRuns?: number;
+  activeRuns: number;
+  queuedRuns: number;
+};
+
+export type ClusterScheduling = {
+  /**
+   * Effective Server limit shared by all Placements on the Cluster.
+   */
+  maximumActiveRuns: number;
+  /**
+   * Assigned, preparing, and running Runs across the Cluster, including removed Placements.
+   */
+  activeRuns: number;
+  /**
+   * All queued Runs for the Cluster, including Runs awaiting review or Gates.
+   */
+  queuedRuns: number;
+  /**
+   * Currently configured Placements for this Cluster, ordered by name.
+   */
+  placements: Array<ClusterPlacementScheduling>;
+};
+
 export type PlacementResourceRequirements = {
   requests: {
     [key: string]: string;
@@ -4707,6 +4737,51 @@ export type ListClustersResponses = {
 };
 
 export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
+
+export type GetClusterSchedulingData = {
+  body?: never;
+  path: {
+    clusterName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/clusters/{clusterName}/scheduling";
+};
+
+export type GetClusterSchedulingErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The Server has never observed this Cluster.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Cluster scheduling details could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetClusterSchedulingError =
+  GetClusterSchedulingErrors[keyof GetClusterSchedulingErrors];
+
+export type GetClusterSchedulingResponses = {
+  /**
+   * Current scheduling limits and Run counts for the Cluster.
+   */
+  200: ClusterScheduling;
+};
+
+export type GetClusterSchedulingResponse =
+  GetClusterSchedulingResponses[keyof GetClusterSchedulingResponses];
 
 export type ListPlacementsData = {
   body?: never;

@@ -24,6 +24,7 @@ import (
 )
 
 type RunService interface {
+	ClusterScheduling(ctx context.Context, clusterName string) (run.ClusterScheduling, error)
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
 	RerunRun(ctx context.Context, request run.RerunRequest) (run.Run, error)
 	GetRun(context.Context, uuid.UUID) (run.Run, error)

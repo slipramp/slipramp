@@ -36,6 +36,55 @@ Cluster:
       items:
         $ref: "#/KargoIntegrationHealth"
 
+ClusterScheduling:
+  type: object
+  additionalProperties: false
+  required: [maximumActiveRuns, activeRuns, queuedRuns, placements]
+  properties:
+    maximumActiveRuns:
+      type: integer
+      format: int32
+      minimum: 1
+      description: Effective Server limit shared by all Placements on the Cluster.
+    activeRuns:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Assigned, preparing, and running Runs across the Cluster, including removed Placements.
+    queuedRuns:
+      type: integer
+      format: int64
+      minimum: 0
+      description: All queued Runs for the Cluster, including Runs awaiting review or Gates.
+    placements:
+      type: array
+      description: Currently configured Placements for this Cluster, ordered by name.
+      items:
+        $ref: "#/ClusterPlacementScheduling"
+
+ClusterPlacementScheduling:
+  type: object
+  additionalProperties: false
+  required: [name, namespace, activeRuns, queuedRuns]
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    namespace:
+      $ref: ./runs.yaml#/CatalogName
+    maximumActiveRuns:
+      type: integer
+      format: int32
+      minimum: 1
+      description: Optional Placement limit within the shared Cluster limit.
+    activeRuns:
+      type: integer
+      format: int64
+      minimum: 0
+    queuedRuns:
+      type: integer
+      format: int64
+      minimum: 0
+
 ControllerBuildInfo:
   type: object
   additionalProperties: false

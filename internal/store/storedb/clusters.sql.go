@@ -48,6 +48,42 @@ func (q *Queries) GetControllerMetrics(ctx context.Context, connectedAfter pgtyp
 	return i, err
 }
 
+const listClusterPlacementRunCounts = `-- name: ListClusterPlacementRunCounts :many
+SELECT coalesce(r.placement_name, '')::text AS placement_name,
+       count(*) FILTER (WHERE r.phase IN ('assigned', 'preparing', 'running')) AS active_runs,
+       count(*) FILTER (WHERE r.phase = 'queued') AS queued_runs
+FROM clusters c
+LEFT JOIN runs r ON r.cluster_name = c.name AND r.phase IN ('queued', 'assigned', 'preparing', 'running')
+WHERE c.name = $1
+GROUP BY r.placement_name
+`
+
+type ListClusterPlacementRunCountsRow struct {
+	PlacementName string
+	ActiveRuns    int64
+	QueuedRuns    int64
+}
+
+func (q *Queries) ListClusterPlacementRunCounts(ctx context.Context, clusterName string) ([]ListClusterPlacementRunCountsRow, error) {
+	rows, err := q.db.Query(ctx, listClusterPlacementRunCounts, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListClusterPlacementRunCountsRow
+	for rows.Next() {
+		var i ListClusterPlacementRunCountsRow
+		if err := rows.Scan(&i.PlacementName, &i.ActiveRuns, &i.QueuedRuns); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClusters = `-- name: ListClusters :many
 SELECT name, first_seen_at, last_seen_at, controller_version
 FROM clusters

@@ -10,6 +10,8 @@ const ConnectionWindow = time.Minute
 
 const MaximumControllerVersionLength = 128
 
+var ErrNotFound = errors.New("cluster has not been observed")
+
 type ConnectionState string
 
 const (

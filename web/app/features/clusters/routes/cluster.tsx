@@ -15,14 +15,14 @@ import { Link, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
+  getClusterScheduling,
   listClusters,
   listPromotionStages,
   listRuns,
-  type Cluster,
   type KargoIntegrationHealth,
   type PromotionStageDetail,
-  type Run,
 } from "~/api/generated";
+import { ClusterSchedulingPanel } from "~/features/clusters/cluster-scheduling";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
@@ -44,15 +44,28 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export const shouldRevalidate = skipPresentationSearchParamRevalidation;
 
+async function findCluster(client: ReturnType<typeof createServerAPIClient>, name: string) {
+  let offset = 0;
+  while (true) {
+    const { data } = await listClusters({ client, query: { q: name, limit: 200, offset } });
+    if (!data) return { clustersAvailable: false, cluster: undefined };
+    const cluster = data.items.find((item) => item.name === name);
+    offset += data.items.length;
+    if (cluster || offset >= data.total || data.items.length === 0) {
+      return { clustersAvailable: true, cluster };
+    }
+  }
+}
+
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const clustersResult = await listClusters({ client, query: { limit: 200 } });
-  const cluster = clustersResult.data?.items.find((item) => item.name === params.clusterName);
+  const { cluster, clustersAvailable } = await findCluster(client, params.clusterName);
 
   if (!cluster) {
     return {
       cluster,
-      clustersAvailable: clustersResult.data !== undefined,
+      clustersAvailable,
+      scheduling: undefined,
       recentRuns: [],
       runsAvailable: false,
       stages: [] as PromotionStageDetail[],
@@ -60,7 +73,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     };
   }
 
-  const [runsResult, stagesResult] = await Promise.all([
+  const [schedulingResult, runsResult, stagesResult] = await Promise.all([
+    getClusterScheduling({ client, path: { clusterName: cluster.name } }),
     listRuns({ client, query: { cluster: cluster.name, limit: recentRunLimit } }),
     listPromotionStages({
       client,
@@ -71,6 +85,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     cluster,
     clustersAvailable: true,
+    scheduling: schedulingResult.data,
     recentRuns: runsResult.data?.items ?? [],
     runsAvailable: runsResult.data !== undefined,
     stages: stagesResult.data?.items ?? [],
@@ -165,11 +180,20 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
           ) : null}
         </Tabs.List>
         <Tabs.Panel pt="lg" value="overview">
-          <ClusterOverview
-            cluster={cluster}
-            recentRuns={loaderData.recentRuns}
-            runsAvailable={loaderData.runsAvailable}
-          />
+          <Stack gap="lg">
+            <ClusterSchedulingPanel clusterName={cluster.name} scheduling={loaderData.scheduling} />
+            <RecentRuns
+              available={loaderData.runsAvailable}
+              description={`The latest ${recentRunLimit} executions assigned to this cluster.`}
+              emptyMessage="No recent Runs were assigned to this cluster."
+              hasActiveRuns={
+                loaderData.scheduling &&
+                (loaderData.scheduling.activeRuns > 0 || loaderData.scheduling.queuedRuns > 0)
+              }
+              runs={loaderData.recentRuns}
+              viewAllTo={`/runs?cluster=${encodeURIComponent(cluster.name)}`}
+            />
+          </Stack>
         </Tabs.Panel>
         {cluster.kargoIntegrations.length > 0 ? (
           <Tabs.Panel pt="lg" value="kargo">
@@ -185,26 +209,6 @@ export default function ClusterDetail({ loaderData }: Route.ComponentProps) {
         ) : null}
       </Tabs>
     </Stack>
-  );
-}
-
-function ClusterOverview({
-  cluster,
-  recentRuns,
-  runsAvailable,
-}: Readonly<{
-  cluster: Cluster;
-  recentRuns: Run[];
-  runsAvailable: boolean;
-}>) {
-  return (
-    <RecentRuns
-      available={runsAvailable}
-      description={`The latest ${recentRunLimit} executions assigned to this cluster.`}
-      emptyMessage="No recent Runs were assigned to this cluster."
-      runs={recentRuns}
-      viewAllTo={`/runs?cluster=${encodeURIComponent(cluster.name)}`}
-    />
   );
 }
 

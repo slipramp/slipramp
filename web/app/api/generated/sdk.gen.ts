@@ -82,6 +82,9 @@ import type {
   GetClientCompatibilityData,
   GetClientCompatibilityErrors,
   GetClientCompatibilityResponses,
+  GetClusterSchedulingData,
+  GetClusterSchedulingErrors,
+  GetClusterSchedulingResponses,
   GetCommitData,
   GetCommitErrors,
   GetCommitResponses,
@@ -1332,6 +1335,33 @@ export const listClusters = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/clusters",
+    ...options,
+  });
+
+/**
+ * Get Run capacity and Placements for an observed Cluster
+ */
+export const getClusterScheduling = <ThrowOnError extends boolean = false>(
+  options: Options<GetClusterSchedulingData, ThrowOnError>,
+): RequestResult<GetClusterSchedulingResponses, GetClusterSchedulingErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetClusterSchedulingResponses,
+    GetClusterSchedulingErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/clusters/{clusterName}/scheduling",
     ...options,
   });
 

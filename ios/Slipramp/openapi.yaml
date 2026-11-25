@@ -2011,6 +2011,58 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /api/v1/clusters/{clusterName}/scheduling:
+    get:
+      operationId: getClusterScheduling
+      summary: Get Run capacity and Placements for an observed Cluster
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Controllers
+      parameters:
+        - name: clusterName
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+      responses:
+        '200':
+          description: Current scheduling limits and Run counts for the Cluster.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterScheduling'
+        '401':
+          description: A valid product session or bearer credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The authenticated principal cannot read product state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The Server has never observed this Cluster.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Cluster scheduling details could not be loaded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/placements:
     get:
       operationId: listPlacements
@@ -10529,6 +10581,61 @@ components:
           type: string
           format: date-time
           description: Exclusive end of the hold. Omit for an indefinite lock.
+    ClusterPlacementScheduling:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - namespace
+        - activeRuns
+        - queuedRuns
+      properties:
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        namespace:
+          $ref: '#/components/schemas/CatalogName'
+        maximumActiveRuns:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Optional Placement limit within the shared Cluster limit.
+        activeRuns:
+          type: integer
+          format: int64
+          minimum: 0
+        queuedRuns:
+          type: integer
+          format: int64
+          minimum: 0
+    ClusterScheduling:
+      type: object
+      additionalProperties: false
+      required:
+        - maximumActiveRuns
+        - activeRuns
+        - queuedRuns
+        - placements
+      properties:
+        maximumActiveRuns:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Effective Server limit shared by all Placements on the Cluster.
+        activeRuns:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Assigned, preparing, and running Runs across the Cluster, including removed Placements.
+        queuedRuns:
+          type: integer
+          format: int64
+          minimum: 0
+          description: All queued Runs for the Cluster, including Runs awaiting review or Gates.
+        placements:
+          type: array
+          description: Currently configured Placements for this Cluster, ordered by name.
+          items:
+            $ref: '#/components/schemas/ClusterPlacementScheduling'
     PlacementResourceRequirements:
       type: object
       additionalProperties: false

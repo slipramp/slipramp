@@ -922,6 +922,14 @@ type recordingRunService struct {
 	reviewError   error
 	scheduling    map[uuid.UUID]run.Scheduling
 	gates         map[uuid.UUID]gate.Summary
+
+	clusterScheduling run.ClusterScheduling
+	schedulingCluster string
+}
+
+func (s *recordingRunService) ClusterScheduling(_ context.Context, name string) (run.ClusterScheduling, error) {
+	s.schedulingCluster = name
+	return s.clusterScheduling, s.loadError
 }
 
 func (s *recordingRunService) DecideRunReview(

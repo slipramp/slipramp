@@ -74,6 +74,58 @@ clusters:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+clusterScheduling:
+  get:
+    operationId: getClusterScheduling
+    summary: Get Run capacity and Placements for an observed Cluster
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Controllers]
+    parameters:
+      - name: clusterName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "200":
+        description: Current scheduling limits and Run counts for the Cluster.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/controllers.yaml#/ClusterScheduling
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Server has never observed this Cluster.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Cluster scheduling details could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 enroll:
   post:
     operationId: enrollController

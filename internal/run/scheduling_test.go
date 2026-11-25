@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -114,6 +115,49 @@ func TestSchedulingDerivesQueuedState(t *testing.T) {
 
 type stubSchedulingStore struct {
 	snapshots []SchedulingSnapshot
+	counts    map[string]RunCounts
+}
+
+func (s *stubSchedulingStore) ListClusterPlacementRunCounts(context.Context, string) (map[string]RunCounts, error) {
+	return s.counts, nil
+}
+
+func TestClusterScheduling(t *testing.T) {
+	t.Parallel()
+
+	placements, err := placement.NewSetWithClusterLimits(map[string]placement.Config{
+		"shared": {ClusterName: "colo", JobNamespace: "shared-jobs"},
+		"capped": {ClusterName: "colo", JobNamespace: "batch-jobs", MaximumActiveRuns: 1},
+		"remote": {ClusterName: "remote", JobNamespace: "jobs"},
+	}, map[string]int32{"colo": 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &stubSchedulingStore{counts: map[string]RunCounts{
+		"capped":  {Active: 1, Queued: 2},
+		"removed": {Active: 2, Queued: 1},
+	}}
+	service := &Service{placements: placements, scheduling: store}
+	got, err := service.ClusterScheduling(t.Context(), "colo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ClusterScheduling{
+		Active: 3, Queued: 3, MaximumActiveRuns: 2,
+		Placements: []PlacementScheduling{
+			{Name: "capped", Namespace: "batch-jobs", MaximumActiveRuns: 1, Active: 1, Queued: 2},
+			{Name: "shared", Namespace: "shared-jobs"},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ClusterScheduling() = %#v, want %#v", got, want)
+	}
+
+	store.counts = nil
+	empty, err := service.ClusterScheduling(t.Context(), "idle")
+	if err != nil || empty.MaximumActiveRuns != DefaultMaximumActiveRuns || len(empty.Placements) != 0 {
+		t.Errorf("ClusterScheduling(idle) = %#v, %v", empty, err)
+	}
 }
 
 func (s *stubSchedulingStore) GetRunSchedulingSnapshots(

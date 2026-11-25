@@ -2692,6 +2692,32 @@ type ClusterList struct {
 	Total  int       `json:"total"`
 }
 
+// ClusterPlacementScheduling defines model for ClusterPlacementScheduling.
+type ClusterPlacementScheduling struct {
+	ActiveRuns int64 `json:"activeRuns"`
+
+	// MaximumActiveRuns Optional Placement limit within the shared Cluster limit.
+	MaximumActiveRuns *int32      `json:"maximumActiveRuns,omitempty"`
+	Name              CatalogName `json:"name"`
+	Namespace         CatalogName `json:"namespace"`
+	QueuedRuns        int64       `json:"queuedRuns"`
+}
+
+// ClusterScheduling defines model for ClusterScheduling.
+type ClusterScheduling struct {
+	// ActiveRuns Assigned, preparing, and running Runs across the Cluster, including removed Placements.
+	ActiveRuns int64 `json:"activeRuns"`
+
+	// MaximumActiveRuns Effective Server limit shared by all Placements on the Cluster.
+	MaximumActiveRuns int32 `json:"maximumActiveRuns"`
+
+	// Placements Currently configured Placements for this Cluster, ordered by name.
+	Placements []ClusterPlacementScheduling `json:"placements"`
+
+	// QueuedRuns All queued Runs for the Cluster, including Runs awaiting review or Gates.
+	QueuedRuns int64 `json:"queuedRuns"`
+}
+
 // ControllerBuildInfo defines model for ControllerBuildInfo.
 type ControllerBuildInfo struct {
 	// Version Release version reported by the Controller process.
@@ -6583,6 +6609,11 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 	ListClusters(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetClusterScheduling Get Run capacity and Placements for an observed Cluster
+	//
+	// Corresponds with GET /api/v1/clusters/{clusterName}/scheduling (the `GetClusterScheduling` operationId).
+	GetClusterScheduling(ctx context.Context, clusterName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListCommits List indexed commits
 	//
 	// Lists commits reachable from the most recently indexed tracked branch head, newest first. The result may lag the observed branch head while a history index is pending.
@@ -7693,6 +7724,21 @@ func (c *Client) GetClientCompatibility(ctx context.Context, reqEditors ...Reque
 // Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 func (c *Client) ListClusters(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListClustersRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetClusterScheduling Get Run capacity and Placements for an observed Cluster
+//
+// Corresponds with GET /api/v1/clusters/{clusterName}/scheduling (the `GetClusterScheduling` operationId).
+func (c *Client) GetClusterScheduling(ctx context.Context, clusterName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterSchedulingRequest(c.Server, clusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -10317,6 +10363,40 @@ func NewListClustersRequest(server string, params *ListClustersParams) (*http.Re
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetClusterSchedulingRequest constructs an http.Request for the GetClusterScheduling method
+func NewGetClusterSchedulingRequest(server string, clusterName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/clusters/%s/scheduling", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -15083,6 +15163,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 	ListClustersWithResponse(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
 
+	// GetClusterSchedulingWithResponse Get Run capacity and Placements for an observed Cluster
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/clusters/{clusterName}/scheduling (the `GetClusterScheduling` operationId).
+	GetClusterSchedulingWithResponse(ctx context.Context, clusterName CatalogName, reqEditors ...RequestEditorFn) (*GetClusterSchedulingResponse, error)
+
 	// ListCommitsWithResponse List indexed commits
 	//
 	// Lists commits reachable from the most recently indexed tracked branch head, newest first. The result may lag the observed branch head while a history index is pending.
@@ -17073,6 +17160,82 @@ func (r ListClustersResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListClustersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetClusterSchedulingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterScheduling
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetClusterSchedulingResponse) GetJSON200() *ClusterScheduling {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetClusterSchedulingResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetClusterSchedulingResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetClusterSchedulingResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetClusterSchedulingResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetClusterSchedulingResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetClusterSchedulingResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterSchedulingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterSchedulingResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetClusterSchedulingResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23977,6 +24140,19 @@ func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, para
 	return ParseListClustersResponse(rsp)
 }
 
+// GetClusterSchedulingWithResponse Get Run capacity and Placements for an observed Cluster
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/clusters/{clusterName}/scheduling (the `GetClusterScheduling` operationId).
+func (c *ClientWithResponses) GetClusterSchedulingWithResponse(ctx context.Context, clusterName CatalogName, reqEditors ...RequestEditorFn) (*GetClusterSchedulingResponse, error) {
+	rsp, err := c.GetClusterScheduling(ctx, clusterName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterSchedulingResponse(rsp)
+}
+
 // ListCommitsWithResponse List indexed commits
 //
 // Lists commits reachable from the most recently indexed tracked branch head, newest first. The result may lag the observed branch head while a history index is pending.
@@ -26537,6 +26713,67 @@ func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error
 			return nil, err
 		}
 		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterSchedulingResponse parses an HTTP response from a GetClusterSchedulingWithResponse call
+func ParseGetClusterSchedulingResponse(rsp *http.Response) (*GetClusterSchedulingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterSchedulingResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterScheduling
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -32083,6 +32320,9 @@ type ServerInterface interface {
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request, params ListClustersParams)
+	// GetClusterScheduling Get Run capacity and Placements for an observed Cluster
+	// (GET /api/v1/clusters/{clusterName}/scheduling)
+	GetClusterScheduling(w http.ResponseWriter, r *http.Request, clusterName CatalogName)
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, params ListCommitsParams)
@@ -32792,6 +33032,32 @@ func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListClusters(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClusterScheduling operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterScheduling(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clusterName" -------------
+	var clusterName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterScheduling(w, r, clusterName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -36306,6 +36572,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}", wrapper.GetTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters/{clusterName}/scheduling", wrapper.GetClusterScheduling)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements", wrapper.ListPlacements)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements/{placementName}", wrapper.GetPlacement)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements/{placementName}/preflights", wrapper.ListPlacementPreflights)
@@ -37637,6 +37904,98 @@ func (response ListClusters405ApplicationProblemPlusJSONResponse) VisitListClust
 type ListClusters500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListClusters500ApplicationProblemPlusJSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterSchedulingRequestObject struct {
+	ClusterName CatalogName `json:"clusterName"`
+}
+
+type GetClusterSchedulingResponseObject interface {
+	VisitGetClusterSchedulingResponse(w http.ResponseWriter) error
+}
+
+type GetClusterScheduling200JSONResponse ClusterScheduling
+
+func (response GetClusterScheduling200JSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterScheduling401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClusterScheduling401ApplicationProblemPlusJSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterScheduling403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClusterScheduling403ApplicationProblemPlusJSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterScheduling404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClusterScheduling404ApplicationProblemPlusJSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterScheduling405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClusterScheduling405ApplicationProblemPlusJSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterScheduling500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClusterScheduling500ApplicationProblemPlusJSONResponse) VisitGetClusterSchedulingResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -46390,6 +46749,9 @@ type StrictServerInterface interface {
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(ctx context.Context, request ListClustersRequestObject) (ListClustersResponseObject, error)
+	// GetClusterScheduling Get Run capacity and Placements for an observed Cluster
+	// (GET /api/v1/clusters/{clusterName}/scheduling)
+	GetClusterScheduling(ctx context.Context, request GetClusterSchedulingRequestObject) (GetClusterSchedulingResponseObject, error)
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
@@ -47044,6 +47406,32 @@ func (sh *strictHandler) ListClusters(w http.ResponseWriter, r *http.Request, pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListClustersResponseObject); ok {
 		if err := validResponse.VisitListClustersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClusterScheduling operation middleware
+func (sh *strictHandler) GetClusterScheduling(w http.ResponseWriter, r *http.Request, clusterName CatalogName) {
+	var request GetClusterSchedulingRequestObject
+
+	request.ClusterName = clusterName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClusterScheduling(ctx, request.(GetClusterSchedulingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClusterScheduling")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClusterSchedulingResponseObject); ok {
+		if err := validResponse.VisitGetClusterSchedulingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

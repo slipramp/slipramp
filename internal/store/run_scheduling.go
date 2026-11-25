@@ -8,9 +8,31 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
+
+func (d *Database) ListClusterPlacementRunCounts(
+	ctx context.Context,
+	clusterName string,
+) (map[string]run.RunCounts, error) {
+	rows, err := d.queries.ListClusterPlacementRunCounts(ctx, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("list Cluster Placement Run counts: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, cluster.ErrNotFound
+	}
+
+	counts := make(map[string]run.RunCounts, len(rows))
+	for _, row := range rows {
+		if row.PlacementName != "" {
+			counts[row.PlacementName] = run.RunCounts{Active: row.ActiveRuns, Queued: row.QueuedRuns}
+		}
+	}
+	return counts, nil
+}
 
 func (d *Database) GetRunSchedulingSnapshots(
 	ctx context.Context,

@@ -12,9 +12,71 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
+
+func TestClusterPlacementRunCountsIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	if _, err := database.ListClusterPlacementRunCounts(ctx, "colo"); !errors.Is(err, cluster.ErrNotFound) {
+		t.Fatalf("unobserved cluster error = %v", err)
+	}
+	if err := database.RecordClusterObservation(ctx, "colo", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := database.ListClusterPlacementRunCounts(ctx, "colo")
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("idle cluster counts = %v, %v", empty, err)
+	}
+
+	first, second := createCapacityTestRuns(t, ctx, database)
+	if _, err := database.claimQueuedRunAt(ctx, "colo", testSchedulingCapacity(), uuid.Nil, second.CreatedAt); err != nil {
+		t.Fatal(err)
+	}
+	remote := first
+	remote.ID = uuid.New()
+	remote.ClusterName = "remote"
+	remote.Snapshot.Placement.ClusterName = remote.ClusterName
+	if _, err := database.CreateRun(ctx, remote, nil); err != nil {
+		t.Fatal(err)
+	}
+	batch := second
+	batch.ID = uuid.New()
+	batch.PlacementName = "batch"
+	batch.Snapshot.Placement.Name = batch.PlacementName
+	if _, err := database.CreateRun(ctx, batch, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	checkCounts := func(active int64) {
+		t.Helper()
+		counts, err := database.ListClusterPlacementRunCounts(ctx, "colo")
+		if err != nil || len(counts) != 2 || counts["infrastructure"] != (run.RunCounts{Active: active, Queued: 1}) ||
+			counts["batch"] != (run.RunCounts{Queued: 1}) {
+			t.Errorf("cluster counts = %v, %v", counts, err)
+		}
+	}
+	checkCounts(1)
+	observation := run.Observation{ID: first.ID, ClusterName: "colo", JobUID: new("job"), ObservedAt: second.CreatedAt}
+	for _, phase := range []run.Phase{run.PhasePreparing, run.PhaseRunning, run.PhaseFinished} {
+		observation.Phase = phase
+		observation.ObservedAt = observation.ObservedAt.Add(time.Minute)
+		if phase == run.PhaseFinished {
+			observation.Outcome = new(run.OutcomeSucceeded)
+		}
+		if err := database.ApplyRunObservation(ctx, observation); err != nil {
+			t.Fatal(err)
+		}
+		if phase == run.PhaseFinished {
+			checkCounts(0)
+		} else {
+			checkCounts(1)
+		}
+	}
+}
 
 func TestRunCapacityIntegration(t *testing.T) {
 	tests := []struct {
