@@ -271,6 +271,61 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /api/v1/search:
+    get:
+      operationId: searchResources
+      summary: Search Targets, Kargo Stages, and Pipelines
+      description: Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - System
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+      responses:
+        '200':
+          description: Ranked results grouped by resource kind.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          description: The search query is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid product session or bearer credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The authenticated principal cannot read product state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Search could not be completed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/inbox:
     get:
       operationId: getInbox
@@ -5717,6 +5772,74 @@ components:
       type: http
       scheme: bearer
   schemas:
+    SearchResults:
+      type: object
+      additionalProperties: false
+      required:
+        - targets
+        - stages
+        - pipelines
+      properties:
+        targets:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/TargetSearchResult'
+        stages:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/KargoSearchResult'
+        pipelines:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/KargoSearchResult'
+    TargetSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - title
+        - repository
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          description: Display title, falling back to the Target name.
+        repository:
+          type: string
+    KargoSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - stageId
+        - stageName
+        - integration
+        - cluster
+        - project
+      properties:
+        name:
+          type: string
+        stageId:
+          type: string
+          format: uuid
+          description: The Stage itself, or the member Stage identifying the Pipeline in its Project.
+        stageName:
+          type: string
+          description: Name of the Stage identified by stageId.
+        integration:
+          type: string
+        cluster:
+          type: string
+        project:
+          type: string
     HealthResponse:
       type: object
       required:

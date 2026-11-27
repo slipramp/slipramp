@@ -52,6 +52,7 @@ import { Form, Link, useLocation, useNavigation } from "react-router";
 import type { ProductPrincipal } from "~/api/generated";
 import mascotUrl from "~/features/mascot/assets/slipramp-mascot.webp";
 import { ActivityRefreshControl, ActivityRefreshProvider } from "~/features/shell/activity-refresh";
+import { GlobalSearch } from "~/features/search/global-search";
 import { Identity } from "~/shared/identity";
 import { PerformanceFooter } from "~/features/performance/performance-footer";
 import { TimeZoneControl } from "~/features/shell/time-zone-control";
@@ -154,8 +155,8 @@ function ProductShellLayout({
       </Box>
 
       <AppShell.Header className="product-header">
-        <Group h="100%" justify="space-between" px={{ base: "md", sm: "xl" }}>
-          <Group gap="sm">
+        <Box className="product-header-layout" px={{ base: "xs", sm: "xl" }}>
+          <Group className="product-header-identity" gap="xs" wrap="nowrap">
             <Burger
               aria-label={mobileOpened ? "Close navigation" : "Open navigation"}
               hiddenFrom="md"
@@ -177,7 +178,7 @@ function ProductShellLayout({
                 )}
               </ActionIcon>
             </Tooltip>
-            <Link className="product-brand" to="/">
+            <Link aria-label="Slipramp home" className="product-brand" to="/">
               <img alt="" aria-hidden="true" className="product-mark" src="/slipramp-mark.png" />
               <span>Slipramp</span>
             </Link>
@@ -185,6 +186,7 @@ function ProductShellLayout({
               Infrastructure control plane
             </Text>
           </Group>
+          <GlobalSearch kargoEnabled={kargoEnabled} />
           <Group className="product-header-controls" gap="xs" h="100%" wrap="nowrap">
             <Box aria-hidden="true" className="product-header-mascot-slot">
               <img alt="" className="product-header-mascot" decoding="async" src={mascotUrl} />
@@ -193,7 +195,7 @@ function ProductShellLayout({
             <TimeZoneControl />
             <AppearanceControl />
           </Group>
-        </Group>
+        </Box>
       </AppShell.Header>
 
       <AppShell.Navbar className="product-navbar" p="sm">

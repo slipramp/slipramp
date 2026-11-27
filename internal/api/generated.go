@@ -3378,6 +3378,20 @@ type KargoPromotionResponse struct {
 // KargoPromotionStatus Effective status returned to the polling Kargo PromotionTask. Gated means the durable Promotion is approved and is waiting for its applicable global, Stage, or repository Gates to release execution. Canceling keeps the callback waiting for the Kargo abort.
 type KargoPromotionStatus string
 
+// KargoSearchResult defines model for KargoSearchResult.
+type KargoSearchResult struct {
+	Cluster     string `json:"cluster"`
+	Integration string `json:"integration"`
+	Name        string `json:"name"`
+	Project     string `json:"project"`
+
+	// StageID The Stage itself, or the member Stage identifying the Pipeline in its Project.
+	StageID openapi_types.UUID `json:"stageId"`
+
+	// StageName Name of the Stage identified by stageId.
+	StageName string `json:"stageName"`
+}
+
 // KargoStageSnapshot defines model for KargoStageSnapshot.
 type KargoStageSnapshot struct {
 	ObservedAt time.Time                   `json:"observedAt"`
@@ -5092,6 +5106,13 @@ type ScheduleTrigger struct {
 // ScopeWindow defines model for ScopeWindow.
 type ScopeWindow = gate.ScopeWindow
 
+// SearchResults defines model for SearchResults.
+type SearchResults struct {
+	Pipelines []KargoSearchResult  `json:"pipelines"`
+	Stages    []KargoSearchResult  `json:"stages"`
+	Targets   []TargetSearchResult `json:"targets"`
+}
+
 // ServerGateLock defines model for ServerGateLock.
 type ServerGateLock struct {
 	Actor     ActorSnapshot `json:"actor"`
@@ -5301,6 +5322,16 @@ type TargetReconciliationStatus struct {
 
 // TargetReconciliationStatusComparison Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
 type TargetReconciliationStatusComparison string
+
+// TargetSearchResult defines model for TargetSearchResult.
+type TargetSearchResult struct {
+	ID         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	Repository string             `json:"repository"`
+
+	// Title Display title, falling back to the Target name.
+	Title string `json:"title"`
+}
 
 // TargetSpec defines model for TargetSpec.
 type TargetSpec struct {
@@ -5782,6 +5813,11 @@ type StreamRunLogParams struct {
 type RerunRunParams struct {
 	// IdempotencyKey Optional key that makes retries of the same rerun request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
+// SearchResourcesParams defines parameters for SearchResources.
+type SearchResourcesParams struct {
+	Q string `form:"q" json:"q"`
 }
 
 // ListTargetsParams defines parameters for ListTargets.
@@ -7251,6 +7287,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
 	DecideRunReview(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchResources Search Targets, Kargo Stages, and Pipelines
+	//
+	// Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+	//
+	// Corresponds with GET /api/v1/search (the `SearchResources` operationId).
+	SearchResources(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceAccountWithBody Create a service account
 	//
@@ -9237,6 +9280,23 @@ func (c *Client) DecideRunReviewWithBody(ctx context.Context, runID openapi_type
 // Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
 func (c *Client) DecideRunReview(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDecideRunReviewRequest(c.Server, runID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SearchResources Search Targets, Kargo Stages, and Pipelines
+//
+// Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+//
+// Corresponds with GET /api/v1/search (the `SearchResources` operationId).
+func (c *Client) SearchResources(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchResourcesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -14098,6 +14158,56 @@ func NewDecideRunReviewRequestWithBody(server string, runID openapi_types.UUID, 
 	return req, nil
 }
 
+// NewSearchResourcesRequest constructs an http.Request for the SearchResources method
+func NewSearchResourcesRequest(server string, params *SearchResourcesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateServiceAccountRequest calls the generic CreateServiceAccount builder with application/json body
 func NewCreateServiceAccountRequest(server string, body CreateServiceAccountJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -15895,6 +16005,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
 	DecideRunReviewWithResponse(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error)
+
+	// SearchResourcesWithResponse Search Targets, Kargo Stages, and Pipelines
+	//
+	// Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/search (the `SearchResources` operationId).
+	SearchResourcesWithResponse(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*SearchResourcesResponse, error)
 
 	// CreateServiceAccountWithBodyWithResponse Create a service account
 	//
@@ -22455,6 +22574,82 @@ func (r DecideRunReviewResponse) ContentType() string {
 	return ""
 }
 
+type SearchResourcesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SearchResults
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SearchResourcesResponse) GetJSON200() *SearchResults {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SearchResourcesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchResourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchResourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchResourcesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateServiceAccountResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -25393,6 +25588,21 @@ func (c *ClientWithResponses) DecideRunReviewWithResponse(ctx context.Context, r
 		return nil, err
 	}
 	return ParseDecideRunReviewResponse(rsp)
+}
+
+// SearchResourcesWithResponse Search Targets, Kargo Stages, and Pipelines
+//
+// Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/search (the `SearchResources` operationId).
+func (c *ClientWithResponses) SearchResourcesWithResponse(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*SearchResourcesResponse, error) {
+	rsp, err := c.SearchResources(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchResourcesResponse(rsp)
 }
 
 // CreateServiceAccountWithBodyWithResponse Create a service account
@@ -31071,6 +31281,67 @@ func ParseDecideRunReviewResponse(rsp *http.Response) (*DecideRunReviewResponse,
 	return response, nil
 }
 
+// ParseSearchResourcesResponse parses an HTTP response from a SearchResourcesWithResponse call
+func ParseSearchResourcesResponse(rsp *http.Response) (*SearchResourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchResourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SearchResults
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseCreateServiceAccountResponse parses an HTTP response from a CreateServiceAccountWithResponse call
 func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccountResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -32518,6 +32789,9 @@ type ServerInterface interface {
 	// DecideRunReview Decide a Run review
 	// (POST /api/v1/runs/{runId}/review)
 	DecideRunReview(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// SearchResources Search Targets, Kargo Stages, and Pipelines
+	// (GET /api/v1/search)
+	SearchResources(w http.ResponseWriter, r *http.Request, params SearchResourcesParams)
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(w http.ResponseWriter, r *http.Request)
@@ -35820,6 +36094,39 @@ func (siw *ServerInterfaceWrapper) DecideRunReview(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// SearchResources operation middleware
+func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchResourcesParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchResources(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateServiceAccount operation middleware
 func (siw *ServerInterfaceWrapper) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 
@@ -36542,6 +36849,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repository-connection-tests", wrapper.TestRepositoryConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.SearchResources)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/inbox", wrapper.GetInbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/inbox/problem-acknowledgements", wrapper.AcknowledgeInboxProblems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/notification-deliveries", wrapper.ListNotificationDeliveries)
@@ -44802,6 +45110,98 @@ func (response DecideRunReview500ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
+type SearchResourcesRequestObject struct {
+	Params SearchResourcesParams
+}
+
+type SearchResourcesResponseObject interface {
+	VisitSearchResourcesResponse(w http.ResponseWriter) error
+}
+
+type SearchResources200JSONResponse SearchResults
+
+func (response SearchResources200JSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchResources400ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchResources400ApplicationProblemPlusJSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchResources401ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchResources401ApplicationProblemPlusJSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchResources403ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchResources403ApplicationProblemPlusJSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchResources405ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchResources405ApplicationProblemPlusJSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchResources500ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchResources500ApplicationProblemPlusJSONResponse) VisitSearchResourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateServiceAccountRequestObject struct {
 	Body *CreateServiceAccountJSONRequestBody
 }
@@ -46947,6 +47347,9 @@ type StrictServerInterface interface {
 	// DecideRunReview Decide a Run review
 	// (POST /api/v1/runs/{runId}/review)
 	DecideRunReview(ctx context.Context, request DecideRunReviewRequestObject) (DecideRunReviewResponseObject, error)
+	// SearchResources Search Targets, Kargo Stages, and Pipelines
+	// (GET /api/v1/search)
+	SearchResources(ctx context.Context, request SearchResourcesRequestObject) (SearchResourcesResponseObject, error)
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(ctx context.Context, request CreateServiceAccountRequestObject) (CreateServiceAccountResponseObject, error)
@@ -49259,6 +49662,32 @@ func (sh *strictHandler) DecideRunReview(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DecideRunReviewResponseObject); ok {
 		if err := validResponse.VisitDecideRunReviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchResources operation middleware
+func (sh *strictHandler) SearchResources(w http.ResponseWriter, r *http.Request, params SearchResourcesParams) {
+	var request SearchResourcesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchResources(ctx, request.(SearchResourcesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchResources")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchResourcesResponseObject); ok {
+		if err := validResponse.VisitSearchResourcesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

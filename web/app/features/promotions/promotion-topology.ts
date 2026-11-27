@@ -74,5 +74,35 @@ export function topologyLanes(stages: PromotionProjectStage[]) {
 }
 
 function compareStages(left: PromotionProjectStage, right: PromotionProjectStage) {
-  return left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
+  return compareCodePoints(left.name, right.name) || compareCodePoints(left.id, right.id);
+}
+
+export function pipelineName(pipeline: PromotionTopologyPipeline, index: number) {
+  const applications = pipelineApplications(pipeline);
+  const [application] = [...applications].toSorted(compareCodePoints);
+  if (application) {
+    return applications.size > 1 ? `${application} + ${applications.size - 1} more` : application;
+  }
+  const stage = pipeline.stages.length === 1 ? pipeline.stages[0] : undefined;
+  return stage?.name ?? `Pipeline ${index + 1}`;
+}
+
+export function pipelineApplications(pipeline: PromotionTopologyPipeline) {
+  const applications = pipeline.stages.flatMap((stage) =>
+    stage.enrichment?.application ? [stage.enrichment.application] : [],
+  );
+  return new Set(applications);
+}
+
+// Match the server's UTF-8 ordering when choosing Pipeline anchors and names.
+function compareCodePoints(left: string, right: string) {
+  const rightCharacters = right[Symbol.iterator]();
+  for (const character of left) {
+    const next = rightCharacters.next();
+    if (next.done) return 1;
+    const leftCodePoint = character.codePointAt(0) ?? 0;
+    const rightCodePoint = next.value.codePointAt(0) ?? 0;
+    if (leftCodePoint !== rightCodePoint) return leftCodePoint - rightCodePoint;
+  }
+  return rightCharacters.next().done ? 0 : -1;
 }

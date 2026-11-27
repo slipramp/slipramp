@@ -374,6 +374,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			GitTriggerDeliveries:     persistence.database,
 			Commits:                  persistence.database,
 			Catalogs:                 catalogs,
+			Search:                   persistence.database,
 			Inbox:                    inboxService,
 			Notifications:            notificationService,
 			Runs:                     runs,

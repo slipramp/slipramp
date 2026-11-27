@@ -38,6 +38,7 @@ type Handler struct {
 	gitTriggerDeliveries     GitTriggerDeliveryService
 	commits                  CommitService
 	catalogs                 CatalogService
+	search                   SearchStore
 	inbox                    InboxService
 	notifications            NotificationService
 	runs                     RunService
@@ -92,6 +93,7 @@ type Dependencies struct {
 	GitTriggerDeliveries     GitTriggerDeliveryService
 	Commits                  CommitService
 	Catalogs                 CatalogService
+	Search                   SearchStore
 	Inbox                    InboxService
 	Notifications            NotificationService
 	Runs                     RunService
@@ -135,6 +137,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		gitTriggerDeliveries:     dependencies.GitTriggerDeliveries,
 		commits:                  dependencies.Commits,
 		catalogs:                 dependencies.Catalogs,
+		search:                   dependencies.Search,
 		inbox:                    dependencies.Inbox,
 		notifications:            dependencies.Notifications,
 		runs:                     dependencies.Runs,

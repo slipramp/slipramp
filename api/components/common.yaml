@@ -204,3 +204,61 @@ Cancellation:
       description: Time the first operator request was recorded.
     requestedBy:
       $ref: "#/ActorSnapshot"
+
+SearchResults:
+  type: object
+  additionalProperties: false
+  required: [targets, stages, pipelines]
+  properties:
+    targets:
+      type: array
+      maxItems: 5
+      items:
+        $ref: "#/TargetSearchResult"
+    stages:
+      type: array
+      maxItems: 5
+      items:
+        $ref: "#/KargoSearchResult"
+    pipelines:
+      type: array
+      maxItems: 5
+      items:
+        $ref: "#/KargoSearchResult"
+
+TargetSearchResult:
+  type: object
+  additionalProperties: false
+  required: [id, name, title, repository]
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    title:
+      type: string
+      description: Display title, falling back to the Target name.
+    repository:
+      type: string
+
+KargoSearchResult:
+  type: object
+  additionalProperties: false
+  required: [name, stageId, stageName, integration, cluster, project]
+  properties:
+    name:
+      type: string
+    stageId:
+      type: string
+      format: uuid
+      description: The Stage itself, or the member Stage identifying the Pipeline in its Project.
+    stageName:
+      type: string
+      description: Name of the Stage identified by stageId.
+    integration:
+      type: string
+    cluster:
+      type: string
+    project:
+      type: string

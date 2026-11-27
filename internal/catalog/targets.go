@@ -91,3 +91,10 @@ type TargetListFilter struct {
 	Limit        int32
 	Offset       int32
 }
+
+type TargetSearchResult struct {
+	ID         uuid.UUID
+	Name       string
+	Title      string
+	Repository string
+}

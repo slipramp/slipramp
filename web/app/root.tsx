@@ -22,6 +22,7 @@ import {
   Links,
   Meta,
   Outlet,
+  replace,
   Scripts,
   ScrollRestoration,
   useRouteError,
@@ -41,6 +42,7 @@ import {
   clearOIDCLoginClaim,
   oidcLoginLeaseStorageKey,
 } from "~/features/auth/oidc-login-coordination";
+import { canonicalSearchPaletteLocation } from "~/features/search/search-state";
 import { ProductShell } from "~/features/shell/product-shell";
 import { LockWarning } from "~/features/gates/lock-warning";
 import { loadLockStatus } from "~/features/gates/gate-policy.server";
@@ -71,6 +73,8 @@ export function headers() {
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
+  const canonical = canonicalSearchPaletteLocation(new URL(request.url));
+  if (canonical) throw replace(canonical);
   const [authentication, compatibility, globalLock] = await Promise.all([
     getProductAuthentication(context),
     getClientCompatibility({ client: createServerAPIClient(request, context) }),

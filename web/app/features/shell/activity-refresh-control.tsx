@@ -1,4 +1,4 @@
-import { Button, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Tooltip } from "@mantine/core";
 import { IconPlayerPause, IconRefresh } from "@tabler/icons-react";
 import {
   createContext,
@@ -99,11 +99,6 @@ export function ActivityRefreshControl() {
     refresh.activeIntervalMs === undefined
       ? undefined
       : formatRefreshInterval(refresh.activeIntervalMs);
-  const label = !active
-    ? "Auto-refresh off"
-    : refresh.enabled
-      ? `Auto-refresh ${interval}`
-      : "Auto-refresh paused";
   const description = !active
     ? "This page does not refresh automatically."
     : refresh.enabled
@@ -111,28 +106,27 @@ export function ActivityRefreshControl() {
       : `Auto-refresh is paused. This page normally refreshes every ${interval}. Select to resume.`;
 
   return (
-    <Tooltip label={description} position="bottom-end" withArrow>
-      <Button
-        aria-label={description}
+    <Tooltip
+      label={description}
+      position="bottom-end"
+      events={{ hover: true, focus: true, touch: false }}
+      withArrow
+    >
+      <ActionIcon
+        aria-label="Auto-refresh"
+        aria-description={description}
+        aria-pressed={active && refresh.enabled}
         disabled={!active}
-        leftSection={
-          active && refresh.enabled ? (
-            <IconPlayerPause aria-hidden size={16} />
-          ) : (
-            <IconRefresh aria-hidden size={16} />
-          )
-        }
         onClick={() => refresh.setEnabled(!refresh.enabled)}
-        size="compact-sm"
+        size="lg"
         variant="light"
       >
-        <Text inherit span visibleFrom="sm">
-          {label}
-        </Text>
-        <Text hiddenFrom="sm" inherit span>
-          {active ? (refresh.enabled ? interval : "Paused") : "Off"}
-        </Text>
-      </Button>
+        {active && refresh.enabled ? (
+          <IconPlayerPause aria-hidden size={19} stroke={1.8} />
+        ) : (
+          <IconRefresh aria-hidden size={19} stroke={1.8} />
+        )}
+      </ActionIcon>
     </Tooltip>
   );
 }

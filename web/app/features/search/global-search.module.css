@@ -1,0 +1,7 @@
+.detail {
+  color: var(--mantine-color-dimmed);
+}
+
+.option[data-combobox-selected] .detail {
+  color: inherit;
+}

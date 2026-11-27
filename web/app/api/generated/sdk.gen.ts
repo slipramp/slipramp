@@ -265,6 +265,9 @@ import type {
   SealRunLogData,
   SealRunLogErrors,
   SealRunLogResponses,
+  SearchResourcesData,
+  SearchResourcesErrors,
+  SearchResourcesResponses,
   SetGlobalGateWindowData,
   SetGlobalGateWindowErrors,
   SetGlobalGateWindowResponses,
@@ -450,6 +453,31 @@ export const testRepositoryConnection = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Search Targets, Kargo Stages, and Pipelines
+ *
+ * Matches all whitespace-separated terms across names and their context, ignoring case. Returns up to five matches per kind, with exact names and prefixes first. Kargo results include only active, configured observations.
+ */
+export const searchResources = <ThrowOnError extends boolean = false>(
+  options: Options<SearchResourcesData, ThrowOnError>,
+): RequestResult<SearchResourcesResponses, SearchResourcesErrors, ThrowOnError> =>
+  (options.client ?? client).get<SearchResourcesResponses, SearchResourcesErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/search",
+    ...options,
   });
 
 /**

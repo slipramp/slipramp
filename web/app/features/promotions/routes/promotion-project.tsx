@@ -1,9 +1,11 @@
 import { Alert, Stack } from "@mantine/core";
+import { replace } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getPromotionProject } from "~/api/generated";
 import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { submitPromotionProjectAction } from "~/features/promotions/promotion-project-action.server";
+import { pipelineStageParam } from "~/features/promotions/promotion-project-inventory-state";
 import { ProjectDetail } from "~/features/promotions/promotion-project-view";
 import { canWritePromotions } from "~/features/promotions/promotion-creation";
 import { problemDetail } from "~/shared/form-data";
@@ -28,6 +30,18 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     }),
     getProductPrincipal(context),
   ]);
+
+  const url = new URL(request.url);
+  const stageIds = url.searchParams.getAll(pipelineStageParam);
+  if (result.data && stageIds.length > 0) {
+    const stageId = stageIds[0] ?? "";
+    const knownStage = result.data.stages.some((stage) => stage.id === stageId);
+    if (!knownStage || stageIds.length > 1) {
+      if (knownStage) url.searchParams.set(pipelineStageParam, stageId);
+      else url.searchParams.delete(pipelineStageParam);
+      return replace(url.pathname + url.search);
+    }
+  }
 
   return {
     error: result.data

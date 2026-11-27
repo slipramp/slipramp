@@ -5,6 +5,7 @@ import type { PromotionProjectDetail } from "~/api/generated";
 export const promotionProjectInventoryPageSize = 8;
 export const promotionPipelineInventoryPageSize = 12;
 export const promotionStageInventoryPageSize = 25;
+export const pipelineStageParam = "pipelineStage";
 
 export function promotionStageInventoryScope(searchParams: URLSearchParams) {
   return {
@@ -30,8 +31,10 @@ export function promotionStageFilterSearch(
 
 export function promotionProjectDetailPath(
   project: Pick<PromotionProjectDetail, "cluster" | "integration" | "project">,
+  stageId?: string,
 ) {
-  return `/promotion-projects/${encodeURIComponent(project.integration)}/${encodeURIComponent(project.cluster)}/${encodeURIComponent(project.project)}`;
+  const path = `/promotion-projects/${encodeURIComponent(project.integration)}/${encodeURIComponent(project.cluster)}/${encodeURIComponent(project.project)}`;
+  return stageId ? `${path}?${new URLSearchParams({ [pipelineStageParam]: stageId })}` : path;
 }
 
 export function shouldRevalidatePromotionInventory({

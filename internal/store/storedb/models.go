@@ -354,6 +354,11 @@ type PromotionGate struct {
 	CurrentValidUntil         pgtype.Timestamptz
 }
 
+type PromotionPipelineSearch struct {
+	StageID pgtype.UUID
+	Name    string
+}
+
 type PromotionStage struct {
 	ID                              pgtype.UUID
 	Integration                     string

@@ -4,6 +4,37 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type SearchResults = {
+  targets: Array<TargetSearchResult>;
+  stages: Array<KargoSearchResult>;
+  pipelines: Array<KargoSearchResult>;
+};
+
+export type TargetSearchResult = {
+  id: string;
+  name: string;
+  /**
+   * Display title, falling back to the Target name.
+   */
+  title: string;
+  repository: string;
+};
+
+export type KargoSearchResult = {
+  name: string;
+  /**
+   * The Stage itself, or the member Stage identifying the Pipeline in its Project.
+   */
+  stageId: string;
+  /**
+   * Name of the Stage identified by stageId.
+   */
+  stageName: string;
+  integration: string;
+  cluster: string;
+  project: string;
+};
+
 export type HealthResponse = {
   status: "ok";
 };
@@ -3300,6 +3331,49 @@ export type TestRepositoryConnectionResponses = {
 
 export type TestRepositoryConnectionResponse =
   TestRepositoryConnectionResponses[keyof TestRepositoryConnectionResponses];
+
+export type SearchResourcesData = {
+  body?: never;
+  path?: never;
+  query: {
+    q: string;
+  };
+  url: "/api/v1/search";
+};
+
+export type SearchResourcesErrors = {
+  /**
+   * The search query is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Search could not be completed.
+   */
+  500: Problem;
+};
+
+export type SearchResourcesError = SearchResourcesErrors[keyof SearchResourcesErrors];
+
+export type SearchResourcesResponses = {
+  /**
+   * Ranked results grouped by resource kind.
+   */
+  200: SearchResults;
+};
+
+export type SearchResourcesResponse = SearchResourcesResponses[keyof SearchResourcesResponses];
 
 export type GetInboxData = {
   body?: never;

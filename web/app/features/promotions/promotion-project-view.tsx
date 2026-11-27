@@ -54,13 +54,18 @@ import { promotionStagePolicyPresentation } from "~/features/promotions/promotio
 import { StagePolicyBadge } from "~/features/promotions/promotion-policy-badge";
 import { PromotionStageLink } from "~/features/promotions/promotion-stage-link";
 import { PromotionProjectLink } from "~/features/promotions/promotion-project-link";
-import { promotionStageFilterSearch } from "~/features/promotions/promotion-project-inventory-state";
+import {
+  pipelineStageParam,
+  promotionStageFilterSearch,
+} from "~/features/promotions/promotion-project-inventory-state";
 import {
   promotionProjectAttention,
   type PromotionProjectAttention,
 } from "~/features/promotions/promotion-project-filters";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import {
+  pipelineApplications,
+  pipelineName,
   topologyPipelines,
   type PromotionTopologyPipeline,
 } from "~/features/promotions/promotion-topology";
@@ -106,11 +111,25 @@ export function ProjectDetail({
   const validPipelineKeys = new Set(pipelines.map((pipeline) => pipeline.key));
   const explicitPipelineSelection =
     searchParams.has("pipeline") || searchParams.get("pipelines") === "collapsed";
+  const stageId = searchParams.get(pipelineStageParam);
+  const focusedPipeline =
+    stageId && activeView === "pipelines" && !explicitPipelineSelection
+      ? visiblePipelines.find((pipeline) => pipeline.stages.some((stage) => stage.id === stageId))
+      : undefined;
+  const focusedAnchor = focusedPipeline?.stages[0]?.id;
+  useEffect(() => {
+    if (focusedAnchor) {
+      document.getElementById(`pipeline-${focusedAnchor}`)?.scrollIntoView({ block: "start" });
+    }
+  }, [focusedAnchor]);
+
   const expandedPipelineKeys = explicitPipelineSelection
     ? [...new Set(searchParams.getAll("pipeline"))].filter((key) => validPipelineKeys.has(key))
-    : visiblePipelines.length <= 4
-      ? visiblePipelines.map((pipeline) => pipeline.key)
-      : [];
+    : focusedPipeline
+      ? [focusedPipeline.key]
+      : visiblePipelines.length <= 4
+        ? visiblePipelines.map((pipeline) => pipeline.key)
+        : [];
 
   function closePolicy() {
     const next = new URLSearchParams(searchParams);
@@ -156,6 +175,7 @@ export function ProjectDetail({
     const next = new URLSearchParams(searchParams);
     next.delete("pipeline");
     next.delete("pipelines");
+    next.delete(pipelineStageParam);
     if (keys.length === 0) next.set("pipelines", "collapsed");
     else for (const key of keys) next.append("pipeline", key);
     setSearchParams(next, { preventScrollReset: true });
@@ -290,7 +310,7 @@ export function projectPipelines(stages: PromotionProjectStage[]) {
     .map((pipeline, index) => ({
       ...pipeline,
       key: pipeline.stages.map((stage) => stage.id).join(":"),
-      label: pipelineLabel(pipeline, index),
+      label: pipelineName(pipeline, index),
     }))
     .toSorted((left, right) => left.label.localeCompare(right.label, undefined, { numeric: true }));
 }
@@ -452,7 +472,12 @@ export function PipelineList({
       variant="separated"
     >
       {pipelines.map((pipeline) => (
-        <Accordion.Item key={pipeline.key} value={pipeline.key}>
+        <Accordion.Item
+          id={`pipeline-${pipeline.stages[0]?.id}`}
+          style={{ scrollMarginTop: 80 }}
+          key={pipeline.key}
+          value={pipeline.key}
+        >
           <Accordion.Control>
             {showProject && pipeline.projectContext ? (
               <Grid align="start" gap="xl" mr="sm">
@@ -965,16 +990,8 @@ function StageFilterLink({
   );
 }
 
-function pipelineLabel(pipeline: PromotionTopologyPipeline, index: number) {
-  const applications = pipelineApplications(pipeline);
-  if (applications.length === 1) return applications[0] ?? `Pipeline ${index + 1}`;
-  if (applications.length > 1) return `${applications[0]} + ${applications.length - 1} more`;
-  if (pipeline.stages.length === 1) return pipeline.stages[0]?.name ?? `Pipeline ${index + 1}`;
-  return `Pipeline ${index + 1}`;
-}
-
 function pipelinePath(pipeline: PromotionTopologyPipeline) {
-  const useEnvironment = pipelineApplications(pipeline).length === 1;
+  const useEnvironment = pipelineApplications(pipeline).size === 1;
   return pipeline.lanes
     .map((lane) =>
       lane
@@ -984,13 +1001,6 @@ function pipelinePath(pipeline: PromotionTopologyPipeline) {
         .join(" + "),
     )
     .join(" → ");
-}
-
-function pipelineApplications(pipeline: PromotionTopologyPipeline) {
-  return pipeline.stages
-    .flatMap((stage) => (stage.enrichment?.application ? [stage.enrichment.application] : []))
-    .filter((application, index, applications) => applications.indexOf(application) === index)
-    .toSorted((left, right) => left.localeCompare(right));
 }
 
 export function stageMatchesQuery(stage: StageInventoryStage, query: string) {

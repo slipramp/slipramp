@@ -18,6 +18,8 @@ paths:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repository-connection-tests:
     $ref: ./paths/repositories.yaml#/repositoryConnectionTests
+  /api/v1/search:
+    $ref: ./paths/system.yaml#/search
   /api/v1/inbox:
     $ref: ./paths/inbox.yaml#/inbox
   /api/v1/inbox/problem-acknowledgements:
@@ -194,6 +196,12 @@ components:
       type: http
       scheme: bearer
   schemas:
+    SearchResults:
+      $ref: ./components/common.yaml#/SearchResults
+    TargetSearchResult:
+      $ref: ./components/common.yaml#/TargetSearchResult
+    KargoSearchResult:
+      $ref: ./components/common.yaml#/KargoSearchResult
     HealthResponse:
       $ref: ./components/common.yaml#/HealthResponse
     ReadinessResponse:

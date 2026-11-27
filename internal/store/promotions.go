@@ -195,6 +195,10 @@ func (d *Database) ReplacePromotionStageSnapshot(
 		return fmt.Errorf("archive missing promotion Stages: %w", err)
 	}
 
+	if err := replacePipelineSearch(ctx, queries, snapshot, stages); err != nil {
+		return err
+	}
+
 	if _, err := queries.UpsertKargoStageSnapshot(
 		ctx,
 		storedb.UpsertKargoStageSnapshotParams{

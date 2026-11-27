@@ -652,98 +652,27 @@ func pipelineMatchesListFilter(pipeline Pipeline, filter PipelineListFilter) boo
 }
 
 func projectPipelines(project ProjectDetail) []Pipeline {
-	byID := make(map[uuid.UUID]ProjectStage, len(project.Stages))
-	neighbors := make(map[uuid.UUID]map[uuid.UUID]struct{}, len(project.Stages))
+	byName := make(map[string]ProjectStage, len(project.Stages))
+	stages := make([]promotion.Stage, 0, len(project.Stages))
 	for _, stage := range project.Stages {
-		byID[stage.Stage.ID] = stage
-		neighbors[stage.Stage.ID] = make(map[uuid.UUID]struct{})
+		byName[stage.Stage.Name] = stage
+		stages = append(stages, stage.Stage)
 	}
-	for _, stage := range project.Stages {
-		for _, request := range stage.RequestedFreight {
-			for _, source := range request.Sources {
-				if source.StageID == nil {
-					continue
-				}
-				if _, ok := byID[*source.StageID]; !ok {
-					continue
-				}
-				neighbors[stage.Stage.ID][*source.StageID] = struct{}{}
-				neighbors[*source.StageID][stage.Stage.ID] = struct{}{}
-			}
+	groups := promotion.ProjectPipelines(stages)
+	pipelines := make([]Pipeline, 0, len(groups))
+	for _, group := range groups {
+		members := make([]ProjectStage, 0, len(group.StageNames))
+		for _, name := range group.StageNames {
+			members = append(members, byName[name])
 		}
-	}
-
-	remaining := make(map[uuid.UUID]struct{}, len(project.Stages))
-	for id := range byID {
-		remaining[id] = struct{}{}
-	}
-	ordered := slices.Clone(project.Stages)
-	slices.SortFunc(ordered, compareProjectStages)
-	pipelines := make([]Pipeline, 0)
-	for _, root := range ordered {
-		if _, ok := remaining[root.Stage.ID]; !ok {
-			continue
-		}
-		delete(remaining, root.Stage.ID)
-		component := make([]ProjectStage, 0)
-		pending := []uuid.UUID{root.Stage.ID}
-		for len(pending) > 0 {
-			id := pending[len(pending)-1]
-			pending = pending[:len(pending)-1]
-			component = append(component, byID[id])
-			for neighbor := range neighbors[id] {
-				if _, ok := remaining[neighbor]; ok {
-					delete(remaining, neighbor)
-					pending = append(pending, neighbor)
-				}
-			}
-		}
-		slices.SortFunc(component, compareProjectStages)
 		pipelines = append(pipelines, Pipeline{
 			Integration: project.Integration,
 			ClusterName: project.ClusterName,
 			Project:     project.Project,
-			Stages:      component,
+			Name:        group.Name,
+			Stages:      members,
 		})
-	}
-	for index := range pipelines {
-		pipelines[index].Name = pipelineName(pipelines[index].Stages, index)
 	}
 
 	return pipelines
-}
-
-func compareProjectStages(left, right ProjectStage) int {
-	if value := cmp.Compare(left.Stage.Name, right.Stage.Name); value != 0 {
-		return value
-	}
-
-	return cmp.Compare(left.Stage.ID.String(), right.Stage.ID.String())
-}
-
-func pipelineName(stages []ProjectStage, index int) string {
-	applications := make([]string, 0, len(stages))
-	seen := make(map[string]struct{}, len(stages))
-	for _, stage := range stages {
-		if stage.Stage.Application == "" {
-			continue
-		}
-		if _, ok := seen[stage.Stage.Application]; ok {
-			continue
-		}
-		seen[stage.Stage.Application] = struct{}{}
-		applications = append(applications, stage.Stage.Application)
-	}
-	slices.Sort(applications)
-	if len(applications) == 1 {
-		return applications[0]
-	}
-	if len(applications) > 1 {
-		return fmt.Sprintf("%s + %d more", applications[0], len(applications)-1)
-	}
-	if len(stages) == 1 {
-		return stages[0].Stage.Name
-	}
-
-	return fmt.Sprintf("Pipeline %d", index+1)
 }

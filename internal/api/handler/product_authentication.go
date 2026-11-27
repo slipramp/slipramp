@@ -41,6 +41,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"GetCommit":                      productidentity.PermissionRead,
 	"GetRepositoryCatalog":           productidentity.PermissionRead,
 	"ExplainTargetAction":            productidentity.PermissionRead,
+	"SearchResources":                productidentity.PermissionRead,
 	"ListTargets":                    productidentity.PermissionRead,
 	"GetTarget":                      productidentity.PermissionRead,
 	"ListClusters":                   productidentity.PermissionRead,
