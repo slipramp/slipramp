@@ -62,6 +62,10 @@ import {
   repeatPromotionFreight,
 } from "~/features/promotions/promotion-creation";
 import { PromotionCreateButton } from "~/features/promotions/promotion-create-dialog";
+import {
+  promotionLifecycleDiagnostic,
+  promotionResultNotice,
+} from "~/features/promotions/promotion-result";
 import { promotionStagePath } from "~/features/promotions/promotion-stage";
 import { freightOriginLabel } from "~/features/promotions/promotion-freight";
 import { loadLockStatus } from "~/features/gates/gate-policy.server";
@@ -273,6 +277,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
   const canManageActivePromotion =
     canWrite && promotionIsActive(promotion) && promotion.cancellation.state === "not-requested";
   const overallStatus = promotionOverallStatus(promotion);
+  const result = promotionResultNotice(promotion);
 
   return (
     <Stack gap="lg">
@@ -362,9 +367,18 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           {actionData.error}
         </Alert>
       ) : null}
-      {promotion.message ? (
-        <Alert color={promotion.status === "expired" ? "gray" : "red"} title="Promotion result">
-          {promotion.message}
+      {result ? (
+        <Alert color={result.color} title={result.title}>
+          <Stack gap="xs">
+            {result.messages.map((message) => (
+              <Text key={message}>{message}</Text>
+            ))}
+            {result.observedAt && (
+              <Text c="dimmed" size="sm">
+                Observed <Timestamp value={result.observedAt} />
+              </Text>
+            )}
+          </Stack>
         </Alert>
       ) : null}
       {promotion.status === "creating" &&
@@ -374,8 +388,6 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           Kargo has not submitted the Git context required to prepare this review yet.
         </Alert>
       ) : null}
-      <CreationDispatchNotice promotion={promotion} />
-      <KargoOutcomeNotice promotion={promotion} />
 
       <PromotionWorkspace
         argoDiff={loaderData.argoDiff}
@@ -410,40 +422,6 @@ function SelectedFreight({ freight }: Readonly<{ freight: PromotionFreightItem }
         </Box>
       </DetailGrid>
     </DetailSection>
-  );
-}
-
-function CreationDispatchNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
-  const dispatch = promotion.creationDispatch;
-  if (dispatch.phase !== "failed") return null;
-
-  return (
-    <Alert color="red" title="Kargo object delivery failed">
-      {dispatch.diagnostic ?? "Slipramp could not materialize the Kargo Promotion."}
-    </Alert>
-  );
-}
-
-function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
-  if (
-    !promotion.kargoOutcome ||
-    promotion.kargoOutcome.phase === "Succeeded" ||
-    promotion.cancellation.state === "completed"
-  )
-    return null;
-
-  return (
-    <Alert color="red" title={`Kargo Promotion ${promotion.kargoOutcome.phase.toLowerCase()}`}>
-      <Stack gap="xs">
-        <Text>
-          {promotion.kargoOutcome.diagnostic ??
-            "Kargo reached an unsuccessful terminal phase without a diagnostic."}
-        </Text>
-        <Text c="dimmed" size="sm">
-          Observed <Timestamp value={promotion.kargoOutcome.observedAt} />
-        </Text>
-      </Stack>
-    </Alert>
   );
 }
 
@@ -705,19 +683,13 @@ function PromotionLifecycleRelevantDetail({
       </Stack>
     );
   }
-  if (stage === "delivery" && promotion.creationDispatch.diagnostic) {
-    return (
+  if (stage === "delivery" || stage === "execution") {
+    const diagnostic = promotionLifecycleDiagnostic(promotion, stage);
+    return diagnostic ? (
       <Text c="dimmed" size="xs">
-        {promotion.creationDispatch.diagnostic}
+        {diagnostic}
       </Text>
-    );
-  }
-  if (stage === "execution" && promotion.kargoOutcome?.diagnostic) {
-    return (
-      <Text c="dimmed" size="xs">
-        {promotion.kargoOutcome.diagnostic}
-      </Text>
-    );
+    ) : null;
   }
   return null;
 }
